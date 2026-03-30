@@ -42,11 +42,19 @@ endif
 
 # Tool to generate platform configuration files.
 ifeq ($(shell axconfig-gen --version 2>/dev/null),)
+ifeq ($(wildcard $(PWD)/vendor/axconfig-gen/Cargo.toml),)
 ifeq ($(AUTO_INSTALL_DEPS),y)
 $(info Installing axconfig-gen...)
 $(shell cargo install --locked axconfig-gen)
 else
 $(error Missing required tool: axconfig-gen. Install it manually, or rerun with AUTO_INSTALL_DEPS=y)
+endif
+else
+$(info Installing axconfig-gen from vendored source (offline)...)
+$(shell cargo install --offline --locked --path $(PWD)/vendor/axconfig-gen >/dev/null 2>&1)
+ifeq ($(shell axconfig-gen --version 2>/dev/null),)
+$(error Failed to install axconfig-gen from vendor. Please install it manually)
+endif
 endif
 endif
 
