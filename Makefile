@@ -10,6 +10,7 @@ export NET := y
 export VSOCK := n
 export MEM := 1G
 export ICOUNT := n
+export BUS := mmio
 
 # Generated Options
 export A := $(PWD)
@@ -22,6 +23,8 @@ ifeq ($(MEMTRACK), y)
 endif
 
 default: build
+
+KERNEL_NAME := $(notdir $(A))
 
 ROOTFS_URL = https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG = rootfs-$(ARCH).img
@@ -44,6 +47,20 @@ defconfig justrun clean:
 build run debug disasm: defconfig
 	@$(MAKE) -C make $@
 
+all: kernel-rv kernel-la
+
+kernel-rv:
+	$(MAKE) ARCH=riscv64 build
+	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv
+
+kernel-la:
+	$(MAKE) ARCH=loongarch64 build
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la
+
+contest-run-rv: defconfig
+	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
+	@$(MAKE) -C make run ARCH=riscv64 BLK=y NET=y BUS=mmio DISK_IMG=$(A)/sdcard-rv.img
+
 ci-test:
 	./scripts/ci-test.py $(ARCH)
 
@@ -57,4 +74,4 @@ la:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: build run justrun debug disasm clean
+.PHONY: all build run justrun debug disasm clean kernel-rv kernel-la contest-run-rv
