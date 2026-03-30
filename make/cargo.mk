@@ -12,6 +12,8 @@ build_args-release := --release
 
 build_args := \
   -Z unstable-options \
+  --locked \
+  --offline \
   --target $(TARGET) \
   --target-dir $(TARGET_DIR) \
   $(build_args-$(MODE)) \

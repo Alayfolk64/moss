@@ -1,11 +1,27 @@
 # Necessary dependencies for the build system.
 #
 # NOTE:
-# Avoid silent, parse-time `cargo install` by default because it can trigger
-# long network downloads with no live output (looks like Make is hanging).
-# Set `AUTO_INSTALL_DEPS=y` if you still want automatic installation.
-
-AUTO_INSTALL_DEPS ?= n
+# Build logic is local-source only. No network fallback is allowed here.
+WORKSPACE_DIR := $(abspath $(CURDIR)/..)
+VENDOR_CARGO_CONFIG := --config source.crates-io.replace-with=\"vendored-sources\" --config source.vendored-sources.directory=\"$(WORKSPACE_DIR)/vendor\"
+TOOLS_HOST := $(shell rustc -vV 2>/dev/null | sed -n 's/^host: //p')
+ifeq ($(strip $(TOOLS_HOST)),)
+$(error Failed to detect Rust host triple. Ensure rustc is installed and available in PATH)
+endif
+TOOLS_ROOT := $(WORKSPACE_DIR)/.tools/$(TOOLS_HOST)
+TOOLS_BIN := $(TOOLS_ROOT)/bin
+export PATH := $(TOOLS_BIN):$(PATH)
+AXCONFIG_GEN := $(TOOLS_BIN)/axconfig-gen
+ifneq ($(strip $(shell $(TOOLS_BIN)/rust-objcopy --version 2>/dev/null)),)
+RUST_OBJCOPY := $(TOOLS_BIN)/rust-objcopy
+else
+RUST_OBJCOPY := $(shell command -v rust-objcopy 2>/dev/null)
+endif
+ifneq ($(strip $(shell $(TOOLS_BIN)/rust-objdump --version 2>/dev/null)),)
+RUST_OBJDUMP := $(TOOLS_BIN)/rust-objdump
+else
+RUST_OBJDUMP := $(shell command -v rust-objdump 2>/dev/null)
+endif
 
 # Resolve the default platform package name used by make/platform.mk.
 ifeq ($(MYPLAT),)
@@ -24,46 +40,58 @@ else
 _default_plat_package := $(MYPLAT)
 endif
 
-_vendored_plat_config := $(PWD)/vendor/$(_default_plat_package)/axconfig.toml
+_vendored_plat_config := $(WORKSPACE_DIR)/vendor/$(_default_plat_package)/axconfig.toml
 
-# `cargo-axplat` is only needed when no local platform config can be resolved.
+# The build must be able to resolve a local platform config file.
 ifeq ($(wildcard $(PLAT_CONFIG)),)
 ifeq ($(wildcard $(_vendored_plat_config)),)
-ifeq ($(shell cargo axplat --version 2>/dev/null),)
-ifeq ($(AUTO_INSTALL_DEPS),y)
-$(info Installing cargo-axplat...)
-$(shell cargo install --locked cargo-axplat)
-else
-$(error Missing required tool: cargo-axplat. Install it manually, or rerun with AUTO_INSTALL_DEPS=y)
-endif
-endif
+$(error Missing local platform config: $(_vendored_plat_config). Set PLAT_CONFIG to a local file or vendor the platform crate into $(WORKSPACE_DIR)/vendor)
 endif
 endif
 
 # Tool to generate platform configuration files.
-ifeq ($(shell axconfig-gen --version 2>/dev/null),)
-ifeq ($(wildcard $(PWD)/vendor/axconfig-gen/Cargo.toml),)
-ifeq ($(AUTO_INSTALL_DEPS),y)
-$(info Installing axconfig-gen...)
-$(shell cargo install --locked axconfig-gen)
-else
-$(error Missing required tool: axconfig-gen. Install it manually, or rerun with AUTO_INSTALL_DEPS=y)
+ifeq ($(strip $(shell $(AXCONFIG_GEN) --version 2>/dev/null)),)
+ifeq ($(wildcard $(WORKSPACE_DIR)/vendor/axconfig-gen/Cargo.toml),)
+$(error Missing local source for axconfig-gen: $(WORKSPACE_DIR)/vendor/axconfig-gen)
 endif
-else
-$(info Installing axconfig-gen from vendored source (offline)...)
-$(shell cargo install --offline --locked --path $(PWD)/vendor/axconfig-gen >/dev/null 2>&1)
-ifeq ($(shell axconfig-gen --version 2>/dev/null),)
-$(error Failed to install axconfig-gen from vendor. Please install it manually)
-endif
+$(info Building axconfig-gen from local source (offline)...)
+$(shell cargo $(VENDOR_CARGO_CONFIG) install --offline --root $(TOOLS_ROOT) --path $(WORKSPACE_DIR)/vendor/axconfig-gen)
+ifeq ($(strip $(shell $(AXCONFIG_GEN) --version 2>/dev/null)),)
+$(error Failed to build axconfig-gen from local source: $(WORKSPACE_DIR)/vendor/axconfig-gen. Check cargo output above)
 endif
 endif
 
 # Cargo binutils wrappers: rust-objcopy / rust-objdump.
-ifeq ($(shell cargo install --list | grep cargo-binutils),)
-ifeq ($(AUTO_INSTALL_DEPS),y)
-$(info Installing cargo-binutils...)
-$(shell cargo install --locked cargo-binutils)
-else
-$(error Missing required tool: cargo-binutils. Install it manually, or rerun with AUTO_INSTALL_DEPS=y)
+ifeq ($(strip $(RUST_OBJCOPY)),)
+ifeq ($(wildcard $(WORKSPACE_DIR)/vendor/cargo-binutils/Cargo.toml),)
+$(error Missing required tool: rust-objcopy. Local source not found: $(WORKSPACE_DIR)/vendor/cargo-binutils)
 endif
+$(info Building cargo-binutils from local source (offline)...)
+$(shell cargo $(VENDOR_CARGO_CONFIG) install --offline --root $(TOOLS_ROOT) --path $(WORKSPACE_DIR)/vendor/cargo-binutils)
+endif
+
+ifeq ($(strip $(RUST_OBJDUMP)),)
+ifeq ($(wildcard $(WORKSPACE_DIR)/vendor/cargo-binutils/Cargo.toml),)
+$(error Missing required tool: rust-objdump. Local source not found: $(WORKSPACE_DIR)/vendor/cargo-binutils)
+endif
+$(info Building cargo-binutils from local source (offline)...)
+$(shell cargo $(VENDOR_CARGO_CONFIG) install --offline --root $(TOOLS_ROOT) --path $(WORKSPACE_DIR)/vendor/cargo-binutils)
+endif
+
+ifneq ($(strip $(shell $(TOOLS_BIN)/rust-objcopy --version 2>/dev/null)),)
+RUST_OBJCOPY := $(TOOLS_BIN)/rust-objcopy
+else
+RUST_OBJCOPY := $(shell command -v rust-objcopy 2>/dev/null)
+endif
+ifneq ($(strip $(shell $(TOOLS_BIN)/rust-objdump --version 2>/dev/null)),)
+RUST_OBJDUMP := $(TOOLS_BIN)/rust-objdump
+else
+RUST_OBJDUMP := $(shell command -v rust-objdump 2>/dev/null)
+endif
+
+ifeq ($(strip $(RUST_OBJCOPY)),)
+$(error Failed to resolve rust-objcopy. Build from local source failed and no system binary found)
+endif
+ifeq ($(strip $(RUST_OBJDUMP)),)
+$(error Failed to resolve rust-objdump. Build from local source failed and no system binary found)
 endif

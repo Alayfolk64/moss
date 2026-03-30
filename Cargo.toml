@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["kernel"]
-exclude = ["arceos"]
+exclude = ["arceos", "vendor/axconfig-gen", "vendor/cargo-binutils"]
 
 [workspace.package]
 version = "0.2.0-preview.2"

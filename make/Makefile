@@ -50,6 +50,9 @@ TARGET_DIR ?= $(PWD)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?= $(PWD)/.axconfig.toml
 UIMAGE ?= n
+AXCONFIG_GEN ?= axconfig-gen
+RUST_OBJCOPY ?= rust-objcopy
+RUST_OBJDUMP ?= rust-objdump
 
 # App options
 A ?= examples/helloworld
@@ -143,8 +146,8 @@ AR := $(CROSS_COMPILE)ar
 RANLIB := $(CROSS_COMPILE)ranlib
 LD := rust-lld -flavor gnu
 
-OBJDUMP ?= rust-objdump -d --print-imm-hex --x86-asm-syntax=intel
-OBJCOPY ?= rust-objcopy --binary-architecture=$(ARCH)
+OBJDUMP ?= $(RUST_OBJDUMP) -d --print-imm-hex --x86-asm-syntax=intel
+OBJCOPY ?= $(RUST_OBJCOPY) --binary-architecture=$(ARCH)
 GDB ?= gdb
 
 # Paths

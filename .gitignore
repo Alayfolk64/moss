@@ -11,6 +11,7 @@
 /.cargo/*
 !/.cargo/config.toml
 /.crates*
+/.tools/
 /mnt
 *.swp
 *.swo
