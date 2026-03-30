@@ -198,6 +198,11 @@ else
 	$(call make_disk_image,fat32,$(DISK_IMG))
 endif
 
+ifeq ($(APP_TYPE), rust)
+clean_c:
+	@:
+endif
+
 clean: clean_c
 	rm -rf $(APP)/*.bin $(APP)/*.elf $(OUT_CONFIG)
 	cargo clean

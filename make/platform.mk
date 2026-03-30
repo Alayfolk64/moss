@@ -32,6 +32,9 @@ ifeq ($(MYPLAT),)
   else
     $(error "ARCH" must be one of "x86_64", "riscv64", "aarch64" or "loongarch64")
   endif
+  # Prefer vendored platform config to avoid invoking `cargo axplat` (which may
+  # trigger network access in clean/offline environments).
+  PLAT_CONFIG ?= $(PWD)/vendor/$(PLAT_PACKAGE)/axconfig.toml
   PLAT_CONFIG := $(strip $(call resolve_config))
   # We don't need to check whether `PLAT_CONFIG` is valid here, as the `PLAT_PACKAGE`
   # is a valid pacakage.
@@ -40,6 +43,8 @@ ifeq ($(MYPLAT),)
 else
   # `MYPLAT` is specified, treat it as a package name
   PLAT_PACKAGE := $(MYPLAT)
+  # If the package has been vendored, resolve directly from local files.
+  PLAT_CONFIG ?= $(PWD)/vendor/$(PLAT_PACKAGE)/axconfig.toml
   PLAT_CONFIG := $(strip $(call resolve_config))
   ifeq ($(wildcard $(PLAT_CONFIG)),)
     $(error "MYPLAT=$(MYPLAT) is not a valid platform package name")
