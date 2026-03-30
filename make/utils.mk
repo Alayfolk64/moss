@@ -9,7 +9,7 @@ END_C := \033[0m
 
 define run_cmd
   @printf '$(WHITE_C)$(1)$(END_C) $(GRAY_C)$(2)$(END_C)\n'
-  @$(1) $(2)
+  @$(1) $(2) 2>&1
 endef
 
 define make_disk_image_fat32

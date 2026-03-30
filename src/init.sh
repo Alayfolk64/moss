@@ -34,17 +34,71 @@ run_test() {
   ret=$?
   echo "[TEST] Exit code($ret): $test_sh"
   echo
+  return "$ret"
 }
 
-TEST_LIST=$("$BB" find /musl /glibc -type f -name '*_testcode.sh' 2>/dev/null | "$BB" sort)
+append_root() {
+  d="$1"
+  [ -n "$d" ] || return 0
+  [ -d "$d" ] || return 0
+  case " $SEARCH_ROOTS " in
+    *" $d "*) ;;
+    *) SEARCH_ROOTS="$SEARCH_ROOTS $d" ;;
+  esac
+}
+
+SEARCH_ROOTS=""
+append_root "/"
+append_root "/musl"
+append_root "/glibc"
+
+# Scan all mounted filesystems (exclude pseudo filesystems only).
+if [ -r /proc/mounts ]; then
+  while IFS=' ' read -r _dev m fs_type _rest; do
+    [ -n "$m" ] || continue
+    case "$fs_type" in
+      proc|sysfs|devtmpfs|devpts|tmpfs|cgroup|cgroup2|mqueue|pstore|debugfs|tracefs|securityfs|ramfs|configfs|fusectl|hugetlbfs|bpf|overlay)
+        continue
+        ;;
+    esac
+    case "$m" in
+      /proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/run|/run/*)
+        continue
+        ;;
+    esac
+    append_root "$m"
+  done < /proc/mounts
+fi
+
+echo "[TEST] scan roots:$SEARCH_ROOTS"
+
+TEST_LIST=$(
+  for d in $SEARCH_ROOTS; do
+    [ -d "$d" ] || continue
+    "$BB" find "$d" -type f \
+      \( -name '*_testcode.sh' -o -name '*_test.sh' -o -name 'test_*.sh' -o -name '*test*.sh' \) \
+      2>/dev/null
+  done | "$BB" sort -u
+)
 
 if [ -z "$TEST_LIST" ]; then
-  echo "[TEST] no *_testcode.sh found under /musl or /glibc"
+  echo "[TEST] no test shell scripts found in mounted filesystems"
 else
-  printf '%s\n' "$TEST_LIST" | while IFS= read -r t; do
+  total=0
+  passed=0
+  failed=0
+  while IFS= read -r t; do
     [ -n "$t" ] || continue
-    run_test "$t"
-  done
+    total=$((total + 1))
+    if run_test "$t"; then
+      passed=$((passed + 1))
+    else
+      failed=$((failed + 1))
+    fi
+  done <<EOF
+$TEST_LIST
+EOF
+  echo "[TEST] summary: total=$total passed=$passed failed=$failed"
 fi
 
 echo "[TEST] all discovered scripts completed"

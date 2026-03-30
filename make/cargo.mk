@@ -1,5 +1,8 @@
 # Cargo features and build args
 
+WORKSPACE_DIR := $(abspath $(CURDIR)/..)
+VENDOR_CARGO_CONFIG := --config source.crates-io.replace-with=\"vendored-sources\" --config source.vendored-sources.directory=\"$(WORKSPACE_DIR)/vendor\"
+
 ifeq ($(V),1)
   verbose := -v
 else ifeq ($(V),2)
@@ -12,6 +15,7 @@ build_args-release := --release
 
 build_args := \
   -Z unstable-options \
+  $(VENDOR_CARGO_CONFIG) \
   --locked \
   --offline \
   --target $(TARGET) \

@@ -41,8 +41,15 @@ img:
 	@echo -e "\033[33mWARN: The 'img' target is deprecated. Please use 'rootfs' instead.\033[0m"
 	@$(MAKE) --no-print-directory rootfs
 
-defconfig justrun clean:
+defconfig justrun:
 	@$(MAKE) -C make $@
+
+makeclean:
+	@$(MAKE) -C make makeclean
+	@rm -f $(A)/kernel-rv $(A)/kernel-la
+
+clean: makeclean
+	@:
 
 build run debug disasm: defconfig
 	@$(MAKE) -C make $@
@@ -51,11 +58,11 @@ all: kernel-rv kernel-la
 
 kernel-rv:
 	$(MAKE) ARCH=riscv64 build
-	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv
+	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv
 
 kernel-la:
 	$(MAKE) ARCH=loongarch64 build
-	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la
 
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
@@ -74,4 +81,4 @@ la:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean kernel-rv kernel-la contest-run-rv
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv
