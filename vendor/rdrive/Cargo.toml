@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "rdrive"
-version = "0.19.1"
+version = "0.20.0"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = false
 autolib = false
@@ -37,17 +37,23 @@ repository = "https://github.com/drivercraft/sparreal-os"
 name = "rdrive"
 path = "src/lib.rs"
 
-[dependencies.fdt-parser]
-version = "0.4.16"
+[dependencies.fdt-edit]
+version = "0.2.3"
+
+[dependencies.fdt-raw]
+version = "0.3"
 
 [dependencies.log]
 version = "0.4"
+
+[dependencies.mmio-api]
+version = "0.2"
 
 [dependencies.paste]
 version = "1"
 
 [dependencies.pcie]
-version = "0.5"
+version = "0.6"
 
 [dependencies.rdif-base]
 version = "0.8"

@@ -122,7 +122,6 @@ fn mpmc_contention() {
 
     const N: u32 = 64;
 
-    #[expect(deprecated)]
     static Q: Queue<u32, 64> = Queue::new();
 
     let (s, r) = mpsc::channel();

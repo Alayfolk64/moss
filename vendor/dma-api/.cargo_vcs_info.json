@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "685a18f768135daf920d2c9fa892a534b93e0101"
+    "sha1": "66c40dbe51803d82da835c82adc6d9c44f49f140"
   },
-  "path_in_vcs": ""
+  "path_in_vcs": "crates/dma-api"
 }

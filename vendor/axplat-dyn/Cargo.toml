@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axplat-dyn"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = "build.rs"
 autolib = false
@@ -54,11 +54,24 @@ path = "src/lib.rs"
 version = "1"
 default-features = false
 
+[dependencies.axalloc]
+version = "=0.3.0-preview.3"
+
 [dependencies.axconfig-macros]
 version = "0.2"
 
 [dependencies.axcpu]
 version = "0.3.0-preview.8"
+
+[dependencies.axdriver_base]
+version = "0.1.4-preview.3"
+
+[dependencies.axdriver_block]
+version = "0.1.4-preview.3"
+
+[dependencies.axdriver_virtio]
+version = "0.1.4-preview.3"
+features = ["block"]
 
 [dependencies.axerrno]
 version = "0.2"
@@ -69,15 +82,30 @@ version = "0.3"
 [dependencies.axplat]
 version = "0.3.1-pre.6"
 
+[dependencies.dma-api]
+version = "0.7"
+
+[dependencies.fdt-edit]
+version = "0.2"
+
 [dependencies.heapless]
 version = "0.9"
 
 [dependencies.log]
 version = "0.4"
 
+[dependencies.memory_addr]
+version = "0.4"
+
 [dependencies.percpu]
 version = "0.2.3-preview.1"
 features = ["custom-base"]
+
+[dependencies.rd-block]
+version = "0.1"
+
+[dependencies.rdrive]
+version = "0.20"
 
 [dependencies.somehal]
 version = "0.6"

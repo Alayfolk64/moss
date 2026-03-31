@@ -7,7 +7,6 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use gimli::Reader;
 use memmap2::Mmap;
 use object::{Object, ObjectMapFile, ObjectSection, SymbolMap, SymbolMapName};
 use typed_arena::Arena;
@@ -20,18 +19,11 @@ use crate::{
 /// The type used by [`Loader`] for reading DWARF data.
 ///
 /// This is used in the return types of the methods of [`Loader`].
-type LoaderReader<'a> =
-    gimli::RelocateReader<gimli::EndianSlice<'a, gimli::RunTimeEndian>, &'a LoaderRelocationMap>;
+// TODO: use impl Trait when stable
+pub type LoaderReader<'a> = gimli::EndianSlice<'a, gimli::RunTimeEndian>;
 
 type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Default)]
-struct LoaderArena {
-    data: Arena<Vec<u8>>,
-    mmap: Arena<Mmap>,
-    relocation: Arena<LoaderRelocationMap>,
-}
 
 /// A loader for the DWARF data required for a `Context`.
 ///
@@ -48,7 +40,8 @@ struct LoaderArena {
 /// - Locates and loads split DWARF files (DWO and DWP).
 pub struct Loader {
     internal: LoaderInternal<'static>,
-    arena: LoaderArena,
+    arena_data: Arena<Vec<u8>>,
+    arena_mmap: Arena<Mmap>,
 }
 
 impl Loader {
@@ -65,10 +58,15 @@ impl Loader {
         path: impl AsRef<Path>,
         sup_path: Option<impl AsRef<Path>>,
     ) -> Result<Self> {
-        let arena = LoaderArena::default();
+        let arena_data = Arena::new();
+        let arena_mmap = Arena::new();
 
-        let internal =
-            LoaderInternal::new(path.as_ref(), sup_path.as_ref().map(AsRef::as_ref), &arena)?;
+        let internal = LoaderInternal::new(
+            path.as_ref(),
+            sup_path.as_ref().map(AsRef::as_ref),
+            &arena_data,
+            &arena_mmap,
+        )?;
         Ok(Loader {
             // Convert to static lifetime to allow self-reference by `internal`.
             // `internal` is only accessed through `borrow_internal`, which ensures
@@ -76,33 +74,34 @@ impl Loader {
             internal: unsafe {
                 core::mem::transmute::<LoaderInternal<'_>, LoaderInternal<'static>>(internal)
             },
-            arena,
+            arena_data,
+            arena_mmap,
         })
     }
 
     fn borrow_internal<'a, F, T>(&'a self, f: F) -> T
     where
-        F: FnOnce(&'a LoaderInternal<'a>, &'a LoaderArena) -> T,
+        F: FnOnce(&'a LoaderInternal<'a>, &'a Arena<Vec<u8>>, &'a Arena<Mmap>) -> T,
     {
         // Do not leak the static lifetime.
         let internal = unsafe {
             core::mem::transmute::<&LoaderInternal<'static>, &'a LoaderInternal<'a>>(&self.internal)
         };
-        f(internal, &self.arena)
+        f(internal, &self.arena_data, &self.arena_mmap)
     }
 
     /// Get the base address used for relative virtual addresses.
     ///
     /// Currently this is only non-zero for PE.
     pub fn relative_address_base(&self) -> u64 {
-        self.borrow_internal(|i, _arena| i.relative_address_base)
+        self.borrow_internal(|i, _data, _mmap| i.relative_address_base)
     }
 
     /// Find the source file and line corresponding to the given virtual memory address.
     ///
     /// This calls [`Context::find_location`] with the given address.
     pub fn find_location(&self, probe: u64) -> Result<Option<Location<'_>>> {
-        self.borrow_internal(|i, arena| i.find_location(probe, arena))
+        self.borrow_internal(|i, data, mmap| i.find_location(probe, data, mmap))
     }
 
     /// Return source file and lines for a range of addresses.
@@ -112,16 +111,18 @@ impl Loader {
         &self,
         probe_low: u64,
         probe_high: u64,
-    ) -> Result<LocationRangeIter<'_, impl gimli::Reader + '_>> {
-        self.borrow_internal(|i, arena| i.find_location_range(probe_low, probe_high, arena))
+    ) -> Result<LocationRangeIter<'_, LoaderReader<'_>>> {
+        self.borrow_internal(|i, data, mmap| {
+            i.find_location_range(probe_low, probe_high, data, mmap)
+        })
     }
 
     /// Return an iterator for the function frames corresponding to the given virtual
     /// memory address.
     ///
     /// This calls [`Context::find_frames`] with the given address.
-    pub fn find_frames(&self, probe: u64) -> Result<FrameIter<'_, impl gimli::Reader + '_>> {
-        self.borrow_internal(|i, arena| i.find_frames(probe, arena))
+    pub fn find_frames(&self, probe: u64) -> Result<FrameIter<'_, LoaderReader<'_>>> {
+        self.borrow_internal(|i, data, mmap| i.find_frames(probe, data, mmap))
     }
 
     /// Find the symbol table entry corresponding to the given virtual memory address.
@@ -132,12 +133,12 @@ impl Loader {
 
     /// Find the symbol table entry corresponding to the given virtual memory address.
     pub fn find_symbol_info(&self, probe: u64) -> Option<Symbol<'_>> {
-        self.borrow_internal(|i, _arena| i.find_symbol_info(probe))
+        self.borrow_internal(|i, _data, _mmap| i.find_symbol_info(probe))
     }
 
     /// Get the address of a section
     pub fn get_section_range(&self, section_name: &[u8]) -> Option<gimli::Range> {
-        self.borrow_internal(|i, _arena| i.get_section_range(section_name))
+        self.borrow_internal(|i, _data, _mmap| i.get_section_range(section_name))
     }
 }
 
@@ -154,9 +155,14 @@ struct LoaderInternal<'a> {
 }
 
 impl<'a> LoaderInternal<'a> {
-    fn new(path: &Path, sup_path: Option<&Path>, arena: &'a LoaderArena) -> Result<Self> {
+    fn new(
+        path: &Path,
+        sup_path: Option<&Path>,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
+    ) -> Result<Self> {
         let file = File::open(path)?;
-        let map = arena.mmap.alloc(unsafe { Mmap::map(&file)? });
+        let map = arena_mmap.alloc(unsafe { Mmap::map(&file)? });
         let object = object::File::parse(&**map)?;
 
         let relative_address_base = object.relative_address_base();
@@ -170,7 +176,7 @@ impl<'a> LoaderInternal<'a> {
         let sup_map;
         let sup_object = if let Some(sup_path) = sup_path {
             let sup_file = File::open(sup_path)?;
-            sup_map = arena.mmap.alloc(unsafe { Mmap::map(&sup_file)? });
+            sup_map = arena_mmap.alloc(unsafe { Mmap::map(&sup_file)? });
             Some(object::File::parse(&**sup_map)?)
         } else {
             None
@@ -200,7 +206,7 @@ impl<'a> LoaderInternal<'a> {
                 })
             })
         })() {
-            let map = arena.mmap.alloc(map);
+            let map = arena_mmap.alloc(map);
             Some(object::File::parse(&**map)?)
         } else {
             None
@@ -213,10 +219,11 @@ impl<'a> LoaderInternal<'a> {
         } else {
             gimli::RunTimeEndian::Big
         };
-        let mut dwarf =
-            gimli::Dwarf::load(|id| load_section(Some(id.name()), dwarf_object, endian, arena))?;
+        let mut dwarf = gimli::Dwarf::load(|id| {
+            load_section(Some(id.name()), dwarf_object, endian, arena_data)
+        })?;
         if let Some(sup_object) = &sup_object {
-            dwarf.load_sup(|id| load_section(Some(id.name()), sup_object, endian, arena))?;
+            dwarf.load_sup(|id| load_section(Some(id.name()), sup_object, endian, arena_data))?;
         }
         dwarf.populate_abbreviations_cache(gimli::AbbreviationsCacheStrategy::Duplicates);
 
@@ -235,7 +242,7 @@ impl<'a> LoaderInternal<'a> {
                 .unwrap_or_else(|| "dwp".into());
             dwp_path.set_extension(dwp_extension);
             let dwp_file = File::open(&dwp_path).ok()?;
-            let map = arena.mmap.alloc(unsafe { Mmap::map(&dwp_file) }.ok()?);
+            let map = arena_mmap.alloc(unsafe { Mmap::map(&dwp_file) }.ok()?);
             let dwp_object = object::File::parse(&**map).ok()?;
 
             let endian = if dwp_object.is_little_endian() {
@@ -243,11 +250,9 @@ impl<'a> LoaderInternal<'a> {
             } else {
                 gimli::RunTimeEndian::Big
             };
-            let empty_relocation = arena.relocation.alloc(LoaderRelocationMap::default());
-            let empty =
-                LoaderReader::new(gimli::EndianSlice::new(&[][..], endian), empty_relocation);
+            let empty = gimli::EndianSlice::new(&[][..], endian);
             gimli::DwarfPackage::load(
-                |id| load_section(id.dwo_name(), &dwp_object, endian, arena),
+                |id| load_section(id.dwo_name(), &dwp_object, endian, arena_data),
                 empty,
             )
             .ok()
@@ -264,18 +269,27 @@ impl<'a> LoaderInternal<'a> {
         })
     }
 
-    fn ctx(&self, probe: u64, arena: &'a LoaderArena) -> (&Context<LoaderReader<'a>>, u64) {
-        self.object_ctx(probe, arena).unwrap_or((&self.ctx, probe))
+    fn ctx(
+        &self,
+        probe: u64,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
+    ) -> (&Context<LoaderReader<'a>>, u64) {
+        self.object_ctx(probe, arena_data, arena_mmap)
+            .unwrap_or((&self.ctx, probe))
     }
 
     fn object_ctx(
         &self,
         probe: u64,
-        arena: &'a LoaderArena,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
     ) -> Option<(&Context<LoaderReader<'a>>, u64)> {
         let symbol = self.object_map.get(probe)?;
         let object_context = self.objects[symbol.object_index()]
-            .get_or_init(|| ObjectContext::new(symbol.object(&self.object_map), arena))
+            .get_or_init(|| {
+                ObjectContext::new(symbol.object(&self.object_map), arena_data, arena_mmap)
+            })
             .as_ref()?;
         object_context.ctx(symbol.name(), probe - symbol.address())
     }
@@ -297,8 +311,13 @@ impl<'a> LoaderInternal<'a> {
             })
     }
 
-    fn find_location(&'a self, probe: u64, arena: &'a LoaderArena) -> Result<Option<Location<'a>>> {
-        let (ctx, probe) = self.ctx(probe, arena);
+    fn find_location(
+        &'a self,
+        probe: u64,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
+    ) -> Result<Option<Location<'a>>> {
+        let (ctx, probe) = self.ctx(probe, arena_data, arena_mmap);
         Ok(ctx.find_location(probe)?)
     }
 
@@ -306,9 +325,10 @@ impl<'a> LoaderInternal<'a> {
         &self,
         probe_low: u64,
         probe_high: u64,
-        arena: &'a LoaderArena,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
     ) -> Result<LocationRangeIter<'_, LoaderReader<'a>>> {
-        let (ctx, probe) = self.ctx(probe_low, arena);
+        let (ctx, probe) = self.ctx(probe_low, arena_data, arena_mmap);
         // TODO: handle ranges that cover multiple objects
         let probe_high = probe + (probe_high - probe_low);
         Ok(ctx.find_location_range(probe, probe_high)?)
@@ -317,9 +337,10 @@ impl<'a> LoaderInternal<'a> {
     fn find_frames(
         &self,
         probe: u64,
-        arena: &'a LoaderArena,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
     ) -> Result<FrameIter<'_, LoaderReader<'a>>> {
-        let (ctx, probe) = self.ctx(probe, arena);
+        let (ctx, probe) = self.ctx(probe, arena_data, arena_mmap);
         let mut frames = ctx.find_frames(probe);
         loop {
             let (load, continuation) = match frames {
@@ -327,7 +348,7 @@ impl<'a> LoaderInternal<'a> {
                 LookupResult::Load { load, continuation } => (load, continuation),
             };
 
-            let r = self.load_dwo(load, arena)?;
+            let r = self.load_dwo(load, arena_data, arena_mmap)?;
             frames = continuation.resume(r);
         }
     }
@@ -335,7 +356,8 @@ impl<'a> LoaderInternal<'a> {
     fn load_dwo(
         &self,
         load: SplitDwarfLoad<LoaderReader<'a>>,
-        arena: &'a LoaderArena,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
     ) -> Result<Option<Arc<gimli::Dwarf<LoaderReader<'a>>>>> {
         // Load the DWO file from the DWARF package, if available.
         if let Some(dwp) = self.dwarf_package.as_ref() {
@@ -347,17 +369,17 @@ impl<'a> LoaderInternal<'a> {
         // Determine the path to the DWO file.
         let mut path = PathBuf::new();
         if let Some(p) = load.comp_dir.as_ref() {
-            path.push(convert_path(&p.to_slice()?)?);
+            path.push(convert_path(p.slice())?);
         }
         let Some(p) = load.path.as_ref() else {
             return Ok(None);
         };
-        path.push(convert_path(&p.to_slice()?)?);
+        path.push(convert_path(p.slice())?);
 
         // Load the DWO file, ignoring errors.
         let dwo = (|| {
             let file = File::open(&path).ok()?;
-            let map = arena.mmap.alloc(unsafe { Mmap::map(&file) }.ok()?);
+            let map = arena_mmap.alloc(unsafe { Mmap::map(&file) }.ok()?);
             let object = object::File::parse(&**map).ok()?;
             let endian = if object.is_little_endian() {
                 gimli::RunTimeEndian::Little
@@ -365,7 +387,7 @@ impl<'a> LoaderInternal<'a> {
                 gimli::RunTimeEndian::Big
             };
             let mut dwo_dwarf =
-                gimli::Dwarf::load(|id| load_section(id.dwo_name(), &object, endian, arena))
+                gimli::Dwarf::load(|id| load_section(id.dwo_name(), &object, endian, arena_data))
                     .ok()?;
             let dwo_unit_header = dwo_dwarf.units().next().ok()??;
             let dwo_unit = dwo_dwarf.unit(dwo_unit_header).ok()?;
@@ -385,9 +407,13 @@ struct ObjectContext<'a> {
 }
 
 impl<'a> ObjectContext<'a> {
-    fn new(object: &ObjectMapFile<'a>, arena: &'a LoaderArena) -> Option<Self> {
+    fn new(
+        object: &ObjectMapFile<'a>,
+        arena_data: &'a Arena<Vec<u8>>,
+        arena_mmap: &'a Arena<Mmap>,
+    ) -> Option<Self> {
         let file = File::open(convert_path(object.path()).ok()?).ok()?;
-        let map = &**arena.mmap.alloc(unsafe { Mmap::map(&file) }.ok()?);
+        let map = &**arena_mmap.alloc(unsafe { Mmap::map(&file) }.ok()?);
         let data = if let Some(member_name) = object.member() {
             let archive = object::read::archive::ArchiveFile::parse(map).ok()?;
             let member = archive.members().find_map(|member| {
@@ -409,7 +435,8 @@ impl<'a> ObjectContext<'a> {
             gimli::RunTimeEndian::Big
         };
         let dwarf =
-            gimli::Dwarf::load(|id| load_section(Some(id.name()), &object, endian, arena)).ok()?;
+            gimli::Dwarf::load(|id| load_section(Some(id.name()), &object, endian, arena_data))
+                .ok()?;
         let ctx = Context::from_dwarf(dwarf).ok()?;
         let symbols = object.symbol_map();
         Some(ObjectContext { ctx, symbols })
@@ -424,28 +451,20 @@ impl<'a> ObjectContext<'a> {
     }
 }
 
-fn load_section<'input>(
+fn load_section<'input, Endian: gimli::Endianity>(
     name: Option<&'static str>,
     file: &object::File<'input>,
-    endian: gimli::RunTimeEndian,
-    arena: &'input LoaderArena,
-) -> Result<LoaderReader<'input>> {
-    let mut relocations = LoaderRelocationMap::default();
+    endian: Endian,
+    arena_data: &'input Arena<Vec<u8>>,
+) -> Result<gimli::EndianSlice<'input, Endian>> {
     let data = match name.and_then(|name| file.section_by_name(name)) {
-        Some(section) => {
-            relocations.add(file, &section);
-            match section.uncompressed_data()? {
-                Cow::Borrowed(b) => b,
-                Cow::Owned(b) => arena.data.alloc(b),
-            }
-        }
+        Some(section) => match section.uncompressed_data()? {
+            Cow::Borrowed(b) => b,
+            Cow::Owned(b) => arena_data.alloc(b),
+        },
         None => &[],
     };
-    let relocations = arena.relocation.alloc(relocations);
-    Ok(LoaderReader::new(
-        gimli::EndianSlice::new(data, endian),
-        relocations,
-    ))
+    Ok(gimli::EndianSlice::new(data, endian))
 }
 
 #[cfg(unix)]
@@ -476,37 +495,5 @@ impl<'a> Symbol<'a> {
     /// Get the symbol address.
     pub fn address(&self) -> u64 {
         self.address
-    }
-}
-
-#[derive(Debug, Default)]
-struct LoaderRelocationMap(object::read::RelocationMap);
-
-impl LoaderRelocationMap {
-    fn add(&mut self, file: &object::File, section: &object::Section) {
-        let mut warned = false;
-        for (offset, relocation) in section.relocations() {
-            if let Err(e) = self.0.add(file, offset, relocation) {
-                if !warned {
-                    warned = true;
-                    std::eprintln!(
-                        "Relocation error for section {} at offset 0x{:08x}: {}",
-                        section.name().unwrap(),
-                        offset,
-                        e
-                    );
-                }
-            }
-        }
-    }
-}
-
-impl gimli::read::Relocate for &'_ LoaderRelocationMap {
-    fn relocate_address(&self, offset: usize, value: u64) -> gimli::Result<u64> {
-        Ok(self.0.relocate(offset as u64, value))
-    }
-
-    fn relocate_offset(&self, offset: usize, value: usize) -> gimli::Result<usize> {
-        <usize as gimli::ReaderOffset>::from_u64(self.0.relocate(offset as u64, value as u64))
     }
 }

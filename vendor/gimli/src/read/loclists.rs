@@ -5,8 +5,8 @@ use crate::common::{
 use crate::constants;
 use crate::endianity::Endianity;
 use crate::read::{
-    DebugAddr, EndianSlice, Error, Expression, Range, RawRange, Reader, ReaderAddress,
-    ReaderOffset, ReaderOffsetId, Result, Section, lists::ListsHeader,
+    lists::ListsHeader, DebugAddr, EndianSlice, Error, Expression, Range, RawRange, Reader,
+    ReaderAddress, ReaderOffset, ReaderOffsetId, Result, Section,
 };
 
 /// The raw contents of the `.debug_loc` section.
@@ -195,6 +195,9 @@ impl<R: Reader> LocationLists<R> {
     /// The `base_address` should be obtained from the `DW_AT_low_pc` attribute in the
     /// `DW_TAG_compile_unit` entry for the compilation unit that contains this location
     /// list.
+    ///
+    /// Can be [used with
+    /// `FallibleIterator`](./index.html#using-with-fallibleiterator).
     pub fn locations(
         &self,
         offset: LocationListsOffset<R::Offset>,
@@ -237,6 +240,9 @@ impl<R: Reader> LocationLists<R> {
     ///
     /// This iterator does not perform any processing of the location entries,
     /// such as handling base addresses.
+    ///
+    /// Can be [used with
+    /// `FallibleIterator`](./index.html#using-with-fallibleiterator).
     pub fn raw_locations(
         &self,
         offset: LocationListsOffset<R::Offset>,
@@ -521,14 +527,6 @@ impl<R: Reader> fallible_iterator::FallibleIterator for RawLocListIter<R> {
     }
 }
 
-impl<R: Reader> Iterator for RawLocListIter<R> {
-    type Item = Result<RawLocListEntry<R>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        RawLocListIter::next(self).transpose()
-    }
-}
-
 /// An iterator over a location list.
 ///
 /// This iterator internally handles processing of base address selection entries
@@ -673,14 +671,6 @@ impl<R: Reader> fallible_iterator::FallibleIterator for LocListIter<R> {
 
     fn next(&mut self) -> ::core::result::Result<Option<Self::Item>, Self::Error> {
         LocListIter::next(self)
-    }
-}
-
-impl<R: Reader> Iterator for LocListIter<R> {
-    type Item = Result<LocationListEntry<R>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        LocListIter::next(self).transpose()
     }
 }
 

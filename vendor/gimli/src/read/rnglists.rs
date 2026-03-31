@@ -5,8 +5,8 @@ use crate::common::{
 use crate::constants;
 use crate::endianity::Endianity;
 use crate::read::{
-    DebugAddr, EndianSlice, Error, Reader, ReaderAddress, ReaderOffset, ReaderOffsetId, Result,
-    Section, lists::ListsHeader,
+    lists::ListsHeader, DebugAddr, EndianSlice, Error, Reader, ReaderAddress, ReaderOffset,
+    ReaderOffsetId, Result, Section,
 };
 
 /// The raw contents of the `.debug_ranges` section.
@@ -213,6 +213,9 @@ impl<R: Reader> RangeLists<R> {
     ///
     /// The `base_address` should be obtained from the `DW_AT_low_pc` attribute in the
     /// `DW_TAG_compile_unit` entry for the compilation unit that contains this range list.
+    ///
+    /// Can be [used with
+    /// `FallibleIterator`](./index.html#using-with-fallibleiterator).
     pub fn ranges(
         &self,
         offset: RangeListsOffset<R::Offset>,
@@ -236,6 +239,9 @@ impl<R: Reader> RangeLists<R> {
     ///
     /// This iterator does not perform any processing of the range entries,
     /// such as handling base addresses.
+    ///
+    /// Can be [used with
+    /// `FallibleIterator`](./index.html#using-with-fallibleiterator).
     pub fn raw_ranges(
         &self,
         offset: RangeListsOffset<R::Offset>,
@@ -458,14 +464,6 @@ impl<R: Reader> fallible_iterator::FallibleIterator for RawRngListIter<R> {
     }
 }
 
-impl<R: Reader> Iterator for RawRngListIter<R> {
-    type Item = Result<RawRngListEntry<R::Offset>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        RawRngListIter::next(self).transpose()
-    }
-}
-
 /// An iterator over an address range list.
 ///
 /// This iterator internally handles processing of base addresses and different
@@ -592,14 +590,6 @@ impl<R: Reader> fallible_iterator::FallibleIterator for RngListIter<R> {
 
     fn next(&mut self) -> ::core::result::Result<Option<Self::Item>, Self::Error> {
         RngListIter::next(self)
-    }
-}
-
-impl<R: Reader> Iterator for RngListIter<R> {
-    type Item = Result<Range>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        RngListIter::next(self).transpose()
     }
 }
 

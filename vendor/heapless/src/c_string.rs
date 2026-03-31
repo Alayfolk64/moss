@@ -10,29 +10,12 @@ use core::{
     ops::Deref,
 };
 
-#[cfg(feature = "zeroize")]
-use zeroize::Zeroize;
-
 /// A fixed capacity [`CString`](https://doc.rust-lang.org/std/ffi/struct.CString.html).
 ///
 /// It stores up to `N - 1` non-nul characters with a trailing nul terminator.
 #[derive(Clone, Hash)]
 pub struct CString<const N: usize, LenT: LenType = usize> {
     inner: Vec<u8, N, LenT>,
-}
-
-#[cfg(feature = "zeroize")]
-impl<const N: usize, LenT: LenType> Zeroize for CString<N, LenT> {
-    fn zeroize(&mut self) {
-        self.inner.zeroize();
-
-        const {
-            assert!(N > 0);
-        }
-
-        // SAFETY: We just asserted that `N > 0`.
-        unsafe { self.inner.push_unchecked(b'\0') };
-    }
 }
 
 impl<const N: usize, LenT: LenType> CString<N, LenT> {
@@ -106,12 +89,11 @@ impl<const N: usize, LenT: LenType> CString<N, LenT> {
     ///
     /// # Safety
     ///
-    /// - The memory pointed to by `ptr` must contain a valid nul terminator at the end of the
-    ///   string.
-    /// - `ptr` must be valid for reads of bytes up to and including the nul terminator. This means
-    ///   in particular:
-    ///     - The entire memory range of this `CStr` must be contained within a single allocated
-    ///       object!
+    /// - The memory pointed to by `ptr` must contain a valid nul terminator at the
+    ///   end of the string.
+    /// - `ptr` must be valid for reads of bytes up to and including the nul terminator.
+    ///   This means in particular:
+    ///     - The entire memory range of this `CStr` must be contained within a single allocated object!
     ///     - `ptr` must be non-nul even for a zero-length `CStr`.
     ///
     /// # Example
@@ -191,8 +173,7 @@ impl<const N: usize, LenT: LenType> CString<N, LenT> {
 
         match CStr::from_bytes_with_nul(bytes) {
             Ok(_) => {
-                // SAFETY: A string is left in a valid state because appended bytes are
-                // nul-terminated.
+                // SAFETY: A string is left in a valid state because appended bytes are nul-terminated.
                 unsafe { self.extend_from_bytes_unchecked(bytes) }?;
 
                 Ok(())
@@ -500,35 +481,6 @@ mod tests {
         let mut string = CString::<4>::new();
         string.extend_from_bytes(b"foo").unwrap();
         assert_eq!(Borrow::<CStr>::borrow(&string), c"foo");
-    }
-
-    #[test]
-    #[cfg(feature = "zeroize")]
-    fn test_cstring_zeroize() {
-        use zeroize::Zeroize;
-
-        let mut c_string = CString::<32>::from_bytes_with_nul(b"sensitive_password\0").unwrap();
-
-        assert_eq!(c_string.to_str(), Ok("sensitive_password"));
-        assert!(!c_string.to_bytes().is_empty());
-        let original_length = c_string.to_bytes().len();
-        assert_eq!(original_length, 18);
-
-        let new_string = CString::<32>::from_bytes_with_nul(b"short\0").unwrap();
-        c_string = new_string;
-
-        assert_eq!(c_string.to_str(), Ok("short"));
-        assert_eq!(c_string.to_bytes().len(), 5);
-
-        // zeroized using Vec's implementation
-        c_string.zeroize();
-
-        assert_eq!(c_string.to_bytes().len(), 0);
-        assert_eq!(c_string.to_bytes_with_nul(), &[0]);
-
-        c_string.extend_from_bytes(b"new_data").unwrap();
-        assert_eq!(c_string.to_str(), Ok("new_data"));
-        assert_eq!(c_string.to_bytes().len(), 8);
     }
 
     mod equality {

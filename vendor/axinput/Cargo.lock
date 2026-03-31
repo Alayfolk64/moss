@@ -69,9 +69,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "axbacktrace"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf9566516f5d799b2f791a6ec5af57eec87d17624346f7c876fa006b922c99e6"
+checksum = "1ed127f24c722b06d19c9c1ff73907905bbc2f9463dfd7440652f3f0d6617a93"
 dependencies = [
  "cfg-if",
  "log",
@@ -80,9 +80,9 @@ dependencies = [
 
 [[package]]
 name = "axconfig"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25985c64d932bf954b02eaf0873e4445d234d39b5100b1985585e3276b6b47d1"
+checksum = "15f74d126fc479e4a5acd4389e7ef2c9176c41e7ea3c54e985a7468489b494fb"
 dependencies = [
  "axconfig-macros",
 ]
@@ -135,9 +135,9 @@ dependencies = [
 
 [[package]]
 name = "axdriver"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a92c9e28dbeeb219f91abed250fa9e04d3cd28a6d5d296fc2fb46a8b99d8f86"
+checksum = "aea5c6b6a48e7283ede40784ded0eedd371e98d59faf97e7d9f4a73dcec4fe00"
 dependencies = [
  "axconfig",
  "axdriver_base",
@@ -187,9 +187,9 @@ dependencies = [
 
 [[package]]
 name = "axhal"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b721414abb9554522acdc0495cef83eadfc7d47257fe3c979e655c982d79588"
+checksum = "281f69e09ddb6eb04b7695fc8bdf5a58c760c630443aca8e69abc65ded5642da"
 dependencies = [
  "axconfig",
  "axcpu",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "axinput"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 dependencies = [
  "axdriver",
  "axsync",
@@ -242,9 +242,9 @@ dependencies = [
 
 [[package]]
 name = "axsync"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb8e90184332ae787f483a256561c6c4eecc4b5b41e06d3850fbd524a8c6a98"
+checksum = "fdadc56f8fc6d471c977997b4865d423ebf8b69256f183475af511bb4749d251"
 dependencies = [
  "axtask",
  "event-listener",
@@ -254,9 +254,9 @@ dependencies = [
 
 [[package]]
 name = "axtask"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc45120776afddf28b19bb7aba87e379c5779cf28a8f7884943a4821caeec774"
+checksum = "678fe49dac66ef02c5ed0a8657e5fbc74d40b66e29b9864f5e4325741c0ad878"
 dependencies = [
  "axerrno",
  "axhal",

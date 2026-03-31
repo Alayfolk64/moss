@@ -1,5 +1,4 @@
 use core::{arch::naked_asm, fmt};
-
 use memory_addr::VirtAddr;
 
 /// Saved registers when a trap (interrupt or exception) occurs.
@@ -41,19 +40,9 @@ impl TrapFrame {
         self.rdi as _
     }
 
-    /// Sets the 0th syscall argument.
-    pub const fn set_arg0(&mut self, rdi: usize) {
-        self.rdi = rdi as _;
-    }
-
     /// Gets the 1st syscall argument.
     pub const fn arg1(&self) -> usize {
         self.rsi as _
-    }
-
-    /// Sets the 1st syscall argument.
-    pub const fn set_arg1(&mut self, rsi: usize) {
-        self.rsi = rsi as _;
     }
 
     /// Gets the 2nd syscall argument.
@@ -61,19 +50,9 @@ impl TrapFrame {
         self.rdx as _
     }
 
-    /// Sets the 2nd syscall argument.
-    pub const fn set_arg2(&mut self, rdx: usize) {
-        self.rdx = rdx as _;
-    }
-
     /// Gets the 3rd syscall argument.
     pub const fn arg3(&self) -> usize {
         self.r10 as _
-    }
-
-    /// Sets the 3rd syscall argument.
-    pub const fn set_arg3(&mut self, r10: usize) {
-        self.r10 = r10 as _;
     }
 
     /// Gets the 4th syscall argument.
@@ -81,64 +60,14 @@ impl TrapFrame {
         self.r8 as _
     }
 
-    /// Sets the 4th syscall argument.
-    pub const fn set_arg4(&mut self, r8: usize) {
-        self.r8 = r8 as _;
-    }
-
     /// Gets the 5th syscall argument.
     pub const fn arg5(&self) -> usize {
         self.r9 as _
     }
 
-    /// Sets the 5th syscall argument.
-    pub const fn set_arg5(&mut self, r9: usize) {
-        self.r9 = r9 as _;
-    }
-
-    /// Gets the instruction pointer.
-    pub const fn ip(&self) -> usize {
-        self.rip as _
-    }
-
-    /// Sets the instruction pointer.
-    pub const fn set_ip(&mut self, rip: usize) {
-        self.rip = rip as _;
-    }
-
-    /// Gets the stack pointer.
-    pub const fn sp(&self) -> usize {
-        self.rsp as _
-    }
-
-    /// Sets the stack pointer.
-    pub const fn set_sp(&mut self, rsp: usize) {
-        self.rsp = rsp as _;
-    }
-
-    /// Gets the syscall number.
-    pub const fn sysno(&self) -> usize {
-        self.rax as usize
-    }
-
-    /// Sets the syscall number.
-    pub const fn set_sysno(&mut self, rax: usize) {
-        self.rax = rax as _;
-    }
-
-    /// Gets the return value register.
-    pub const fn retval(&self) -> usize {
-        self.rax as _
-    }
-
-    /// Sets the return value register.
-    pub const fn set_retval(&mut self, rax: usize) {
-        self.rax = rax as _;
-    }
-
-    /// Unwind the stack and get the backtrace.
-    pub fn backtrace(&self) -> axbacktrace::Backtrace {
-        axbacktrace::Backtrace::capture_trap(self.rbp as _, self.rip as _, 0)
+    /// Whether the trap is from userspace.
+    pub const fn is_user(&self) -> bool {
+        self.cs & 0b11 == 3
     }
 }
 
@@ -221,7 +150,7 @@ impl fmt::Debug for ExtendedState {
 ///
 /// - Callee-saved registers
 /// - Stack pointer register
-/// - Thread pointer register (for kernel-space thread-local storage)
+/// - Thread pointer register (for thread-local storage, currently unsupported)
 /// - FP/SIMD registers
 ///
 /// On context switch, current task saves its context from CPU to memory,
@@ -240,8 +169,11 @@ pub struct TaskContext {
     pub kstack_top: VirtAddr,
     /// `RSP` after all callee-saved registers are pushed.
     pub rsp: u64,
-    /// Thread pointer (FS segment base address)
+    /// Thread Local Storage (TLS).
     pub fs_base: usize,
+    /// The `gs_base` register value.
+    #[cfg(feature = "uspace")]
+    pub gs_base: usize,
     /// Extended states, i.e., FP/SIMD states.
     #[cfg(feature = "fp-simd")]
     pub ext_state: ExtendedState,
@@ -267,6 +199,8 @@ impl TaskContext {
             cr3: crate::asm::read_kernel_page_table(),
             #[cfg(feature = "fp-simd")]
             ext_state: ExtendedState::default(),
+            #[cfg(feature = "uspace")]
+            gs_base: 0,
         }
     }
 
@@ -311,13 +245,17 @@ impl TaskContext {
             self.ext_state.save();
             next_ctx.ext_state.restore();
         }
-        #[cfg(feature = "tls")]
+        #[cfg(any(feature = "tls", feature = "uspace"))]
         unsafe {
             self.fs_base = crate::asm::read_thread_pointer();
             crate::asm::write_thread_pointer(next_ctx.fs_base);
         }
         #[cfg(feature = "uspace")]
         unsafe {
+            // Switch gs base for user space.
+            self.gs_base = x86::msr::rdmsr(x86::msr::IA32_KERNEL_GSBASE) as usize;
+            x86::msr::wrmsr(x86::msr::IA32_KERNEL_GSBASE, next_ctx.gs_base as u64);
+            super::gdt::write_tss_rsp0(next_ctx.kstack_top);
             if next_ctx.cr3 != self.cr3 {
                 crate::asm::write_user_page_table(next_ctx.cr3);
                 // writing to CR3 has flushed the TLB

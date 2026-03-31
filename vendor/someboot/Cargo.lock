@@ -307,31 +307,20 @@ dependencies = [
 
 [[package]]
 name = "fdt-edit"
-version = "0.1.5"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b0f564fda6b9389cec0b258a98483b974b6ed37cf4e771222fb49cabe1e260f"
+checksum = "bda8ff88f0dd8770b247b17d9e0faf293c52cb5733e2500294ffa93ac1f0b384"
 dependencies = [
  "enum_dispatch",
- "fdt-raw 0.1.5",
+ "fdt-raw",
  "log",
 ]
 
 [[package]]
 name = "fdt-raw"
-version = "0.1.5"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e7b19f67663e8368d5a07165a1c348b5a761afe5d130e982a0ed8859aca37c2"
-dependencies = [
- "heapless",
- "log",
- "thiserror",
-]
-
-[[package]]
-name = "fdt-raw"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce2d6b3100c219add1cf704f0996cd45003fee5f1a2567397625c62cb7688f4"
+checksum = "91e6747052012035c3473585be1d706207893d8db73101825d8a3f75effa9843"
 dependencies = [
  "heapless",
  "log",
@@ -737,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "someboot"
-version = "0.1.6"
+version = "0.1.11"
 dependencies = [
  "aarch64-cpu 11.2.0",
  "aarch64-cpu-ext",
@@ -753,7 +742,7 @@ dependencies = [
  "byteorder",
  "derive_more",
  "fdt-edit",
- "fdt-raw 0.2.0",
+ "fdt-raw",
  "heapless",
  "kasm-aarch64",
  "kernutil",
@@ -775,13 +764,14 @@ dependencies = [
  "tock-registers 0.10.1",
  "uefi",
  "uguid",
+ "x86",
 ]
 
 [[package]]
 name = "somehal-macros"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38cc4ec03fa0bf03efcaf2b829371f3e08862df67be679009ff2ba6e87a3a7b8"
+checksum = "0e26764471ab7fe1c7cafcc1505b61ed59a3e9d55d4aa4a3d42648f0d4638d78"
 dependencies = [
  "darling 0.21.3",
  "proc-macro2",

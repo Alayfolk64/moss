@@ -1,5 +1,8 @@
 use core::{fmt::Write, ptr::null, sync::atomic::AtomicBool};
 
+#[cfg(target_arch = "x86_64")]
+use core::arch::naked_asm;
+
 use uefi::{
     Result,
     boot::{self, MemoryDescriptor, MemoryType},
@@ -14,8 +17,9 @@ use uefi::{
 pub use uefi::{Status, runtime::ResetType};
 
 use crate::{
+    ArchTrait,
     acpi::set_rsdp,
-    arch::relocate,
+    arch::{Arch, relocate},
     mem::{__io, __va},
 };
 
@@ -31,20 +35,54 @@ pub mod pe;
 
 /// EFI PE 入口点 - 符合 EFI ABI 的汇编包装
 /// 参数: a0 = image_handle, a1 = system_table
+#[cfg(target_arch = "x86_64")]
+#[unsafe(naked)]
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".text")]
+pub unsafe extern "C" fn __x86_64_efi_pe_entry() -> Status {
+    naked_asm!(
+        "sub rsp, 8",
+        "mov r12, rcx",
+        "mov r13, rdx",
+        "call {relocate}",
+        "mov rdi, r12",
+        "mov rsi, r13",
+        "add rsp, 8",
+        "jmp {entry}",
+        relocate = sym relocate,
+        entry = sym efi_pe_entry_main,
+    )
+}
+
+unsafe extern "C" fn efi_pe_entry_main(
+    image_handle: Handle,
+    system_table: *const ::core::ffi::c_void,
+) -> Status {
+    unsafe {
+        boot::set_image_handle(image_handle);
+        table::set_system_table(system_table.cast());
+        setup_console();
+        println!("UEFI application started.");
+        // Safety: `system_table` comes from the EFI firmware entry path and
+        // matches the contract documented on `ArchTrait::efi_enter_kernel`.
+        if Arch::efi_enter_kernel(system_table) {
+            Status::SUCCESS
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
 #[unsafe(export_name = "efi_pe_entry")]
 #[unsafe(link_section = ".text")]
-pub unsafe extern "C" fn efi_pe_entry(
+pub unsafe extern "efiapi" fn efi_pe_entry(
     image_handle: Handle,
     system_table: *const ::core::ffi::c_void,
 ) -> Status {
     unsafe {
         relocate();
-        boot::set_image_handle(image_handle);
-        table::set_system_table(system_table.cast());
-        setup_console();
-        println!("UEFI application started.");
-        crate::arch::entry::kernel_entry(1, null(), system_table);
-        unreachable!()
+        efi_pe_entry_main(image_handle, system_table)
     }
 }
 

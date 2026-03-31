@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "somehal"
-version = "0.6.1"
+version = "0.6.5"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = "build.rs"
 autolib = false
@@ -37,6 +37,7 @@ hv = [
     "someboot/hv",
 ]
 mmu = ["someboot/mmu"]
+percpu-prealloc = ["someboot/percpu-prealloc"]
 uspace = [
     "mmu",
     "someboot/uspace",
@@ -66,13 +67,16 @@ version = "0.7"
 version = "0.14"
 
 [dependencies.rdrive]
-version = "0.19"
+version = "0.20"
 
 [dependencies.someboot]
 version = "0.1"
 
 [dependencies.somehal-macros]
 version = "0.1"
+
+[dependencies.spin]
+version = "0.10"
 
 [dependencies.thiserror]
 version = "2"

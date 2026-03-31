@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "someboot"
-version = "0.1.6"
+version = "0.1.11"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = "build.rs"
 autolib = false
@@ -34,6 +34,7 @@ repository = "https://github.com/drivercraft/sparreal-os"
 efi = []
 hv = []
 mmu = []
+percpu-prealloc = []
 uspace = ["mmu"]
 
 [lib]
@@ -81,10 +82,10 @@ features = ["full"]
 default-features = false
 
 [dependencies.fdt-edit]
-version = "0.1"
+version = "0.2.3"
 
 [dependencies.fdt-raw]
-version = "0.2"
+version = "0.3"
 
 [dependencies.heapless]
 version = "0.9"
@@ -158,3 +159,9 @@ version = "0.2"
 
 [target.'cfg(target_arch = "loongarch64")'.dependencies.uefi]
 version = "0.36"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies.uefi]
+version = "0.36"
+
+[target.'cfg(target_arch = "x86_64")'.dependencies.x86]
+version = "0.52"

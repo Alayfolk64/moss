@@ -8,22 +8,16 @@
 //!
 //! Cargo features that can be enabled with `gimli`:
 //!
-//! * `std`: Enabled by default. Use the `std` library. Disabling this feature allows
-//!   using `gimli` in embedded environments that do not have access to `std`.
+//! * `std`: Enabled by default. Use the `std` library. Disabling this feature
+//!   allows using `gimli` in embedded environments that do not have access to
+//!   `std`. Note that even when `std` is disabled, `gimli` still requires an
+//!   implementation of the `alloc` crate.
 //!
-//! * `read`: Enabled by default. Enables the `read` module. Use of `std` is optional.
-//!   Requires the `alloc` crate.
+//! * `read`: Enabled by default. Enables the `read` module. Use of `std` is
+//!   optional.
 //!
-//! * `read-core`: Enabled by default. Enables a subset of the `read` module that does
-//!   not require the `alloc` crate.
-//!
-//! * `endian-reader`: Enabled by default. Enables the [`EndianReader`] trait. This is
-//!   a separate feature because it also depends on the `stable_deref_trait` crate.
-//!
-//! * `write`: Enabled by default. Enables the `write` module. Use of `std` is optional.
-//!   Requires the `alloc` crate. Enabling both `read` and `write` will also enable
-//!   conversion functionality in the `write` module.
-//!
+//! * `write`: Enabled by default. Enables the `write` module. Always uses
+//!   the `std` library.
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 // Selectively enable rust 2018 warnings
@@ -51,7 +45,7 @@
 #[macro_use]
 extern crate alloc;
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "write"))]
 #[macro_use]
 extern crate std;
 
@@ -72,9 +66,6 @@ mod endianity;
 pub use crate::endianity::*;
 
 pub mod leb128;
-
-mod case_fold;
-pub use crate::case_fold::*;
 
 #[cfg(feature = "read-core")]
 pub mod read;

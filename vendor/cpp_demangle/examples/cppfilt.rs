@@ -51,7 +51,7 @@ where
 
         if let Ok((sym, tail)) = BorrowedSymbol::with_tail(&line[idx..]) {
             let demangled = sym
-                .demangle_with_options(&options)
+                .demangle(&options)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             write!(out, "{}", demangled)?;
             line = tail;

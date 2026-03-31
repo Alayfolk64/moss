@@ -2,8 +2,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use gimli::ReaderOffset;
-
 use crate::maybe_small;
 use crate::{Context, DebugFile, Error, LazyResult, RangeAttributes};
 
@@ -160,7 +158,7 @@ impl<R: gimli::Reader> Functions<R> {
         // It's possible for multiple functions to have the same address range if the
         // compiler can detect and remove functions with identical code.  In that case
         // we'll nondeterministically return one of them.
-        addresses.sort_unstable_by_key(|x| x.range.begin);
+        addresses.sort_by_key(|x| x.range.begin);
 
         Ok(Functions {
             functions: functions.into_boxed_slice(),
@@ -254,7 +252,7 @@ impl<R: gimli::Reader> Function<R> {
         // In this example, if you want to look up address 7 at depth 0, and you
         // encounter [0..2 at depth 1], are you before or after the target range?
         // You don't know.
-        state.addresses.sort_unstable_by(|r1, r2| {
+        state.addresses.sort_by(|r1, r2| {
             if r1.call_depth < r2.call_depth {
                 Ordering::Less
             } else if r1.call_depth > r2.call_depth {
@@ -310,7 +308,7 @@ impl<R: gimli::Reader> Function<R> {
     }
 
     fn skip(
-        entries: &mut gimli::EntriesRaw<'_, R>,
+        entries: &mut gimli::EntriesRaw<'_, '_, R>,
         abbrev: &gimli::Abbreviation,
         depth: isize,
     ) -> Result<(), Error> {
@@ -464,7 +462,7 @@ impl<R: gimli::Reader> InlinedFunction<R> {
 
 struct InlinedState<'a, R: gimli::Reader> {
     // Mutable fields.
-    entries: gimli::EntriesRaw<'a, R>,
+    entries: gimli::EntriesRaw<'a, 'a, R>,
     functions: Vec<InlinedFunction<R>>,
     addresses: Vec<InlinedFunctionAddress>,
 
@@ -526,7 +524,7 @@ where
     let abbrev = if let Some(abbrev) = entries.read_abbreviation()? {
         abbrev
     } else {
-        return Err(gimli::Error::NoEntryAtGivenOffset(offset.0.into_u64()));
+        return Err(gimli::Error::NoEntryAtGivenOffset);
     };
 
     let mut name = None;

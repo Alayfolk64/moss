@@ -3,14 +3,10 @@ use core::{
     borrow::Borrow,
     fmt,
     hash::{BuildHasher, Hash},
-    iter::FusedIterator,
     mem,
     num::NonZeroU32,
     ops, slice,
 };
-
-#[cfg(feature = "zeroize")]
-use zeroize::Zeroize;
 
 use hash32::{BuildHasherDefault, FnvHasher};
 
@@ -70,7 +66,6 @@ use crate::Vec;
 pub type FnvIndexMap<K, V, const N: usize> = IndexMap<K, V, BuildHasherDefault<FnvHasher>, N>;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 struct HashValue(u16);
 
 impl HashValue {
@@ -85,7 +80,6 @@ impl HashValue {
 
 #[doc(hidden)]
 #[derive(Clone)]
-#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub struct Bucket<K, V> {
     hash: HashValue,
     key: K,
@@ -94,7 +88,6 @@ pub struct Bucket<K, V> {
 
 #[doc(hidden)]
 #[derive(Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub struct Pos {
     // compact representation of `{ hash_value: u16, index: u16 }`
     // To get the most from `NonZero` we store the *value minus 1*. This way `None::Option<Pos>`
@@ -145,11 +138,6 @@ macro_rules! probe_loop {
     }
 }
 
-#[cfg_attr(
-    feature = "zeroize",
-    derive(Zeroize),
-    zeroize(bound = "K: Zeroize, V: Zeroize")
-)]
 struct CoreMap<K, V, const N: usize> {
     entries: Vec<Bucket<K, V>, N, usize>,
     indices: [Option<Pos>; N],
@@ -665,8 +653,8 @@ where
             match self.core.insert(self.hash_val, self.key, value) {
                 Insert::Success(inserted) => {
                     unsafe {
-                        // SAFETY: Already checked existence at instantiation and the only mutable
-                        // reference to the map is internally held.
+                        // SAFETY: Already checked existence at instantiation and the only mutable reference
+                        // to the map is internally held.
                         Ok(&mut (*self.core.entries.as_mut_ptr().add(inserted.index)).value)
                     }
                 }
@@ -734,14 +722,8 @@ where
 ///     println!("{}: \"{}\"", book, review);
 /// }
 /// ```
-#[cfg_attr(
-    feature = "zeroize",
-    derive(Zeroize),
-    zeroize(bound = "K: Zeroize, V: Zeroize")
-)]
 pub struct IndexMap<K, V, S, const N: usize> {
     core: CoreMap<K, V, N>,
-    #[cfg_attr(feature = "zeroize", zeroize(skip))]
     build_hasher: S,
 }
 
@@ -806,7 +788,7 @@ impl<K, V, S, const N: usize> IndexMap<K, V, S, N> {
         }
     }
 
-    /// Return an iterator over mutable references to the values of the map, in insertion order
+    /// Return an iterator over mutable references to the the values of the map, in insertion order
     ///
     /// ```
     /// use heapless::index_map::FnvIndexMap;
@@ -1472,19 +1454,6 @@ impl<K, V, const N: usize> Iterator for IntoIter<K, V, N> {
     fn next(&mut self) -> Option<Self::Item> {
         self.entries.pop().map(|bucket| (bucket.key, bucket.value))
     }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.len();
-        (len, Some(len))
-    }
-}
-
-impl<K, V, const N: usize> FusedIterator for IntoIter<K, V, N> {}
-
-impl<K, V, const N: usize> ExactSizeIterator for IntoIter<K, V, N> {
-    fn len(&self) -> usize {
-        self.entries.len()
-    }
 }
 
 impl<K, V, S, const N: usize> IntoIterator for IndexMap<K, V, S, N> {
@@ -1592,8 +1561,8 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
 
 /// A mutable iterator over the values of a [`IndexMap`].
 ///
-/// This `struct` is created by the [`values_mut`](IndexMap::values_mut) method on [`IndexMap`]. See
-/// its documentation for more.
+/// This `struct` is created by the [`values_mut`](IndexMap::values_mut) method on [`IndexMap`]. See its
+/// documentation for more.
 pub struct ValuesMut<'a, K, V> {
     iter: slice::IterMut<'a, Bucket<K, V>>,
 }
@@ -1758,23 +1727,8 @@ mod tests {
         src.insert("k4", "v4").unwrap();
         let clone = src.clone();
         for (k, v) in clone.into_iter() {
-            assert_eq!(v, src.remove(k).unwrap());
+            assert_eq!(v, *src.get(k).unwrap());
         }
-        assert!(src.is_empty());
-    }
-
-    #[test]
-    fn into_iter_len() {
-        let mut src: FnvIndexMap<_, _, 2> = FnvIndexMap::new();
-        src.insert("k1", "v1").unwrap();
-        src.insert("k2", "v2").unwrap();
-
-        let mut items = src.into_iter();
-        assert_eq!(items.len(), 2);
-        let _ = items.next();
-        assert_eq!(items.len(), 1);
-        let _ = items.next();
-        assert_eq!(items.len(), 0);
     }
 
     #[test]
@@ -1788,11 +1742,8 @@ mod tests {
 
     // tests that use this constant take too long to run under miri, specially on CI, with a map of
     // this size so make the map smaller when using miri
-    #[cfg(not(any(miri, target_os = "vxworks")))]
+    #[cfg(not(miri))]
     const MAP_SLOTS: usize = 4096;
-    // Reduce number of slots as too many slots can cause a stack overflow on VxWorks.
-    #[cfg(target_os = "vxworks")]
-    const MAP_SLOTS: usize = 1024;
     #[cfg(miri)]
     const MAP_SLOTS: usize = 64;
     fn almost_filled_map() -> FnvIndexMap<usize, usize, MAP_SLOTS> {
@@ -2033,29 +1984,5 @@ mod tests {
         // Make sure `PartialEq` is implemented even if `V` doesn't implement `Eq`.
         let map: FnvIndexMap<usize, f32, 4> = Default::default();
         assert_eq!(map, map);
-    }
-
-    #[test]
-    #[cfg(feature = "zeroize")]
-    fn test_index_map_zeroize() {
-        use zeroize::Zeroize;
-
-        let mut map: FnvIndexMap<u8, u8, 8> = FnvIndexMap::new();
-        for i in 1..=8 {
-            map.insert(i, i * 10).unwrap();
-        }
-
-        assert_eq!(map.len(), 8);
-        assert!(!map.is_empty());
-
-        // zeroized using Vec's implementation
-        map.zeroize();
-
-        assert_eq!(map.len(), 0);
-        assert!(map.is_empty());
-
-        map.insert(1, 10).unwrap();
-        assert_eq!(map.len(), 1);
-        assert_eq!(map.get(&1), Some(&10));
     }
 }

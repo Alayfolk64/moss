@@ -26,17 +26,12 @@
 //!
 //! [`BinaryHeap`]: `crate::binary_heap::BinaryHeap`
 
-use core::{
-    cmp::Ordering,
-    fmt,
-    marker::PhantomData,
-    mem::MaybeUninit,
-    ops::{Deref, DerefMut},
-    ptr,
-};
-
-#[cfg(feature = "zeroize")]
-use zeroize::Zeroize;
+use core::cmp::Ordering;
+use core::fmt;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
+use core::ops::{Deref, DerefMut};
+use core::ptr;
 
 mod storage {
     use super::{LenType, Node, SortedLinkedListInner, SortedLinkedListView};
@@ -45,24 +40,18 @@ mod storage {
     ///
     /// There's two implementations available:
     ///
-    /// - [`OwnedSortedLinkedListStorage`]: stores the data in an array `[T; N]` whose size is known
-    ///   at compile time.
+    /// - [`OwnedSortedLinkedListStorage`]: stores the data in an array `[T; N]` whose size is known at compile time.
     /// - [`ViewSortedLinkedListStorage`]: stores the data in an unsized `[T]`.
     ///
-    /// This allows [`SortedLinkedList`] to be generic over either sized or unsized storage. The
-    /// [`sorted_linked_list`](super) module contains a [`SortedLinkedListInner`] struct that's
-    /// generic on [`SortedLinkedListStorage`], and two type aliases for convenience:
+    /// This allows [`SortedLinkedList`] to be generic over either sized or unsized storage. The [`sorted_linked_list`](super)
+    /// module contains a [`SortedLinkedListInner`] struct that's generic on [`SortedLinkedListStorage`],
+    /// and two type aliases for convenience:
     ///
-    /// - [`SortedLinkedList<T, Idx, N>`](super::SortedLinkedList) = `SortedLinkedListInner<T,
-    ///   OwnedSortedLinkedListStorage<T, Idx, N>>`
-    /// - [`SortedLinkedListView<T, Idx>`](super::SortedLinkedListView) = `SortedLinkedListInner<T,
-    ///   ViewSortedLinkedListStorage<T, Idx>>`
+    /// - [`SortedLinkedList<T, Idx, N>`](super::SortedLinkedList) = `SortedLinkedListInner<T, OwnedSortedLinkedListStorage<T, Idx, N>>`
+    /// - [`SortedLinkedListView<T, Idx>`](super::SortedLinkedListView) = `SortedLinkedListInner<T, ViewSortedLinkedListStorage<T, Idx>>`
     ///
-    /// `SortedLinkedList` can be unsized into `SortedLinkedListView`, either by unsizing coercions
-    /// such as `&mut SortedLinkedList -> &mut SortedLinkedListView` or `Box<SortedLinkedList>
-    /// -> Box<SortedLinkedListView>`, or explicitly with
-    /// [`.as_view()`](super::SortedLinkedList::as_view) or
-    /// [`.as_mut_view()`](super::SortedLinkedList::as_mut_view).
+    /// `SortedLinkedList` can be unsized into `SortedLinkedListView`, either by unsizing coercions such as `&mut SortedLinkedList -> &mut SortedLinkedListView` or
+    /// `Box<SortedLinkedList> -> Box<SortedLinkedListView>`, or explicitly with [`.as_view()`](super::SortedLinkedList::as_view) or [`.as_mut_view()`](super::SortedLinkedList::as_mut_view).
     ///
     /// This trait is sealed, so you cannot implement it for your own types. You can only use
     /// the implementations provided by this crate.
@@ -74,8 +63,7 @@ mod storage {
     pub trait SortedLinkedListStorage<T, Idx>: SortedLinkedListSealedStorage<T, Idx> {}
 
     pub trait SortedLinkedListSealedStorage<T, Idx> {
-        // part of the sealed trait so that no trait is publicly implemented by
-        // `OwnedSortedLinkedListStorage` besides `Storage`
+        // part of the sealed trait so that no trait is publicly implemented by `OwnedSortedLinkedListStorage` besides `Storage`
         fn borrow(&self) -> &[Node<T, Idx>];
         fn borrow_mut(&mut self) -> &mut [Node<T, Idx>];
         fn as_view<K>(
@@ -97,8 +85,7 @@ mod storage {
         pub(crate) buffer: T,
     }
 
-    /// Implementation of [`SortedLinkedListStorage`] that stores the data in an array `[T; N]`
-    /// whose size is known at compile time.
+    /// Implementation of [`SortedLinkedListStorage`] that stores the data in an array `[T; N]` whose size is known at compile time.
     pub type OwnedSortedLinkedListStorage<T, Idx, const N: usize> =
         SortedLinkedListStorageInner<[Node<T, Idx>; N]>;
     /// Implementation of [`SortedLinkedListStorage`] that stores the data in an unsized `[T]`.
@@ -204,17 +191,15 @@ impl private::Sealed for Max {}
 impl private::Sealed for Min {}
 
 /// A node in the [`SortedLinkedList`].
-#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub struct Node<T, Idx> {
     val: MaybeUninit<T>,
     next: Idx,
 }
 
-/// Base struct for [`SortedLinkedList`] and [`SortedLinkedListView`], generic over the
-/// [`SortedLinkedListStorage`].
+/// Base struct for [`SortedLinkedList`] and [`SortedLinkedListView`], generic over the [`SortedLinkedListStorage`].
 ///
-/// In most cases you should use [`SortedLinkedList`] or [`SortedLinkedListView`] directly. Only use
-/// this struct if you want to write code that's generic over both.
+/// In most cases you should use [`SortedLinkedList`] or [`SortedLinkedListView`] directly. Only use this
+/// struct if you want to write code that's generic over both.
 pub struct SortedLinkedListInner<T, Idx, K, S>
 where
     Idx: LenType,
@@ -860,26 +845,6 @@ where
     }
 }
 
-#[cfg(feature = "zeroize")]
-impl<T, Idx, K, S> Zeroize for SortedLinkedListInner<T, Idx, K, S>
-where
-    T: Ord + Zeroize,
-    Idx: LenType + Zeroize,
-    K: Kind,
-    S: SortedLinkedListStorage<T, Idx> + ?Sized,
-{
-    fn zeroize(&mut self) {
-        while let Some(mut item) = self.pop() {
-            item.zeroize();
-        }
-
-        let buffer = self.list.borrow_mut();
-        for elem in buffer {
-            elem.zeroize();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use static_assertions::assert_not_impl_any;
@@ -1007,38 +972,6 @@ mod tests {
         find.finish();
 
         assert_eq!(ll.peek().unwrap(), &1001);
-    }
-
-    #[test]
-    #[cfg(feature = "zeroize")]
-    fn test_sorted_linked_list_zeroize() {
-        use zeroize::Zeroize;
-
-        let mut list: SortedLinkedList<u8, Max, 8, u8> = SortedLinkedList::new_u8();
-        for i in 1..=8 {
-            list.push(i).unwrap();
-        }
-
-        assert_eq!(list.is_empty(), false);
-        assert!(list.is_full());
-        assert_eq!(list.peek(), Some(&8));
-
-        list.pop();
-        list.pop();
-        list.push(100).unwrap();
-
-        assert_eq!(list.peek(), Some(&100));
-
-        list.zeroize();
-
-        assert_eq!(list.peek(), None);
-        assert!(list.is_empty());
-
-        unsafe {
-            for node in &list.list.buffer {
-                assert_eq!(node.val.assume_init(), 0);
-            }
-        }
     }
 
     fn _test_variance<'a: 'b, 'b>(

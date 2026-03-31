@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axhal"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = "build.rs"
 autolib = false
@@ -89,11 +89,11 @@ name = "axhal"
 path = "src/lib.rs"
 
 [dependencies.axalloc]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axconfig]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [dependencies.axcpu]
 version = "0.3.0-preview.8"
@@ -135,7 +135,7 @@ version = "0.2.3-preview.1"
 version = "0.10"
 
 [build-dependencies.axconfig]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.axplat-aarch64-qemu-virt]
 version = "0.3.1-pre.6"
@@ -154,6 +154,6 @@ version = "0.3.1-pre.6"
 optional = true
 
 [target.'cfg(target_os = "none")'.dependencies.axplat-dyn]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 default-features = false

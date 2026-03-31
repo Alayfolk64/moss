@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axinput"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -39,11 +39,11 @@ name = "axinput"
 path = "src/lib.rs"
 
 [dependencies.axdriver]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 features = ["input"]
 
 [dependencies.axsync]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [dependencies.lazyinit]
 version = "0.2"

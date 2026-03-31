@@ -125,12 +125,6 @@ where
         unsafe { Self::new_unchecked(initial_tag(), NonNull::from(reference)) }
     }
 
-    #[inline]
-    pub unsafe fn from_ptr_unchecked(ptr: *mut N) -> Self {
-        debug_assert!(!ptr.is_null(), "Pointer must be non-null");
-        Self::new_unchecked(initial_tag(), NonNull::new_unchecked(ptr))
-    }
-
     /// # Safety
     ///
     /// - `ptr` must be a valid pointer.
@@ -188,13 +182,6 @@ const fn initial_tag() -> Tag {
     Tag::MIN
 }
 
-/// Pushes the given node on top of the stack
-///
-/// # Safety
-///
-/// - `new_top` must point to a node that is properly initialized for linking, i.e.
-///   `new_top.as_ref().next()` must be valid to call (see [`Node::next`])
-/// - `new_top` must be convertible to a reference (see [`NonNull::as_ref`])
 pub unsafe fn push<N>(stack: &Stack<N>, new_top: NonNullPtr<N>)
 where
     N: Node,
@@ -205,7 +192,6 @@ where
         new_top
             .non_null()
             .as_ref()
-            // SAFETY: Caller ensures that it is safe to call `next`
             .next()
             .store(top, Ordering::Relaxed);
 
@@ -249,16 +235,13 @@ where
                 // |                               | push(p)                 | (1, 2) -> (1, 3) -> (1, 1)   |
                 // | try_pop()::cas(p, p.next)     |                         | (1, 1)                       |
                 //
-                // As can be seen, the `cas` operation succeeds, wrongly removing pointer `3` from
-                // the stack.
+                // As can be seen, the `cas` operation succeeds, wrongly removing pointer `3` from the stack.
                 //
-                // By incrementing the tag before returning the pointer, it cannot be pushed again
-                // with the, same tag, preventing the `try_pop()::cas(p, p.next)`
-                // operation from succeeding.
+                // By incrementing the tag before returning the pointer, it cannot be pushed again with the,
+                // same tag, preventing the `try_pop()::cas(p, p.next)` operation from succeeding.
                 //
-                // With this fix, `try_pop()` in thread 2 returns `(2, 2)` and the comparison
-                // between `(1, 2)` and `(2, 2)` fails, restarting the loop and
-                // correctly removing the new top:
+                // With this fix, `try_pop()` in thread 2 returns `(2, 2)` and the comparison between
+                // `(1, 2)` and `(2, 2)` fails, restarting the loop and correctly removing the new top:
                 //
                 // | Thread 1                      | Thread 2                | Stack                        |
                 // |-------------------------------|-------------------------|------------------------------|

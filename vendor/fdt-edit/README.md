@@ -1,233 +1,215 @@
 # fdt-edit
 
-A high-level Rust library for creating, editing, and encoding Flattened Device Tree (FDT) structures.
+[![Crates.io](https://img.shields.io/crates/v/fdt-edit.svg)](https://crates.io/crates/fdt-edit)
+[![Documentation](https://docs.rs/fdt-edit/badge.svg)](https://docs.rs/fdt-edit)
 
-## Overview
+`fdt-edit` is a pure-Rust, `#![no_std]` library for creating, loading, editing, querying, and re-encoding Flattened Device Tree (FDT) blobs.
 
-`fdt-edit` is a feature-rich device tree manipulation library built on top of `fdt-raw`. It provides comprehensive functionality for creating new device trees from scratch, modifying existing device trees, and encoding the edited device trees into standard DTB format.
+The crate is intended for firmware, kernels, bootloaders, and embedded tooling that need a mutable in-memory device tree representation instead of a read-only parser.
 
-## Features
+## What It Does
 
-- **Complete device tree editing**: Full CRUD operations for nodes and properties
-- **Type-safe node operations**: Specialized node types (clocks, memory, PCI, interrupt controllers, etc.)
-- **Efficient encoder**: Converts in-memory device tree structures to standard DTB format
-- **phandle management**: Automatic phandle allocation and reference management
-- **Memory reservation support**: Complete memory reservation region operations
-- **`no_std` compatible**: Suitable for embedded environments
+- Parse existing DTB data into an editable arena-backed tree
+- Build new device trees programmatically from scratch
+- Add, update, and remove nodes and properties
+- Query nodes by path, phandle, or compatible string
+- Re-encode the edited tree back into DTB bytes
+- Work in `no_std` environments with `alloc`
 
-## Core Components
+## Why `fdt-edit`
 
-### Fdt Structure
-An editable device tree container that:
-- Parses from raw DTB data
-- Creates new empty device trees
-- Manages phandle cache
-- Encodes to DTB format
+This repository originally focused on parsing. The current high-level crate is `fdt-edit`, which sits on top of `fdt-raw` and provides a mutable API for real tree manipulation.
 
-### Node System
-Supports multiple specialized node types:
-- **Clock nodes**: Clock sources and clock consumers
-- **Memory nodes**: Memory region definitions
-- **PCI nodes**: PCI buses and devices
-- **Interrupt controllers**: Interrupt mapping and management
-- **Generic nodes**: Customizable node types
+Compared with a read-only parser, `fdt-edit` is designed for workflows such as:
 
-### Property System
-- **Type-safe properties**: Support for various data types
-- **Automatic property management**: Intelligent property CRUD operations
-- **Formatted display**: Friendly node and property display
+- patching a board DTB before boot
+- constructing a synthetic tree in tests
+- rewriting properties like `reg`, `status`, `compatible`, or `interrupt-parent`
+- preserving memory reservation entries while round-tripping DTB data
+
+## Installation
+
+Add the crate to your `Cargo.toml`:
+
+```toml
+[dependencies]
+fdt-edit = "0.2.0"
+```
 
 ## Quick Start
 
-```rust
-use fdt_edit::Fdt;
+### Load, Modify, Encode
 
-// Parse existing DTB from bytes
-let raw_data = include_bytes!("path/to/device-tree.dtb");
-let fdt = Fdt::from_bytes(&raw_data)?;
+```rust,no_run
+use fdt_edit::{Fdt, Node, Property};
 
-// Access nodes by path
-let node = fdt.get_by_path("/chosen");
-if let Some(chosen) = node {
-    println!("Found chosen node: {}", chosen.name());
-}
+# fn main() -> Result<(), fdt_edit::FdtError> {
+let dtb: &[u8] = &[]; // replace with real DTB bytes
+let mut fdt = Fdt::from_bytes(dtb)?;
 
-// Encode back to DTB format
-let dtb_data = fdt.encode();
-std::fs::write("output.dtb", dtb_data.as_bytes())?;
+let root_id = fdt.root_id();
+fdt.node_mut(root_id)
+  .unwrap()
+  .set_property(Property::new("model", b"example-board\0".to_vec()));
+
+let soc_id = if let Some(node) = fdt.get_by_path("/soc") {
+  node.id()
+} else {
+  fdt.add_node(root_id, Node::new("soc"))
+};
+
+let mut uart = Node::new("uart@1000");
+uart.set_property(Property::new("compatible", b"ns16550a\0".to_vec()));
+uart.set_property(Property::new(
+  "reg",
+  vec![0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00],
+));
+fdt.add_node(soc_id, uart);
+
+let encoded = fdt.encode();
+assert!(!encoded.is_empty());
+# Ok(())
+# }
 ```
 
-### Node Traversal and Searching
+### Build A New Tree
 
 ```rust
-use fdt_edit::{Fdt, NodeKind};
+use fdt_edit::{Fdt, Node, Property};
 
-let fdt = Fdt::from_bytes(&dtb_data)?;
+let mut fdt = Fdt::new();
+let root_id = fdt.root_id();
 
-// Iterate through all nodes
-for node in fdt.all_nodes() {
-    println!("Node: {} at path {}", node.name(), node.path());
+fdt.node_mut(root_id).unwrap().set_property(Property::new(
+  "#address-cells",
+  2u32.to_be_bytes().to_vec(),
+));
+fdt.node_mut(root_id).unwrap().set_property(Property::new(
+  "#size-cells",
+  1u32.to_be_bytes().to_vec(),
+));
 
-    // Match specialized node types
-    match node.as_ref() {
-        NodeKind::Memory(mem) => {
-            println!("  Memory node with regions:");
-            for region in mem.regions() {
-                println!("    address=0x{:x}, size=0x{:x}", region.address, region.size);
-            }
-        }
-        NodeKind::Clock(clock) => {
-            println!("  Clock node: {} (#clock-cells={})", clock.name(), clock.clock_cells);
-        }
-        NodeKind::Pci(pci) => {
-            if let Some(range) = pci.bus_range() {
-                println!("  PCI bus range: {:?}", range);
-            }
-        }
-        _ => {
-            println!("  Generic node");
-        }
-    }
-}
+let mut memory = Node::new("memory@80000000");
+memory.set_property(Property::new("device_type", b"memory\0".to_vec()));
+memory.set_property(Property::new(
+  "reg",
+  vec![
+    0x80, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+    0x40, 0x00, 0x00, 0x00,
+  ],
+));
+fdt.add_node(root_id, memory);
 
-// Find nodes by path pattern
-let virtio_nodes: Vec<_> = fdt.find_by_path("/virtio_mmio").collect();
-println!("Found {} virtio_mmio nodes", virtio_nodes.len());
+let dtb = fdt.encode();
+assert!(dtb.len() >= 40);
 ```
 
-### Node Modification and Creation
+### Query Typed Nodes
 
-```rust
-use fdt_edit::{Fdt, Node};
+```rust,no_run
+use fdt_edit::{Fdt, NodeType};
 
-let mut fdt = Fdt::from_bytes(&dtb_data)?;
+# fn main() -> Result<(), fdt_edit::FdtError> {
+# let dtb: &[u8] = &[]; // replace with real DTB bytes
+let fdt = Fdt::from_bytes(dtb)?;
 
-// Create new node manually
-let mut new_node = Node::new("test-device@12340000");
-// Add properties (API in development)
-// new_node.add_property("compatible", &["vendor,test-device"]);
-// new_node.add_property("reg", &[0x12340000u64, 0x1000u64]);
-
-// Add to root node
-fdt.root.add_child(new_node);
-
-// Remove existing node
-if fdt.get_by_path("/psci").is_some() {
-    let removed = fdt.remove_node("/psci")?;
-    println!("Removed psci node: {}", removed.unwrap().name());
+for node in fdt.find_compatible(&["pci-host-ecam-generic"]) {
+  if let NodeType::Pci(pci) = node {
+    let _bus_range = pci.bus_range();
+    let _interrupt_cells = pci.interrupt_cells();
+  }
 }
-
-// Save the modified device tree
-let modified_dtb = fdt.encode();
-std::fs::write("modified.dtb", modified_dtb.as_bytes())?;
+# Ok(())
+# }
 ```
 
-### Specialized Node Access
+## Core API
 
-```rust
-use fdt_edit::{Fdt, NodeKind};
+### `Fdt`
 
-let fdt = Fdt::from_bytes(&dtb_data)?;
+- `Fdt::new()`: create an empty editable tree
+- `Fdt::from_bytes()`: parse DTB bytes into an editable tree
+- `Fdt::from_ptr()`: parse from a raw pointer
+- `root_id()`: get the root node ID
+- `node()` / `node_mut()`: access raw mutable nodes by ID
+- `add_node()`: insert a child node
+- `remove_node()` / `remove_by_path()`: delete nodes and subtrees
+- `get_by_path()`: fetch a classified node view by absolute path or alias
+- `get_by_phandle()`: fetch a node by phandle
+- `find_compatible()`: search by compatible string
+- `all_nodes()`: depth-first iteration over the whole tree
+- `encode()`: serialize the tree back into DTB bytes
 
-// Find and work with memory nodes
-for node in fdt.all_nodes() {
-    if let NodeKind::Memory(mem) = node.as_ref() {
-        let regions = mem.regions();
-        if !regions.is_empty() {
-            println!("Memory node '{}' has {} regions:", mem.name(), regions.len());
-            for (i, region) in regions.iter().enumerate() {
-                println!("  Region {}: 0x{:x}-0x{:x}", i, region.address, region.address + region.size);
-            }
-        }
-    }
-}
+### `Node`
 
-// Find clock nodes
-let mut clock_count = 0;
-for node in fdt.all_nodes() {
-    if let NodeKind::Clock(clock) = node.as_ref() {
-        clock_count += 1;
-        println!("Clock {}: cells={}, output-names={:?}",
-                 clock.name(),
-                 clock.clock_cells,
-                 clock.clock_output_names);
-    }
-}
-```
+- `Node::new(name)`: create a node
+- `set_property()`: add or replace a property
+- `remove_property()`: delete a property
+- `get_property()`: inspect a property
+- `children()`: list child node IDs
+- helpers like `address_cells()`, `size_cells()`, `phandle()`, `compatible()`, `status()`
 
-### Display as Device Tree Source
+### `Property`
 
-```rust
-use fdt_edit::Fdt;
+- `Property::new(name, data)`: create a raw property
+- `get_u32()` / `get_u64()`: decode integer values
+- `set_u32_ls()` / `set_u64()`: encode integer values
+- `as_str()` / `as_str_iter()`: decode string and string-list properties
+- `set_string()` / `set_string_ls()`: update string data
 
-let fdt = Fdt::from_bytes(&dtb_data)?;
+## Typed Node Views
 
-// Display as DTS format (including memory reservations)
-println!("{}", fdt);
-// Output will show:
-// /dts-v1/;
-// /memreserve/ 0x80000000 0x100000;
-// / {
-//     #address-cells = <0x2>;
-//     #size-cells = <0x2>;
-//     compatible = "qemu,arm64";
-//     ...
-// };
-```
+`get_by_path()`, `get_by_phandle()`, and `all_nodes()` return classified node views, so code can branch on device-tree semantics instead of only raw node names.
 
-## Current Status
+Available typed views include:
 
-This library is under active development. Currently supported features:
-- ✅ Parse DTB files into editable structures
-- ✅ Encode device trees back to DTB format
-- ✅ Display device trees in DTS format
-- ✅ Access to memory reservations
-- 🚧 Node editing APIs (in development)
+- `NodeType::Generic`
+- `NodeType::Memory`
+- `NodeType::InterruptController`
+- `NodeType::Clock`
+- `NodeType::Pci`
 
-## Dependencies
+These views expose helpers such as inherited `interrupt-parent` lookup, translated `reg` handling, clock metadata, memory region inspection, and PCI-specific range or interrupt-map parsing.
 
-- `fdt-raw` - Low-level FDT parsing library
-- `log = "0.4"` - Logging support
-- `enum_dispatch = "0.3.13"` - Enum dispatch optimization
+## Encoding And Round-Tripping
 
-## Dev Dependencies
+`fdt-edit` preserves the parts of the tree that matter for boot-time DTB generation:
 
-- `dtb-file` - Test data
-- `env_logger = "0.11"` - Logger implementation
+- header metadata such as `boot_cpuid_phys`
+- memory reservation entries
+- node hierarchy and property ordering
+- string table regeneration during encoding
+
+The crate is built for parse-edit-encode workflows and includes tests that round-trip real DTBs from several platforms.
+
+## Repository Layout
+
+This repository is a small workspace:
+
+- `fdt-edit`: the high-level editable FDT library described in this README
+- `fdt-raw`: lower-level parsing and data primitives used by `fdt-edit`
+- `dtb-file`: DTB fixtures used by tests and examples
 
 ## Testing
 
-The library includes comprehensive tests that verify round-trip compatibility:
-
 ```bash
-cargo test
+cargo test -p fdt-edit
 ```
 
-The main test (`test_parse_and_rebuild`) ensures that:
-1. A DTB file can be parsed successfully
-2. The parsed structure can be encoded back to DTB
-3. The original and rebuilt DTB files produce identical DTS output when using `dtc`
+The test suite covers:
+
+- parsing real DTB fixtures
+- tree traversal and path lookup
+- typed node classification
+- inherited interrupt-parent resolution
+- DTB encoding and round-trip correctness
+- memory reservation serialization
 
 ## License
 
-This project is licensed under open source licenses. Please see the LICENSE file in the project root for specific license types.
+`fdt-edit` is licensed under `MIT OR Apache-2.0`.
 
-## Contributing
+## Repository
 
-Issues and Pull Requests are welcome. Please ensure:
-
-1. Code follows the project's formatting standards (`cargo fmt`)
-2. All tests pass (`cargo test`)
-3. Clippy checks pass (`cargo clippy`)
-4. New features include appropriate test cases
-
-## Related Projects
-
-- [fdt-raw](../fdt-raw/) - Low-level FDT parsing library
-- [fdt-parser](../fdt-parser/) - High-level cached FDT parser
-- [dtb-tool](../dtb-tool/) - DTB file inspection tool
-- [dtb-file](../dtb-file/) - Test data package
-
-## Examples
-
-More usage examples can be found in the source code test files, particularly in `tests/edit.rs`.
+https://github.com/drivercraft/fdt-parser

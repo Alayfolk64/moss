@@ -49,9 +49,11 @@ impl ArchTrait for Arch {
         power::init();
     }
 
-    fn per_cpu_trap_init(_is_primary: bool) {
+    fn per_cpu_trap_init(is_primary: bool) {
         trap::setup();
-        println!("Disable user page table");
+        if is_primary {
+            println!("Disable user page table");
+        }
         #[cfg(uspace)]
         elx::set_user_table(PageTableInfo { asid: 0, addr: 0 });
         elx::flush_tlb(None);
@@ -198,6 +200,12 @@ impl ArchTrait for Arch {
 
     fn dcache_range(op: crate::DCacheOp, addr: usize, size: usize) {
         aarch64_cpu_ext::cache::dcache_range(op.into(), addr, size);
+    }
+
+    // Safety: the EFI stub guarantees the same contract as the trait docs.
+    unsafe fn efi_enter_kernel(_system_table: *const ::core::ffi::c_void) -> bool {
+        unsafe { crate::arch::entry::kernel_entry(0) };
+        unreachable!()
     }
 }
 

@@ -12,14 +12,9 @@
 [package]
 edition = "2024"
 name = "fdt-edit"
-version = "0.1.5"
+version = "0.2.3"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = false
-exclude = [
-    ".git*",
-    "*.md",
-    "tests/",
-]
 autolib = false
 autobins = false
 autoexamples = false
@@ -27,7 +22,6 @@ autotests = false
 autobenches = false
 description = "A high-level library for creating, editing, and encoding Flattened Device Tree (FDT) structures"
 homepage = "https://github.com/drivercraft/fdt-parser"
-documentation = "https://docs.rs/fdt-edit"
 readme = "README.md"
 keywords = [
     "device-tree",
@@ -43,7 +37,6 @@ categories = [
 ]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/drivercraft/fdt-parser"
-resolver = "2"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -61,15 +54,39 @@ std = []
 name = "fdt_edit"
 path = "src/lib.rs"
 
-[[example]]
-name = "fdt_debug_demo"
-path = "examples/fdt_debug_demo.rs"
+[[test]]
+name = "clock"
+path = "tests/clock.rs"
+
+[[test]]
+name = "encode"
+path = "tests/encode.rs"
+
+[[test]]
+name = "fdt"
+path = "tests/fdt.rs"
+
+[[test]]
+name = "interrupts"
+path = "tests/interrupts.rs"
+
+[[test]]
+name = "pci"
+path = "tests/pci.rs"
+
+[[test]]
+name = "range"
+path = "tests/range.rs"
+
+[[test]]
+name = "rebuild"
+path = "tests/rebuild.rs"
 
 [dependencies.enum_dispatch]
-version = "0.3.13"
+version = "0.3"
 
 [dependencies.fdt-raw]
-version = "0.1.0"
+version = "0.3"
 
 [dependencies.log]
 version = "0.4"

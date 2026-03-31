@@ -63,8 +63,13 @@ fn compiler_error(err: Error) -> TokenStream {
     err.to_compile_error().into()
 }
 
-#[cfg(any(feature = "sp-naive", not(feature = "custom-base")))]
-fn def_percpu_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
+/// Defines a per-CPU static variable.
+///
+/// It should be used on a `static` variable definition.
+///
+/// See the documentation of the [percpu](https://docs.rs/percpu) crate for more details.
+#[proc_macro_attribute]
+pub fn def_percpu(attr: TokenStream, item: TokenStream) -> TokenStream {
     if !attr.is_empty() {
         return compiler_error(Error::new(
             Span::call_site(),
@@ -212,6 +217,16 @@ fn def_percpu_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
                 f(unsafe { self.current_ref_mut_raw() })
             }
 
+            /// Reset the per-CPU data on the current CPU to the initial value.
+            /// Preemption will be disabled during the reset.
+            ///
+            /// If the initial expression has side effects, they may be executed.
+            pub fn reset_to_init(&self) {
+                self.with_current(|val| unsafe {
+                    *val = #init_expr;
+                });
+            }
+
             /// Returns the raw pointer of this per-CPU static variable on the given CPU.
             ///
             /// # Safety
@@ -256,15 +271,6 @@ fn def_percpu_impl(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
     .into()
 }
-/// Defines a per-CPU static variable.
-///
-/// It should be used on a `static` variable definition.
-///
-/// See the documentation of the [percpu](https://docs.rs/percpu) crate for more details.
-#[proc_macro_attribute]
-pub fn def_percpu(attr: TokenStream, item: TokenStream) -> TokenStream {
-    def_percpu_impl(attr, item)
-}
 
 #[doc(hidden)]
 #[cfg(not(feature = "sp-naive"))]
@@ -273,34 +279,4 @@ pub fn percpu_symbol_vma(item: TokenStream) -> TokenStream {
     let symbol = &format_ident!("{}", item.to_string());
     let offset = arch::gen_symbol_vma(symbol);
     quote!({ #offset }).into()
-}
-
-#[cfg(all(feature = "custom-base", not(feature = "sp-naive")))]
-fn def_percpu_impl(attr: TokenStream, input: TokenStream) -> TokenStream {
-    if !attr.is_empty() {
-        return compiler_error(Error::new(
-            Span::call_site(),
-            "expect an empty attribute: `#[def_percpu]`",
-        ));
-    }
-
-    use syn::parse_macro_input;
-
-    let ItemStatic {
-        attrs,
-        vis,
-        static_token,
-        mutability,
-        ident,
-        ty,
-        expr,
-        ..
-    } = parse_macro_input!(input as ItemStatic);
-
-    quote! {
-        #[unsafe(link_section = ".percpu")]
-        #(#attrs)*
-        #vis #static_token #mutability #ident : percpu::PerCpuData<#ty> = percpu::PerCpuData::new(#expr);
-    }
-    .into()
 }

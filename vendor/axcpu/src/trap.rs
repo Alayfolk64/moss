@@ -13,7 +13,13 @@ pub static IRQ: [fn(usize) -> bool];
 
 /// A slice of page fault handler functions.
 #[def_trap_handler]
-pub static PAGE_FAULT: [fn(VirtAddr, PageFaultFlags) -> bool];
+pub static PAGE_FAULT: [fn(VirtAddr, PageFaultFlags, bool) -> bool];
+
+/// A slice of syscall handler functions.
+#[cfg(feature = "uspace")]
+#[cfg_attr(docsrs, doc(cfg(feature = "uspace")))]
+#[def_trap_handler]
+pub static SYSCALL: [fn(&TrapFrame, usize) -> isize];
 
 #[allow(unused_macros)]
 macro_rules! handle_trap {
@@ -29,4 +35,10 @@ macro_rules! handle_trap {
             false
         }
     }}
+}
+
+/// Call the external syscall handler.
+#[cfg(feature = "uspace")]
+pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
+    SYSCALL[0](tf, syscall_num)
 }

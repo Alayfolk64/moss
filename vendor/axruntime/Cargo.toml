@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axruntime"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -91,40 +91,40 @@ name = "axruntime"
 path = "src/lib.rs"
 
 [dependencies.axalloc]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axbacktrace]
 version = "0.1"
 
 [dependencies.axconfig]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [dependencies.axdisplay]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axdriver]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axfs]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axfs-ng]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axhal]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [dependencies.axinput]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axipi]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axklib]
@@ -132,25 +132,25 @@ version = "0.3"
 optional = true
 
 [dependencies.axlog]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [dependencies.axmm]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axnet]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axnet-ng]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.axplat]
 version = "0.3.1-pre.6"
 
 [dependencies.axtask]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 optional = true
 
 [dependencies.cfg-if]

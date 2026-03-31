@@ -29,7 +29,7 @@ Alternatively, you can edit your `Cargo.toml` directly and run `cargo update`:
 
 ```toml
 [dependencies]
-rust_decimal = "1.40"
+rust_decimal = "1.41"
 ```
 
 To enable macro support, you can enable the `macros` feature:
@@ -110,6 +110,7 @@ assert_eq!(total, dec!(27.26));
 **Behavior / Functionality**
 
 * [borsh](#borsh)
+* [bytemuck](#bytemuck)
 * [c-repr](#c-repr)
 * [legacy-ops](#legacy-ops)
 * [macros](#macros)
@@ -119,6 +120,7 @@ assert_eq!(total, dec!(27.26));
 * [rocket-traits](#rocket-traits)
 * [rust-fuzz](#rust-fuzz)
 * [std](#std)
+* [wasm](#wasm)
 
 **Database**
 
@@ -143,6 +145,10 @@ Forces `Decimal`'s alignment to 16 bytes (128 bits). This is identical to `u128`
 ### `borsh`
 
 Enables [Borsh](https://borsh.io/) serialization for `Decimal`.
+
+### `bytemuck`
+
+Enables [bytemuck](https://github.com/Lokathor/bytemuck) support by deriving `Pod` and `Zeroable` for `Decimal`. This also activates the `c-repr` feature since `Pod` requires `repr(C)`.
 
 ### `c-repr`
 
@@ -388,6 +394,13 @@ Please see the `examples` directory for more information regarding `serde_json` 
 Enable `std` library support. This is enabled by default, however in the future will be opt in. For now, to
 support `no_std`
 libraries, this crate can be compiled with `--no-default-features`.
+
+### `wasm`
+
+Enable [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) support which makes `Decimal` compatible with the
+`wasm_bindgen` attribute macro and exposes the following methods across boundaries:
+* `fromNumber()` / `toNumber()` — convert between `Decimal` and the primitive `number` type.
+* `fromString()` / `toString()` — convert between `Decimal` and a string representation.
 
 ## Building
 

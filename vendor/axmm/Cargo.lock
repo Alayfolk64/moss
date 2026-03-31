@@ -69,9 +69,9 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 
 [[package]]
 name = "axalloc"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a10c400cbdf0f611f92fcdd6e2c658de329085d3156ba65e323da7eaa7c7aca"
+checksum = "f5bb0695cfda0a651f3b44026899987c51c76063a9a807666f8f6b5e93a67966"
 dependencies = [
  "axallocator",
  "axerrno 0.2.2",
@@ -96,9 +96,9 @@ dependencies = [
 
 [[package]]
 name = "axbacktrace"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf9566516f5d799b2f791a6ec5af57eec87d17624346f7c876fa006b922c99e6"
+checksum = "1ed127f24c722b06d19c9c1ff73907905bbc2f9463dfd7440652f3f0d6617a93"
 dependencies = [
  "cfg-if",
  "log",
@@ -107,9 +107,9 @@ dependencies = [
 
 [[package]]
 name = "axconfig"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25985c64d932bf954b02eaf0873e4445d234d39b5100b1985585e3276b6b47d1"
+checksum = "15f74d126fc479e4a5acd4389e7ef2c9176c41e7ea3c54e985a7468489b494fb"
 dependencies = [
  "axconfig-macros",
 ]
@@ -182,9 +182,9 @@ dependencies = [
 
 [[package]]
 name = "axhal"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b721414abb9554522acdc0495cef83eadfc7d47257fe3c979e655c982d79588"
+checksum = "281f69e09ddb6eb04b7695fc8bdf5a58c760c630443aca8e69abc65ded5642da"
 dependencies = [
  "axalloc",
  "axconfig",
@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "axmm"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 dependencies = [
  "axalloc",
  "axerrno 0.2.2",
@@ -478,9 +478,9 @@ checksum = "17f03abfebdaaf0fad16790237a0348baf84886d3ade460db13bae59e614a180"
 
 [[package]]
 name = "libc"
-version = "0.2.182"
+version = "0.2.183"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
 
 [[package]]
 name = "linkme"

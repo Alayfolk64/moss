@@ -12,4 +12,10 @@ impl PlatOp for Plat {
     fn systick_irq() -> rdrive::IrqId {
         someboot::irq::systimer_irq().raw().into()
     }
+
+    fn secondary_init() {}
+
+    fn secondary_init_intc() {}
+
+    fn secondary_init_systick() {}
 }

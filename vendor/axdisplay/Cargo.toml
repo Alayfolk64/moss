@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axdisplay"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 authors = ["Shiping Yuan <robert_yuan@pku.edu.com>"]
 build = false
 autolib = false
@@ -31,11 +31,11 @@ name = "axdisplay"
 path = "src/lib.rs"
 
 [dependencies.axdriver]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 features = ["display"]
 
 [dependencies.axsync]
-version = "=0.3.0-preview.2"
+version = "=0.3.0-preview.3"
 
 [dependencies.lazyinit]
 version = "0.2"

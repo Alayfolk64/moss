@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.5](https://github.com/drivercraft/sparreal-os/compare/somehal-v0.6.4...somehal-v0.6.5) - 2026-03-19
+
+### Other
+
+- ✨ feat: 添加 per-CPU 预分配支持 ([#62](https://github.com/drivercraft/sparreal-os/pull/62))
+
+## [0.6.4](https://github.com/drivercraft/sparreal-os/compare/somehal-v0.6.3...somehal-v0.6.4) - 2026-03-19
+
+### Other
+
+- ✨ feat: 添加x86_64支持 ([#60](https://github.com/drivercraft/sparreal-os/pull/60))
+
+## [0.6.3](https://github.com/drivercraft/sparreal-os/compare/somehal-v0.6.2...somehal-v0.6.3) - 2026-03-10
+
+### Other
+
+- ✨ feat: 更新架构初始化函数以支持中断和定时器设置 ([#50](https://github.com/drivercraft/sparreal-os/pull/50))
+
+## [0.6.2](https://github.com/drivercraft/sparreal-os/compare/somehal-v0.6.1...somehal-v0.6.2) - 2026-03-10
+
+### Fixed
+
+- multi-core SMP initialization and secondary CPU boot sequence ([#48](https://github.com/drivercraft/sparreal-os/pull/48))
+
+### Other
+
+- ✨ feat: 更新 fdt-edit 和 fdt-raw 版本，优化 FDT 相关功能 ([#47](https://github.com/drivercraft/sparreal-os/pull/47))
+
 ## [0.6.1](https://github.com/drivercraft/sparreal-os/compare/somehal-v0.6.0...somehal-v0.6.1) - 2026-03-06
 
 ### Other

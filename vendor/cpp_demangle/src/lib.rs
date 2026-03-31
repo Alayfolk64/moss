@@ -1,8 +1,8 @@
 //! This crate can parse a C++ “mangled” linker symbol name into a Rust value
 //! describing what the name refers to: a variable, a function, a virtual table,
-//! etc. The description type implements functions such as `demangle()`,
-//! producing human-readable text describing the mangled name. Debuggers and
-//! profilers can use this crate to provide more meaningful output.
+//! etc. The description type implements `Display`, producing human-readable
+//! text describing the mangled name. Debuggers and profilers can use this crate
+//! to provide more meaningful output.
 //!
 //! C++ requires the compiler to choose names for linker symbols consistently
 //! across compilation units, so that two compilation units that have seen the
@@ -22,7 +22,8 @@
 //!
 //! The Itanium C++ ABI specifies that the linker symbol for that function must
 //! be named `_ZN5space3fooEii`. This crate can parse that name into a Rust
-//! value representing its structure. That Rust value can be `demangle()`d to the
+//! value representing its structure. Formatting the value with the `format!`
+//! macro or the `std::string::ToString::to_string` trait method yields the
 //! string `space::foo(int, int)`, which is more meaningful to the C++
 //! developer.
 
@@ -150,6 +151,7 @@ where
     ///
     /// ```
     /// use cpp_demangle::Symbol;
+    /// use std::string::ToString;
     ///
     /// // First, something easy :)
     ///
@@ -158,7 +160,7 @@ where
     /// let sym = Symbol::new(&mangled[..])
     ///     .expect("Could not parse mangled symbol!");
     ///
-    /// let demangled = sym.demangle().unwrap();
+    /// let demangled = sym.to_string();
     /// assert_eq!(demangled, "space::foo(int, bool, char)");
     ///
     /// // Now let's try something a little more complicated!
@@ -169,7 +171,7 @@ where
     /// let sym = Symbol::new(&mangled[..])
     ///     .expect("Could not parse mangled symbol!");
     ///
-    /// let demangled = sym.demangle().unwrap();
+    /// let demangled = sym.to_string();
     /// assert_eq!(
     ///     demangled,
     ///     "JS_GetPropertyDescriptorById(JSContext*, JS::Handle<JSObject*>, JS::Handle<jsid>, JS::MutableHandle<JS::PropertyDescriptor>)"
@@ -184,6 +186,7 @@ where
     ///
     /// ```
     /// use cpp_demangle::{ParseOptions, Symbol};
+    /// use std::string::ToString;
     ///
     /// // First, something easy :)
     ///
@@ -195,7 +198,7 @@ where
     /// let sym = Symbol::new_with_options(&mangled[..], &parse_options)
     ///     .expect("Could not parse mangled symbol!");
     ///
-    /// let demangled = sym.demangle().unwrap();
+    /// let demangled = sym.to_string();
     /// assert_eq!(demangled, "space::foo(int, bool, char)");
     ///
     /// // Now let's try something a little more complicated!
@@ -206,7 +209,7 @@ where
     /// let sym = Symbol::new(&mangled[..])
     ///     .expect("Could not parse mangled symbol!");
     ///
-    /// let demangled = sym.demangle().unwrap();
+    /// let demangled = sym.to_string();
     /// assert_eq!(
     ///     demangled,
     ///     "JS_GetPropertyDescriptorById(JSContext*, JS::Handle<JSObject*>, JS::Handle<jsid>, JS::MutableHandle<JS::PropertyDescriptor>)"
@@ -249,40 +252,27 @@ substitutions = {:#?}",
         Ok(symbol)
     }
 
-    /// Demangle the symbol and return it as a String, with the default options.
-    ///
-    /// ```
-    /// use cpp_demangle::{DemangleOptions, Symbol};
-    ///
-    /// let mangled = b"_ZN5space3fooEibc";
-    ///
-    /// let sym = Symbol::new(&mangled[..])
-    ///     .expect("Could not parse mangled symbol!");
-    ///
-    /// let demangled = sym.demangle().unwrap();
-    /// assert_eq!(demangled, "space::foo(int, bool, char)");
-    /// ```
-    #[inline]
-    pub fn demangle(&self) -> ::core::result::Result<String, fmt::Error> {
-        self.demangle_with_options(&Default::default())
-    }
-
     /// Demangle the symbol and return it as a String.
     ///
+    /// Unlike the `ToString` implementation, this function allows options to
+    /// be specified.
+    ///
     /// ```
     /// use cpp_demangle::{DemangleOptions, Symbol};
+    /// use std::string::ToString;
     ///
     /// let mangled = b"_ZN5space3fooEibc";
     ///
     /// let sym = Symbol::new(&mangled[..])
     ///     .expect("Could not parse mangled symbol!");
     ///
+    /// let demangled = sym.to_string();
     /// let options = DemangleOptions::default();
-    /// let demangled = sym.demangle_with_options(&options).unwrap();
-    /// assert_eq!(demangled, "space::foo(int, bool, char)");
+    /// let demangled_again = sym.demangle(&options).unwrap();
+    /// assert_eq!(demangled_again, demangled);
     /// ```
     #[allow(clippy::trivially_copy_pass_by_ref)]
-    pub fn demangle_with_options(
+    pub fn demangle(
         &self,
         options: &DemangleOptions,
     ) -> ::core::result::Result<String, fmt::Error> {
@@ -371,6 +361,7 @@ where
     ///
     /// ```
     /// use cpp_demangle::BorrowedSymbol;
+    /// use std::string::ToString;
     ///
     /// let mangled = b"_ZN5space3fooEibc and some trailing junk";
     ///
@@ -379,7 +370,7 @@ where
     ///
     /// assert_eq!(tail, b" and some trailing junk");
     ///
-    /// let demangled = sym.demangle().unwrap();
+    /// let demangled = sym.to_string();
     /// assert_eq!(demangled, "space::foo(int, bool, char)");
     /// ```
     #[inline]
@@ -396,6 +387,7 @@ where
     ///
     /// ```
     /// use cpp_demangle::{BorrowedSymbol, ParseOptions};
+    /// use std::string::ToString;
     ///
     /// let mangled = b"_ZN5space3fooEibc and some trailing junk";
     ///
@@ -407,7 +399,7 @@ where
     ///
     /// assert_eq!(tail, b" and some trailing junk");
     ///
-    /// let demangled = sym.demangle().unwrap();
+    /// let demangled = sym.to_string();
     /// assert_eq!(demangled, "space::foo(int, bool, char)");
     /// ```
     pub fn with_tail_and_options(
@@ -439,5 +431,28 @@ substitutions = {:#?}",
         );
 
         Ok((symbol, tail.into()))
+    }
+}
+
+impl<T> fmt::Display for Symbol<T>
+where
+    T: AsRef<[u8]>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut out = String::new();
+        {
+            let options = DemangleOptions::default();
+            let mut ctx = ast::DemangleContext::new(
+                &self.substitutions,
+                self.raw.as_ref(),
+                options,
+                &mut out,
+            );
+            self.parsed.demangle(&mut ctx, None).map_err(|err| {
+                log!("Demangling error: {:#?}", err);
+                fmt::Error
+            })?;
+        }
+        write!(f, "{}", &out)
     }
 }

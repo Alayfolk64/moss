@@ -342,6 +342,20 @@ fn test_node_properties() {
 }
 
 #[test]
+fn test_interrupt_parent_inheritance() {
+    init_logging();
+    let raw = fdt_qemu();
+    let fdt = Fdt::from_bytes(&raw).unwrap();
+
+    let root = fdt.find_by_path("/").unwrap();
+    assert_eq!(root.interrupt_parent(), Some(Phandle::from(0x8002)));
+
+    let chosen = fdt.find_by_path("/chosen").unwrap();
+    assert!(chosen.find_property("interrupt-parent").is_none());
+    assert_eq!(chosen.interrupt_parent(), Some(Phandle::from(0x8002)));
+}
+
+#[test]
 fn test_reg_parsing() {
     init_logging();
     let raw = fdt_qemu();
@@ -816,7 +830,10 @@ fn test_find_children_by_path_leaf() {
     let children: Vec<_> = fdt.find_children_by_path("/chosen").collect();
     info!(
         "Children of /chosen: {:?}",
-        children.iter().map(|n: &fdt_raw::Node| n.name()).collect::<Vec<_>>()
+        children
+            .iter()
+            .map(|n: &fdt_raw::Node| n.name())
+            .collect::<Vec<_>>()
     );
 
     // Even if it has children, verify they are all at the correct level
@@ -835,7 +852,10 @@ fn test_find_children_by_path_nonexistent() {
 
     // Non-existent path should return empty iterator
     let result: Vec<_> = fdt.find_children_by_path("/nonexistent/path").collect();
-    assert!(result.is_empty(), "Non-existent path should return empty iterator");
+    assert!(
+        result.is_empty(),
+        "Non-existent path should return empty iterator"
+    );
 }
 
 #[test]

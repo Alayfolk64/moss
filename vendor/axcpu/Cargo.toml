@@ -13,18 +13,17 @@
 edition = "2021"
 rust-version = "1.88.0"
 name = "axcpu"
-version = "0.3.0-preview.8"
+version = "0.3.0"
 authors = [
     "Yuekai Jia <equation618@gmail.com>",
     "Youjie Zheng <Azure_stars@126.com>",
     "yfblock <321353225@qq.com>",
+    "Debin <luodebin@kylinos.cn>",
     "yanjuguang <coolyanjg@163.com>",
     "Grow Zheng <hhmcn@outlook.com>",
     "Su Mingxian <aarkegz@gmail.com>",
     "hky1999 <keyang.hu@qq.com>",
     "RobertYuan <634954435@qq.com>",
-    "Mivik <mivikq@gmail.com>",
-    "朝倉水希 <asakuramizu111@gmail.com>",
 ]
 build = false
 autolib = false
@@ -49,7 +48,7 @@ categories = [
     "os",
 ]
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
-repository = "https://github.com/arceos-org/axcpu/tree/dev"
+repository = "https://github.com/arceos-org/axcpu"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -58,10 +57,11 @@ targets = [
     "aarch64-unknown-none-softfloat",
     "riscv64gc-unknown-none-elf",
     "loongarch64-unknown-none-softfloat",
+    "armv7a-none-eabi",
 ]
 
 [features]
-arm-el2 = ["page_table_entry/arm-el2"]
+arm-el2 = []
 default = []
 fp-simd = []
 tls = []
@@ -70,9 +70,6 @@ uspace = []
 [lib]
 name = "axcpu"
 path = "src/lib.rs"
-
-[dependencies.axbacktrace]
-version = "0.1"
 
 [dependencies.cfg-if]
 version = "1.0"
@@ -90,19 +87,22 @@ version = "0.4"
 version = "0.6"
 
 [dependencies.static_assertions]
-version = "1.1"
+version = "1.1.0"
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies.riscv]
 version = "0.16"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.aarch64-cpu]
-version = "11.0"
+version = "11.2"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.tock-registers]
 version = "0.10"
 
+[target.'cfg(target_arch = "arm")'.dependencies.aarch32-cpu]
+version = "0.2.0"
+
 [target.'cfg(target_arch = "loongarch64")'.dependencies.loongArch64]
-version = "0.2"
+version = "0.2.4"
 
 [target.'cfg(target_arch = "loongarch64")'.dependencies.page_table_multiarch]
 version = "0.6"
@@ -111,15 +111,13 @@ version = "0.6"
 version = "0.2"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.percpu]
-version = "0.2.3-preview.1"
+version = "0.3"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.x86]
 version = "0.52"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.x86_64]
-version = "0.15"
-features = ["instructions"]
-default-features = false
+version = "0.15.2"
 
 [lints.clippy]
 new_without_default = "allow"

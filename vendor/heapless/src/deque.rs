@@ -33,27 +33,19 @@
 //! }
 //! ```
 
-use crate::{
-    vec::{OwnedVecStorage, VecStorage, VecStorageInner, ViewVecStorage},
-    CapacityError,
-};
-use core::{
-    cmp::Ordering,
-    fmt,
-    iter::FusedIterator,
-    marker::PhantomData,
-    mem::{ManuallyDrop, MaybeUninit},
-    ptr, slice,
-};
+use core::cmp::Ordering;
+use core::fmt;
+use core::iter::FusedIterator;
+use core::marker::PhantomData;
+use core::mem::MaybeUninit;
+use core::{ptr, slice};
 
-#[cfg(feature = "zeroize")]
-use zeroize::Zeroize;
+use crate::vec::{OwnedVecStorage, VecStorage, VecStorageInner, ViewVecStorage};
 
 /// Base struct for [`Deque`] and [`DequeView`], generic over the [`VecStorage`].
 ///
 /// In most cases you should use [`Deque`] or [`DequeView`] directly. Only use this
 /// struct if you want to write code that's generic over both.
-#[cfg_attr(feature = "zeroize", derive(Zeroize))]
 pub struct DequeInner<T, S: VecStorage<T> + ?Sized> {
     // This phantomdata is required because otherwise rustc thinks that `T` is not used
     phantom: PhantomData<T>,
@@ -177,16 +169,14 @@ impl<T, const N: usize> Deque<T, N> {
 
     /// Returns the maximum number of elements the deque can hold.
     ///
-    /// This method is not available on a `DequeView`, use
-    /// [`storage_capacity`](DequeInner::storage_capacity) instead.
+    /// This method is not available on a `DequeView`, use [`storage_capacity`](DequeInner::storage_capacity) instead.
     pub const fn capacity(&self) -> usize {
         N
     }
 
     /// Returns the number of elements currently in the deque.
     ///
-    /// This method is not available on a `DequeView`, use [`storage_len`](DequeInner::storage_len)
-    /// instead.
+    /// This method is not available on a `DequeView`, use [`storage_len`](DequeInner::storage_len) instead.
     pub const fn len(&self) -> usize {
         if self.full {
             N
@@ -458,8 +448,8 @@ impl<T, S: VecStorage<T> + ?Sized> DequeInner<T, S> {
                         self.storage_capacity() - free,
                     );
 
-                    // because the deque wasn't contiguous, we know that `tail_len < self.len ==
-                    // slice.len()`, so this will never panic.
+                    // because the deque wasn't contiguous, we know that `tail_len < self.len == slice.len()`,
+                    // so this will never panic.
                     slice.rotate_left(back_len);
 
                     // the used part of the buffer now is `free..self.capacity()`, so set
@@ -471,8 +461,7 @@ impl<T, S: VecStorage<T> + ?Sized> DequeInner<T, S> {
                 // head is shorter so:
                 //  1. copy head backwards
                 //  2. rotate used part of the buffer
-                //  3. update head to point to the new beginning (which is the beginning of the
-                //     buffer)
+                //  3. update head to point to the new beginning (which is the beginning of the buffer)
 
                 unsafe {
                     // if there is no free space in the buffer, then the slices are already
@@ -490,8 +479,8 @@ impl<T, S: VecStorage<T> + ?Sized> DequeInner<T, S> {
                     // next to each other, all the elements in the range are initialized.
                     let slice: &mut [T] = slice::from_raw_parts_mut(buffer_ptr, len);
 
-                    // because the deque wasn't contiguous, we know that `head_len < self.len ==
-                    // slice.len()` so this will never panic.
+                    // because the deque wasn't contiguous, we know that `head_len < self.len == slice.len()`
+                    // so this will never panic.
                     slice.rotate_right(front_len);
 
                     // the used part of the buffer now is `0..self.len`, so set
@@ -818,187 +807,6 @@ impl<T, S: VecStorage<T> + ?Sized> DequeInner<T, S> {
             inner: start.iter_mut().chain(end),
         }
     }
-
-    /// Shortens the deque, keeping the first `len` elements and dropping
-    /// the rest.
-    ///
-    /// If `len` is greater or equal to the deque's current length, this has
-    /// no effect.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use heapless::Deque;
-    ///
-    /// let mut buf: Deque<_, 5> = Deque::new();
-    /// buf.push_back(5);
-    /// buf.push_back(10);
-    /// buf.push_back(15);
-    /// buf.truncate(1);
-    /// assert_eq!(buf.make_contiguous(), [5]);
-    /// ```
-    pub fn truncate(&mut self, len: usize) {
-        /// Runs the destructor for all items in the slice when it gets dropped (gracefully or
-        /// during unwinding).
-        struct Dropper<'a, T>(&'a mut [T]);
-
-        impl<'a, T> Drop for Dropper<'a, T> {
-            fn drop(&mut self) {
-                unsafe {
-                    ptr::drop_in_place(self.0);
-                }
-            }
-        }
-
-        // Safety:
-        // * Any slice passed to `drop_in_place` is valid; the second case has `len <= front.len()`
-        //   and returning on `len > self.storage_len()` ensures `begin <= back.len()` in the first
-        //   case
-        // * Deque front/back cursors are moved before calling `drop_in_place`, so no value is
-        //   dropped twice if `drop_in_place` panics
-        unsafe {
-            // If new desired length is greater or equal, we don't need to act.
-            if len >= self.storage_len() {
-                return;
-            }
-
-            let (front, back) = self.as_mut_slices();
-
-            // If `len` desires to keep elements past front's entire length,
-            // then only back's contents will need to be dropped
-            // as the two slices combined should be more than `len`.
-            if len > front.len() {
-                let begin = len - front.len();
-                let drop_back = back.get_unchecked_mut(begin..) as *mut _;
-
-                // Self::to_physical_index returns the index `len` units _after_ the front cursor,
-                // meaning we can use it to find the decremented index for `back` for non-contiguous
-                // deques, as well as determine where the new "cap" for front needs
-                // to be placed for contiguous deques.
-                self.back = self.to_physical_index(len);
-                self.full = false;
-
-                ptr::drop_in_place(drop_back);
-            } else {
-                // Otherwise, we know back's entire contents need to be dropped,
-                // since the desired length never reaches into it.
-                let drop_back = back as *mut _;
-                let drop_front = front.get_unchecked_mut(len..) as *mut _;
-
-                self.back = self.to_physical_index(len);
-                self.full = false;
-
-                // If `drop_front` causes a panic, the Dropper will still be called to drop it's
-                // slice during unwinding. In either case, front will always be
-                // dropped before back.
-                let _back_dropper = Dropper(&mut *drop_back);
-                ptr::drop_in_place(drop_front);
-            }
-        }
-    }
-
-    /// Retains only the elements specified by the predicate.
-    ///
-    /// In other words, remove all elements `e` for which `f(&e)` returns false.
-    /// This method operates in place, visiting each element exactly once in the
-    /// original order, and preserves the order of the retained elements.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use heapless::Deque;
-    ///
-    /// let mut buf: Deque<_, 10> = Deque::new();
-    /// buf.extend(1..5);
-    /// buf.retain(|&x| x % 2 == 0);
-    /// assert_eq!(buf.make_contiguous(), [2, 4]);
-    /// ```
-    ///
-    /// Because the elements are visited exactly once in the original order,
-    /// external state may be used to decide which elements to keep.
-    ///
-    /// ```
-    /// use heapless::Deque;
-    ///
-    /// let mut buf: Deque<_, 10> = Deque::new();
-    /// buf.extend(1..6);
-    ///
-    /// let keep = [false, true, true, false, true];
-    /// let mut iter = keep.iter();
-    /// buf.retain(|_| *iter.next().unwrap());
-    /// assert_eq!(buf.make_contiguous(), [2, 3, 5]);
-    /// ```
-    pub fn retain<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&T) -> bool,
-    {
-        self.retain_mut(|elem| f(elem));
-    }
-
-    /// Retains only the elements specified by the predicate.
-    ///
-    /// In other words, remove all elements `e` for which `f(&mut e)` returns false.
-    /// This method operates in place, visiting each element exactly once in the
-    /// original order, and preserves the order of the retained elements.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use heapless::Deque;
-    ///
-    /// let mut buf: Deque<_, 10> = Deque::new();
-    /// buf.extend(1..5);
-    /// buf.retain_mut(|x| {
-    ///     if *x % 2 == 0 {
-    ///         *x += 1;
-    ///         true
-    ///     } else {
-    ///         false
-    ///     }
-    /// });
-    /// assert_eq!(buf.make_contiguous(), [3, 5]);
-    /// ```
-    pub fn retain_mut<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut T) -> bool,
-    {
-        let len = self.storage_len();
-        let mut idx = 0;
-        let mut cur = 0;
-
-        // Stage 1: Check if all values can be retained.
-        while cur < len {
-            let val = self
-                .get_mut(cur)
-                .expect("cur was checked to be less than deque's length");
-            if !f(val) {
-                cur += 1;
-                break;
-            }
-
-            cur += 1;
-            idx += 1;
-        }
-        // Stage 2: Swap retained values into current idx, building a contiguous chunk from 0 to
-        // idx.
-        while cur < len {
-            let val = self
-                .get_mut(cur)
-                .expect("cur was checked to be less than deque's length");
-            if !f(val) {
-                cur += 1;
-                continue;
-            }
-
-            self.swap(idx, cur);
-            cur += 1;
-            idx += 1;
-        }
-        // Stage 3: Truncate any moved values after idx.
-        if cur != idx {
-            self.truncate(idx);
-        }
-    }
 }
 
 /// Iterator over the contents of a [`Deque`]
@@ -1105,21 +913,6 @@ impl<T, const N: usize> Iterator for IntoIter<T, N> {
     fn next(&mut self) -> Option<Self::Item> {
         self.deque.pop_front()
     }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = self.len();
-        (len, Some(len))
-    }
-}
-impl<T, const N: usize> DoubleEndedIterator for IntoIter<T, N> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        self.deque.pop_back()
-    }
-}
-impl<T, const N: usize> FusedIterator for IntoIter<T, N> {}
-impl<T, const N: usize> ExactSizeIterator for IntoIter<T, N> {
-    fn len(&self) -> usize {
-        self.deque.len()
-    }
 }
 
 impl<T, const N: usize> IntoIterator for Deque<T, N> {
@@ -1206,55 +999,11 @@ impl<T: PartialEq, const N: usize> PartialEq for Deque<T, N> {
 
 impl<T: Eq, const N: usize> Eq for Deque<T, N> {}
 
-impl<T, const NS: usize, const ND: usize> TryFrom<[T; NS]> for Deque<T, ND> {
-    /// Converts a `[T; NS]` into a `Deque<T, ND>`.
-    ///
-    /// ```
-    /// use heapless::Deque;
-    ///
-    /// let deq1 = Deque::<u8, 5>::try_from([1, 2, 3]).unwrap();
-    /// let mut deq2 = Deque::<u8, 5>::new();
-    /// deq2.push_back(1).unwrap();
-    /// deq2.push_back(2).unwrap();
-    /// deq2.push_back(3).unwrap();
-    ///
-    /// assert_eq!(deq1, deq2);
-    /// ```
-    type Error = (CapacityError, [T; NS]);
-
-    /// Converts a `[T; NS]` array into a `Deque<T, ND>`.
-    ///
-    /// Returns back the `value` if NS > ND.
-    fn try_from(value: [T; NS]) -> Result<Self, Self::Error> {
-        if NS > ND {
-            return Err((CapacityError, value));
-        }
-
-        let mut deq = Self::default();
-        let value = ManuallyDrop::new(value);
-
-        // SAFETY: We already ensured that value fits in deq.
-        unsafe {
-            ptr::copy_nonoverlapping(
-                value.as_ptr(),
-                deq.buffer.buffer.as_mut_ptr().cast::<T>(),
-                NS,
-            );
-        }
-
-        deq.front = 0;
-        deq.back = NS;
-        deq.full = NS == ND;
-
-        Ok(deq)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::Deque;
-    use crate::CapacityError;
     use static_assertions::assert_not_impl_any;
+
+    use super::Deque;
 
     // Ensure a `Deque` containing `!Send` values stays `!Send` itself.
     assert_not_impl_any!(Deque<*const (), 4>: Send);
@@ -1444,41 +1193,6 @@ mod tests {
         assert_eq!(items.next(), Some(2));
         assert_eq!(items.next(), Some(3));
         assert_eq!(items.next(), None);
-    }
-
-    #[test]
-    fn iter_move_back() {
-        let mut v: Deque<i32, 4> = Deque::new();
-
-        v.push_back(0).unwrap();
-        v.push_back(1).unwrap();
-        v.push_back(2).unwrap();
-        v.push_back(3).unwrap();
-
-        let mut items = v.into_iter();
-        assert_eq!(items.next_back(), Some(3));
-        assert_eq!(items.next_back(), Some(2));
-        assert_eq!(items.next_back(), Some(1));
-        assert_eq!(items.next_back(), Some(0));
-        assert_eq!(items.next_back(), None);
-    }
-
-    #[test]
-    fn iter_move_len() {
-        let mut v: Deque<i32, 3> = Deque::new();
-
-        v.push_back(0).unwrap();
-        v.push_back(1).unwrap();
-        v.push_back(2).unwrap();
-
-        let mut items = v.into_iter();
-        assert_eq!(items.len(), 3);
-        let _ = items.next();
-        assert_eq!(items.len(), 2);
-        let _ = items.next_back();
-        assert_eq!(items.len(), 1);
-        let _ = items.next();
-        assert_eq!(items.len(), 0);
     }
 
     #[test]
@@ -1830,369 +1544,5 @@ mod tests {
         b.push_front(1).unwrap();
 
         assert_eq!(a, b);
-    }
-
-    #[test]
-    fn try_from_array() {
-        // Array is too big error.
-        assert!(matches!(
-            Deque::<u8, 3>::try_from([1, 2, 3, 4]),
-            Err((CapacityError, [1, 2, 3, 4]))
-        ));
-
-        // Array is at limit.
-        let deq1 = Deque::<u8, 3>::try_from([1, 2, 3]).unwrap();
-        let mut deq2 = Deque::<u8, 3>::new();
-        deq2.push_back(1).unwrap();
-        deq2.push_back(2).unwrap();
-        deq2.push_back(3).unwrap();
-        assert!(deq1.is_full());
-        assert_eq!(deq1, deq2);
-
-        // Array is under limit.
-        let deq1 = Deque::<u8, 8>::try_from([1, 2, 3, 4]).unwrap();
-        let mut deq2 = Deque::<u8, 8>::new();
-        deq2.push_back(1).unwrap();
-        deq2.push_back(2).unwrap();
-        deq2.push_back(3).unwrap();
-        deq2.push_back(4).unwrap();
-
-        assert!(!deq1.is_full());
-        assert_eq!(deq1, deq2);
-    }
-
-    #[test]
-    fn try_from_array_with_zst() {
-        #[derive(Debug, PartialEq, Copy, Clone)]
-        struct ZeroSizedType;
-
-        // Test with ZST (zero-sized type)
-        let deq1 =
-            Deque::<ZeroSizedType, 5>::try_from([ZeroSizedType, ZeroSizedType, ZeroSizedType])
-                .unwrap();
-        let mut deq2 = Deque::<ZeroSizedType, 5>::new();
-        deq2.push_back(ZeroSizedType).unwrap();
-        deq2.push_back(ZeroSizedType).unwrap();
-        deq2.push_back(ZeroSizedType).unwrap();
-
-        assert_eq!(deq1, deq2);
-        assert_eq!(deq1.len(), 3);
-    }
-
-    #[test]
-    fn try_from_array_drop() {
-        droppable!();
-
-        // Array is over limit.
-        {
-            let _result = Deque::<Droppable, 2>::try_from([
-                Droppable::new(),
-                Droppable::new(),
-                Droppable::new(),
-            ]);
-        }
-
-        assert_eq!(Droppable::count(), 0);
-
-        // Array is at limit.
-        {
-            let _result = Deque::<Droppable, 3>::try_from([
-                Droppable::new(),
-                Droppable::new(),
-                Droppable::new(),
-            ]);
-        }
-
-        assert_eq!(Droppable::count(), 0);
-
-        // Array is under limit.
-        {
-            let _result = Deque::<Droppable, 4>::try_from([
-                Droppable::new(),
-                Droppable::new(),
-                Droppable::new(),
-            ]);
-        }
-
-        assert_eq!(Droppable::count(), 0);
-    }
-
-    #[test]
-    #[cfg(feature = "zeroize")]
-    fn test_deque_zeroize() {
-        use zeroize::Zeroize;
-
-        let mut deque = Deque::<u8, 16>::new();
-
-        for i in 1..=8 {
-            deque.push_back(i).unwrap();
-        }
-        for i in 9..=16 {
-            deque.push_front(i).unwrap();
-        }
-
-        assert_eq!(deque.len(), 16);
-        assert_eq!(deque.front(), Some(&16));
-        assert_eq!(deque.back(), Some(&8));
-
-        // zeroized using Vec's implementation
-        deque.zeroize();
-
-        assert_eq!(deque.len(), 0);
-        assert!(deque.is_empty());
-    }
-
-    // Checking that no invalid destructors are called with empty Deques
-    #[test]
-    fn truncate_empty() {
-        droppable!();
-
-        const LEN: usize = 1;
-        let mut tester: Deque<_, LEN> = Deque::new();
-
-        // Truncate to 0 from 0
-        tester.truncate(0);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-
-        // Truncate to 123 from 0 (thus clamping back down to 0)
-        tester.truncate(123);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-
-        // Ensure state is still valid by pushing one element in and then truncating again
-        assert!(tester.push_front(Droppable::new()).is_ok());
-        assert_eq!(tester.len(), 1);
-        assert_eq!(Droppable::count(), 1);
-
-        // Truncate to 0 from 1
-        tester.truncate(0);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-    }
-
-    // Testing truncation with contiguous Deques
-    #[test]
-    fn truncate_contiguous() {
-        droppable!();
-
-        fn slice_lengths<T>(slices: (&[T], &[T])) -> (usize, usize) {
-            let (a, b) = slices;
-            (a.len(), b.len())
-        }
-
-        const LEN: usize = 20;
-        let mut tester: Deque<_, LEN> = Deque::new();
-
-        // Filling from front.
-        for _ in 0..5 {
-            assert!(tester.push_front(Droppable::new()).is_ok());
-        }
-
-        // Truncating past the elements present, no change.
-        tester.truncate(10);
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (5, 0));
-        assert_eq!(Droppable::count(), 5);
-
-        // Truncating equal to elements present, no change.
-        tester.truncate(5);
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (5, 0));
-        assert_eq!(Droppable::count(), 5);
-
-        // Truncating to empty.
-        tester.truncate(0);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-
-        // Refill from front.
-        for _ in 0..5 {
-            assert!(tester.push_front(Droppable::new()).is_ok());
-        }
-
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (5, 0));
-        assert_eq!(Droppable::count(), 5);
-
-        // Truncate into the middle of elements.
-        tester.truncate(3);
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (3, 0));
-        assert_eq!(Droppable::count(), 3);
-
-        // Truncating to empty.
-        tester.truncate(0);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-
-        // Resetting cursors.
-        tester.clear();
-
-        // Filling from back...
-        for _ in 0..5 {
-            assert!(tester.push_back(Droppable::new()).is_ok());
-        }
-
-        tester.truncate(10);
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (5, 0));
-        assert_eq!(Droppable::count(), 5);
-
-        tester.truncate(5);
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (5, 0));
-        assert_eq!(Droppable::count(), 5);
-
-        tester.truncate(0);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-
-        for _ in 0..5 {
-            assert!(tester.push_back(Droppable::new()).is_ok());
-        }
-
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (5, 0));
-        assert_eq!(Droppable::count(), 5);
-
-        tester.truncate(3);
-        let lens = slice_lengths(tester.as_slices());
-        assert_eq!(lens, (3, 0));
-        assert_eq!(Droppable::count(), 3);
-
-        tester.truncate(0);
-        assert_eq!(tester.len(), 0);
-        assert_eq!(Droppable::count(), 0);
-    }
-
-    // Testing truncation with non-contiguous Deques
-    #[test]
-    fn truncate_non_contiguous() {
-        const LEN: usize = 20;
-        let mut tester: Deque<u8, LEN> = Deque::new();
-
-        // Filling non-contiguously.
-        //
-        // Expecting [3, 2, 1, 1, 2, 3]
-        for x in 1..=3 {
-            assert!(tester.push_front(x).is_ok());
-        }
-        for y in 1..=3 {
-            assert!(tester.push_back(y).is_ok());
-        }
-
-        // Truncating past the elements present, no change.
-        tester.truncate(10);
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[1, 2, 3][..]));
-        println!("{} {}", tester.front, tester.back);
-        // Truncating equal to elements present, no change.
-        tester.truncate(6);
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[1, 2, 3][..]));
-
-        // Truncating to empty.
-        tester.truncate(0);
-        assert_eq!(tester.as_slices(), (&[][..], &[][..]));
-
-        // Resetting cursors.
-        tester.clear();
-
-        // Refilling.
-        for x in 1..=3 {
-            assert!(tester.push_front(x).is_ok());
-        }
-        for y in 1..=3 {
-            assert!(tester.push_back(y).is_ok());
-        }
-
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[1, 2, 3][..]));
-
-        // Truncating only part of back, retaining front and part of back.
-        tester.truncate(5);
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[1, 2][..]));
-
-        // Replacing the truncated element.
-        assert!(tester.push_back(3).is_ok());
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[1, 2, 3][..]));
-
-        // Truncating away all of back's contents, but retaining all of front's contents.
-        tester.truncate(3);
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[][..]));
-
-        // Replacing the truncated elements.
-        for y in 1..=3 {
-            assert!(tester.push_back(y).is_ok());
-        }
-        assert_eq!(tester.as_slices(), (&[3, 2, 1][..], &[1, 2, 3][..]));
-
-        // Truncating into front, thus also dropping all of back.
-        tester.truncate(2);
-        assert_eq!(tester.as_slices(), (&[3, 2][..], &[][..]));
-
-        // Truncating to empty.
-        tester.truncate(0);
-        assert_eq!(tester.as_slices(), (&[][..], &[][..]));
-
-        // Should remain empty.
-        tester.truncate(123);
-        assert_eq!(tester.as_slices(), (&[][..], &[][..]));
-    }
-
-    // Tests that each element's destructor is called when being truncated.
-    #[test]
-    fn truncate_drop_count() {
-        droppable!();
-
-        const LEN: usize = 20;
-        const TRUNC: usize = 3;
-        for push_front_amt in 0..=LEN {
-            let mut tester: Deque<_, LEN> = Deque::new();
-            for index in 0..LEN {
-                if index < push_front_amt {
-                    assert!(
-                        tester.push_front(Droppable::new()).is_ok(),
-                        "deque must have room for all {LEN} entries"
-                    );
-                } else {
-                    assert!(
-                        tester.push_back(Droppable::new()).is_ok(),
-                        "deque must have room for all {LEN} entries"
-                    );
-                }
-            }
-
-            assert_eq!(Droppable::count(), LEN as i32);
-
-            tester.truncate(TRUNC);
-            assert_eq!(tester.len(), TRUNC);
-            assert_eq!(Droppable::count(), TRUNC as i32);
-
-            tester.truncate(0);
-            assert_eq!(tester.len(), 0);
-            assert_eq!(Droppable::count(), 0);
-        }
-    }
-
-    #[test]
-    fn retain() {
-        droppable!();
-
-        const LEN: usize = 20;
-        for push_front_amt in 0..=LEN {
-            let mut tester: Deque<_, LEN> = Deque::new();
-            for index in 0..LEN {
-                if index < push_front_amt {
-                    assert!(tester.push_front((index, Droppable::new())).is_ok());
-                } else {
-                    assert!(tester.push_back((index, Droppable::new())).is_ok());
-                }
-            }
-            assert_eq!(Droppable::count(), LEN as i32);
-
-            tester.retain(|(x, _)| *x >= 10);
-
-            assert_eq!(tester.len(), 10);
-            assert_eq!(Droppable::count(), 10);
-        }
     }
 }

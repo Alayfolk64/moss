@@ -1,6 +1,6 @@
 use page_table_generic::{PhysAddr, VirtAddr};
 
-use crate::smp::PerCpuMeta;
+use crate::{ArchTrait, smp::PerCpuMeta};
 
 pub struct PrimaryCpuInitInfo {
     pub kernel_start: PhysAddr,
@@ -31,6 +31,13 @@ pub fn primary_init_early(params: PrimaryCpuInitInfo) {
 }
 
 pub(crate) fn secondary_entry(cpu_meta: &PerCpuMeta) {
+    crate::arch::Arch::per_cpu_trap_init(false);
+    let cpu_meta = unsafe {
+        let phys = cpu_meta as *const _ as usize;
+        let virt = crate::mem::phys_to_virt(phys);
+        &*(virt as *const crate::smp::PerCpuMeta)
+    };
+
     unsafe extern "Rust" {
         fn __someboot_secondary(cpu_meta: &PerCpuMeta);
     }

@@ -2335,7 +2335,7 @@ impl Parse for PrefixHandle {
                     current = Some(save(subs, prefix, tail_tail));
                     tail = tail_tail;
                 }
-                Some(c) if UnqualifiedName::starts_with(c, &tail) => {
+                Some(c) if current.is_some() && UnqualifiedName::starts_with(c, &tail) => {
                     // Either
                     //
                     //     <prefix> ::= <unqualified-name>
@@ -2343,22 +2343,16 @@ impl Parse for PrefixHandle {
                     // or
                     //
                     //     <prefix> ::= <data-member-prefix> ::= <prefix> <source-name> M
+                    debug_assert!(UnqualifiedName::starts_with(c, &tail));
+
                     let (name, tail_tail) = UnqualifiedName::parse(ctx, subs, tail)?;
                     if tail_tail.peek() == Some(b'M') {
                         // XXXkhuey This seems to be a legacy thing that's dropped from the standard.
                         // Behave the way we used to.
-                        // Emit a Prefix::DataMember, but only if current.is_some().
-                        let prefix = match current {
-                            None => Prefix::Unqualified(name),
-                            Some(current) => {
-                                let name = match name {
-                                    UnqualifiedName::Source(name, _) => name,
-                                    UnqualifiedName::LocalSourceName(name, ..) => name,
-                                    _ => return Err(error::Error::UnexpectedText),
-                                };
-                                Prefix::DataMember(current, DataMemberPrefix(name))
-                            }
+                        let UnqualifiedName::Source(name, _) = name else {
+                            return Err(error::Error::UnexpectedText);
                         };
+                        let prefix = Prefix::DataMember(current.unwrap(), DataMemberPrefix(name));
                         current = Some(save(subs, prefix, tail_tail));
                         tail = consume(b"M", tail_tail).unwrap();
                     } else {
@@ -2369,6 +2363,16 @@ impl Parse for PrefixHandle {
                         current = Some(save(subs, prefix, tail_tail));
                         tail = tail_tail;
                     }
+                }
+                Some(c) if UnqualifiedName::starts_with(c, &tail) => {
+                    // <prefix> ::= <unqualified-name>
+                    let (name, tail_tail) = UnqualifiedName::parse(ctx, subs, tail)?;
+                    let prefix = match current {
+                        None => Prefix::Unqualified(name),
+                        Some(handle) => Prefix::Nested(handle, name),
+                    };
+                    current = Some(save(subs, prefix, tail_tail));
+                    tail = tail_tail;
                 }
                 Some(_) => {
                     if let Some(handle) = current {
@@ -2516,7 +2520,7 @@ impl PrefixHandle {
 /// The `<unqualified-name>` production.
 ///
 /// ```text
-/// <unqualified-name> ::= [on] <operator-name> [<abi-tags>]
+/// <unqualified-name> ::= <operator-name> [<abi-tags>]
 ///                    ::= <ctor-dtor-name> [<abi-tags>]
 ///                    ::= <source-name> [<abi-tags>]
 ///                    ::= <local-source-name> [<abi-tags>]
@@ -2551,10 +2555,7 @@ impl Parse for UnqualifiedName {
     ) -> Result<(UnqualifiedName, IndexStr<'b>)> {
         try_begin_parse!("UnqualifiedName", ctx, input);
 
-        // libiberty accepts inputs with and without "on" here,
-        // llvm only accepts with "on". Be less picky.
-        let operator_name_input = consume(b"on", input).unwrap_or(input);
-        if let Ok((op, tail)) = try_recurse!(OperatorName::parse(ctx, subs, operator_name_input)) {
+        if let Ok((op, tail)) = try_recurse!(OperatorName::parse(ctx, subs, input)) {
             let (abi_tags, tail) = AbiTags::parse(ctx, subs, tail)?;
             return Ok((UnqualifiedName::Operator(op, abi_tags), tail));
         }
@@ -3175,7 +3176,6 @@ where
                 simple.demangle(ctx, scope)
             }
             OperatorName::Cast(ref ty) | OperatorName::Conversion(ref ty) => {
-                inner_barrier!(ctx);
                 ctx.ensure_space()?;
 
                 // Cast operators can refer to template arguments before they
@@ -3770,19 +3770,19 @@ impl Parse for TypeHandle {
                 // NB: Parsing a <template-args> production may modify the substitutions
                 // table, so we need to avoid contaminating the official copy.
                 let mut tmp_subs = subs.clone();
-                match try_recurse!(TemplateArgs::parse(ctx, &mut tmp_subs, tail)) {
-                    Ok((_, new_tail)) if new_tail.peek() == Some(b'I') => {
-                        // We really do have a <template-template-param>. Fall through.
-                        // NB: We can't use the arguments we just parsed because a
-                        // TemplateTemplateParam is substitutable, and if we use it
-                        // any substitutions in the arguments will come *before* it,
-                        // putting the substitution table out of order.
-                    }
-                    _ => {
+                if let Ok((_, new_tail)) =
+                    try_recurse!(TemplateArgs::parse(ctx, &mut tmp_subs, tail))
+                {
+                    if new_tail.peek() != Some(b'I') {
                         // Don't consume the TemplateArgs.
                         let ty = Type::TemplateParam(param);
                         return insert_and_return_handle(ty, subs, tail);
                     }
+                    // We really do have a <template-template-param>. Fall through.
+                    // NB: We can't use the arguments we just parsed because a
+                    // TemplateTemplateParam is substitutable, and if we use it
+                    // any substitutions in the arguments will come *before* it,
+                    // putting the substitution table out of order.
                 }
             }
         }
@@ -5756,10 +5756,6 @@ where
 ///               ::= sZ <function-param>                          # sizeof...(parameter), size of a function parameter pack
 ///               ::= sP <template-arg>* E                         # sizeof...(T), size of a captured template parameter pack from an alias template
 ///               ::= sp <expression>                              # expression..., pack expansion
-///               ::= fl <binary operator-name> <expression>       # (... operator expression), unary left fold
-///               ::= fr <binary operator-name> <expression>       # (expression operator ...), unary right fold
-///               ::= fL <binary operator-name> <expression> <expression> # (expression operator ... operator expression), binary left fold
-///               ::= fR <binary operator-name> <expression> <expression> # (expression operator ... operator expression), binary right fold
 ///               ::= tw <expression>                              # throw expression
 ///               ::= tr                                           # throw with no operand (rethrow)
 ///               ::= <unresolved-name>                            # f(p), N::f(p), ::f(p),
@@ -5802,7 +5798,7 @@ pub enum Expression {
     ConversionBraced(TypeHandle, Vec<Expression>),
 
     /// A braced init list expression.
-    BracedInitList(Vec<Expression>),
+    BracedInitList(Box<Expression>),
 
     /// The `new` operator.
     New(Vec<Expression>, TypeHandle, Option<Initializer>),
@@ -5892,9 +5888,6 @@ pub enum Expression {
     /// `expression...`, pack expansion.
     PackExpansion(Box<Expression>),
 
-    /// The fold expressions.
-    Fold(FoldExpr),
-
     /// `throw expression`
     Throw(Box<Expression>),
 
@@ -5959,9 +5952,9 @@ impl Parse for Expression {
                     return Ok((expr, tail));
                 }
                 b"il" => {
-                    let (exprs, tail) = zero_or_more::<Expression>(ctx, subs, tail)?;
-                    let expr = Expression::BracedInitList(exprs);
+                    let (expr, tail) = Expression::parse(ctx, subs, tail)?;
                     let tail = consume(b"E", tail)?;
+                    let expr = Expression::BracedInitList(Box::new(expr));
                     return Ok((expr, tail));
                 }
                 b"dc" => {
@@ -6065,19 +6058,6 @@ impl Parse for Expression {
                 b"sp" => {
                     let (expr, tail) = Expression::parse(ctx, subs, tail)?;
                     let expr = Expression::PackExpansion(Box::new(expr));
-                    return Ok((expr, tail));
-                }
-                b"fl" | b"fr" | b"fR" => {
-                    let (expr, tail) = FoldExpr::parse(ctx, subs, input)?;
-                    let expr = Expression::Fold(expr);
-                    return Ok((expr, tail));
-                }
-                // NB: fL for a fold expression is ambiguous with fL for a
-                // function parameter at this point. Look ahead before we commit
-                // to a fold expression.
-                b"fL" if tail.peek().map(|c| !c.is_ascii_digit()).unwrap_or(false) => {
-                    let (expr, tail) = FoldExpr::parse(ctx, subs, input)?;
-                    let expr = Expression::Fold(expr);
                     return Ok((expr, tail));
                 }
                 b"tw" => {
@@ -6334,16 +6314,9 @@ where
                 write!(ctx, "}}")?;
                 Ok(())
             }
-            Expression::BracedInitList(ref exprs) => {
+            Expression::BracedInitList(ref expr) => {
                 write!(ctx, "{{")?;
-                let mut need_comma = false;
-                for expr in exprs {
-                    if need_comma {
-                        write!(ctx, ", ")?;
-                    }
-                    expr.demangle(ctx, scope)?;
-                    need_comma = true;
-                }
+                expr.demangle(ctx, scope)?;
                 write!(ctx, "}}")?;
                 Ok(())
             }
@@ -6508,7 +6481,6 @@ where
                 Ok(())
             }
             Expression::Subobject(ref expr) => expr.demangle(ctx, scope),
-            Expression::Fold(ref expr) => expr.demangle(ctx, scope),
             Expression::TemplateParam(ref param) => param.demangle(ctx, scope),
             Expression::FunctionParam(ref param) => param.demangle(ctx, scope),
             Expression::Member(ref expr, ref name) => {
@@ -8167,127 +8139,6 @@ where
     }
 }
 
-/// The fold expressions.
-///
-/// These are not separate productions in the grammar but our code is cleaner
-/// if we handle them all together.
-///
-/// <expression>  ::= ...
-///               ::= fl <binary operator-name> <expression>       # (... operator expression), unary left fold
-///               ::= fr <binary operator-name> <expression>       # (expression operator ...), unary right fold
-///               ::= fL <binary operator-name> <expression> <expression> # (expression operator ... operator expression), binary left fold
-///               ::= fR <binary operator-name> <expression> <expression> # (expression operator ... operator expression), binary right fold
-///               ::= ...
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FoldExpr {
-    /// (...+<expr>)
-    UnaryLeft(SimpleOperatorName, Box<Expression>),
-    /// (<expr>+...)
-    UnaryRight(SimpleOperatorName, Box<Expression>),
-    /// (<expr1>+...+<expr2>)
-    BinaryLeft(SimpleOperatorName, Box<Expression>, Box<Expression>),
-    /// (<expr1>+...+<expr2>)
-    BinaryRight(SimpleOperatorName, Box<Expression>, Box<Expression>),
-}
-
-impl Parse for FoldExpr {
-    fn parse<'a, 'b>(
-        ctx: &'a ParseContext,
-        subs: &'a mut SubstitutionTable,
-        input: IndexStr<'b>,
-    ) -> Result<(FoldExpr, IndexStr<'b>)> {
-        try_begin_parse!("FoldExpr", ctx, input);
-
-        let tail = consume(b"f", input)?;
-        if let Ok(tail) = consume(b"l", tail) {
-            let (operator, tail) = SimpleOperatorName::parse(ctx, subs, tail)?;
-            // Only binary operators are permitted.
-            if operator.arity() != 2 {
-                return Err(error::Error::UnexpectedText);
-            }
-            let (expr, tail) = Expression::parse(ctx, subs, tail)?;
-            return Ok((FoldExpr::UnaryLeft(operator, Box::new(expr)), tail));
-        }
-        if let Ok(tail) = consume(b"r", tail) {
-            let (operator, tail) = SimpleOperatorName::parse(ctx, subs, tail)?;
-            // Only binary operators are permitted.
-            if operator.arity() != 2 {
-                return Err(error::Error::UnexpectedText);
-            }
-            let (expr, tail) = Expression::parse(ctx, subs, tail)?;
-            return Ok((FoldExpr::UnaryRight(operator, Box::new(expr)), tail));
-        }
-        if let Ok(tail) = consume(b"L", tail) {
-            let (operator, tail) = SimpleOperatorName::parse(ctx, subs, tail)?;
-            // Only binary operators are permitted.
-            if operator.arity() != 2 {
-                return Err(error::Error::UnexpectedText);
-            }
-            let (expr1, tail) = Expression::parse(ctx, subs, tail)?;
-            let (expr2, tail) = Expression::parse(ctx, subs, tail)?;
-            return Ok((
-                FoldExpr::BinaryLeft(operator, Box::new(expr1), Box::new(expr2)),
-                tail,
-            ));
-        }
-        if let Ok(tail) = consume(b"R", tail) {
-            let (operator, tail) = SimpleOperatorName::parse(ctx, subs, tail)?;
-            // Only binary operators are permitted.
-            if operator.arity() != 2 {
-                return Err(error::Error::UnexpectedText);
-            }
-            let (expr1, tail) = Expression::parse(ctx, subs, tail)?;
-            let (expr2, tail) = Expression::parse(ctx, subs, tail)?;
-            return Ok((
-                FoldExpr::BinaryRight(operator, Box::new(expr1), Box::new(expr2)),
-                tail,
-            ));
-        }
-
-        Err(error::Error::UnexpectedText)
-    }
-}
-
-impl<'subs, W> Demangle<'subs, W> for FoldExpr
-where
-    W: 'subs + DemangleWrite,
-{
-    #[inline]
-    fn demangle<'prev, 'ctx>(
-        &'subs self,
-        ctx: &'ctx mut DemangleContext<'subs, W>,
-        scope: Option<ArgScopeStack<'prev, 'subs>>,
-    ) -> fmt::Result {
-        let ctx = try_begin_demangle!(self, ctx, scope);
-
-        match self {
-            FoldExpr::UnaryLeft(ref operator, ref expr) => {
-                write!(ctx, "(...")?;
-                operator.demangle(ctx, scope)?;
-                expr.demangle_as_subexpr(ctx, scope)?;
-                write!(ctx, ")")
-            }
-            FoldExpr::UnaryRight(ref operator, ref expr) => {
-                write!(ctx, "(")?;
-                expr.demangle_as_subexpr(ctx, scope)?;
-                operator.demangle(ctx, scope)?;
-                write!(ctx, "...)")
-            }
-            FoldExpr::BinaryLeft(ref operator, ref expr1, ref expr2)
-            | FoldExpr::BinaryRight(ref operator, ref expr1, ref expr2) => {
-                write!(ctx, "(")?;
-                expr1.demangle_as_subexpr(ctx, scope)?;
-                operator.demangle(ctx, scope)?;
-                write!(ctx, "...")?;
-                operator.demangle(ctx, scope)?;
-                expr2.demangle_as_subexpr(ctx, scope)?;
-                write!(ctx, ")")
-            }
-        }
-    }
-}
-
 /// Expect and consume the given byte str, and return the advanced `IndexStr` if
 /// we saw the expectation. Otherwise return an error of kind
 /// `error::Error::UnexpectedText` if the input doesn't match, or
@@ -8399,7 +8250,7 @@ mod tests {
     use super::{
         AbiTag, AbiTags, ArrayType, BareFunctionType, BaseUnresolvedName, BuiltinType, CallOffset,
         ClassEnumType, ClosureTypeName, CtorDtorName, CvQualifiers, DataMemberPrefix, Decltype,
-        DestructorName, Discriminator, Encoding, ExceptionSpec, ExprPrimary, Expression, FoldExpr,
+        DestructorName, Discriminator, Encoding, ExceptionSpec, ExprPrimary, Expression,
         FunctionParam, FunctionType, GlobalCtorDtor, Identifier, Initializer, LambdaSig, LocalName,
         MangledName, MemberName, Name, NestedName, NonSubstitution, Number, NvOffset, OperatorName,
         ParametricBuiltinType, Parse, ParseContext, PointerToMemberType, Prefix, PrefixHandle,
@@ -10136,16 +9987,11 @@ mod tests {
                     }
                     b"ilLS_1EE..." => {
                         Expression::BracedInitList(
-                            vec![Expression::Primary(
+                            Box::new(Expression::Primary(
                                 ExprPrimary::Literal(
                                     TypeHandle::BackReference(0),
                                     5,
-                                    6))]),
-                        b"...",
-                        []
-                    }
-                    b"ilE..." => {
-                        Expression::BracedInitList(vec![]),
+                                    6)))),
                         b"...",
                         []
                     }
@@ -10411,15 +10257,6 @@ mod tests {
                         b"...",
                         []
                     }
-                    b"fL1pK_..." => {
-                        Expression::FunctionParam(FunctionParam(1, CvQualifiers {
-                            restrict: false,
-                            volatile: false,
-                            const_: true,
-                        }, Some(0))),
-                        b"...",
-                        []
-                    }
                     b"dtT_3abc..." => {
                         Expression::Member(
                             Box::new(Expression::TemplateParam(TemplateParam(0))),
@@ -10504,39 +10341,6 @@ mod tests {
                     b"spT_..." => {
                         Expression::PackExpansion(
                             Box::new(Expression::TemplateParam(TemplateParam(0)))),
-                        b"...",
-                        []
-                    }
-                    b"flplT_..." => {
-                        Expression::Fold(
-                            FoldExpr::UnaryLeft(
-                                SimpleOperatorName::Add,
-                                Box::new(Expression::TemplateParam(TemplateParam(0))),
-                            )
-                        ),
-                        b"...",
-                        []
-                    }
-                    b"fraaT_..." => {
-                        Expression::Fold(
-                            FoldExpr::UnaryRight(
-                                SimpleOperatorName::LogicalAnd,
-                                Box::new(Expression::TemplateParam(TemplateParam(0))),
-                            )
-                        ),
-                        b"...",
-                        []
-                    }
-                    b"fRoospT_spT0_..." => {
-                        Expression::Fold(
-                            FoldExpr::BinaryRight(
-                                SimpleOperatorName::LogicalOr,
-                                Box::new(Expression::PackExpansion(
-                                    Box::new(Expression::TemplateParam(TemplateParam(0))))),
-                                Box::new(Expression::PackExpansion(
-                                    Box::new(Expression::TemplateParam(TemplateParam(1))))),
-                            )
-                        ),
                         b"...",
                         []
                     }
@@ -10627,8 +10431,6 @@ mod tests {
                 }
                 Err => {
                     b"dtStfp_clI3abcE..." => Error::UnexpectedText,
-                    // A fold expression with a unary operator should be rejected.
-                    b"flpsT_..." => Error::UnexpectedText,
                 }
             }
         });
@@ -11691,7 +11493,7 @@ mod tests {
 
     #[test]
     fn parse_unqualified_name() {
-        // <unqualified-name> ::= [on] <operator-name> [<abi-tags>]
+        // <unqualified-name> ::= <operator-name> [<abi-tags>]
         //                    ::= <ctor-dtor-name> [<abi-tags>]
         //                    ::= <source-name> [<abi-tags>]
         //                    ::= <local-source-name> [<abi-tags>]
@@ -11700,10 +11502,6 @@ mod tests {
         assert_parse!(UnqualifiedName {
             Ok => {
                 b"qu.." => {
-                    UnqualifiedName::Operator(OperatorName::Simple(SimpleOperatorName::Question), AbiTags::default()),
-                    b".."
-                }
-                b"onqu.." => {
                     UnqualifiedName::Operator(OperatorName::Simple(SimpleOperatorName::Question), AbiTags::default()),
                     b".."
                 }

@@ -435,13 +435,6 @@ pub trait Reader: Debug + Clone {
         Ok(self.endian().read_u64(&a))
     }
 
-    /// Read a u128.
-    #[inline]
-    fn read_u128(&mut self) -> Result<u128> {
-        let a: [u8; 16] = self.read_u8_array()?;
-        Ok(self.endian().read_u128(&a))
-    }
-
     /// Read an i64.
     #[inline]
     fn read_i64(&mut self) -> Result<i64> {
@@ -525,7 +518,7 @@ pub trait Reader: Debug + Clone {
             let val = self.read_u64().and_then(Self::Offset::from_u64)?;
             Ok((val, Format::Dwarf64))
         } else {
-            Err(Error::UnknownReservedLength(val))
+            Err(Error::UnknownReservedLength)
         }
     }
 

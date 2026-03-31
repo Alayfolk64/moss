@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "mmio-api"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = false
 autolib = false

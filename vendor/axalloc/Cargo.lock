@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "axalloc"
-version = "0.3.0-preview.2"
+version = "0.3.0-preview.3"
 dependencies = [
  "axallocator",
  "axbacktrace",
@@ -43,9 +43,9 @@ dependencies = [
 
 [[package]]
 name = "axbacktrace"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf9566516f5d799b2f791a6ec5af57eec87d17624346f7c876fa006b922c99e6"
+checksum = "1ed127f24c722b06d19c9c1ff73907905bbc2f9463dfd7440652f3f0d6617a93"
 dependencies = [
  "cfg-if",
  "log",
@@ -172,9 +172,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.182"
+version = "0.2.183"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
+checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
 
 [[package]]
 name = "lock_api"

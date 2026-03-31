@@ -8,7 +8,9 @@
 
 #![cfg(__ZEROCOPY_INTERNAL_USE_ONLY_NIGHTLY_FEATURES_IN_TESTS)]
 
-use std::{path::PathBuf, process::Command};
+use std::{panic, path::PathBuf, process::Command, thread};
+
+use regex::Regex;
 
 enum Directive {
     Asm,
@@ -38,15 +40,18 @@ fn run_codegen_test(bench_name: &str, target_cpu: &str, bless: bool) {
     let target_dir = env!("CARGO_TARGET_DIR");
 
     let cargo_asm = |directive: &Directive| {
-        Command::new("cargo")
+        Command::new("./cargo.sh")
             .args([
+                "+nightly",
                 "asm",
+                "--quiet",
                 "-p",
                 "zerocopy",
                 "--manifest-path",
                 manifest_path,
                 "--target-dir",
                 target_dir,
+                "--all-features",
                 "--bench",
                 bench_name,
                 "--target-cpu",
@@ -59,16 +64,15 @@ fn run_codegen_test(bench_name: &str, target_cpu: &str, bless: bool) {
             .expect("failed to execute process")
     };
 
+    let re = Regex::new(r"(\.Lanon\.)[0-z]+(\.\d+)").unwrap();
+
     let test_directive = |directive: Directive| {
         let output = cargo_asm(&directive);
-        let actual_result = output.stdout;
+        let actual_result = String::from_utf8_lossy(&output.stdout);
+        let actual_result = re.replace_all(&actual_result, "${1}HASH${2}");
 
         if !(output.status.success()) {
-            panic!(
-                "{}\n{}",
-                String::from_utf8_lossy(&actual_result),
-                String::from_utf8_lossy(&output.stderr)
-            );
+            panic!("{}\n{}", &actual_result, String::from_utf8_lossy(&output.stderr));
         }
 
         let expected_file_path = {
@@ -81,10 +85,10 @@ fn run_codegen_test(bench_name: &str, target_cpu: &str, bless: bool) {
         };
 
         if bless {
-            std::fs::write(expected_file_path, &actual_result).unwrap();
+            std::fs::write(expected_file_path, actual_result.as_bytes()).unwrap();
         } else {
             let expected_result = std::fs::read(expected_file_path).unwrap_or_default();
-            if actual_result != expected_result {
+            if actual_result.as_bytes() != expected_result {
                 let expected = String::from_utf8_lossy(&expected_result[..]);
                 panic!("Bless codegen tests with BLESS=1\nGot unexpected output:\n{}", expected);
             }
@@ -99,13 +103,23 @@ fn run_codegen_test(bench_name: &str, target_cpu: &str, bless: bool) {
 #[cfg_attr(miri, ignore)]
 fn codegen() {
     let bless = std::env::var("BLESS").is_ok();
-    let paths = std::fs::read_dir("benches").unwrap();
-    for path in paths {
-        let path = path.unwrap().path();
-        if !path.extension().map(|s| s == "rs").unwrap_or(false) {
-            continue;
-        }
-        let path = path.file_stem().unwrap().to_str().unwrap();
-        run_codegen_test(path, "x86-64", bless);
+    let handles: Vec<_> = std::fs::read_dir("benches")
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+        .map(|path| {
+            let bench_name = path.file_stem().unwrap().to_str().unwrap().to_owned();
+            thread::spawn(move || {
+                panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                    run_codegen_test(&bench_name, "x86-64", bless);
+                }))
+            })
+        })
+        .collect();
+
+    let failed = handles.into_iter().any(|handle| handle.join().unwrap().is_err());
+
+    if failed {
+        panic!("One or more codegen tests failed. See thread panics above for details.");
     }
 }

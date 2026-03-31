@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "somehal-macros"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = false
 autolib = false

@@ -4,9 +4,10 @@
 
 use alloc::{string::String, vec::Vec};
 use core::ops::Deref;
+
 use fdt_raw::{FDT_MAGIC, Token};
 
-use crate::{Fdt, Node};
+use crate::{Fdt, NodeId};
 
 /// FDT 二进制数据
 #[derive(Clone, Debug)]
@@ -125,8 +126,8 @@ impl<'a> FdtEncoder<'a> {
 
     /// 执行编码
     pub fn encode(mut self) -> FdtData {
-        // 递归编码节点树
-        self.encode_node(&self.fdt.root.clone());
+        // 从根节点开始递归编码节点树
+        self.encode_node(self.fdt.root_id());
 
         // 添加 END token
         let token: u32 = Token::End.into();
@@ -135,19 +136,24 @@ impl<'a> FdtEncoder<'a> {
         self.finalize()
     }
 
-    /// 递归编码节点及其子节点
-    fn encode_node(&mut self, node: &Node) {
-        // 写入 BEGIN_NODE 和节点名
-        self.write_begin_node(node.name());
+    /// 递归编码节点及其子节点（适配 arena 结构）
+    fn encode_node(&mut self, id: NodeId) {
+        let node = match self.fdt.node(id) {
+            Some(n) => n,
+            None => return,
+        };
 
-        // 写入所有属性（直接使用原始数据）
+        // 写入 BEGIN_NODE 和节点名
+        self.write_begin_node(&node.name);
+
+        // 写入所有属性
         for prop in node.properties() {
-            self.write_property(prop.name(), &prop.data);
+            self.write_property(&prop.name, &prop.data);
         }
 
         // 递归编码子节点
-        for child in node.children() {
-            self.encode_node(child);
+        for &child_id in node.children() {
+            self.encode_node(child_id);
         }
 
         // 写入 END_NODE

@@ -1,173 +1,108 @@
 //! Structures and functions for user space.
 
-use core::ops::{Deref, DerefMut};
-
 use memory_addr::VirtAddr;
-use x86_64::{
-    registers::{
-        control::Cr2,
-        model_specific::{Efer, EferFlags, KernelGsBase, LStar, SFMask, Star},
-        rflags::RFlags,
-    },
-    structures::idt::ExceptionVector,
-};
 
-use super::{
-    asm::{read_thread_pointer, write_thread_pointer},
-    gdt,
-    trap::{err_code_to_flags, IRQ_VECTOR_END, IRQ_VECTOR_START, LEGACY_SYSCALL_VECTOR},
-    TrapFrame,
-};
-
-pub use crate::uspace_common::{ExceptionKind, ReturnReason};
+use crate::TrapFrame;
 
 /// Context to enter user space.
-#[derive(Debug, Clone, Copy)]
-#[repr(C)]
-pub struct UserContext {
-    tf: TrapFrame,
-    /// FS Segment Base
-    pub fs_base: u64,
-    /// GS Segment Base
-    pub gs_base: u64,
-}
+pub struct UspaceContext(TrapFrame);
 
-impl UserContext {
+impl UspaceContext {
+    /// Creates an empty context with all registers set to zero.
+    pub const fn empty() -> Self {
+        unsafe { core::mem::MaybeUninit::zeroed().assume_init() }
+    }
+
     /// Creates a new context with the given entry point, user stack pointer,
     /// and the argument.
     pub fn new(entry: usize, ustack_top: VirtAddr, arg0: usize) -> Self {
+        use crate::GdtStruct;
         use x86_64::registers::rflags::RFlags;
-        Self {
-            tf: TrapFrame {
-                rdi: arg0 as _,
-                rip: entry as _,
-                cs: gdt::UCODE64.0 as _,
-                rflags: RFlags::INTERRUPT_FLAG.bits(), // IOPL = 0, IF = 1
-                rsp: ustack_top.as_usize() as _,
-                ss: gdt::UDATA.0 as _,
-                ..Default::default()
-            },
-            fs_base: 0,
-            gs_base: 0,
-        }
+        Self(TrapFrame {
+            rdi: arg0 as _,
+            rip: entry as _,
+            cs: GdtStruct::UCODE64_SELECTOR.0 as _,
+            rflags: RFlags::INTERRUPT_FLAG.bits(), // IOPL = 0, IF = 1
+            rsp: ustack_top.as_usize() as _,
+            ss: GdtStruct::UDATA_SELECTOR.0 as _,
+            ..Default::default()
+        })
     }
 
-    /// Gets the TLS area.
-    pub const fn tls(&self) -> usize {
-        self.fs_base as _
+    /// Creates a new context from the given [`TrapFrame`].
+    ///
+    /// It copies almost all registers except `CS` and `SS` which need to be
+    /// set to the user segment selectors.
+    pub const fn from(tf: &TrapFrame) -> Self {
+        use crate::GdtStruct;
+        let mut tf = *tf;
+        tf.cs = GdtStruct::UCODE64_SELECTOR.0 as _;
+        tf.ss = GdtStruct::UDATA_SELECTOR.0 as _;
+        Self(tf)
     }
 
-    /// Sets the TLS area.
-    pub const fn set_tls(&mut self, tls_area: usize) {
-        self.fs_base = tls_area as _;
+    /// Gets the instruction pointer.
+    pub const fn get_ip(&self) -> usize {
+        self.0.rip as _
+    }
+
+    /// Gets the stack pointer.
+    pub const fn get_sp(&self) -> usize {
+        self.0.rsp as _
+    }
+
+    /// Sets the instruction pointer.
+    pub const fn set_ip(&mut self, rip: usize) {
+        self.0.rip = rip as _;
+    }
+
+    /// Sets the stack pointer.
+    pub const fn set_sp(&mut self, rsp: usize) {
+        self.0.rsp = rsp as _;
+    }
+
+    /// Sets the return value register.
+    pub const fn set_retval(&mut self, rax: usize) {
+        self.0.rax = rax as _;
     }
 
     /// Enters user space.
     ///
     /// It restores the user registers and jumps to the user entry point
     /// (saved in `rip`).
+    /// When an exception or syscall occurs, the kernel stack pointer is
+    /// switched to `kstack_top`.
     ///
-    /// This function returns when an exception or syscall occurs.
-    pub fn run(&mut self) -> ReturnReason {
-        extern "C" {
-            fn enter_user(uctx: &mut UserContext);
-        }
-
-        assert_eq!(self.cs, gdt::UCODE64.0 as _);
-        assert_eq!(self.ss, gdt::UDATA.0 as _);
-
+    /// # Safety
+    ///
+    /// This function is unsafe because it changes processor mode and the stack.
+    pub unsafe fn enter_uspace(&self, kstack_top: VirtAddr) -> ! {
         crate::asm::disable_irqs();
-
-        let kernel_fs_base = read_thread_pointer();
-        unsafe { write_thread_pointer(self.fs_base as _) };
-        KernelGsBase::write(x86_64::VirtAddr::new_truncate(self.gs_base));
-
-        unsafe { enter_user(self) };
-
-        self.gs_base = KernelGsBase::read().as_u64();
-        self.fs_base = read_thread_pointer() as _;
-        unsafe { write_thread_pointer(kernel_fs_base) };
-
-        let cr2 = Cr2::read().unwrap().as_u64() as usize;
-        let vector = self.vector as u8;
-
-        const PAGE_FAULT_VECTOR: u8 = ExceptionVector::Page as u8;
-
-        let ret = match (vector, err_code_to_flags(self.error_code)) {
-            (PAGE_FAULT_VECTOR, Ok(flags)) => ReturnReason::PageFault(va!(cr2), flags),
-            (LEGACY_SYSCALL_VECTOR, _) => ReturnReason::Syscall,
-            (IRQ_VECTOR_START..=IRQ_VECTOR_END, _) => {
-                handle_trap!(IRQ, vector as _);
-                ReturnReason::Interrupt
-            }
-            _ => ReturnReason::Exception(ExceptionInfo {
-                vector,
-                error_code: self.error_code,
-                cr2,
-            }),
-        };
-
-        crate::asm::enable_irqs();
-        ret
-    }
-}
-
-impl Deref for UserContext {
-    type Target = TrapFrame;
-
-    fn deref(&self) -> &Self::Target {
-        &self.tf
-    }
-}
-
-impl DerefMut for UserContext {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tf
-    }
-}
-
-/// Information about an exception that occurred in user space.
-#[derive(Debug, Clone, Copy)]
-pub struct ExceptionInfo {
-    /// The exception vector.
-    pub vector: u8,
-    /// The error code.
-    pub error_code: u64,
-    /// The faulting virtual address (if applicable).
-    pub cr2: usize,
-}
-
-impl ExceptionInfo {
-    /// Returns a generalized kind of this exception.
-    pub fn kind(&self) -> ExceptionKind {
-        match ExceptionVector::try_from(self.vector) {
-            Ok(ExceptionVector::Breakpoint) => ExceptionKind::Breakpoint,
-            Ok(ExceptionVector::InvalidOpcode) => ExceptionKind::IllegalInstruction,
-            _ => ExceptionKind::Other,
+        assert_eq!(super::gdt::read_tss_rsp0(), kstack_top);
+        unsafe {
+            core::arch::asm!("
+                mov     rsp, {tf}
+                pop     rax
+                pop     rcx
+                pop     rdx
+                pop     rbx
+                pop     rbp
+                pop     rsi
+                pop     rdi
+                pop     r8
+                pop     r9
+                pop     r10
+                pop     r11
+                pop     r12
+                pop     r13
+                pop     r14
+                pop     r15
+                add     rsp, 16     // skip vector, error_code
+                swapgs
+                iretq",
+                tf = in(reg) &self.0,
+                options(noreturn),
+            )
         }
-    }
-}
-
-/// Initializes syscall support and setups the syscall handler.
-pub(super) fn init_syscall() {
-    extern "C" {
-        fn syscall_entry();
-    }
-
-    LStar::write(x86_64::VirtAddr::new_truncate(
-        syscall_entry as *const () as usize as _,
-    ));
-    Star::write(gdt::UCODE64, gdt::UDATA, gdt::KCODE64, gdt::KDATA).unwrap();
-    SFMask::write(
-        RFlags::TRAP_FLAG
-            | RFlags::INTERRUPT_FLAG
-            | RFlags::DIRECTION_FLAG
-            | RFlags::IOPL_LOW
-            | RFlags::IOPL_HIGH
-            | RFlags::NESTED_TASK
-            | RFlags::ALIGNMENT_CHECK,
-    ); // TF | IF | DF | IOPL | AC | NT (0x47700)
-    unsafe {
-        Efer::update(|efer| *efer |= EferFlags::SYSTEM_CALL_EXTENSIONS);
     }
 }

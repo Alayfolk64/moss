@@ -1,6 +1,6 @@
 use crate::constants::{
-    MAX_I128_REPR, MAX_SCALE_U32, MAX_STR_BUFFER_SIZE, POWERS_10, SCALE_MASK, SCALE_SHIFT, SIGN_MASK, SIGN_SHIFT,
-    U32_MASK, U8_MASK, UNSIGN_MASK,
+    MAX_I128_REPR, MAX_SCALE_U32, POWERS_10, SCALE_MASK, SCALE_SHIFT, SIGN_MASK, SIGN_SHIFT, U32_MASK, U8_MASK,
+    UNSIGN_MASK,
 };
 use crate::ops;
 use crate::Error;
@@ -23,6 +23,8 @@ use num_traits::float::FloatCore;
 use num_traits::{FromPrimitive, Num, One, Signed, ToPrimitive, Zero};
 #[cfg(feature = "rkyv")]
 use rkyv::{Archive, Deserialize, Serialize};
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+use wasm_bindgen::prelude::wasm_bindgen;
 
 /// The smallest value that can be represented by this decimal type.
 const MIN: Decimal = Decimal {
@@ -106,6 +108,7 @@ pub struct UnpackedDecimal {
     feature = "borsh",
     derive(borsh::BorshDeserialize, borsh::BorshSerialize, borsh::BorshSchema)
 )]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck_derive::Pod, bytemuck_derive::Zeroable))]
 #[cfg_attr(
     feature = "rkyv",
     derive(Archive, Deserialize, Serialize),
@@ -113,6 +116,7 @@ pub struct UnpackedDecimal {
     archive_attr(derive(Clone, Copy, Debug))
 )]
 #[cfg_attr(feature = "rkyv-safe", archive(check_bytes))]
+#[cfg_attr(all(target_arch = "wasm32", feature = "wasm"), wasm_bindgen)]
 pub struct Decimal {
     // Bits 0-15: unused
     // Bits 16-23: Contains "e", a value between 0-28 that indicates the scale
@@ -2409,6 +2413,62 @@ fn base2_to_decimal(
     })
 }
 
+impl Decimal {
+    /// Converts this `Decimal` to an `i128`, truncating any fractional part.
+    ///
+    /// This is the infallible equivalent of [`ToPrimitive::to_i128`].
+    pub fn as_i128(&self) -> i128 {
+        let d = self.trunc();
+        let raw: i128 = ((i128::from(d.hi) << 64) | (i128::from(d.mid) << 32)) | i128::from(d.lo);
+        if self.is_sign_negative() {
+            -raw
+        } else {
+            raw
+        }
+    }
+
+    /// Converts this `Decimal` to an `f64`.
+    ///
+    /// This is the infallible equivalent of [`ToPrimitive::to_f64`].
+    pub fn as_f64(&self) -> f64 {
+        if self.scale() == 0 {
+            // If scale is zero, we are storing a 96-bit integer value, that would
+            // always fit into i128, which in turn is always representable as f64,
+            // albeit with loss of precision for values outside of -2^53..2^53 range.
+            self.as_i128() as f64
+        } else {
+            let neg = self.is_sign_negative();
+            let mut mantissa: u128 = self.lo.into();
+            mantissa |= (self.mid as u128) << 32;
+            mantissa |= (self.hi as u128) << 64;
+            // scale is at most 28, so this fits comfortably into a u128.
+            let scale = self.scale();
+            let precision: u128 = 10_u128.pow(scale);
+            let integral_part = mantissa / precision;
+            let frac_part = mantissa % precision;
+            let frac_f64 = (frac_part as f64) / (precision as f64);
+            let integral = integral_part as f64;
+            // If there is a fractional component then we will need to add that and remove any
+            // inaccuracies that creep in during addition. Otherwise, if the fractional component
+            // is zero we can exit early.
+            if frac_f64.is_zero() {
+                if neg {
+                    return -integral;
+                }
+                return integral;
+            }
+            let value = integral + frac_f64;
+            let round_to = 10f64.powi(self.scale() as i32);
+            let rounded = (value * round_to).round() / round_to;
+            if neg {
+                -rounded
+            } else {
+                rounded
+            }
+        }
+    }
+}
+
 impl ToPrimitive for Decimal {
     fn to_i64(&self) -> Option<i64> {
         let d = self.trunc();
@@ -2438,13 +2498,7 @@ impl ToPrimitive for Decimal {
     }
 
     fn to_i128(&self) -> Option<i128> {
-        let d = self.trunc();
-        let raw: i128 = ((i128::from(d.hi) << 64) | (i128::from(d.mid) << 32)) | i128::from(d.lo);
-        if self.is_sign_negative() {
-            Some(-raw)
-        } else {
-            Some(raw)
-        }
+        Some(self.as_i128())
     }
 
     fn to_u64(&self) -> Option<u64> {
@@ -2471,42 +2525,7 @@ impl ToPrimitive for Decimal {
     }
 
     fn to_f64(&self) -> Option<f64> {
-        if self.scale() == 0 {
-            // If scale is zero, we are storing a 96-bit integer value, that would
-            // always fit into i128, which in turn is always representable as f64,
-            // albeit with loss of precision for values outside of -2^53..2^53 range.
-            let integer = self.to_i128();
-            integer.map(|i| i as f64)
-        } else {
-            let neg = self.is_sign_negative();
-            let mut mantissa: u128 = self.lo.into();
-            mantissa |= (self.mid as u128) << 32;
-            mantissa |= (self.hi as u128) << 64;
-            // scale is at most 28, so this fits comfortably into a u128.
-            let scale = self.scale();
-            let precision: u128 = 10_u128.pow(scale);
-            let integral_part = mantissa / precision;
-            let frac_part = mantissa % precision;
-            let frac_f64 = (frac_part as f64) / (precision as f64);
-            let integral = integral_part as f64;
-            // If there is a fractional component then we will need to add that and remove any
-            // inaccuracies that creep in during addition. Otherwise, if the fractional component
-            // is zero we can exit early.
-            if frac_f64.is_zero() {
-                if neg {
-                    return Some(-integral);
-                }
-                return Some(integral);
-            }
-            let value = integral + frac_f64;
-            let round_to = 10f64.powi(self.scale() as i32);
-            let rounded = (value * round_to).round() / round_to;
-            if neg {
-                Some(-rounded)
-            } else {
-                Some(rounded)
-            }
-        }
+        Some(self.as_f64())
     }
 }
 
@@ -2774,5 +2793,16 @@ impl<'a> Sum<&'a Decimal> for Decimal {
             sum += i;
         }
         sum
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_scientific_0e0() {
+        let dec = Decimal::from_scientific("0e0").unwrap();
+        assert_eq!(dec, Decimal::ZERO);
     }
 }

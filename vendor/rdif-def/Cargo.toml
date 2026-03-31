@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "rdif-def"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = false
 autolib = false
