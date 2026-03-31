@@ -50,6 +50,7 @@ _cargo_build: oldconfig
 ifeq ($(APP_TYPE), rust)
 	$(call cargo_build,$(APP),$(AX_FEAT) $(LIB_FEAT) $(APP_FEAT))
 	@cp $(rust_elf) $(OUT_ELF)
+	$(call run_cmd,$(OBJCOPY),$(OUT_ELF) --strip-debug $(OUT_ELF))
 else ifeq ($(APP_TYPE), c)
 	$(call cargo_build,ulib/axlibc,$(AX_FEAT) $(LIB_FEAT))
 endif

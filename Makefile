@@ -1,7 +1,8 @@
 # Build Options
 export ARCH := riscv64
 export LOG := warn
-export DWARF := y
+export DWARF := n
+export MODE := release
 export MEMTRACK := n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
@@ -65,10 +66,12 @@ all: kernel-rv kernel-la
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv
+	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin
 
 kernel-la: toolchain
 	$(MAKE) ARCH=loongarch64 build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la.bin
 
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
