@@ -1,7 +1,0 @@
-{
-  "git": {
-    "sha1": "ba8a4532533ae7466f8cd6baae279b9940730a7c",
-    "dirty": true
-  },
-  "path_in_vcs": "platforms/axplat-aarch64-qemu-virt"
-}
