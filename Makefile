@@ -6,6 +6,8 @@ export MODE := release
 export MEMTRACK := n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
+RUST_LLD ?= rust-lld
+RUST_OBJCOPY ?= rust-objcopy
 export RUSTFLAGS ?= -Zcrate-attr=feature(unsigned_signed_diff)
 
 # QEMU Options
@@ -53,7 +55,7 @@ defconfig justrun: toolchain
 
 makeclean:
 	@$(MAKE) -C make makeclean
-	@rm -f $(A)/kernel-rv $(A)/kernel-la
+	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin $(A)/kernel-rv.dbg.elf $(A)/kernel-rv.bin.o
 
 clean: makeclean
 	@:
@@ -65,8 +67,11 @@ all: kernel-rv kernel-la
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
-	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv
+	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin
+	$(RUST_OBJCOPY) -I binary -O elf64-littleriscv -B riscv --rename-section .data=.text,alloc,load,readonly,code $(A)/kernel-rv.bin $(A)/kernel-rv.bin.o
+	$(RUST_LLD) -flavor gnu -m elf64lriscv -T $(A)/make/kernel-rv-wrap.ld -o $(A)/kernel-rv $(A)/kernel-rv.bin.o
+	rm -f $(A)/kernel-rv.bin.o
 
 kernel-la: toolchain
 	$(MAKE) ARCH=loongarch64 build

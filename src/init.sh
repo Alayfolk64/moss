@@ -21,6 +21,8 @@ if [ -z "$BB" ]; then
 fi
 
 echo "[TEST] using busybox: $BB"
+# Install busybox applets (e.g. sleep, kill, grep) to avoid missing-command failures.
+"$BB" --install -s /bin >/dev/null 2>&1 || true
 
 run_test() {
   test_sh="$1"
@@ -75,9 +77,14 @@ echo "[TEST] scan roots:$SEARCH_ROOTS"
 TEST_LIST=$(
   for d in $SEARCH_ROOTS; do
     [ -d "$d" ] || continue
-    "$BB" find "$d" -type f \
-      \( -name '*_testcode.sh' -o -name '*_test.sh' -o -name 'test_*.sh' -o -name '*test*.sh' \) \
-      2>/dev/null
+    for p in \
+      "$d"/*_testcode.sh \
+      "$d"/*_test.sh \
+      "$d"/test_*.sh \
+      "$d"/*test*.sh
+    do
+      [ -f "$p" ] && echo "$p"
+    done
   done | "$BB" sort -u
 )
 

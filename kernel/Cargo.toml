@@ -30,7 +30,7 @@ axfeat = { workspace = true, features = [
     "rtc",
 
     "fs",
-    "fs-fat",
+    "fs-ext4",
 ] }
 
 axalloc.workspace = true

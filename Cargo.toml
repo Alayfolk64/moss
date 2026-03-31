@@ -75,6 +75,9 @@ required-features = ["qemu"]
 axfeat.workspace = true
 starry-kernel.workspace = true
 
+[patch.crates-io]
+lwext4_rust = { path = "third_party/lwext4_rust" }
+
 [package.metadata.vendor-filter]
 platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none-softfloat"]
 all-features = true

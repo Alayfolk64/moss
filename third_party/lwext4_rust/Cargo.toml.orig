@@ -1,0 +1,26 @@
+[package]
+name = "lwext4_rust"
+authors = ["Luoyuan Xiao <xiaoluoyuan@163.com>", "Mivik <mivikq@gmail.com>"]
+version = "0.3.1-preview.1"
+edition = "2024"
+license = "GPL-2.0"
+repository = "https://github.com/Starry-OS/lwext4_rust"
+homepage = "https://github.com/Starry-OS/lwext4_rust"
+description = "Rust bindings for lwext4 - a lightweight ext2/ext3/ext4 filesystem library for embedded systems"
+keywords = ["ext4", "filesystem", "lwext4", "no_std", "embedded"]
+categories = ["no-std", "filesystem"]
+
+links = "lwext4"
+build = "build.rs"
+
+[features]
+default = ["print", "std"]
+print = ["printf-compat"]
+std = []
+
+[dependencies]
+log = "0.4"
+printf-compat = { version = "0.3", default-features = false, optional = true }
+
+[build-dependencies]
+bindgen = "0.72"
