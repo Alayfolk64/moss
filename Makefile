@@ -34,6 +34,12 @@ toolchain:
 	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
 
 KERNEL_NAME := $(notdir $(A))
+SDCARD_RV_IMG := $(A)/sdcard-rv.img
+SDCARD_RV_SRC := $(A)/.sdcard-rv.src.img
+SDCARD_RV_TMP := /tmp/$(KERNEL_NAME)-sdcard-rv.img
+SDCARD_LA_IMG := $(A)/sdcard-la.img
+SDCARD_LA_SRC := $(A)/.sdcard-la.src.img
+SDCARD_LA_TMP := /tmp/$(KERNEL_NAME)-sdcard-la.img
 
 ROOTFS_URL = https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG = rootfs-$(ARCH).img
@@ -57,6 +63,34 @@ makeclean:
 	@$(MAKE) -C make makeclean
 	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin $(A)/kernel-rv.dbg.elf $(A)/kernel-rv.bin.o
 
+prepare-sdcard-rv:
+	@src="$(SDCARD_RV_SRC)"; \
+		img="$(SDCARD_RV_IMG)"; \
+		if [ ! -f "$$src" ]; then \
+			if [ -e "$$img" ]; then \
+				cp -Lf "$$img" "$$src"; \
+			else \
+				echo "missing image source: $$img"; \
+				exit 1; \
+			fi; \
+		fi; \
+		rm -f "$$img"; \
+		cp -f "$$src" "$$img"
+
+prepare-sdcard-la:
+	@src="$(SDCARD_LA_SRC)"; \
+		img="$(SDCARD_LA_IMG)"; \
+		if [ ! -f "$$src" ]; then \
+			if [ -e "$$img" ]; then \
+				cp -Lf "$$img" "$$src"; \
+			else \
+				echo "missing image source: $$img"; \
+				exit 1; \
+			fi; \
+		fi; \
+		rm -f "$$img"; \
+		cp -f "$$src" "$$img"
+
 clean: makeclean
 	@:
 
@@ -65,7 +99,7 @@ build run debug disasm: toolchain defconfig
 
 all: kernel-rv kernel-la
 
-kernel-rv: toolchain
+kernel-rv: toolchain prepare-sdcard-rv
 	$(MAKE) ARCH=riscv64 build
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin
@@ -73,7 +107,7 @@ kernel-rv: toolchain
 	$(RUST_LLD) -flavor gnu -m elf64lriscv -T $(A)/make/kernel-rv-wrap.ld -o $(A)/kernel-rv $(A)/kernel-rv.bin.o
 	rm -f $(A)/kernel-rv.bin.o
 
-kernel-la: toolchain
+kernel-la: toolchain prepare-sdcard-la
 	$(MAKE) ARCH=loongarch64 build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la.bin
@@ -95,4 +129,4 @@ la:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain prepare-sdcard-rv prepare-sdcard-la

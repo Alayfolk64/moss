@@ -54,13 +54,6 @@ default = []
 qemu = [
     "axfeat/defplat",
     "axfeat/bus-pci",
-
-    "axfeat/display",
-
-    "starry-kernel/input",
-
-    # auxilary features
-    "starry-kernel/dev-log",
 ]
 smp = ["axfeat/smp"]
 
@@ -79,5 +72,5 @@ starry-kernel.workspace = true
 lwext4_rust = { path = "third_party/lwext4_rust" }
 
 [package.metadata.vendor-filter]
-platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none-softfloat"]
+platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none"]
 all-features = true

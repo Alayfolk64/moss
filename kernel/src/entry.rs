@@ -83,4 +83,7 @@ pub fn init(args: &[String], envs: &[String]) {
         .filesystem()
         .flush()
         .expect("Failed to flush rootfs");
+
+    info!("Init flow completed, powering off");
+    axhal::power::system_off();
 }

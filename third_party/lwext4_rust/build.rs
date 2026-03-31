@@ -35,6 +35,7 @@ fn main() {
         .expect("cannot canonicalize lwext4 output path");
 
     let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let target_abi = env::var("CARGO_CFG_TARGET_ABI").unwrap_or_default();
     let lwext4_lib = &format!("lwext4-{arch}");
 
     // Build the C library in OUT_DIR
@@ -46,6 +47,7 @@ fn main() {
                 lwext4_out.to_str().expect("invalid path of lwext4"),
             ])
             .arg(format!("ARCH={arch}"))
+            .arg(format!("TARGET_ABI={target_abi}"))
             .arg(format!(
                 "ULIBC={}",
                 if cfg!(feature = "std") { "OFF" } else { "ON" }
