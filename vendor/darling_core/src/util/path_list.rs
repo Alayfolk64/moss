@@ -1,8 +1,7 @@
 use std::ops::Deref;
 
-use syn::{Meta, Path};
+use syn::{Meta, NestedMeta, Path};
 
-use crate::ast::NestedMeta;
 use crate::{Error, FromMeta, Result};
 
 use super::path_to_string;
@@ -30,20 +29,6 @@ impl PathList {
     /// Create a new `Vec` containing the string representation of each path.
     pub fn to_strings(&self) -> Vec<String> {
         self.0.iter().map(path_to_string).collect()
-    }
-
-    /// Visits the values representing the intersection, i.e., the values that are both in `self` and `other`.
-    ///
-    /// Values will be returned in the order they appear in `self`.
-    ///
-    /// Values that are present multiple times in `self` and present at least once in `other` will be returned multiple times.
-    ///
-    /// # Performance
-    /// This function runs in `O(n * m)` time.
-    /// It is believed that path lists are usually short enough that this is better than allocating a set containing the values
-    /// of `other` or adding a conditional solution.
-    pub fn intersection<'a>(&'a self, other: &'a PathList) -> impl Iterator<Item = &'a Path> {
-        self.0.iter().filter(|path| other.0.contains(path))
     }
 }
 
@@ -81,13 +66,12 @@ mod tests {
     use super::PathList;
     use crate::FromMeta;
     use proc_macro2::TokenStream;
-    use quote::quote;
-    use syn::{parse_quote, Attribute, Meta};
+    use syn::{Attribute, Meta};
 
     /// parse a string as a syn::Meta instance.
     fn pm(tokens: TokenStream) -> ::std::result::Result<Meta, String> {
         let attribute: Attribute = parse_quote!(#[#tokens]);
-        Ok(attribute.meta)
+        attribute.parse_meta().map_err(|_| "Unable to parse".into())
     }
 
     fn fm<T: FromMeta>(tokens: TokenStream) -> T {
@@ -115,15 +99,5 @@ mod tests {
         let input = PathList::from_meta(&pm(quote!(ignore(Debug, Clone = false))).unwrap());
         let err = input.unwrap_err();
         assert!(err.has_span());
-    }
-
-    #[test]
-    fn intersection() {
-        let left = fm::<PathList>(quote!(ignore(Debug, Clone, Eq)));
-        let right = fm::<PathList>(quote!(ignore(Clone, Eq, Clone)));
-        assert_eq!(
-            left.intersection(&right).cloned().collect::<Vec<_>>(),
-            vec![parse_quote!(Clone), parse_quote!(Eq)],
-        );
     }
 }

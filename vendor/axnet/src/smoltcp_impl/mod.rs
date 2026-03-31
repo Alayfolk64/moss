@@ -6,22 +6,24 @@ mod tcp;
 mod udp;
 
 use alloc::vec;
-use core::{cell::RefCell, ops::DerefMut};
+use core::cell::RefCell;
+use core::ops::DerefMut;
 
 use axdriver::prelude::*;
 use axhal::time::{NANOS_PER_MICROS, wall_time_nanos};
 use axsync::Mutex;
 use lazyinit::LazyInit;
-use smoltcp::{
-    iface::{Config, Interface, SocketHandle, SocketSet},
-    phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken},
-    socket::{self, AnySocket},
-    time::Instant,
-    wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr},
-};
+use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet};
+use smoltcp::phy::{Device, DeviceCapabilities, Medium, RxToken, TxToken};
+use smoltcp::socket::{self, AnySocket};
+use smoltcp::time::Instant;
+use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr};
 
 use self::listen_table::ListenTable;
-pub use self::{dns::dns_query, tcp::TcpSocket, udp::UdpSocket};
+
+pub use self::dns::dns_query;
+pub use self::tcp::TcpSocket;
+pub use self::udp::UdpSocket;
 
 macro_rules! env_or_default {
     ($key:literal) => {
@@ -54,7 +56,7 @@ static ETH0: LazyInit<InterfaceWrapper> = LazyInit::new();
 struct SocketSetWrapper<'a>(Mutex<SocketSet<'a>>);
 
 struct DeviceWrapper {
-    inner: RefCell<AxNetDevice>, /* use `RefCell` is enough since it's wrapped in `Mutex` in `InterfaceWrapper`. */
+    inner: RefCell<AxNetDevice>, // use `RefCell` is enough since it's wrapped in `Mutex` in `InterfaceWrapper`.
 }
 
 struct InterfaceWrapper {

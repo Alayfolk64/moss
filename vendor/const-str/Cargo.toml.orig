@@ -1,36 +1,36 @@
 [package]
 name = "const-str"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
-description.workspace = true
-license.workspace = true
-repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
-readme.workspace = true
-rust-version.workspace = true
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
+version = "0.6.4"
+authors = ["Nugine <nugine@foxmail.com>"]
+edition = "2021"
+description = "compile-time string operations"
+license = "MIT"
+repository = "https://github.com/Nugine/const-str"
+keywords = ["string", "const", "proc-macro"]
+categories = ["text-processing", "no-std"]
+readme = "../README.md"
+rust-version = "1.77.0"
 
 [features]
 default = []
 std = []
 proc = ["dep:const-str-proc-macro"]
-regex = ["proc", "const-str-proc-macro?/regex", "dep:regex"]
-http = ["proc", "const-str-proc-macro?/http", "dep:http"]
-case = ["proc", "const-str-proc-macro?/heck", "dep:heck"]
+regex = ["proc", "const-str-proc-macro?/regex"]
+http = ["proc", "const-str-proc-macro?/http"]
+case = ["proc", "const-str-proc-macro?/heck"]
 all = ["std", "proc", "regex", "http", "case"]
 unstable = []
 
-[dependencies]
-heck = { workspace = true, optional = true }
-http = { workspace = true, optional = true }
-regex = { workspace = true, optional = true }
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies.const-str-proc-macro]
-version = "1.1.0"
+version = "0.6.4"
 path = "../const-str-proc-macro"
 optional = true
+
+[dev-dependencies]
+regex = "1.7.0"
+http = "1.0.0"
+heck = "0.5.0"

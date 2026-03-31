@@ -1,6 +1,7 @@
 {
   "git": {
-    "sha1": "3c331df32a906d92ae16200c65cfc2bfe22b0442"
+    "sha1": "e31ee8410e78fd9a8f83c9c1bed8efd00f10e059",
+    "dirty": true
   },
   "path_in_vcs": "modules/axlog"
 }

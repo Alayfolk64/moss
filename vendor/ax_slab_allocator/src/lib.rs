@@ -6,11 +6,13 @@
 //!
 //! [buddy_system_allocator]: https://docs.rs/buddy_system_allocator/latest/buddy_system_allocator/
 
+#![feature(allocator_api)]
 #![no_std]
 
 extern crate alloc;
+extern crate buddy_system_allocator;
 
-use alloc::alloc::Layout;
+use alloc::alloc::{AllocError, Layout};
 use core::ptr::NonNull;
 
 #[cfg(test)]
@@ -32,10 +34,6 @@ enum HeapAllocator {
     Slab4096Bytes,
     BuddyAllocator,
 }
-
-/// Error type for allocation failure.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub struct AllocError;
 
 /// A fixed size heap backed by multiple slabs with blocks of different sizes.
 /// Allocations over 4096 bytes are served by linked list allocator.

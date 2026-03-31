@@ -36,14 +36,20 @@
 #[macro_use]
 extern crate axlog;
 
+#[cfg(all(target_arch = "x86_64", feature = "plat-hv-x86_64"))]
+extern crate axplat_x86_qemu_q35;
+
+#[cfg(all(target_arch = "aarch64", feature = "plat-hv-aarch64"))]
+extern crate axplat_dyn;
+
+#[cfg(all(target_arch = "aarch64", feature = "plat-hv-aarch64"))]
+extern crate somehal;
+
 #[cfg(all(target_os = "none", not(test)))]
 mod lang_items;
 
 #[cfg(feature = "smp")]
 mod mp;
-
-#[cfg(feature = "paging")]
-mod klib;
 
 #[cfg(feature = "smp")]
 pub use self::mp::rust_main_secondary;
@@ -103,11 +109,18 @@ impl axlog::LogIf for LogIfImpl {
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// Number of CPUs that have completed initialization.
 static INITED_CPUS: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(any(feature = "plat-hv-x86_64", feature = "plat-hv-aarch64"))]
 fn is_init_ok() -> bool {
-    INITED_CPUS.load(Ordering::Acquire) == axhal::cpu_num()
+    let cpu_num = cpu_count();
+    INITED_CPUS.load(Ordering::Acquire) == cpu_num
+}
+
+#[cfg(not(any(feature = "plat-hv-x86_64", feature = "plat-hv-aarch64")))]
+fn is_init_ok() -> bool {
+    let cpu_num = axconfig::plat::CPU_NUM;
+    INITED_CPUS.load(Ordering::Acquire) == cpu_num
 }
 
 /// The main entry point of the ArceOS runtime.
@@ -122,15 +135,15 @@ fn is_init_ok() -> bool {
 /// secondary cores call [`rust_main_secondary`].
 #[cfg_attr(not(test), axplat::main)]
 pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
-    #[cfg(not(feature = "plat-dyn"))]
-    unsafe {
-        axhal::mem::clear_bss()
-    };
+    unsafe { axhal::mem::clear_bss() };
     axhal::percpu::init_primary(cpu_id);
     axhal::init_early(cpu_id, arg);
-    let log_level = option_env!("AX_LOG").unwrap_or("info");
 
     ax_println!("{}", LOGO);
+    #[cfg(any(feature = "plat-hv-x86_64", feature = "plat-hv-aarch64"))]
+    ax_println!("smp = {}\n", cpu_count());
+
+    #[cfg(not(any(feature = "plat-hv-x86_64", feature = "plat-hv-aarch64")))]
     ax_println!(
         indoc::indoc! {"
             arch = {}
@@ -145,9 +158,9 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
         axconfig::PLATFORM,
         option_env!("AX_TARGET").unwrap_or(""),
         option_env!("AX_MODE").unwrap_or(""),
-        log_level,
+        option_env!("AX_LOG").unwrap_or(""),
         axbacktrace::is_enabled(),
-        axhal::cpu_num()
+        axconfig::plat::CPU_NUM,
     );
 
     #[cfg(feature = "rtc")]
@@ -157,10 +170,12 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     );
 
     axlog::init();
-    axlog::set_max_level(log_level); // no effect if set `log-level-*` features
+    log::set_max_level(log::LevelFilter::Trace);
+    // axlog::set_max_level("info"); // no effect if set `log-level-*` features
     info!("Logging is enabled.");
     info!("Primary CPU {cpu_id} started, arg = {arg:#x}.");
 
+    axhal::mem::init();
     info!("Found physcial memory regions:");
     for r in axhal::mem::memory_regions() {
         info!(
@@ -175,27 +190,6 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     #[cfg(feature = "alloc")]
     init_allocator();
 
-    {
-        use core::ops::Range;
-
-        unsafe extern "C" {
-            safe static _stext: [u8; 0];
-            safe static _etext: [u8; 0];
-            safe static _edata: [u8; 0];
-        }
-
-        axbacktrace::init(
-            Range {
-                start: _stext.as_ptr() as usize,
-                end: _etext.as_ptr() as usize,
-            },
-            Range {
-                start: _edata.as_ptr() as usize,
-                end: usize::MAX,
-            },
-        );
-    }
-
     let (kernel_space_start, kernel_space_size) = axhal::mem::kernel_aspace();
 
     info!(
@@ -207,8 +201,8 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     #[cfg(feature = "paging")]
     axmm::init_memory_management();
 
-    // #[cfg(feature = "plat-dyn")]
-    // axdriver::setup(arg);
+    #[cfg(feature = "driver-dyn")]
+    axdriver::setup(arg);
 
     info!("Initialize platform devices...");
     axhal::init_later(cpu_id, arg);
@@ -216,36 +210,19 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     #[cfg(feature = "multitask")]
     axtask::init_scheduler();
 
-    #[cfg(feature = "axdriver")]
+    #[cfg(any(feature = "fs", feature = "net", feature = "display"))]
     {
         #[allow(unused_variables)]
         let all_devices = axdriver::init_drivers();
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "fs-ng")] {
-                axfs_ng::init_filesystems(all_devices.block);
-            } else
-            if #[cfg(feature = "fs")] {
-                axfs::init_filesystems(all_devices.block, axhal::dtb::get_chosen_bootargs());
-            }
-        }
+        #[cfg(feature = "fs")]
+        axfs::init_filesystems(all_devices.block, axhal::dtb::get_chosen_bootargs());
 
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "net-ng")] {
-                axnet_ng::init_network(all_devices.net);
-
-                #[cfg(feature = "vsock")]
-                axnet_ng::init_vsock(all_devices.vsock);
-            } else if #[cfg(feature = "net")] {
-                axnet::init_network(all_devices.net);
-            }
-        }
+        #[cfg(feature = "net")]
+        axnet::init_network(all_devices.net);
 
         #[cfg(feature = "display")]
         axdisplay::init_display(all_devices.display);
-
-        #[cfg(feature = "input")]
-        axinput::init_input(all_devices.input);
     }
 
     #[cfg(feature = "smp")]
@@ -285,7 +262,7 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
 
 #[cfg(feature = "alloc")]
 fn init_allocator() {
-    use axhal::mem::{MemRegionFlags, memory_regions, phys_to_virt};
+    use axhal::mem::{MemRegionFlags, memory_regions, phys_to_virt, virt_to_phys};
 
     info!("Initialize global memory allocator...");
     info!("  use {} allocator.", axalloc::global_allocator().name());
@@ -313,7 +290,7 @@ fn init_allocator() {
         struct AddrTranslatorImpl;
         impl axalloc::AddrTranslator for AddrTranslatorImpl {
             fn virt_to_phys(&self, va: usize) -> Option<usize> {
-                Some(axhal::mem::virt_to_phys(va.into()).as_usize())
+                Some(virt_to_phys(va.into()).as_usize())
             }
         }
 
@@ -365,6 +342,7 @@ fn init_interrupt() {
         axhal::time::set_oneshot_timer(deadline);
     }
 
+    // axhal::irq::register(axconfig::devices::TIMER_IRQ, || {
     axhal::irq::register(axhal::time::irq_num(), || {
         update_timer();
         #[cfg(feature = "multitask")]
@@ -385,4 +363,38 @@ fn init_tls() {
     let main_tls = axhal::tls::TlsArea::alloc();
     unsafe { axhal::asm::write_thread_pointer(main_tls.tls_ptr() as usize) };
     core::mem::forget(main_tls);
+}
+
+#[cfg(any(feature = "plat-hv-x86_64", feature = "plat-hv-aarch64"))]
+fn smp() -> Option<usize> {
+    let mut smp = None;
+    let s = option_env!("AXVISOR_SMP");
+    if let Some(s) = s
+        && let Ok(n) = s.parse::<usize>()
+    {
+        smp = Some(n);
+    }
+    smp
+}
+
+/// Returns the number of CPUs available on the system
+#[cfg(any(feature = "plat-hv-x86_64", feature = "plat-hv-aarch64"))]
+pub fn cpu_count() -> usize {
+    let mut cpu_count;
+
+    cfg_if::cfg_if! {
+        if #[cfg(all(target_arch = "x86_64", feature = "plat-hv-x86_64"))] {
+            cpu_count = axplat_x86_qemu_q35::cpu_count()
+        } else if #[cfg(all(target_arch = "aarch64", feature = "plat-hv-aarch64"))] {
+            cpu_count = somehal::mem::cpu_id_list().count()
+        } else {
+            cpu_count = 1;
+        }
+    }
+
+    if let Some(smp) = smp() {
+        cpu_count = smp.min(cpu_count);
+    }
+
+    cpu_count
 }

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "starry-vm"
-version = "0.3.0"
+version = "0.2.0"
 authors = [
     "朝倉水希 <asakuramizu111@gmail.com>",
     "Mivik <mivikq@gmail.com>",
@@ -26,7 +26,7 @@ autobenches = false
 description = "Virtual memory management library for Starry OS"
 readme = false
 keywords = ["starry-os"]
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/Starry-OS/starry-vm"
 
 [package.metadata.docs.rs]
@@ -56,7 +56,7 @@ features = [
 ]
 
 [dependencies.extern-trait]
-version = "0.4"
+version = "0.2"
 
 [dev-dependencies.bytemuck]
 version = "1.24"

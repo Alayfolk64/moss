@@ -91,6 +91,8 @@ pub unsafe fn init_mmu(root_paddr: PhysAddr) {
 
     // Enable the MMU and turn on I-cache and D-cache
     SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
+    // Disable SPAN
+    SCTLR_EL1.set(SCTLR_EL1.get() | (1 << 23));
     barrier::isb(barrier::SY);
 }
 
@@ -99,11 +101,13 @@ pub unsafe fn init_mmu(root_paddr: PhysAddr) {
 /// In detail, it initializes the exception vector, and sets `TTBR0_EL1` to 0 to
 /// block low address access.
 pub fn init_trap() {
+    #[cfg(feature = "uspace")]
+    crate::uspace_common::init_exception_table();
     unsafe extern "C" {
         fn exception_vector_base();
     }
     unsafe {
-        crate::asm::write_exception_vector_base(exception_vector_base as *const () as usize);
+        crate::asm::write_exception_vector_base(exception_vector_base as usize);
         crate::asm::write_user_page_table(0.into());
     }
 }

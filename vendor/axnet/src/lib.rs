@@ -30,11 +30,12 @@ cfg_if::cfg_if! {
     }
 }
 
-use axdriver::{AxDeviceContainer, prelude::*};
+pub use self::net_impl::TcpSocket;
+pub use self::net_impl::UdpSocket;
+pub use self::net_impl::{bench_receive, bench_transmit};
+pub use self::net_impl::{dns_query, poll_interfaces};
 
-pub use self::net_impl::{
-    TcpSocket, UdpSocket, bench_receive, bench_transmit, dns_query, poll_interfaces,
-};
+use axdriver::{AxDeviceContainer, prelude::*};
 
 /// Initializes the network subsystem by NIC devices.
 pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
@@ -45,5 +46,17 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
         net_impl::init(dev);
     } else {
         warn!("  No network device found!");
+    }
+}
+
+/// Initializes vsock devices.
+#[cfg(feature = "vsock")]
+pub fn init_vsock(mut vsock_devs: AxDeviceContainer<AxVsockDevice>) {
+    info!("Initialize vsock subsystem...");
+    if let Some(dev) = vsock_devs.take_one() {
+        info!("  use vsock 0: {:?}", dev.device_name());
+        warn!("  vsock not implemented yet!");
+    } else {
+        warn!("  No vsock device found!");
     }
 }

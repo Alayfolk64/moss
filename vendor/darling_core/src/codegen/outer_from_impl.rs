@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt};
 use syn::{GenericParam, Generics, Path, TraitBound, TraitBoundModifier, TypeParamBound};
 
 use crate::codegen::TraitImpl;
@@ -27,8 +27,6 @@ pub trait OuterFromImpl<'a> {
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
         tokens.append_all(quote!(
-            #[automatically_derived]
-            #[allow(clippy::manual_unwrap_or_default)]
             impl #impl_generics #trayt for #ty_ident #ty_generics
                 #where_clause
             {

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "scope-local"
-version = "0.1.2"
+version = "0.1.1"
 authors = ["朝倉水希 <asakuramizu111@gmail.com>"]
 build = "build.rs"
 autolib = false
@@ -35,7 +35,7 @@ name = "scope_local"
 path = "tests/scope_local.rs"
 
 [dependencies.percpu]
-version = "0.2.3-preview.1"
+version = "0.2"
 
 [dependencies.spin]
 version = "0.10"
@@ -46,5 +46,5 @@ default-features = false
 version = "0.6"
 
 [dev-dependencies.percpu]
-version = "0.2.3-preview.1"
+version = "0.2"
 features = ["non-zero-vma"]

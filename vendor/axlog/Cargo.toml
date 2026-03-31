@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axlog"
-version = "0.3.0-preview.3"
+version = "0.2.2-preview.1"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -22,9 +22,11 @@ autotests = false
 autobenches = false
 description = "Macros for multi-level formatted logging used by ArceOS"
 homepage = "https://github.com/arceos-org/arceos"
+documentation = "https://arceos-org.github.io/arceos/axlog/index.html"
 readme = false
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axlog"
+resolver = "2"
 
 [features]
 default = []
@@ -43,7 +45,7 @@ optional = true
 default-features = true
 
 [dependencies.crate_interface]
-version = "0.1"
+version = "0.1.4"
 
 [dependencies.kspin]
 version = "0.1"

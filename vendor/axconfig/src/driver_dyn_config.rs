@@ -41,12 +41,7 @@ pub mod devices {
 #[doc = ""]
 pub mod plat {
     #[doc = " Number of CPUs."]
-    pub const MAX_CPU_NUM: usize = {
-        match option_env!("SMP") {
-            Some(s) => const_str::parse!(s, usize),
-            None => 16,
-        }
-    };
+    pub const CPU_NUM: usize = 16;
     #[doc = " Platform family (deprecated)."]
     pub const FAMILY: &str = "";
     #[doc = " Kernel address space base."]

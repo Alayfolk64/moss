@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axplat-aarch64-qemu-virt"
-version = "0.3.1-pre.6"
+version = "0.3.0-preview.2"
 authors = [
     "Yuekai Jia <equation618@gmail.com>",
     "Youjie Zheng <Azure_stars@126.com>",
@@ -68,16 +68,16 @@ path = "src/lib.rs"
 version = "0.2"
 
 [dependencies.axcpu]
-version = "0.3.0-preview.7"
+version = "0.3.0-preview.2"
 
 [dependencies.axplat]
-version = "0.3.1-pre.6"
+version = ">=0.3.0-preview.2, <0.3.0"
 
 [dependencies.axplat-aarch64-peripherals]
-version = "0.3.1-pre.6"
+version = "0.3.0-preview.2"
 
 [dependencies.log]
 version = "0.4"
 
 [dependencies.page_table_entry]
-version = "0.6"
+version = "0.5"

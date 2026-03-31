@@ -1,12 +1,11 @@
 [package]
 name = "axcpu"
-version = "0.3.0"
+version = "0.3.0-preview.3"
 edition = "2021"
 authors = [
     "Yuekai Jia <equation618@gmail.com>",
     "Youjie Zheng <Azure_stars@126.com>",
     "yfblock <321353225@qq.com>",
-    "Debin <luodebin@kylinos.cn>",
     "yanjuguang <coolyanjg@163.com>",
     "Grow Zheng <hhmcn@outlook.com>",
     "Su Mingxian <aarkegz@gmail.com>",
@@ -20,7 +19,7 @@ repository = "https://github.com/arceos-org/axcpu"
 documentation = "https://docs.rs/axcpu"
 keywords = ["arceos", "cpu", "architecture", "hal"]
 categories = ["embedded", "no-std", "hardware-support", "os"]
-rust-version = "1.88.0"
+rust-version = "1.82.0"
 
 [features]
 default = []
@@ -30,32 +29,30 @@ uspace = []
 arm-el2 = []
 
 [dependencies]
+axbacktrace = "0.1"
 linkme = "0.3"
 log = "0.4"
 cfg-if = "1.0"
 memory_addr = "0.4"
-page_table_entry = "0.6"
+page_table_entry = "0.5"
 static_assertions = "1.1.0"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
-x86 = "0.52"
-x86_64 = "0.15.2"
-percpu = "0.3"
 lazyinit = "0.2"
+percpu = "0.2"
+x86 = "0.52"
+x86_64 = { version = "0.15", default-features = false, features = ["instructions"] }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-aarch64-cpu = "11.2"
-tock-registers = "0.10"
-
-[target.'cfg(target_arch = "arm")'.dependencies]
-aarch32-cpu = "0.2.0"
+aarch64-cpu = "10.0"
+tock-registers = "0.9"
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
-riscv = "0.16"
+riscv = "0.14"
 
 [target.'cfg(target_arch = "loongarch64")'.dependencies]
 loongArch64 = "0.2.4"
-page_table_multiarch = "0.6"
+page_table_multiarch = "0.5"
 
 [lints.clippy]
 new_without_default = "allow"
@@ -67,5 +64,4 @@ targets = [
     "aarch64-unknown-none-softfloat",
     "riscv64gc-unknown-none-elf",
     "loongarch64-unknown-none-softfloat",
-    "armv7a-none-eabi",
 ]

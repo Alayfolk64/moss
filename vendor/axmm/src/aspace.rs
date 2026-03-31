@@ -1,11 +1,9 @@
 use core::fmt;
 
 use axerrno::{AxError, AxResult, ax_err};
-use axhal::{
-    mem::phys_to_virt,
-    paging::{MappingFlags, PageTable},
-    trap::PageFaultFlags,
-};
+use axhal::mem::phys_to_virt;
+use axhal::paging::{MappingFlags, PageTable};
+use axhal::trap::PageFaultFlags;
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
@@ -73,9 +71,7 @@ impl AddrSpace {
         if self.va_range.overlaps(other.va_range) {
             return ax_err!(InvalidInput, "address space overlap");
         }
-        self.pt
-            .cursor()
-            .copy_from(&other.pt, other.base(), other.size());
+        self.pt.copy_from(&other.pt, other.base(), other.size());
         Ok(())
     }
 
@@ -180,7 +176,7 @@ impl AddrSpace {
         for vaddr in PageIter4K::new(start.align_down_4k(), end_align_up)
             .expect("Failed to create page iterator")
         {
-            let (mut paddr, ..) = self.pt.query(vaddr).map_err(|_| AxError::BadAddress)?;
+            let (mut paddr, _, _) = self.pt.query(vaddr).map_err(|_| AxError::BadAddress)?;
 
             let mut copy_size = (size - cnt).min(PAGE_SIZE_4K);
 
@@ -236,9 +232,9 @@ impl AddrSpace {
 
         // TODO
         self.pt
-            .cursor()
-            .protect_region(start, size, flags)
-            .map_err(|_| AxError::BadState)?;
+            .protect_region(start, size, flags, true)
+            .map_err(|_| AxError::BadState)?
+            .ignore();
         Ok(())
     }
 

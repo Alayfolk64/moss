@@ -1,18 +1,20 @@
-#[cfg(feature = "smp")]
-use alloc::sync::Weak;
 use alloc::{collections::VecDeque, sync::Arc};
 use core::{
     future::poll_fn,
     mem::MaybeUninit,
     task::{Context, Poll},
 };
+use futures_util::task::AtomicWaker;
+
+#[cfg(feature = "smp")]
+use alloc::sync::Weak;
+
+use axsched::BaseScheduler;
+use kernel_guard::BaseGuard;
+use kspin::SpinRaw;
+use lazyinit::LazyInit;
 
 use axhal::percpu::this_cpu_id;
-use axsched::BaseScheduler;
-use futures_util::task::AtomicWaker;
-use kernel_guard::BaseGuard;
-use kspin::{SpinNoIrqGuard, SpinRaw};
-use lazyinit::LazyInit;
 
 use crate::{
     AxCpuMask, AxTaskRef, Scheduler, TaskInner,
@@ -52,8 +54,8 @@ percpu_static! {
 /// Access to this variable is marked as `unsafe` because it contains `MaybeUninit` references,
 /// which require careful handling to avoid undefined behavior. The array should be fully
 /// initialized before being accessed to ensure safe usage.
-static mut RUN_QUEUES: [MaybeUninit<&'static mut AxRunQueue>; axconfig::plat::MAX_CPU_NUM] =
-    [ARRAY_REPEAT_VALUE; axconfig::plat::MAX_CPU_NUM];
+static mut RUN_QUEUES: [MaybeUninit<&'static mut AxRunQueue>; axconfig::plat::CPU_NUM] =
+    [ARRAY_REPEAT_VALUE; axconfig::plat::CPU_NUM];
 #[allow(clippy::declare_interior_mutable_const)] // It's ok because it's used only for initialization `RUN_QUEUES`.
 const ARRAY_REPEAT_VALUE: MaybeUninit<&'static mut AxRunQueue> = MaybeUninit::uninit();
 
@@ -96,8 +98,9 @@ pub(crate) fn current_run_queue<G: BaseGuard>() -> CurrentRunQueueRef<'static, G
 /// ## Panics
 ///
 /// This function will panic if `cpu_mask` is empty, indicating that there are no available CPUs for task execution.
+///
 #[cfg(feature = "smp")]
-// The modulo operation is safe here because `axconfig::plat::MAX_CPU_NUM` is always greater than 1 with "smp" enabled.
+// The modulo operation is safe here because `axconfig::plat::CPU_NUM` is always greater than 1 with "smp" enabled.
 #[allow(clippy::modulo_one)]
 #[inline]
 fn select_run_queue_index(cpumask: AxCpuMask) -> usize {
@@ -108,7 +111,7 @@ fn select_run_queue_index(cpumask: AxCpuMask) -> usize {
 
     // Round-robin selection of the run queue index.
     loop {
-        let index = RUN_QUEUE_INDEX.fetch_add(1, Ordering::SeqCst) % axconfig::plat::MAX_CPU_NUM;
+        let index = RUN_QUEUE_INDEX.fetch_add(1, Ordering::SeqCst) % axconfig::plat::CPU_NUM;
         if cpumask.get(index) {
             return index;
         }
@@ -131,6 +134,7 @@ fn select_run_queue_index(cpumask: AxCpuMask) -> usize {
 /// ## Panics
 ///
 /// This function will panic if the index is out of bounds.
+///
 #[cfg(feature = "smp")]
 #[inline]
 fn get_run_queue(index: usize) -> &'static mut AxRunQueue {
@@ -154,6 +158,7 @@ fn get_run_queue(index: usize) -> &'static mut AxRunQueue {
 ///
 /// 1. Implement better load balancing across CPUs for more efficient task distribution.
 /// 2. Use a more generic load balancing algorithm that can be customized or replaced.
+///
 #[inline]
 pub(crate) fn select_run_queue<G: BaseGuard>(task: &AxTaskRef) -> AxRunQueueRef<'static, G> {
     let irq_state = G::acquire();
@@ -391,20 +396,18 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
     ///     2. The caller must ensure that the current task is in the running state.
     ///     3. The caller must ensure that the current task is not the idle task.
     ///     4. The lock of the wait queue will be released explicitly after current task is pushed into it.
-    pub fn blocked_resched(&mut self, mut woke: SpinNoIrqGuard<'_, bool>) {
+    pub fn blocked_resched(&mut self) {
         let curr = &self.current_task;
         assert!(curr.is_running());
         assert!(!curr.is_idle());
         // we must not block current task with preemption disabled.
-        // Current expected preempt count is 2 for `NoPreemptIrqSave` and `woke`.
+        // Current expected preempt count is 1 for `NoPreemptIrqSave`.
         #[cfg(feature = "preempt")]
-        assert!(curr.can_preempt(2));
+        assert!(curr.can_preempt(1));
 
         // Mark the task as blocked, this has to be done before adding it to the wait queue
         // while holding the lock of the wait queue.
         curr.set_state(TaskState::Blocked);
-        *woke = false;
-        drop(woke);
 
         // Current task's state has been changed to `Blocked` and added to the wait queue.
         // Note that the state may have been set as `Ready` in `unblock_task()`,
@@ -510,7 +513,7 @@ impl AxRunQueue {
 
     fn switch_to(&mut self, prev_task: CurrentTask, next_task: AxTaskRef) {
         // Make sure that IRQs are disabled by kernel guard or other means.
-        #[cfg(all(target_os = "none", feature = "irq"))] // Note: irq is faked under unit tests.
+        #[cfg(all(not(test), feature = "irq"))] // Note: irq is faked under unit tests.
         assert!(
             !axhal::asm::irqs_enabled(),
             "IRQs must be disabled during scheduling"

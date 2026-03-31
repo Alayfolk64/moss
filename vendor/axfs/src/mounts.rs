@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use alloc::sync::Arc;
-
 use axfs_vfs::{VfsNodeType, VfsOps, VfsResult};
 
 use crate::fs;

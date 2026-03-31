@@ -5,8 +5,6 @@
 //!
 //! Current: Rust 1.77.0
 //!
-//! - `v1.0.0`: Rust 1.77.0
-//! - `v0.7.0`: Rust 1.77.0
 //! - `v0.6.0`: Rust 1.77.0
 //! - `v0.5.7`: Rust 1.65.0
 //! - `v0.5.0`: Rust 1.64.0
@@ -206,7 +204,4 @@ pub mod __ctfe {
 
     mod unwrap;
     pub use self::unwrap::*;
-
-    mod trim_ascii;
-    pub use self::trim_ascii::*;
 }

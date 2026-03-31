@@ -37,21 +37,23 @@ impl ParseData for FromFieldOptions {
     }
 
     fn parse_field(&mut self, field: &syn::Field) -> Result<()> {
-        match field.ident.as_ref().map(|v| v.to_string()).as_deref() {
+        match field
+            .ident
+            .as_ref()
+            .map(|v| v.to_string())
+            .as_ref()
+            .map(|v| v.as_str())
+        {
             Some("vis") => {
-                self.vis.clone_from(&field.ident);
+                self.vis = field.ident.clone();
                 Ok(())
             }
             Some("ty") => {
-                self.ty.clone_from(&field.ident);
+                self.ty = field.ident.clone();
                 Ok(())
             }
             _ => self.base.parse_field(field),
         }
-    }
-
-    fn validate_body(&self, errors: &mut crate::error::Accumulator) {
-        self.base.validate_body(errors);
     }
 }
 
@@ -61,9 +63,10 @@ impl<'a> From<&'a FromFieldOptions> for FromFieldImpl<'a> {
             ident: v.base.ident.as_ref(),
             vis: v.vis.as_ref(),
             ty: v.ty.as_ref(),
+            attrs: v.base.attrs.as_ref(),
             base: (&v.base.container).into(),
             attr_names: &v.base.attr_names,
-            forward_attrs: v.base.as_forward_attrs(),
+            forward_attrs: v.base.forward_attrs.as_ref(),
             from_ident: v.base.from_ident,
         }
     }

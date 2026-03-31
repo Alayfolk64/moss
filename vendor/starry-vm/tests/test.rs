@@ -1,3 +1,6 @@
+#![feature(maybe_uninit_slice)]
+#![feature(maybe_uninit_write_slice)]
+
 use std::{
     f32,
     mem::MaybeUninit,

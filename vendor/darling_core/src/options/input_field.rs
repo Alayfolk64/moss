@@ -1,26 +1,22 @@
 use std::borrow::Cow;
 
-use syn::{parse_quote_spanned, spanned::Spanned};
-
 use crate::codegen;
 use crate::options::{Core, DefaultExpression, ParseAttribute};
-use crate::util::{Callable, Flag, SpannedValue};
 use crate::{Error, FromMeta, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputField {
     pub ident: syn::Ident,
     pub attr_name: Option<String>,
     pub ty: syn::Type,
     pub default: Option<DefaultExpression>,
-    pub with: Option<Callable>,
+    pub with: Option<syn::Path>,
 
     /// If `true`, generated code will not look for this field in the input meta item,
     /// instead always falling back to either `InputField::default` or `Default::default`.
-    pub skip: Option<SpannedValue<bool>>,
+    pub skip: Option<bool>,
     pub post_transform: Option<codegen::PostfixTransform>,
     pub multiple: Option<bool>,
-    pub flatten: Flag,
 }
 
 impl InputField {
@@ -30,22 +26,17 @@ impl InputField {
             ident: &self.ident,
             name_in_attr: self
                 .attr_name
-                .as_deref()
+                .as_ref()
                 .map_or_else(|| Cow::Owned(self.ident.to_string()), Cow::Borrowed),
             ty: &self.ty,
             default_expression: self.as_codegen_default(),
-            with_callable: self.with.as_ref().map(|w| w.as_ref()).map_or_else(
-                || {
-                    Cow::Owned(
-                        parse_quote_spanned!(self.ty.span()=> ::darling::FromMeta::from_meta),
-                    )
-                },
+            with_path: self.with.as_ref().map_or_else(
+                || Cow::Owned(parse_quote!(::darling::FromMeta::from_meta)),
                 Cow::Borrowed,
             ),
-            skip: *self.skip.unwrap_or_default(),
+            skip: self.skip.unwrap_or_default(),
             post_transform: self.post_transform.as_ref(),
             multiple: self.multiple.unwrap_or_default(),
-            flatten: self.flatten.is_present(),
         }
     }
 
@@ -55,7 +46,7 @@ impl InputField {
         self.default.as_ref().map(|expr| match *expr {
             DefaultExpression::Explicit(ref path) => codegen::DefaultExpression::Explicit(path),
             DefaultExpression::Inherit => codegen::DefaultExpression::Inherit(&self.ident),
-            DefaultExpression::Trait { span } => codegen::DefaultExpression::Trait { span },
+            DefaultExpression::Trait => codegen::DefaultExpression::Trait,
         })
     }
 
@@ -69,7 +60,6 @@ impl InputField {
             skip: None,
             post_transform: Default::default(),
             multiple: None,
-            flatten: Default::default(),
         }
     }
 
@@ -101,7 +91,11 @@ impl InputField {
         // 1. Will we look for this field in the attribute?
         // 1. Is there a locally-defined default?
         // 1. Did the parent define a default?
-        self.default = match (&self.skip, self.default.is_some(), parent.default.is_some()) {
+        self.default = match (
+            self.skip.unwrap_or_default(),
+            self.default.is_some(),
+            parent.default.is_some(),
+        ) {
             // If we have a default, use it.
             (_, true, _) => self.default,
 
@@ -110,13 +104,11 @@ impl InputField {
             (_, false, true) => Some(DefaultExpression::Inherit),
 
             // If we're skipping the field and no defaults have been expressed then we should
-            // use the ::darling::export::Default trait, and set the span to the skip keyword
-            // so that an error caused by the skipped field's type not implementing `Default`
-            // will correctly identify why darling is trying to use `Default`.
-            (Some(v), false, false) if **v => Some(DefaultExpression::Trait { span: v.span() }),
+            // use the ::darling::export::Default trait.
+            (true, false, false) => Some(DefaultExpression::Trait),
 
             // If we don't have or need a default, then leave it blank.
-            (_, false, false) => None,
+            (false, false, false) => None,
         };
 
         self
@@ -133,12 +125,6 @@ impl ParseAttribute for InputField {
             }
 
             self.attr_name = FromMeta::from_meta(mi)?;
-
-            if self.flatten.is_present() {
-                return Err(
-                    Error::custom("`flatten` and `rename` cannot be used together").with_span(mi),
-                );
-            }
         } else if path.is_ident("default") {
             if self.default.is_some() {
                 return Err(Error::duplicate_field_path(path).with_span(mi));
@@ -150,24 +136,12 @@ impl ParseAttribute for InputField {
             }
 
             self.with = Some(FromMeta::from_meta(mi)?);
-
-            if self.flatten.is_present() {
-                return Err(
-                    Error::custom("`flatten` and `with` cannot be used together").with_span(mi),
-                );
-            }
         } else if path.is_ident("skip") {
             if self.skip.is_some() {
                 return Err(Error::duplicate_field_path(path).with_span(mi));
             }
 
             self.skip = FromMeta::from_meta(mi)?;
-
-            if self.skip.map(|v| *v).unwrap_or_default() && self.flatten.is_present() {
-                return Err(
-                    Error::custom("`flatten` and `skip` cannot be used together").with_span(mi),
-                );
-            }
         } else if path.is_ident("map") || path.is_ident("and_then") {
             let transformer = path.get_ident().unwrap().clone();
             if let Some(post_transform) = &self.post_transform {
@@ -192,46 +166,6 @@ impl ParseAttribute for InputField {
             }
 
             self.multiple = FromMeta::from_meta(mi)?;
-
-            if self.multiple == Some(true) && self.flatten.is_present() {
-                return Err(
-                    Error::custom("`flatten` and `multiple` cannot be used together").with_span(mi),
-                );
-            }
-        } else if path.is_ident("flatten") {
-            if self.flatten.is_present() {
-                return Err(Error::duplicate_field_path(path).with_span(mi));
-            }
-
-            self.flatten = FromMeta::from_meta(mi)?;
-
-            let mut conflicts = Error::accumulator();
-
-            if self.multiple == Some(true) {
-                conflicts.push(
-                    Error::custom("`flatten` and `multiple` cannot be used together").with_span(mi),
-                );
-            }
-
-            if self.attr_name.is_some() {
-                conflicts.push(
-                    Error::custom("`flatten` and `rename` cannot be used together").with_span(mi),
-                );
-            }
-
-            if self.with.is_some() {
-                conflicts.push(
-                    Error::custom("`flatten` and `with` cannot be used together").with_span(mi),
-                );
-            }
-
-            if self.skip.map(|v| *v).unwrap_or_default() {
-                conflicts.push(
-                    Error::custom("`flatten` and `skip` cannot be used together").with_span(mi),
-                );
-            }
-
-            conflicts.finish()?;
         } else {
             return Err(Error::unknown_field_path(path).with_span(mi));
         }

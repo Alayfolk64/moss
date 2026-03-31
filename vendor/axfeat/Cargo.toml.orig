@@ -7,6 +7,7 @@ description = "Top-level feature selection for ArceOS"
 license.workspace = true
 homepage.workspace = true
 repository = "https://github.com/arceos-org/arceos/tree/main/api/axfeat"
+documentation = "https://arceos-org.github.io/arceos/axfeat/index.html"
 
 [features]
 default = []
@@ -19,7 +20,6 @@ fp-simd = ["axhal/fp-simd"]
 
 # User space support
 uspace = ["axhal/uspace"]
-hv = ["axhal/hv"]
 
 # Interrupts
 irq = ["axhal/irq", "axruntime/irq", "axtask?/irq", "axdriver?/irq"]
@@ -28,12 +28,6 @@ ipi = ["irq", "dep:axipi", "axhal/ipi", "axruntime/ipi"]
 # Custom or default platforms
 myplat = ["axhal/myplat"]
 defplat = ["axhal/defplat"]
-plat-dyn = [
-    "axhal/plat-dyn",
-    "paging",
-    "axruntime/plat-dyn",
-    "axconfig/plat-dyn",
-]
 
 # Memory
 alloc = ["axalloc", "axruntime/alloc"]
@@ -67,15 +61,10 @@ fs = [
     "dep:axfs",
     "axruntime/fs",
 ] # TODO: try to remove "paging"
-fs-ng = ["fs", "axruntime/fs-ng"]
-fs-ng-ext4 = ["fs-ng", "axfs-ng/ext4"]
-fs-ng-fat = ["fs-ng", "axfs-ng/fat"]
-fs-ng-times = ["fs-ng", "axfs-ng/times"]
 
 # Networking
 net = ["alloc", "paging", "axdriver/virtio-net", "dep:axnet", "axruntime/net"]
-net-ng = ["net", "irq", "multitask", "axruntime/net-ng"]
-vsock = ["axruntime/vsock"]
+vsock = ["net", "axdriver/virtio-socket", "axruntime/vsock", "axnet/vsock"]
 
 # Display
 display = [
@@ -106,7 +95,8 @@ driver-sdmmc = ["axdriver?/sdmmc"]
 driver-ixgbe = ["axdriver?/ixgbe"]
 driver-fxmac = ["axdriver?/fxmac"]                          # fxmac ethernet driver for PhytiumPi
 driver-bcm2835-sdhci = ["axdriver?/bcm2835-sdhci"]
-driver-ahci = ["axdriver?/ahci"]
+
+driver-dyn = ["paging", "axruntime/driver-dyn", "axdriver/dyn"]
 
 # Backtrace
 dwarf = ["alloc", "axbacktrace/dwarf"]
@@ -114,11 +104,9 @@ dwarf = ["alloc", "axbacktrace/dwarf"]
 [dependencies]
 axalloc = { workspace = true, optional = true }
 axbacktrace.workspace = true
-axconfig = { workspace = true, optional = true }
 axdisplay = { workspace = true, optional = true }
 axdriver = { workspace = true, optional = true }
 axfs = { workspace = true, optional = true }
-axfs-ng = { workspace = true, optional = true }
 axhal.workspace = true
 axinput = { workspace = true, optional = true }
 axipi = { workspace = true, optional = true }

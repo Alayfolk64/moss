@@ -19,7 +19,6 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-
 use axfs_vfs::{
     VfsDirEntry, VfsError, VfsNodeAttr, VfsNodeOps, VfsNodePerm, VfsNodeRef, VfsNodeType, VfsOps,
     VfsResult,
@@ -36,11 +35,8 @@ use rsext4::{
 use spin::Mutex;
 
 use crate::dev::{Disk, Partition};
-
-/// Block size for ext4 filesystem operations
 pub const BLOCK_SIZE: usize = 4096;
 
-/// Ext4 filesystem implementation that works with a disk device
 #[allow(dead_code)]
 pub struct Ext4FileSystem {
     inner: Arc<Mutex<Jbd2Dev<Disk>>>,
@@ -60,7 +56,6 @@ unsafe impl Sync for Ext4FileSystemPartition {}
 unsafe impl Send for Ext4FileSystemPartition {}
 
 impl Ext4FileSystem {
-    /// Create a new ext4 filesystem from a disk device
     #[allow(dead_code)]
     pub fn new(disk: Disk) -> Self {
         info!(
@@ -116,16 +111,12 @@ impl VfsOps for Ext4FileSystemPartition {
     }
 }
 
-/// Inner state for ext4 filesystem, either backed by a full disk or a partition
 #[derive(Clone)]
 pub enum Ext4Inner {
-    /// Full disk device
     Disk(Arc<Mutex<Jbd2Dev<Disk>>>),
-    /// Partition device
     Partition(Arc<Mutex<Jbd2Dev<Partition>>>),
 }
 
-/// Wrapper for files and directories in the ext4 filesystem
 pub struct FileWrapper {
     path: String,
     file: Mutex<Option<OpenFile>>,
@@ -157,7 +148,7 @@ impl FileWrapper {
         }
 
         if let Some(rest) = trim_path.strip_prefix("./") {
-            // if starts with "./"
+            //if starts with "./"
             return self.path_deal_with(rest);
         }
         let rest_p = trim_path.replace("//", "/");
@@ -182,13 +173,13 @@ impl VfsNodeOps for FileWrapper {
         let (_inode_num, inode) = match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &self.path)
+                get_inode_with_num(&mut *fs, &mut *inner, &self.path)
                     .map_err(|_| VfsError::Io)?
                     .ok_or(VfsError::NotFound)?
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &self.path)
+                get_inode_with_num(&mut *fs, &mut *inner, &self.path)
                     .map_err(|_| VfsError::Io)?
                     .ok_or(VfsError::NotFound)?
             }
@@ -198,8 +189,8 @@ impl VfsNodeOps for FileWrapper {
         } else {
             VfsNodeType::File
         };
-        let size = inode.size();
-        let blocks = inode.blocks_count();
+        let size = inode.size() as u64;
+        let blocks = inode.blocks_count() as u64;
 
         trace!(
             "get_attr of {:?}, size: {}, blocks: {}",
@@ -222,10 +213,10 @@ impl VfsNodeOps for FileWrapper {
                 let mut inner = inner.lock();
                 match ty {
                     VfsNodeType::Dir => {
-                        mkdir(&mut inner, &mut fs, &fpath);
+                        mkdir(&mut *inner, &mut *fs, &fpath);
                     }
                     _ => {
-                        mkfile(&mut inner, &mut fs, &fpath, None, None);
+                        mkfile(&mut *inner, &mut *fs, &fpath, None, None);
                     }
                 }
             }
@@ -233,10 +224,10 @@ impl VfsNodeOps for FileWrapper {
                 let mut inner = inner.lock();
                 match ty {
                     VfsNodeType::Dir => {
-                        mkdir(&mut inner, &mut fs, &fpath);
+                        mkdir(&mut *inner, &mut *fs, &fpath);
                     }
                     _ => {
-                        mkfile(&mut inner, &mut fs, &fpath, None, None);
+                        mkfile(&mut *inner, &mut *fs, &fpath, None, None);
                     }
                 }
             }
@@ -253,13 +244,13 @@ impl VfsNodeOps for FileWrapper {
         let (_inode_num, inode) = match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &fpath)
+                get_inode_with_num(&mut *fs, &mut *inner, &fpath)
                     .map_err(|_| VfsError::Io)?
                     .ok_or(VfsError::NotFound)?
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &fpath)
+                get_inode_with_num(&mut *fs, &mut *inner, &fpath)
                     .map_err(|_| VfsError::Io)?
                     .ok_or(VfsError::NotFound)?
             }
@@ -269,17 +260,17 @@ impl VfsNodeOps for FileWrapper {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
                 if inode.is_dir() {
-                    delete_dir(&mut fs, &mut inner, &fpath);
+                    delete_dir(&mut *fs, &mut *inner, &fpath);
                 } else {
-                    unlink(&mut fs, &mut inner, &fpath);
+                    unlink(&mut *fs, &mut *inner, &fpath);
                 }
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
                 if inode.is_dir() {
-                    delete_dir(&mut fs, &mut inner, &fpath);
+                    delete_dir(&mut *fs, &mut *inner, &fpath);
                 } else {
-                    unlink(&mut fs, &mut inner, &fpath);
+                    unlink(&mut *fs, &mut *inner, &fpath);
                 }
             }
         }
@@ -308,13 +299,13 @@ impl VfsNodeOps for FileWrapper {
         let (_inode_num, mut inode) = match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &self.path)
+                get_inode_with_num(&mut *fs, &mut *inner, &self.path)
                     .map_err(|_| VfsError::Io)?
                     .ok_or(VfsError::NotFound)?
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &self.path)
+                get_inode_with_num(&mut *fs, &mut *inner, &self.path)
                     .map_err(|_| VfsError::Io)?
                     .ok_or(VfsError::NotFound)?
             }
@@ -327,12 +318,12 @@ impl VfsNodeOps for FileWrapper {
         let blocks = match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                resolve_inode_block_allextend(&mut fs, &mut inner, &mut inode)
+                resolve_inode_block_allextend(&mut *fs, &mut *inner, &mut inode)
                     .map_err(|_| VfsError::Io)?
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                resolve_inode_block_allextend(&mut fs, &mut inner, &mut inode)
+                resolve_inode_block_allextend(&mut *fs, &mut *inner, &mut inode)
                     .map_err(|_| VfsError::Io)?
             }
         };
@@ -343,13 +334,13 @@ impl VfsNodeOps for FileWrapper {
                 Ext4Inner::Disk(ref inner) => {
                     let mut inner = inner.lock();
                     fs.datablock_cache
-                        .get_or_load(&mut inner, phys_block)
+                        .get_or_load(&mut *inner, phys_block)
                         .map_err(|_| VfsError::Io)?
                 }
                 Ext4Inner::Partition(ref inner) => {
                     let mut inner = inner.lock();
                     fs.datablock_cache
-                        .get_or_load(&mut inner, phys_block)
+                        .get_or_load(&mut *inner, phys_block)
                         .map_err(|_| VfsError::Io)?
                 }
             };
@@ -359,11 +350,10 @@ impl VfsNodeOps for FileWrapper {
         let entries = list_entries(&data);
         let mut unique = BTreeMap::new();
         for entry in entries {
-            if let Some(name) = entry.name_str()
-                && name != "."
-                && name != ".."
-            {
-                unique.insert(name.to_string(), entry.file_type);
+            if let Some(name) = entry.name_str() {
+                if name != "." && name != ".." {
+                    unique.insert(name.to_string(), entry.file_type);
+                }
             }
         }
         let unique_vec: Vec<_> = unique.into_iter().collect();
@@ -395,13 +385,13 @@ impl VfsNodeOps for FileWrapper {
         let exists = match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &fpath)
+                get_inode_with_num(&mut *fs, &mut *inner, &fpath)
                     .map_err(|_| VfsError::Io)?
                     .is_some()
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                get_inode_with_num(&mut fs, &mut inner, &fpath)
+                get_inode_with_num(&mut *fs, &mut *inner, &fpath)
                     .map_err(|_| VfsError::Io)?
                     .is_some()
             }
@@ -425,11 +415,11 @@ impl VfsNodeOps for FileWrapper {
             *file_guard = match self.inner {
                 Ext4Inner::Disk(ref inner) => {
                     let mut inner = inner.lock();
-                    open(&mut inner, &mut fs, &self.path, false).ok()
+                    open(&mut *inner, &mut *fs, &self.path, false).ok()
                 }
                 Ext4Inner::Partition(ref inner) => {
                     let mut inner = inner.lock();
-                    open(&mut inner, &mut fs, &self.path, false).ok()
+                    open(&mut *inner, &mut *fs, &self.path, false).ok()
                 }
             };
         }
@@ -440,11 +430,11 @@ impl VfsNodeOps for FileWrapper {
             let data = match self.inner {
                 Ext4Inner::Disk(ref inner) => {
                     let mut inner = inner.lock();
-                    read_at(&mut inner, &mut fs, file, buf.len()).map_err(|_| VfsError::Io)?
+                    read_at(&mut *inner, &mut *fs, file, buf.len()).map_err(|_| VfsError::Io)?
                 }
                 Ext4Inner::Partition(ref inner) => {
                     let mut inner = inner.lock();
-                    read_at(&mut inner, &mut fs, file, buf.len()).map_err(|_| VfsError::Io)?
+                    read_at(&mut *inner, &mut *fs, file, buf.len()).map_err(|_| VfsError::Io)?
                 }
             };
             let len = data.len().min(buf.len());
@@ -460,12 +450,12 @@ impl VfsNodeOps for FileWrapper {
         match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                write_file(&mut inner, &mut fs, &self.path, offset, buf)
+                write_file(&mut *inner, &mut *fs, &self.path, offset, buf)
                     .map_err(|_| VfsError::Io)?;
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                write_file(&mut inner, &mut fs, &self.path, offset, buf)
+                write_file(&mut *inner, &mut *fs, &self.path, offset, buf)
                     .map_err(|_| VfsError::Io)?;
             }
         };
@@ -477,11 +467,11 @@ impl VfsNodeOps for FileWrapper {
         match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                let _ = truncate(&mut inner, &mut fs, &self.path, size);
+                let _ = truncate(&mut *inner, &mut *fs, &self.path, size);
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                let _ = truncate(&mut inner, &mut fs, &self.path, size);
+                let _ = truncate(&mut *inner, &mut *fs, &self.path, size);
             }
         }
         Ok(())
@@ -497,11 +487,11 @@ impl VfsNodeOps for FileWrapper {
         match self.inner {
             Ext4Inner::Disk(ref inner) => {
                 let mut inner = inner.lock();
-                let _ = mv(&mut fs, &mut inner, &src_fpath, &dst_fpath);
+                let _ = mv(&mut *fs, &mut *inner, &src_fpath, &dst_fpath);
             }
             Ext4Inner::Partition(ref inner) => {
                 let mut inner = inner.lock();
-                let _ = mv(&mut fs, &mut inner, &src_fpath, &dst_fpath);
+                let _ = mv(&mut *fs, &mut *inner, &src_fpath, &dst_fpath);
             }
         }
         Ok(())

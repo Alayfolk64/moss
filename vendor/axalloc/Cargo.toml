@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axalloc"
-version = "0.3.0-preview.3"
+version = "0.2.2-hv.5"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -22,6 +22,7 @@ autotests = false
 autobenches = false
 description = "ArceOS global memory allocator"
 homepage = "https://github.com/arceos-org/arceos"
+documentation = "https://arceos-org.github.io/arceos/axalloc/index.html"
 readme = "README.md"
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axalloc"
@@ -70,7 +71,7 @@ name = "axalloc"
 path = "src/lib.rs"
 
 [dependencies.axallocator]
-version = "0.2"
+version = "0.1.3-preview.1"
 features = [
     "axerrno",
     "bitmap",
@@ -85,7 +86,7 @@ optional = true
 version = "0.2"
 
 [dependencies.buddy-slab-allocator]
-version = "0.2"
+version = "0.1.1"
 optional = true
 
 [dependencies.cfg-if]
@@ -101,7 +102,7 @@ version = "0.4"
 version = "0.4"
 
 [dependencies.percpu]
-version = "0.2.3-preview.1"
+version = "0.2"
 optional = true
 
 [dependencies.strum]

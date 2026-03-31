@@ -12,10 +12,11 @@
 [package]
 edition = "2021"
 name = "ax_slab_allocator"
-version = "0.4.0"
+version = "0.3.2-preview.1"
 authors = [
     "Robert Węcławski <r.weclawski@gmail.com>",
     "Yiren Zhang <zyr_ms@outlook.com>",
+    "Yu Chen <yuchen@tsinghua.edu.cn>",
 ]
 build = false
 autolib = false
@@ -24,7 +25,9 @@ autoexamples = false
 autotests = false
 autobenches = false
 description = "Slab allocator for `no_std` systems. Uses multiple slabs with blocks of different sizes and a linked list for blocks larger than 4096 bytes"
-readme = false
+homepage = "https://github.com/arceos-org/slab_allocator"
+documentation = "https://docs.rs/ax_slab_allocator"
+readme = "README.md"
 keywords = [
     "slab",
     "allocator",
@@ -33,12 +36,12 @@ keywords = [
     "kernel",
 ]
 license = "MIT"
-repository = "https://github.com/arceos-org/ax_slab_allocator"
+repository = "https://github.com/arceos-org/slab_allocator"
 
 [lib]
 name = "ax_slab_allocator"
 path = "src/lib.rs"
 
 [dependencies.buddy_system_allocator]
-version = "0.12"
+version = "0.10"
 default-features = false

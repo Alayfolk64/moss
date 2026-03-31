@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axplat-x86-pc"
-version = "0.3.1-pre.6"
+version = "0.3.0-preview.2"
 authors = [
     "Yuekai Jia <equation618@gmail.com>",
     "Youjie Zheng <Azure_stars@126.com>",
@@ -67,10 +67,10 @@ path = "src/lib.rs"
 version = "0.2"
 
 [dependencies.axcpu]
-version = "0.3.0-preview.7"
+version = "0.3.0-preview.2"
 
 [dependencies.axplat]
-version = "0.3.1-pre.6"
+version = ">=0.3.0-preview.2, <0.3.0"
 
 [dependencies.bitflags]
 version = "2.6"
@@ -94,7 +94,7 @@ version = "0.4"
 version = "0.8"
 
 [dependencies.percpu]
-version = "0.2.3-preview.1"
+version = "0.2"
 
 [dependencies.raw-cpuid]
 version = "11.5"

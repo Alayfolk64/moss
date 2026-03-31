@@ -1,5 +1,4 @@
 mod attr_extractor;
-mod attrs_field;
 mod default_expr;
 mod error;
 mod field;
@@ -16,7 +15,6 @@ mod variant;
 mod variant_data;
 
 pub(in crate::codegen) use self::attr_extractor::ExtractAttribute;
-pub use self::attrs_field::ForwardAttrs;
 pub use self::default_expr::DefaultExpression;
 pub use self::field::Field;
 pub use self::from_attributes_impl::FromAttributesImpl;

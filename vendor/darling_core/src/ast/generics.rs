@@ -14,7 +14,7 @@ use crate::{FromGenericParam, FromGenerics, FromTypeParam, Result};
 pub trait GenericParamExt {
     /// The type this GenericParam uses to represent type params and their bounds
     type TypeParam;
-    type LifetimeParam;
+    type LifetimeDef;
     type ConstParam;
 
     /// If this GenericParam is a type param, get the underlying value.
@@ -23,7 +23,7 @@ pub trait GenericParamExt {
     }
 
     /// If this GenericParam is a lifetime, get the underlying value.
-    fn as_lifetime_param(&self) -> Option<&Self::LifetimeParam> {
+    fn as_lifetime_def(&self) -> Option<&Self::LifetimeDef> {
         None
     }
 
@@ -35,7 +35,7 @@ pub trait GenericParamExt {
 
 impl GenericParamExt for syn::GenericParam {
     type TypeParam = syn::TypeParam;
-    type LifetimeParam = syn::LifetimeParam;
+    type LifetimeDef = syn::LifetimeDef;
     type ConstParam = syn::ConstParam;
 
     fn as_type_param(&self) -> Option<&Self::TypeParam> {
@@ -46,7 +46,7 @@ impl GenericParamExt for syn::GenericParam {
         }
     }
 
-    fn as_lifetime_param(&self) -> Option<&Self::LifetimeParam> {
+    fn as_lifetime_def(&self) -> Option<&Self::LifetimeDef> {
         if let syn::GenericParam::Lifetime(ref val) = *self {
             Some(val)
         } else {
@@ -65,7 +65,7 @@ impl GenericParamExt for syn::GenericParam {
 
 impl GenericParamExt for syn::TypeParam {
     type TypeParam = syn::TypeParam;
-    type LifetimeParam = ();
+    type LifetimeDef = ();
     type ConstParam = ();
 
     fn as_type_param(&self) -> Option<&Self::TypeParam> {
@@ -75,7 +75,7 @@ impl GenericParamExt for syn::TypeParam {
 
 /// A mirror of `syn::GenericParam` which is generic over all its contents.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GenericParam<T = syn::TypeParam, L = syn::LifetimeParam, C = syn::ConstParam> {
+pub enum GenericParam<T = syn::TypeParam, L = syn::LifetimeDef, C = syn::ConstParam> {
     Type(T),
     Lifetime(L),
     Const(C),
@@ -103,7 +103,7 @@ impl<T: FromTypeParam> FromGenericParam for GenericParam<T> {
 
 impl<T, L, C> GenericParamExt for GenericParam<T, L, C> {
     type TypeParam = T;
-    type LifetimeParam = L;
+    type LifetimeDef = L;
     type ConstParam = C;
 
     fn as_type_param(&self) -> Option<&T> {
@@ -114,7 +114,7 @@ impl<T, L, C> GenericParamExt for GenericParam<T, L, C> {
         }
     }
 
-    fn as_lifetime_param(&self) -> Option<&L> {
+    fn as_lifetime_def(&self) -> Option<&L> {
         if let GenericParam::Lifetime(ref val) = *self {
             Some(val)
         } else {
@@ -158,7 +158,7 @@ impl<P: FromGenericParam> FromGenerics for Generics<P> {
     }
 }
 
-pub struct TypeParams<'a, P>(Iter<'a, P>);
+pub struct TypeParams<'a, P: 'a>(Iter<'a, P>);
 
 impl<'a, P: GenericParamExt> Iterator for TypeParams<'a, P> {
     type Item = &'a <P as GenericParamExt>::TypeParam;
@@ -177,8 +177,6 @@ impl<'a, P: GenericParamExt> Iterator for TypeParams<'a, P> {
 
 #[cfg(test)]
 mod tests {
-    use syn::parse_quote;
-
     use super::{GenericParam, Generics};
     use crate::FromGenerics;
 

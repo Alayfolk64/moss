@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt};
 use syn::Ident;
 
 use crate::ast::Fields;
@@ -10,10 +10,10 @@ use crate::codegen::{Field, FieldsGen};
 use crate::usage::{self, IdentRefSet, IdentSet, UsesTypeParams};
 
 /// A variant of the enum which is deriving `FromMeta`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Variant<'a> {
     /// The name which will appear in code passed to the `FromMeta` input.
-    pub name_in_attr: Cow<'a, str>,
+    pub name_in_attr: Cow<'a, String>,
 
     /// The name of the variant which will be returned for a given `name_in_attr`.
     pub variant_ident: &'a Ident,
@@ -43,7 +43,7 @@ impl<'a> Variant<'a> {
     }
 }
 
-impl UsesTypeParams for Variant<'_> {
+impl<'a> UsesTypeParams for Variant<'a> {
     fn uses_type_params<'b>(
         &self,
         options: &usage::Options,
@@ -58,21 +58,15 @@ impl UsesTypeParams for Variant<'_> {
 /// Value-carrying variants wrapped in this type will emit code to produce an "unsupported format" error.
 pub struct UnitMatchArm<'a>(&'a Variant<'a>);
 
-impl ToTokens for UnitMatchArm<'_> {
+impl<'a> ToTokens for UnitMatchArm<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let val: &Variant<'_> = self.0;
+        let val: &Variant<'a> = self.0;
 
         if val.skip {
             return;
         }
 
         let name_in_attr = &val.name_in_attr;
-
-        let unsupported_format_error = || {
-            quote!(::darling::export::Err(
-                ::darling::Error::unsupported_format("literal")
-            ))
-        };
 
         if val.data.is_unit() {
             let variant_ident = val.variant_ident;
@@ -81,29 +75,9 @@ impl ToTokens for UnitMatchArm<'_> {
             tokens.append_all(quote!(
                 #name_in_attr => ::darling::export::Ok(#ty_ident::#variant_ident),
             ));
-        } else if val.data.is_newtype() {
-            let field = val
-                .data
-                .fields
-                .first()
-                .expect("Newtype should have exactly one field");
-            let field_ty = field.ty;
-            let ty_ident = val.ty_ident;
-            let variant_ident = val.variant_ident;
-            let unsupported_format = unsupported_format_error();
-
-            tokens.append_all(quote!{
-                #name_in_attr => {
-                    match <#field_ty as ::darling::FromMeta>::from_none() {
-                        ::darling::export::Some(__value) => ::darling::export::Ok(#ty_ident::#variant_ident(__value)),
-                        ::darling::export::None => #unsupported_format,
-                    }
-                }
-            })
         } else {
-            let unsupported_format = unsupported_format_error();
             tokens.append_all(quote!(
-                #name_in_attr => #unsupported_format,
+                #name_in_attr => ::darling::export::Err(::darling::Error::unsupported_format("literal")),
             ));
         }
     }
@@ -114,9 +88,9 @@ impl ToTokens for UnitMatchArm<'_> {
 /// Unit variants wrapped in this type will emit code to produce an "unsupported format" error.
 pub struct DataMatchArm<'a>(&'a Variant<'a>);
 
-impl ToTokens for DataMatchArm<'_> {
+impl<'a> ToTokens for DataMatchArm<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let val: &Variant<'_> = self.0;
+        let val: &Variant<'a> = self.0;
 
         if val.skip {
             return;
@@ -127,16 +101,8 @@ impl ToTokens for DataMatchArm<'_> {
         let ty_ident = val.ty_ident;
 
         if val.data.is_unit() {
-            // Allow unit variants to match a list item if it's just a path with no associated
-            // value, e.g. `volume(shout)` is allowed.
             tokens.append_all(quote!(
-                #name_in_attr => {
-                    if let ::darling::export::syn::Meta::Path(_) = *__nested {
-                        ::darling::export::Ok(#ty_ident::#variant_ident)
-                    } else {
-                        ::darling::export::Err(::darling::Error::unsupported_format("non-path"))
-                    }
-                },
+                #name_in_attr => ::darling::export::Err(::darling::Error::unsupported_format("list")),
             ));
 
             return;
@@ -154,9 +120,8 @@ impl ToTokens for DataMatchArm<'_> {
 
             tokens.append_all(quote!(
                 #name_in_attr => {
-                    if let ::darling::export::syn::Meta::List(ref __data) = *__nested {
-                        let __items = ::darling::export::NestedMeta::parse_meta_list(__data.tokens.clone())?;
-                        let __items = &__items;
+                    if let ::syn::Meta::List(ref __data) = *__nested {
+                        let __items = &__data.nested;
 
                         #declare_errors
 

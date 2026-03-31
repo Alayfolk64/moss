@@ -10,7 +10,6 @@ mod macros;
 pub mod icc;
 
 // ICH (Interrupt Controller Hypervisor) registers
-#[cfg(target_arch = "aarch64")]
 #[macro_use]
 pub mod ich;
 
@@ -18,5 +17,4 @@ pub mod ich;
 pub use icc::*;
 
 // Re-export all ICH registers
-#[cfg(target_arch = "aarch64")]
 pub use ich::*;

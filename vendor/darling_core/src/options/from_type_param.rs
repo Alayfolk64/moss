@@ -37,21 +37,23 @@ impl ParseData for FromTypeParamOptions {
     }
 
     fn parse_field(&mut self, field: &syn::Field) -> Result<()> {
-        match field.ident.as_ref().map(|v| v.to_string()).as_deref() {
+        match field
+            .ident
+            .as_ref()
+            .map(|v| v.to_string())
+            .as_ref()
+            .map(|v| v.as_str())
+        {
             Some("bounds") => {
-                self.bounds.clone_from(&field.ident);
+                self.bounds = field.ident.clone();
                 Ok(())
             }
             Some("default") => {
-                self.default.clone_from(&field.ident);
+                self.default = field.ident.clone();
                 Ok(())
             }
             _ => self.base.parse_field(field),
         }
-    }
-
-    fn validate_body(&self, errors: &mut crate::error::Accumulator) {
-        self.base.validate_body(errors);
     }
 }
 
@@ -60,10 +62,11 @@ impl<'a> From<&'a FromTypeParamOptions> for FromTypeParamImpl<'a> {
         FromTypeParamImpl {
             base: (&v.base.container).into(),
             ident: v.base.ident.as_ref(),
+            attrs: v.base.attrs.as_ref(),
             bounds: v.bounds.as_ref(),
             default: v.default.as_ref(),
             attr_names: &v.base.attr_names,
-            forward_attrs: v.base.as_forward_attrs(),
+            forward_attrs: v.base.forward_attrs.as_ref(),
             from_ident: v.base.from_ident,
         }
     }

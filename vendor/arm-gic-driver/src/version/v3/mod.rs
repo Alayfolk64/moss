@@ -1,3 +1,17 @@
+//! # GICv3 Driver Implementation
+//!
+//! ## Platform Requirements
+//!
+//! **This module is only available on 64-bit ARM platforms** where:
+//! - `target_arch = "aarch64"` OR
+//! - `target_pointer_width = "64"`
+//!
+//! ### Availability
+//!
+//! On AArch64 platforms, you can use this module directly.
+//! On 32-bit ARM platforms or non-ARM architectures, this module is not available.
+//! Use the [`v2`](crate::v2) module instead for GICv1/v2 support.
+
 use core::ptr::NonNull;
 
 use aarch64_cpu::{
@@ -785,10 +799,7 @@ impl Gic {
     /// ```
     pub fn set_cfg(&self, id: IntId, cfg: Trigger) {
         if id.is_private() {
-            // Apply to all redistributors since private interrupts are per-CPU
-            for rd in self.rd_slice().iter() {
-                unsafe { rd.as_ref() }.sgi.set_cfgr(id, cfg);
-            }
+            self.current_rd_ref().sgi.set_cfgr(id, cfg);
         } else {
             self.gicd().set_interrupt_config(id, cfg);
         }
@@ -1128,16 +1139,6 @@ pub fn dir(ack: IntId) {
 ///
 /// * `sgi_id` - SGI interrupt ID (0-15)
 /// * `target` - Target specification for the SGI
-///
-/// # Example
-///
-/// ```ignore
-/// use arm_gic_driver::IntId;
-/// use arm_gic_driver::v3::SGITarget;
-///
-/// // Send SGI 5 to all other CPUs
-/// let sgi_id = IntId::sgi(5);
-/// arm_gic_driver::v3::send_sgi(sgi_id, SGITarget::AllOther);
 /// ```
 pub fn send_sgi(sgi_id: IntId, target: SGITarget) {
     assert!(sgi_id.is_sgi(), "Invalid SGI ID: {sgi_id:?}");

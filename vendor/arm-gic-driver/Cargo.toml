@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "arm-gic-driver"
-version = "0.17.0"
+version = "0.15.12"
 authors = ["周睿 <zrufo747@outlook.com>"]
 build = false
 autolib = false
@@ -35,7 +35,7 @@ categories = [
     "hardware-support",
 ]
 license = "MIT"
-repository = "https://github.com/drivercraft/sparreal-os"
+repository = "https://github.com/rcore-os/arm-gic-driver"
 
 [package.metadata.docs.rs]
 targets = ["aarch64-unknown-linux-gnu"]
@@ -48,6 +48,9 @@ rdif = ["rdif-intc"]
 name = "arm_gic_driver"
 path = "src/lib.rs"
 doctest = false
+
+[dependencies.aarch64-cpu]
+version = "10.0"
 
 [dependencies.bitflags]
 version = "2.9"
@@ -62,11 +65,8 @@ version = "0.4"
 version = "1"
 
 [dependencies.rdif-intc]
-version = "0.14"
+version = "0.12"
 optional = true
 
 [dependencies.tock-registers]
-version = "0.10"
-
-[target.'cfg(target_arch = "aarch64")'.dependencies.aarch64-cpu]
-version = "11"
+version = "0.9"

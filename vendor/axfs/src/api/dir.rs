@@ -13,9 +13,8 @@
 // limitations under the License.
 
 use alloc::string::String;
-use core::fmt;
-
 use axio::Result;
+use core::fmt;
 
 use super::FileType;
 use crate::fops;
@@ -157,6 +156,6 @@ impl DirBuilder {
     }
 
     fn create_dir_all(&self, _path: &str) -> Result<()> {
-        Err(axerrno::AxError::Unsupported)
+        Err(axerrno::AxError::Unsupported.into())
     }
 }

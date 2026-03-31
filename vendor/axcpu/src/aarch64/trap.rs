@@ -4,12 +4,9 @@ use tock_registers::interfaces::Readable;
 use super::TrapFrame;
 use crate::trap::PageFaultFlags;
 
-core::arch::global_asm!(include_str!("trap.S"));
-
 #[repr(u8)]
 #[derive(Debug)]
-#[allow(dead_code)]
-enum TrapKind {
+pub(super) enum TrapKind {
     Synchronous = 0,
     Irq = 1,
     Fiq = 2,
@@ -18,7 +15,6 @@ enum TrapKind {
 
 #[repr(u8)]
 #[derive(Debug)]
-#[allow(dead_code)]
 enum TrapSource {
     CurrentSpEl0 = 0,
     CurrentSpElx = 1,
@@ -26,96 +22,100 @@ enum TrapSource {
     LowerAArch32 = 3,
 }
 
-#[unsafe(no_mangle)]
-fn invalid_exception(tf: &TrapFrame, kind: TrapKind, source: TrapSource) {
+core::arch::global_asm!(
+    include_str!("trap.S"),
+    trapframe_size = const core::mem::size_of::<TrapFrame>(),
+    TRAP_KIND_SYNC = const TrapKind::Synchronous as u8,
+    TRAP_KIND_IRQ = const TrapKind::Irq as u8,
+    TRAP_KIND_FIQ = const TrapKind::Fiq as u8,
+    TRAP_KIND_SERROR = const TrapKind::SError as u8,
+    TRAP_SRC_CURR_EL0 = const TrapSource::CurrentSpEl0 as u8,
+    TRAP_SRC_CURR_ELX = const TrapSource::CurrentSpElx as u8,
+    TRAP_SRC_LOWER_AARCH64 = const TrapSource::LowerAArch64 as u8,
+    TRAP_SRC_LOWER_AARCH32 = const TrapSource::LowerAArch32 as u8,
+);
+
+#[inline(always)]
+pub(super) fn is_valid_page_fault(iss: u64) -> bool {
+    // Only handle Translation fault and Permission fault
+    matches!(iss & 0b111100, 0b0100 | 0b1100) // IFSC or DFSC bits
+}
+
+fn handle_page_fault(tf: &mut TrapFrame, access_flags: PageFaultFlags) {
+    let vaddr = va!(FAR_EL1.get() as usize);
+    if handle_trap!(PAGE_FAULT, vaddr, access_flags) {
+        return;
+    }
+    #[cfg(feature = "uspace")]
+    if tf.fixup_exception() {
+        return;
+    }
     panic!(
-        "Invalid exception {:?} from {:?}:\n{:#x?}",
-        kind, source, tf
+        "Unhandled EL1 Page Fault @ {:#x}, fault_vaddr={:#x}, ESR={:#x} ({:?}):\n{:#x?}\n{}",
+        tf.elr,
+        vaddr,
+        ESR_EL1.get(),
+        access_flags,
+        tf,
+        tf.backtrace()
     );
 }
 
 #[unsafe(no_mangle)]
-fn handle_irq_exception(_tf: &TrapFrame) {
-    handle_trap!(IRQ, 0);
-}
-
-fn handle_instruction_abort(tf: &TrapFrame, iss: u64, is_user: bool) {
-    let mut access_flags = PageFaultFlags::EXECUTE;
-    if is_user {
-        access_flags |= PageFaultFlags::USER;
-    }
-    let vaddr = va!(FAR_EL1.get() as usize);
-
-    // Only handle Translation fault and Permission fault
-    if !matches!(iss & 0b111100, 0b0100 | 0b1100) // IFSC or DFSC bits
-        || !handle_trap!(PAGE_FAULT, vaddr, access_flags, is_user)
-    {
+fn aarch64_trap_handler(tf: &mut TrapFrame, kind: TrapKind, source: TrapSource) {
+    if matches!(
+        source,
+        TrapSource::CurrentSpEl0 | TrapSource::LowerAArch64 | TrapSource::LowerAArch32
+    ) {
         panic!(
-            "Unhandled {} Instruction Abort @ {:#x}, fault_vaddr={:#x}, ESR={:#x} ({:?}):\n{:#x?}",
-            if is_user { "EL0" } else { "EL1" },
-            tf.elr,
-            vaddr,
-            ESR_EL1.get(),
-            access_flags,
-            tf,
+            "Invalid exception {:?} from {:?}:\n{:#x?}",
+            kind, source, tf
         );
     }
-}
-
-fn handle_data_abort(tf: &TrapFrame, iss: u64, is_user: bool) {
-    let wnr = (iss & (1 << 6)) != 0; // WnR: Write not Read
-    let cm = (iss & (1 << 8)) != 0; // CM: Cache maintenance
-    let mut access_flags = if wnr & !cm {
-        PageFaultFlags::WRITE
-    } else {
-        PageFaultFlags::READ
-    };
-    if is_user {
-        access_flags |= PageFaultFlags::USER;
-    }
-    let vaddr = va!(FAR_EL1.get() as usize);
-
-    // Only handle Translation fault and Permission fault
-    if !matches!(iss & 0b111100, 0b0100 | 0b1100) // IFSC or DFSC bits
-        || !handle_trap!(PAGE_FAULT, vaddr, access_flags, is_user)
-    {
-        panic!(
-            "Unhandled {} Data Abort @ {:#x}, fault_vaddr={:#x}, ESR={:#x} ({:?}):\n{:#x?}",
-            if is_user { "EL0" } else { "EL1" },
-            tf.elr,
-            vaddr,
-            ESR_EL1.get(),
-            access_flags,
-            tf,
-        );
-    }
-}
-
-#[unsafe(no_mangle)]
-fn handle_sync_exception(tf: &mut TrapFrame) {
-    let esr = ESR_EL1.extract();
-    let iss = esr.read(ESR_EL1::ISS);
-    match esr.read_as_enum(ESR_EL1::EC) {
-        #[cfg(feature = "uspace")]
-        Some(ESR_EL1::EC::Value::SVC64) => {
-            tf.r[0] = crate::trap::handle_syscall(tf, tf.r[8] as usize) as u64;
+    match kind {
+        TrapKind::Fiq | TrapKind::SError => {
+            panic!("Unhandled exception {:?}:\n{:#x?}", kind, tf);
         }
-        Some(ESR_EL1::EC::Value::InstrAbortLowerEL) => handle_instruction_abort(tf, iss, true),
-        Some(ESR_EL1::EC::Value::InstrAbortCurrentEL) => handle_instruction_abort(tf, iss, false),
-        Some(ESR_EL1::EC::Value::DataAbortLowerEL) => handle_data_abort(tf, iss, true),
-        Some(ESR_EL1::EC::Value::DataAbortCurrentEL) => handle_data_abort(tf, iss, false),
-        Some(ESR_EL1::EC::Value::Brk64) => {
-            debug!("BRK #{:#x} @ {:#x} ", iss, tf.elr);
-            tf.elr += 4;
+        TrapKind::Irq => {
+            handle_trap!(IRQ, 0);
         }
-        _ => {
-            panic!(
-                "Unhandled synchronous exception @ {:#x}: ESR={:#x} (EC {:#08b}, ISS {:#x})",
-                tf.elr,
-                esr.get(),
-                esr.read(ESR_EL1::EC),
-                esr.read(ESR_EL1::ISS),
-            );
+        TrapKind::Synchronous => {
+            let esr = ESR_EL1.extract();
+            let iss = esr.read(ESR_EL1::ISS);
+            match esr.read_as_enum(ESR_EL1::EC) {
+                Some(ESR_EL1::EC::Value::InstrAbortCurrentEL) if is_valid_page_fault(iss) => {
+                    handle_page_fault(tf, PageFaultFlags::EXECUTE);
+                }
+                Some(ESR_EL1::EC::Value::DataAbortCurrentEL) if is_valid_page_fault(iss) => {
+                    let wnr = (iss & (1 << 6)) != 0; // WnR: Write not Read
+                    let cm = (iss & (1 << 8)) != 0; // CM: Cache maintenance
+                    handle_page_fault(
+                        tf,
+                        if wnr & !cm {
+                            PageFaultFlags::WRITE
+                        } else {
+                            PageFaultFlags::READ
+                        },
+                    );
+                }
+                Some(ESR_EL1::EC::Value::Brk64) => {
+                    debug!("BRK #{:#x} @ {:#x} ", iss, tf.elr);
+                    tf.elr += 4;
+                }
+                e => {
+                    let vaddr = va!(FAR_EL1.get() as usize);
+                    panic!(
+                        "Unhandled synchronous exception {:?} @ {:#x}: ESR={:#x} (EC {:#08b}, FAR: {:#x} ISS {:#x})\n{}",
+                        e,
+                        tf.elr,
+                        esr.get(),
+                        esr.read(ESR_EL1::EC),
+                        vaddr,
+                        iss,
+                        tf.backtrace()
+                    );
+                }
+            }
         }
     }
 }

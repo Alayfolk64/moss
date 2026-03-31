@@ -1,9 +1,9 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::Ident;
 
-use crate::codegen::{ExtractAttribute, ForwardAttrs, OuterFromImpl, TraitImpl};
-use crate::options::DataShape;
+use crate::codegen::{ExtractAttribute, OuterFromImpl, TraitImpl};
+use crate::options::{DataShape, ForwardAttrs};
 use crate::util::PathList;
 
 pub struct FromVariantImpl<'a> {
@@ -19,6 +19,11 @@ pub struct FromVariantImpl<'a> {
     ///
     /// This is one of `darling`'s "magic fields".
     pub fields: Option<&'a Ident>,
+    /// If set, the ident of the field into which the forwarded attributes of the input
+    /// variant should be placed.
+    ///
+    /// This is one of `darling`'s "magic fields".
+    pub attrs: Option<&'a Ident>,
     /// If set, the ident of the field into which the discriminant of the input variant
     /// should be placed. The receiving field must be an `Option` as not all enums have
     /// discriminants.
@@ -26,12 +31,12 @@ pub struct FromVariantImpl<'a> {
     /// This is one of `darling`'s "magic fields".
     pub discriminant: Option<&'a Ident>,
     pub attr_names: &'a PathList,
-    pub forward_attrs: ForwardAttrs<'a>,
+    pub forward_attrs: Option<&'a ForwardAttrs>,
     pub from_ident: bool,
     pub supports: Option<&'a DataShape>,
 }
 
-impl ToTokens for FromVariantImpl<'_> {
+impl<'a> ToTokens for FromVariantImpl<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let input = self.param_name();
         let extractor = self.extractor();
@@ -43,7 +48,7 @@ impl ToTokens for FromVariantImpl<'_> {
             .discriminant
             .as_ref()
             .map(|i| quote!(#i: #input.discriminant.as_ref().map(|(_, expr)| expr.clone()),));
-        let passed_attrs = self.forward_attrs.as_initializer();
+        let passed_attrs = self.attrs.as_ref().map(|i| quote!(#i: __fwd_attrs,));
         let passed_fields = self
             .fields
             .as_ref()
@@ -60,7 +65,8 @@ impl ToTokens for FromVariantImpl<'_> {
 
         let supports = self.supports.map(|i| {
             quote! {
-                __errors.handle(#i.check(&#input.fields));
+                #i
+                __validate_data(&#input.fields)?;
             }
         });
 
@@ -70,7 +76,7 @@ impl ToTokens for FromVariantImpl<'_> {
 
         self.wrap(
             quote!(
-                fn from_variant(#input: &::darling::export::syn::Variant) -> ::darling::Result<Self> {
+                fn from_variant(#input: &::syn::Variant) -> ::darling::Result<Self> {
                     #error_declaration
 
                     #extractor
@@ -97,17 +103,21 @@ impl ToTokens for FromVariantImpl<'_> {
     }
 }
 
-impl ExtractAttribute for FromVariantImpl<'_> {
+impl<'a> ExtractAttribute for FromVariantImpl<'a> {
     fn local_declarations(&self) -> TokenStream {
         self.base.local_declarations()
+    }
+
+    fn immutable_declarations(&self) -> TokenStream {
+        self.base.immutable_declarations()
     }
 
     fn attr_names(&self) -> &PathList {
         self.attr_names
     }
 
-    fn forward_attrs(&self) -> &ForwardAttrs<'_> {
-        &self.forward_attrs
+    fn forwarded_attrs(&self) -> Option<&ForwardAttrs> {
+        self.forward_attrs
     }
 
     fn param_name(&self) -> TokenStream {

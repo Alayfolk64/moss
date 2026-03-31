@@ -39,11 +39,6 @@ impl<T> SpannedValue<T> {
     pub fn map_ref<U>(&self, map_fn: impl FnOnce(&T) -> U) -> SpannedValue<U> {
         SpannedValue::new(map_fn(&self.value), self.span)
     }
-
-    /// Gets the inner value, consuming `self` in the process.
-    pub fn into_inner(self) -> T {
-        self.value
-    }
 }
 
 impl<T: Default> Default for SpannedValue<T> {
@@ -72,6 +67,12 @@ impl<T> AsRef<T> for SpannedValue<T> {
     }
 }
 
+impl<T> Spanned for SpannedValue<T> {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
 macro_rules! spanned {
     ($trayt:ident, $method:ident, $syn:path) => {
         impl<T: $trayt> $trayt for SpannedValue<T> {
@@ -85,46 +86,10 @@ macro_rules! spanned {
     };
 }
 
-impl<T: FromMeta> FromMeta for SpannedValue<T> {
-    fn from_meta(item: &syn::Meta) -> Result<Self> {
-        let value = T::from_meta(item).map_err(|e| e.with_span(item))?;
-        let span = match item {
-            // Example: `#[darling(skip)]` as SpannedValue<bool>
-            // should have the span pointing to the word `skip`.
-            syn::Meta::Path(path) => path.span(),
-            // Example: `#[darling(attributes(Value))]` as a SpannedValue<Vec<String>>
-            // should have the span pointing to the list contents.
-            syn::Meta::List(list) => list.tokens.span(),
-            // Example: `#[darling(skip = true)]` as SpannedValue<bool>
-            // should have the span pointing to the word `true`.
-            syn::Meta::NameValue(nv) => nv.value.span(),
-        };
-
-        Ok(Self::new(value, span))
-    }
-
-    fn from_nested_meta(item: &crate::ast::NestedMeta) -> Result<Self> {
-        T::from_nested_meta(item)
-            .map(|value| Self::new(value, item.span()))
-            .map_err(|e| e.with_span(item))
-    }
-
-    fn from_value(literal: &syn::Lit) -> Result<Self> {
-        T::from_value(literal)
-            .map(|value| Self::new(value, literal.span()))
-            .map_err(|e| e.with_span(literal))
-    }
-
-    fn from_expr(expr: &syn::Expr) -> Result<Self> {
-        T::from_expr(expr)
-            .map(|value| Self::new(value, expr.span()))
-            .map_err(|e| e.with_span(expr))
-    }
-}
-
 spanned!(FromGenericParam, from_generic_param, syn::GenericParam);
 spanned!(FromGenerics, from_generics, syn::Generics);
 spanned!(FromTypeParam, from_type_param, syn::TypeParam);
+spanned!(FromMeta, from_meta, syn::Meta);
 spanned!(FromDeriveInput, from_derive_input, syn::DeriveInput);
 spanned!(FromField, from_field, syn::Field);
 spanned!(FromVariant, from_variant, syn::Variant);

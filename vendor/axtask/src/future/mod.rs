@@ -1,16 +1,16 @@
 //! Future support.
 
 use alloc::{sync::Arc, task::Wake};
+use axerrno::AxError;
 use core::{
     fmt,
     future::poll_fn,
     pin::pin,
+    sync::atomic::{AtomicBool, Ordering},
     task::{Context, Poll, Waker},
 };
 
-use axerrno::AxError;
 use kernel_guard::NoPreemptIrqSave;
-use kspin::SpinNoIrq;
 
 use crate::{AxTaskRef, WeakAxTaskRef, current, current_run_queue, select_run_queue};
 
@@ -22,14 +22,14 @@ pub use time::*;
 
 struct AxWaker {
     task: WeakAxTaskRef,
-    woke: SpinNoIrq<bool>,
+    woke: AtomicBool,
 }
 
 impl AxWaker {
     fn new(task: &AxTaskRef) -> Arc<Self> {
         Arc::new(AxWaker {
             task: Arc::downgrade(task),
-            woke: SpinNoIrq::new(false),
+            woke: AtomicBool::new(false),
         })
     }
 }
@@ -41,9 +41,8 @@ impl Wake for AxWaker {
 
     fn wake_by_ref(self: &Arc<Self>) {
         if let Some(task) = self.task.upgrade() {
-            let mut rq = select_run_queue::<NoPreemptIrqSave>(&task);
-            *self.woke.lock() = true;
-            rq.unblock_task(task, false);
+            self.woke.store(true, Ordering::Release);
+            select_run_queue::<NoPreemptIrqSave>(&task).unblock_task(task, false);
         }
     }
 }
@@ -60,29 +59,19 @@ pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
     // to prevent it from being dropped while blocking.
     let task = curr.clone();
 
-    let axwaker = AxWaker::new(&task);
-    let waker = Waker::from(axwaker.clone());
+    let waker = AxWaker::new(&task);
+    let woke = &waker.woke;
+    let waker = Waker::from(waker.clone());
     let mut cx = Context::from_waker(&waker);
 
     loop {
+        woke.store(false, Ordering::Release);
         match fut.as_mut().poll(&mut cx) {
             Poll::Pending => {
-                let mut rq = current_run_queue::<NoPreemptIrqSave>();
-                let mut woke = axwaker.woke.lock();
-                if !*woke {
-                    // blocked_resched() will set *woke = false and drop
-                    // the guard internally before rescheduling. When this
-                    // task is woken, woke will be set to true by the waker
-                    // and we'll re-enter the loop to poll again.
-                    rq.blocked_resched(woke);
+                if !woke.load(Ordering::Acquire) {
+                    current_run_queue::<NoPreemptIrqSave>().blocked_resched();
                 } else {
-                    // ③ woke = true: waker fired between poll() returning
-                    // Pending and us acquiring the lock.
-                    // Clear under the current lock hold, then drop.
-                    // If an interrupt sets woke=true after drop(), the next
-                    // loop iteration will see it correctly.
-                    *woke = false;
-                    drop(woke);
+                    // Immediately woken
                     crate::yield_now();
                 }
             }

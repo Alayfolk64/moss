@@ -55,7 +55,6 @@ impl From<i32> for PsciError {
 /// when SMCCC_CONDUIT_SMC = 1
 fn arm_smccc_smc(func: u32, arg0: usize, arg1: usize, arg2: usize) -> usize {
     let mut ret;
-    #[cfg(target_arch = "aarch64")]
     unsafe {
         core::arch::asm!(
             "smc #0",
@@ -63,17 +62,6 @@ fn arm_smccc_smc(func: u32, arg0: usize, arg1: usize, arg2: usize) -> usize {
             in("x1") arg0,
             in("x2") arg1,
             in("x3") arg2,
-        )
-    }
-    #[cfg(target_arch = "arm")]
-    unsafe {
-        core::arch::asm!(
-            ".arch_extension sec",
-            "smc #0",
-            inlateout("r0") func => ret,
-            in("r1") arg0,
-            in("r2") arg1,
-            in("r3") arg2,
         )
     }
     ret
@@ -82,7 +70,6 @@ fn arm_smccc_smc(func: u32, arg0: usize, arg1: usize, arg2: usize) -> usize {
 /// psci "hvc" method call
 fn psci_hvc_call(func: u32, arg0: usize, arg1: usize, arg2: usize) -> usize {
     let ret;
-    #[cfg(target_arch = "aarch64")]
     unsafe {
         core::arch::asm!(
             "hvc #0",
@@ -90,17 +77,6 @@ fn psci_hvc_call(func: u32, arg0: usize, arg1: usize, arg2: usize) -> usize {
             in("x1") arg0,
             in("x2") arg1,
             in("x3") arg2,
-        )
-    }
-    #[cfg(target_arch = "arm")]
-    unsafe {
-        core::arch::asm!(
-            ".arch_extension virt",
-            "hvc #0",
-            inlateout("r0") func => ret,
-            in("r1") arg0,
-            in("r2") arg1,
-            in("r3") arg2,
         )
     }
     ret

@@ -58,7 +58,7 @@ pub fn enable_irqs(timer_irq_num: usize) {
     use aarch64_cpu::registers::CNTP_CTL_EL0;
     CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET);
     CNTP_TVAL_EL0.set(0);
-    axplat::irq::set_enable(timer_irq_num, true);
+    crate::gic::set_enable(timer_irq_num, true);
 }
 
 /// Default implementation of [`axplat::time::TimeIf`] using the generic

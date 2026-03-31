@@ -66,12 +66,6 @@ impl LinkedList {
     }
 }
 
-impl Default for LinkedList {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl fmt::Debug for LinkedList {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()

@@ -12,10 +12,11 @@
 [package]
 edition = "2024"
 name = "starry-signal"
-version = "0.3.0"
+version = "0.2.4-preview.1"
 authors = [
     "Mivik <mivikq@gmail.com>",
     "朝倉水希 <asakuramizu111@gmail.com>",
+    "Yu Chen <yuchen@tsinghua.edu.cn>",
 ]
 build = "build.rs"
 autolib = false
@@ -31,39 +32,15 @@ keywords = [
     "signal",
     "ipc",
 ]
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/Starry-OS/starry-signal"
 
 [lib]
 name = "starry_signal"
 path = "src/lib.rs"
 
-[[test]]
-name = "action"
-path = "tests/action.rs"
-
-[[test]]
-name = "api_process"
-path = "tests/api_process.rs"
-
-[[test]]
-name = "api_thread"
-path = "tests/api_thread.rs"
-
-[[test]]
-name = "concurrent"
-path = "tests/concurrent.rs"
-
-[[test]]
-name = "pending"
-path = "tests/pending.rs"
-
-[[test]]
-name = "types"
-path = "tests/types.rs"
-
 [dependencies.axcpu]
-version = "0.3.0-preview.5"
+version = "0.3.0-preview.3"
 features = ["uspace"]
 
 [dependencies.bitflags]
@@ -85,7 +62,7 @@ default-features = false
 version = "0.1"
 
 [dependencies.linux-raw-sys]
-version = "0.12"
+version = "0.11"
 features = [
     "general",
     "no_std",
@@ -96,12 +73,9 @@ default-features = false
 version = "0.4"
 
 [dependencies.starry-vm]
-version = "0.3"
+version = "0.2"
 
 [dependencies.strum]
 version = "0.27"
 features = ["derive"]
 default-features = false
-
-[dev-dependencies.extern-trait]
-version = "0.4"

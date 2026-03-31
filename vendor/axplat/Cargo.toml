@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axplat"
-version = "0.3.1-pre.6"
+version = "0.3.0-preview.2"
 authors = [
     "Yuekai Jia <equation618@gmail.com>",
     "Youjie Zheng <Azure_stars@126.com>",
@@ -65,10 +65,10 @@ version = "0.1.0"
 version = "2.6"
 
 [dependencies.const-str]
-version = "1.0"
+version = "0.6.2"
 
 [dependencies.crate_interface]
-version = "0.3"
+version = "0.1"
 
 [dependencies.handler_table]
 version = "0.1.2"
@@ -81,4 +81,4 @@ version = "0.1"
 version = "0.4"
 
 [dependencies.percpu]
-version = "0.2.3-preview.1"
+version = "0.2.0"

@@ -7,6 +7,8 @@ description = "ArceOS task management module"
 license.workspace = true
 homepage.workspace = true
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axtask"
+documentation = "https://arceos-org.github.io/arceos/axtask/index.html"
+readme = "README.md"
 
 [features]
 default = []
@@ -24,10 +26,9 @@ multitask = [
     "dep:lazyinit",
     "dep:memory_addr",
     "dep:percpu",
-    "dep:spin",
 ]
 task-ext = ["dep:extern-trait"]
-irq = ["axhal/irq"]
+irq = []
 tls = ["axhal/tls"]
 preempt = ["irq", "percpu?/preempt", "kernel_guard/preempt"]
 smp = ["kspin/smp"]
@@ -48,7 +49,7 @@ cfg-if.workspace = true
 cpumask = { version = "0.1", optional = true }
 crate_interface = { workspace = true, optional = true }
 event-listener = { workspace = true, optional = true }
-extern-trait = { version = "0.4", optional = true }
+extern-trait = { version = "0.2", optional = true }
 futures-util = { version = "0.3", default-features = false, optional = true, features = [
     "alloc",
     "async-await-macro",
@@ -59,7 +60,6 @@ lazyinit = { workspace = true, optional = true }
 log.workspace = true
 memory_addr = { workspace = true, optional = true }
 percpu = { workspace = true, optional = true }
-spin = { workspace = true, optional = true }
 
 [dev-dependencies]
 axhal = { workspace = true, features = ["fp-simd"] }

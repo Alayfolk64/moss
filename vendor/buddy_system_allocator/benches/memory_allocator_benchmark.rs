@@ -138,7 +138,7 @@ pub fn thread_test() {
     }
 }
 
-const ORDER: usize = 33;
+const ORDER: usize = 32;
 const MACHINE_ALIGN: usize = core::mem::size_of::<usize>();
 /// for now 128M is needed
 /// TODO: reduce memory use
@@ -182,7 +182,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("mutil thread random size", |b| {
         b.iter(|| mutil_thread_random_size(black_box(&HEAP_ALLOCATOR)))
     });
-    c.bench_function("threadtest", |b| b.iter(thread_test));
+    c.bench_function("threadtest", |b| b.iter(|| thread_test()));
 }
 
 criterion_group!(benches, criterion_benchmark);

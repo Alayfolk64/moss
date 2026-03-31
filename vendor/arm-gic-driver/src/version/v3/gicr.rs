@@ -187,7 +187,6 @@ register_bitfields! [
     ],
 ];
 
-#[allow(dead_code)]
 impl LPI {
     /// Wake up the redistributor
     pub fn wake(&self) -> Result<(), &'static str> {
@@ -322,7 +321,6 @@ register_structs! {
         (0x10000 => @END),
     }
 }
-#[allow(dead_code)]
 impl SGI {
     /// Initialize SGI/PPI registers to a known state
     /// This is called during CPU interface initialization

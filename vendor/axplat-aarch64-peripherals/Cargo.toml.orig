@@ -1,6 +1,6 @@
 [package]
 name = "axplat-aarch64-peripherals"
-version.workspace = true
+version = "0.3.0-preview.2"
 description = "ARM64 common peripheral drivers with `axplat` compatibility"
 documentation = "https://docs.rs/axplat-aarch64-peripherals"
 keywords = ["arceos", "os", "hal", "peripheral", "aarch64"]
@@ -20,9 +20,10 @@ log = "0.4"
 spin = "0.10"
 int_ratio = "0.1"
 lazyinit = "0.2"
-aarch64-cpu = "11.0"
+page_table_entry = "0.5"
+aarch64-cpu = "10.0"
 arm_pl011 = "0.1"
-arm-gic-driver = "0.16"
+arm-gic-driver = "0.15"
 arm_pl031 = "0.2"
 axcpu = { workspace = true }
 axplat = { workspace = true }

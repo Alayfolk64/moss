@@ -110,10 +110,6 @@ impl PowerIf for DummyPower {
     fn system_off() -> ! {
         unimplemented!()
     }
-
-    fn cpu_num() -> usize {
-        1
-    }
 }
 
 #[cfg(feature = "irq")]

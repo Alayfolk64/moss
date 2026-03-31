@@ -4,13 +4,13 @@ version = 4
 
 [[package]]
 name = "ax_slab_allocator"
-version = "0.4.0"
+version = "0.3.2-preview.1"
 dependencies = [
  "buddy_system_allocator",
 ]
 
 [[package]]
 name = "buddy_system_allocator"
-version = "0.12.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b672b945a3e4f4f40bfd4cd5ee07df9e796a42254ce7cd6d2599ad969244c44a"
+checksum = "a7913f22349ffcfc6ca0ca9a656ec26cfbba538ed49c31a273dff2c5d1ea83d9"

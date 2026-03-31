@@ -2,12 +2,15 @@
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-#[cfg(feature = "ipi")]
-pub use axconfig::devices::IPI_IRQ;
 use axcpu::trap::{IRQ, register_trap_handler};
+
+pub use axplat::irq::{handle, register, set_enable, unregister};
+
 #[cfg(feature = "ipi")]
 pub use axplat::irq::{IpiTarget, send_ipi};
-pub use axplat::irq::{handle, register, set_enable, unregister};
+
+#[cfg(feature = "ipi")]
+pub use axconfig::devices::IPI_IRQ;
 
 static IRQ_HOOK: AtomicUsize = AtomicUsize::new(0);
 
@@ -21,8 +24,8 @@ pub fn register_irq_hook(hook: fn(usize)) -> bool {
         .compare_exchange(
             0,
             hook as *const () as usize,
-            Ordering::Release,
-            Ordering::Relaxed,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
         )
         .is_ok()
 }
@@ -37,7 +40,7 @@ pub fn irq_handler(vector: usize) -> bool {
     let guard = kernel_guard::NoPreempt::new();
 
     if let Some(irq) = handle(vector) {
-        let hook = IRQ_HOOK.load(Ordering::Acquire);
+        let hook = IRQ_HOOK.load(Ordering::SeqCst);
         if hook != 0 {
             let hook = unsafe { core::mem::transmute::<usize, fn(usize)>(hook) };
             hook(irq);

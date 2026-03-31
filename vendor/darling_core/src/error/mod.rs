@@ -13,16 +13,13 @@ use std::iter::{self, Iterator};
 use std::string::ToString;
 use std::vec;
 use syn::spanned::Spanned;
-use syn::{Expr, Lit, LitStr, Path};
+use syn::{Lit, LitStr, Path};
 
-#[cfg(feature = "diagnostics")]
-mod child;
 mod kind;
-mod util;
 
 use crate::util::path_to_string;
 
-use self::kind::{ErrorKind, ErrorUnknownValue, UnknownValuePosition};
+use self::kind::{ErrorKind, ErrorUnknownField};
 
 /// An alias of `Result` specific to attribute parsing.
 pub type Result<T> = ::std::result::Result<T, Error>;
@@ -59,15 +56,13 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 ///    to ensure those errors appear in the right place. Use `darling::util::SpannedValue` to keep
 ///    span information around on parsed fields so that custom diagnostics can point to the correct
 ///    parts of the input AST.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct Error {
     kind: ErrorKind,
     locations: Vec<String>,
     /// The span to highlight in the emitted diagnostic.
     span: Option<Span>,
-    /// Additional diagnostic messages to show with the error.
-    #[cfg(feature = "diagnostics")]
-    children: Vec<child::ChildDiagnostic>,
 }
 
 /// Error creation functions
@@ -77,8 +72,6 @@ impl Error {
             kind,
             locations: Vec::new(),
             span: None,
-            #[cfg(feature = "diagnostics")]
-            children: vec![],
         }
     }
 
@@ -106,7 +99,7 @@ impl Error {
     /// Creates a new error for a field name that appears in the input but does not correspond
     /// to a known field.
     pub fn unknown_field(name: &str) -> Self {
-        Error::new(ErrorUnknownValue::new(UnknownValuePosition::Field, name).into())
+        Error::new(ErrorKind::UnknownField(name.into()))
     }
 
     /// Creates a new error for a field name that appears in the input but does not correspond
@@ -123,42 +116,12 @@ impl Error {
         T: AsRef<str> + 'a,
         I: IntoIterator<Item = &'a T>,
     {
-        Error::new(
-            ErrorUnknownValue::with_alts(UnknownValuePosition::Field, field, alternates).into(),
-        )
-    }
-
-    /// Creates a new error for a field name that appears in the input but does not correspond to
-    /// a known attribute. The second argument is the list of known attributes; if a similar name
-    /// is found that will be shown in the emitted error message.
-    pub fn unknown_field_path_with_alts<'a, T, I>(field: &Path, alternates: I) -> Self
-    where
-        T: AsRef<str> + 'a,
-        I: IntoIterator<Item = &'a T>,
-    {
-        Error::new(ErrorKind::UnknownField(
-            ErrorUnknownValue::with_alts(
-                UnknownValuePosition::Field,
-                &path_to_string(field),
-                alternates,
-            )
-            .into(),
-        ))
+        Error::new(ErrorUnknownField::with_alts(field, alternates).into())
     }
 
     /// Creates a new error for a struct or variant that does not adhere to the supported shape.
     pub fn unsupported_shape(shape: &str) -> Self {
-        Error::new(ErrorKind::UnsupportedShape {
-            observed: shape.into(),
-            expected: None,
-        })
-    }
-
-    pub fn unsupported_shape_with_expected<T: fmt::Display>(shape: &str, expected: &T) -> Self {
-        Error::new(ErrorKind::UnsupportedShape {
-            observed: shape.into(),
-            expected: Some(expected.to_string()),
-        })
+        Error::new(ErrorKind::UnsupportedShape(shape.into()))
     }
 
     pub fn unsupported_format(format: &str) -> Self {
@@ -168,53 +131,6 @@ impl Error {
     /// Creates a new error for a field which has an unexpected literal type.
     pub fn unexpected_type(ty: &str) -> Self {
         Error::new(ErrorKind::UnexpectedType(ty.into()))
-    }
-
-    pub fn unexpected_expr_type(expr: &Expr) -> Self {
-        Error::unexpected_type(match *expr {
-            Expr::Array(_) => "array",
-            Expr::Assign(_) => "assign",
-            Expr::Async(_) => "async",
-            Expr::Await(_) => "await",
-            Expr::Binary(_) => "binary",
-            Expr::Block(_) => "block",
-            Expr::Break(_) => "break",
-            Expr::Call(_) => "call",
-            Expr::Cast(_) => "cast",
-            Expr::Closure(_) => "closure",
-            Expr::Const(_) => "const",
-            Expr::Continue(_) => "continue",
-            Expr::Field(_) => "field",
-            Expr::ForLoop(_) => "for_loop",
-            Expr::Group(_) => "group",
-            Expr::If(_) => "if",
-            Expr::Index(_) => "index",
-            Expr::Infer(_) => "infer",
-            Expr::Let(_) => "let",
-            Expr::Lit(_) => "lit",
-            Expr::Loop(_) => "loop",
-            Expr::Macro(_) => "macro",
-            Expr::Match(_) => "match",
-            Expr::MethodCall(_) => "method_call",
-            Expr::Paren(_) => "paren",
-            Expr::Path(_) => "path",
-            Expr::Range(_) => "range",
-            Expr::Reference(_) => "reference",
-            Expr::Repeat(_) => "repeat",
-            Expr::Return(_) => "return",
-            Expr::Struct(_) => "struct",
-            Expr::Try(_) => "try",
-            Expr::TryBlock(_) => "try_block",
-            Expr::Tuple(_) => "tuple",
-            Expr::Unary(_) => "unary",
-            Expr::Unsafe(_) => "unsafe",
-            Expr::Verbatim(_) => "verbatim",
-            Expr::While(_) => "while",
-            Expr::Yield(_) => "yield",
-            // non-exhaustive enum
-            _ => "unknown",
-        })
-        .with_span(expr)
     }
 
     /// Creates a new error for a field which has an unexpected literal type. This will automatically
@@ -256,25 +172,13 @@ impl Error {
             Lit::Float(_) => "float",
             Lit::Bool(_) => "bool",
             Lit::Verbatim(_) => "verbatim",
-            // non-exhaustive enum
-            _ => "unknown",
         })
         .with_span(lit)
     }
 
     /// Creates a new error for a value which doesn't match a set of expected literals.
     pub fn unknown_value(value: &str) -> Self {
-        Error::new(ErrorUnknownValue::new(UnknownValuePosition::Value, value).into())
-    }
-
-    pub fn unknown_value_with_alts<'a, T, I>(value: &str, alternates: I) -> Self
-    where
-        T: AsRef<str> + 'a,
-        I: IntoIterator<Item = &'a T>,
-    {
-        Error::new(
-            ErrorUnknownValue::with_alts(UnknownValuePosition::Value, value, alternates).into(),
-        )
+        Error::new(ErrorKind::UnknownValue(value.into()))
     }
 
     /// Creates a new error for a list which did not get enough items to proceed.
@@ -348,51 +252,19 @@ impl Error {
         self
     }
 
-    /// Get a span for the error.
-    ///
-    /// # Return Value
-    /// This function will return [`Span::call_site()`](proc_macro2::Span) if [`Self::has_span`] is `false`.
-    /// To get the span only if one has been explicitly set for `self`, instead use [`Error::explicit_span`].
-    pub fn span(&self) -> Span {
-        self.span.unwrap_or_else(Span::call_site)
-    }
-
-    /// Get the span for `self`, if one has been set.
-    pub fn explicit_span(&self) -> Option<Span> {
-        self.span
-    }
-
     /// Recursively converts a tree of errors to a flattened list.
-    ///
-    /// # Child Diagnostics
-    /// If the `diagnostics` feature is enabled, any child diagnostics on `self`
-    /// will be cloned down to all the errors within `self`.
     pub fn flatten(self) -> Self {
         Error::multiple(self.into_vec())
     }
 
     fn into_vec(self) -> Vec<Self> {
         if let ErrorKind::Multiple(errors) = self.kind {
-            let locations = self.locations;
+            let mut flat = Vec::new();
+            for error in errors {
+                flat.extend(error.prepend_at(self.locations.clone()).into_vec());
+            }
 
-            #[cfg(feature = "diagnostics")]
-            let children = self.children;
-
-            errors
-                .into_iter()
-                .flat_map(|error| {
-                    // This is mutated if the diagnostics feature is enabled
-                    #[allow(unused_mut)]
-                    let mut error = error.prepend_at(locations.clone());
-
-                    // Any child diagnostics in `self` are cloned down to all the distinct
-                    // errors contained in `self`.
-                    #[cfg(feature = "diagnostics")]
-                    error.children.extend(children.iter().cloned());
-
-                    error.into_vec()
-                })
-                .collect()
+            flat
         } else {
             vec![self]
         }
@@ -418,75 +290,6 @@ impl Error {
     /// a multi-error from an empty `Vec`.
     pub fn len(&self) -> usize {
         self.kind.len()
-    }
-
-    /// Consider additional field names as "did you mean" suggestions for
-    /// unknown field errors **if and only if** the caller appears to be operating
-    /// at error's origin (meaning no calls to [`Self::at`] have yet taken place).
-    ///
-    /// # Usage
-    /// `flatten` fields in derived trait implementations rely on this method to offer correct
-    /// "did you mean" suggestions in errors.
-    ///
-    /// Because the `flatten` field receives _all_ unknown fields, if a user mistypes a field name
-    /// that is present on the outer struct but not the flattened struct, they would get an incomplete
-    /// or inferior suggestion unless this method was invoked.
-    pub fn add_sibling_alts_for_unknown_field<'a, T, I>(mut self, alternates: I) -> Self
-    where
-        T: AsRef<str> + 'a,
-        I: IntoIterator<Item = &'a T>,
-    {
-        // The error may have bubbled up before this method was called,
-        // and in those cases adding alternates would be incorrect.
-        if !self.locations.is_empty() {
-            return self;
-        }
-
-        // This is a callback because we don't want to use the iterator
-        // if we don't need to.
-        let collect_alts = || {
-            alternates
-                .into_iter()
-                .map(|s| s.as_ref())
-                .collect::<Vec<_>>()
-        };
-
-        if let ErrorKind::UnknownField(unknown_field) = &mut self.kind {
-            unknown_field.add_alts(&collect_alts());
-        } else if let ErrorKind::Multiple(errors) = self.kind {
-            // Gather up the alternates to avoid unnecessary allocations
-            // on a per-contained-error basis.
-            let alts = collect_alts();
-            self.kind = ErrorKind::Multiple(
-                errors
-                    .into_iter()
-                    .map(|err| err.add_sibling_alts_for_unknown_field_internal(&alts))
-                    .collect(),
-            )
-        }
-
-        self
-    }
-
-    fn add_sibling_alts_for_unknown_field_internal(mut self, alternates: &[&str]) -> Self {
-        // The error may have bubbled up before this method was called,
-        // and in those cases adding alternates would be incorrect.
-        if !self.locations.is_empty() {
-            return self;
-        }
-
-        if let ErrorKind::UnknownField(unknown_field) = &mut self.kind {
-            unknown_field.add_alts(alternates);
-        } else if let ErrorKind::Multiple(errors) = self.kind {
-            self.kind = ErrorKind::Multiple(
-                errors
-                    .into_iter()
-                    .map(|err| err.add_sibling_alts_for_unknown_field_internal(alternates))
-                    .collect(),
-            )
-        }
-
-        self
     }
 
     /// Adds a location chain to the head of the error's existing locations.
@@ -528,12 +331,23 @@ impl Error {
         #[cfg(feature = "diagnostics")]
         {
             self.emit();
-            TokenStream::default()
+            quote!()
         }
 
         #[cfg(not(feature = "diagnostics"))]
         {
-            syn::Error::from(self).into_compile_error()
+            self.flatten()
+                .into_iter()
+                .map(|e| e.single_to_syn_error().to_compile_error())
+                .collect()
+        }
+    }
+
+    #[cfg(not(feature = "diagnostics"))]
+    fn single_to_syn_error(self) -> ::syn::Error {
+        match self.span {
+            Some(span) => ::syn::Error::new(span, self.kind),
+            None => ::syn::Error::new(Span::call_site(), self),
         }
     }
 
@@ -545,18 +359,13 @@ impl Error {
         //
         // If span information is available, don't include the error property path
         // since it's redundant and not consistent with native compiler diagnostics.
-        let diagnostic = match self.kind {
+        match self.kind {
             ErrorKind::UnknownField(euf) => euf.into_diagnostic(self.span),
-            ErrorKind::UnknownValue(euv) => euv.into_diagnostic(self.span),
             _ => match self.span {
                 Some(span) => span.unwrap().error(self.kind.to_string()),
                 None => Diagnostic::new(Level::Error, self.to_string()),
             },
-        };
-
-        self.children
-            .into_iter()
-            .fold(diagnostic, |out, child| child.append_to(out))
+        }
     }
 
     /// Transform this error and its children into a list of compiler diagnostics
@@ -598,84 +407,18 @@ impl Error {
     }
 }
 
-#[cfg(feature = "diagnostics")]
-macro_rules! add_child {
-    ($unspanned:ident, $spanned:ident, $level:ident) => {
-        #[doc = concat!("Add a child ", stringify!($unspanned), " message to this error.")]
-        #[doc = "# Example"]
-        #[doc = "```rust"]
-        #[doc = "# use darling_core::Error;"]
-        #[doc = concat!(r#"Error::custom("Example")."#, stringify!($unspanned), r#"("message content");"#)]
-        #[doc = "```"]
-        pub fn $unspanned<T: fmt::Display>(mut self, message: T) -> Self {
-            self.children.push(child::ChildDiagnostic::new(
-                child::Level::$level,
-                None,
-                message.to_string(),
-            ));
-            self
-        }
-
-        #[doc = concat!("Add a child ", stringify!($unspanned), " message to this error with its own span.")]
-        #[doc = "# Example"]
-        #[doc = "```rust"]
-        #[doc = "# use darling_core::Error;"]
-        #[doc = "# let item_to_span = proc_macro2::Span::call_site();"]
-        #[doc = concat!(r#"Error::custom("Example")."#, stringify!($spanned), r#"(&item_to_span, "message content");"#)]
-        #[doc = "```"]
-        pub fn $spanned<S: Spanned, T: fmt::Display>(mut self, span: &S, message: T) -> Self {
-            self.children.push(child::ChildDiagnostic::new(
-                child::Level::$level,
-                Some(span.span()),
-                message.to_string(),
-            ));
-            self
-        }
-    };
-}
-
-/// Add child diagnostics to the error.
-///
-/// # Example
-///
-/// ## Code
-///
-/// ```rust
-/// # use darling_core::Error;
-/// # let struct_ident = proc_macro2::Span::call_site();
-/// Error::custom("this is a demo")
-///     .with_span(&struct_ident)
-///     .note("we wrote this")
-///     .help("try doing this instead");
-/// ```
-/// ## Output
-///
-/// ```text
-/// error: this is a demo
-///   --> my_project/my_file.rs:3:5
-///    |
-/// 13 |     FooBar { value: String },
-///    |     ^^^^^^
-///    |
-///    = note: we wrote this
-///    = help: try doing this instead
-/// ```
-#[cfg(feature = "diagnostics")]
-impl Error {
-    add_child!(error, span_error, Error);
-    add_child!(warning, span_warning, Warning);
-    add_child!(note, span_note, Note);
-    add_child!(help, span_help, Help);
-}
-
 impl StdError for Error {
+    fn description(&self) -> &str {
+        self.kind.description()
+    }
+
     fn cause(&self) -> Option<&dyn StdError> {
         None
     }
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.kind)?;
         if !self.locations.is_empty() {
             write!(f, " at {}", self.locations.join("/"))?;
@@ -694,34 +437,6 @@ impl From<syn::Error> for Error {
         Self {
             span: Some(e.span()),
             ..Self::custom(e)
-        }
-    }
-}
-
-impl From<Error> for syn::Error {
-    fn from(e: Error) -> Self {
-        if e.len() == 1 {
-            if let Some(span) = e.explicit_span() {
-                // Don't include the location path if the error has an explicit span,
-                // since it will be redundant and isn't consistent with how rustc
-                // exposes errors.
-                syn::Error::new(span, e.kind)
-            } else {
-                // If the error's span is going to be the macro call site, include
-                // the location information to try and help the user pinpoint the issue.
-                syn::Error::new(e.span(), e)
-            }
-        } else {
-            let mut syn_errors = e.flatten().into_iter().map(syn::Error::from);
-            let mut error = syn_errors
-                .next()
-                .expect("darling::Error can never be empty");
-
-            for next_error in syn_errors {
-                error.combine(next_error);
-            }
-
-            error
         }
     }
 }
@@ -872,7 +587,7 @@ impl Accumulator {
     /// This function defuses the drop bomb.
     #[must_use = "Accumulated errors should be handled or propagated to the caller"]
     pub fn into_inner(mut self) -> Vec<Error> {
-        match self.0.take() {
+        match std::mem::replace(&mut self.0, None) {
             Some(errors) => errors,
             None => panic!("darling internal error: Accumulator accessed after defuse"),
         }
@@ -947,14 +662,10 @@ impl Extend<Error> for Accumulator {
 
 impl Drop for Accumulator {
     fn drop(&mut self) {
-        // don't try to panic if we are currently unwinding a panic
-        // otherwise we end up with an unhelful "thread panicked while panicking. aborting." message
-        if !std::thread::panicking() {
-            if let Some(errors) = &mut self.0 {
-                match errors.len() {
-                    0 => panic!("darling::error::Accumulator dropped without being finished"),
-                    error_count => panic!("darling::error::Accumulator dropped without being finished. {} errors were lost.", error_count)
-                }
+        if let Some(errors) = &mut self.0 {
+            match errors.len() {
+                0 => panic!("darling::error::Accumulator dropped without being finished"),
+                error_count => panic!("darling::error::Accumulator dropped without being finished. {} errors were lost.", error_count)
             }
         }
     }

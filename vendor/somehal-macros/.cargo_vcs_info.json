@@ -1,6 +1,0 @@
-{
-  "git": {
-    "sha1": "f2143a90770accfc312da3bdc032956296c18a82"
-  },
-  "path_in_vcs": "crates/somehal-macros"
-}

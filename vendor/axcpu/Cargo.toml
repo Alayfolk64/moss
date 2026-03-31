@@ -11,14 +11,13 @@
 
 [package]
 edition = "2021"
-rust-version = "1.88.0"
+rust-version = "1.82.0"
 name = "axcpu"
-version = "0.3.0"
+version = "0.3.0-preview.3"
 authors = [
     "Yuekai Jia <equation618@gmail.com>",
     "Youjie Zheng <Azure_stars@126.com>",
     "yfblock <321353225@qq.com>",
-    "Debin <luodebin@kylinos.cn>",
     "yanjuguang <coolyanjg@163.com>",
     "Grow Zheng <hhmcn@outlook.com>",
     "Su Mingxian <aarkegz@gmail.com>",
@@ -57,7 +56,6 @@ targets = [
     "aarch64-unknown-none-softfloat",
     "riscv64gc-unknown-none-elf",
     "loongarch64-unknown-none-softfloat",
-    "armv7a-none-eabi",
 ]
 
 [features]
@@ -70,6 +68,9 @@ uspace = []
 [lib]
 name = "axcpu"
 path = "src/lib.rs"
+
+[dependencies.axbacktrace]
+version = "0.1"
 
 [dependencies.cfg-if]
 version = "1.0"
@@ -84,40 +85,39 @@ version = "0.4"
 version = "0.4"
 
 [dependencies.page_table_entry]
-version = "0.6"
+version = "0.5"
 
 [dependencies.static_assertions]
 version = "1.1.0"
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies.riscv]
-version = "0.16"
+version = "0.14"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.aarch64-cpu]
-version = "11.2"
+version = "10.0"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.tock-registers]
-version = "0.10"
-
-[target.'cfg(target_arch = "arm")'.dependencies.aarch32-cpu]
-version = "0.2.0"
+version = "0.9"
 
 [target.'cfg(target_arch = "loongarch64")'.dependencies.loongArch64]
 version = "0.2.4"
 
 [target.'cfg(target_arch = "loongarch64")'.dependencies.page_table_multiarch]
-version = "0.6"
+version = "0.5"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.lazyinit]
 version = "0.2"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.percpu]
-version = "0.3"
+version = "0.2"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.x86]
 version = "0.52"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies.x86_64]
-version = "0.15.2"
+version = "0.15"
+features = ["instructions"]
+default-features = false
 
 [lints.clippy]
 new_without_default = "allow"

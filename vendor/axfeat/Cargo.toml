@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axfeat"
-version = "0.3.0-preview.3"
+version = "0.2.2-hv.5"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -22,6 +22,7 @@ autotests = false
 autobenches = false
 description = "Top-level feature selection for ArceOS"
 homepage = "https://github.com/arceos-org/arceos"
+documentation = "https://arceos-org.github.io/arceos/axfeat/index.html"
 readme = false
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/api/axfeat"
@@ -53,8 +54,12 @@ dma = [
     "alloc",
     "paging",
 ]
-driver-ahci = ["axdriver?/ahci"]
 driver-bcm2835-sdhci = ["axdriver?/bcm2835-sdhci"]
+driver-dyn = [
+    "paging",
+    "axruntime/driver-dyn",
+    "axdriver/dyn",
+]
 driver-fxmac = ["axdriver?/fxmac"]
 driver-ixgbe = ["axdriver?/ixgbe"]
 driver-ramdisk = [
@@ -74,23 +79,6 @@ fs = [
     "dep:axfs",
     "axruntime/fs",
 ]
-fs-ng = [
-    "fs",
-    "axruntime/fs-ng",
-]
-fs-ng-ext4 = [
-    "fs-ng",
-    "axfs-ng/ext4",
-]
-fs-ng-fat = [
-    "fs-ng",
-    "axfs-ng/fat",
-]
-fs-ng-times = [
-    "fs-ng",
-    "axfs-ng/times",
-]
-hv = ["axhal/hv"]
 input = [
     "alloc",
     "paging",
@@ -124,24 +112,12 @@ net = [
     "dep:axnet",
     "axruntime/net",
 ]
-net-ng = [
-    "net",
-    "irq",
-    "multitask",
-    "axruntime/net-ng",
-]
 page-alloc-4g = ["axalloc/page-alloc-4g"]
 page-alloc-64g = ["axalloc/page-alloc-64g"]
 paging = [
     "alloc",
     "axhal/paging",
     "axruntime/paging",
-]
-plat-dyn = [
-    "axhal/plat-dyn",
-    "paging",
-    "axruntime/plat-dyn",
-    "axconfig/plat-dyn",
 ]
 rtc = [
     "axhal/rtc",
@@ -170,66 +146,63 @@ tls = [
     "axtask?/tls",
 ]
 uspace = ["axhal/uspace"]
-vsock = ["axruntime/vsock"]
+vsock = [
+    "net",
+    "axdriver/virtio-socket",
+    "axruntime/vsock",
+    "axnet/vsock",
+]
 
 [lib]
 name = "axfeat"
 path = "src/lib.rs"
 
 [dependencies.axalloc]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axbacktrace]
 version = "0.1"
 
-[dependencies.axconfig]
-version = "=0.3.0-preview.3"
-optional = true
-
 [dependencies.axdisplay]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axdriver]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axfs]
-version = "=0.3.0-preview.3"
-optional = true
-
-[dependencies.axfs-ng]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axhal]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 
 [dependencies.axinput]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axipi]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axlog]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-preview.1"
 
 [dependencies.axnet]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axruntime]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 
 [dependencies.axsync]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.axtask]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 optional = true
 
 [dependencies.kspin]

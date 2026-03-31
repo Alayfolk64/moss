@@ -6,15 +6,13 @@
 
 #![allow(dead_code)]
 
+use super::{UsageKind, Usages};
+use axallocator::{AllocResult, BaseAllocator, BitmapPageAllocator, ByteAllocator, PageAllocator};
 use core::{
     alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
 };
-
-use axallocator::{AllocResult, BaseAllocator, BitmapPageAllocator, ByteAllocator, PageAllocator};
 use kspin::SpinNoIrq;
-
-use super::{UsageKind, Usages};
 
 /// The global allocator instance for standard mode.
 #[cfg_attr(all(target_os = "none", not(test)), global_allocator)]
@@ -372,7 +370,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
 
         #[cfg(feature = "tracking")]
         {
-            crate::tracking::with_state(|state| match state {
+            super::with_tracking_state(|state| match state {
                 None => inner(),
                 Some(state) => {
                     let ptr = inner();
@@ -380,7 +378,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
                     state.generation += 1;
                     state.map.insert(
                         ptr as usize,
-                        crate::tracking::AllocationInfo {
+                        super::AllocationInfo {
                             layout,
                             backtrace: axbacktrace::Backtrace::capture(),
                             generation,
@@ -400,7 +398,7 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         let inner = || GlobalAllocator::dealloc(self, ptr, layout);
 
         #[cfg(feature = "tracking")]
-        crate::tracking::with_state(|state| match state {
+        super::with_tracking_state(|state| match state {
             None => inner(),
             Some(state) => {
                 let address = ptr.as_ptr() as usize;

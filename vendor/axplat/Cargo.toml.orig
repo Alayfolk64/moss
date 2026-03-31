@@ -1,6 +1,6 @@
 [package]
 name = "axplat"
-version.workspace = true
+version = "0.3.0-preview.2"
 description = "This crate provides a unified abstraction layer for diverse hardware platforms."
 documentation = "https://docs.rs/axplat"
 keywords = ["arceos", "os", "hal", "embedded"]
@@ -18,12 +18,12 @@ irq = ["dep:handler_table"]
 [dependencies]
 memory_addr = "0.4"
 bitflags = "2.6"
-crate_interface = "0.3"
+crate_interface = "0.1"
 handler_table = { version = "0.1.2", optional = true }
-const-str = "1.0"
+const-str = "0.6.2"
 axplat-macros = { workspace = true }
 kspin = "0.1"
-percpu.workspace = true
+percpu = "0.2.0"
 
 [package.metadata.docs.rs]
 all-features = true

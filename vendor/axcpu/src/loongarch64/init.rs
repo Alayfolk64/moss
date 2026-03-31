@@ -18,7 +18,7 @@ pub fn init_mmu(root_paddr: PhysAddr, phys_virt_offset: usize) {
 
     // Configure TLB
     const PS_4K: usize = 0x0c; // Page Size 4KB
-    let tlbrentry_paddr = pa!(handle_tlb_refill as *const () as usize - phys_virt_offset);
+    let tlbrentry_paddr = pa!(handle_tlb_refill as usize - phys_virt_offset);
     tlbidx::set_ps(PS_4K);
     stlbps::set_ps(PS_4K);
     tlbrehi::set_ps(PS_4K);
@@ -40,10 +40,13 @@ pub fn init_mmu(root_paddr: PhysAddr, phys_virt_offset: usize) {
 ///
 /// In detail, it initializes the exception vector on LoongArch64 platforms.
 pub fn init_trap() {
-    unsafe extern "C" {
-        fn exception_entry_base();
-    }
+    #[cfg(feature = "uspace")]
+    crate::uspace_common::init_exception_table();
     unsafe {
-        crate::asm::write_exception_entry_base(exception_entry_base as *const () as usize);
+        extern "C" {
+            fn exception_entry_base();
+        }
+        core::arch::asm!(include_asm_macros!(), "csrwr $r0, KSAVE_KSP");
+        crate::asm::write_exception_entry_base(exception_entry_base as usize);
     }
 }

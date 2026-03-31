@@ -97,13 +97,13 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
             listener!(self.event => listener);
 
-            owner_id = self.owner_id.load(Ordering::Acquire);
+            owner_id = self.owner_id.load(Ordering::Relaxed);
             if owner_id == 0 {
                 continue;
             }
 
             block_on(listener);
-            owner_id = self.owner_id.load(Ordering::Acquire);
+            owner_id = self.owner_id.load(Ordering::Relaxed);
         }
     }
 
@@ -142,11 +142,9 @@ pub type MutexGuard<'a, T> = lock_api::MutexGuard<'a, RawMutex, T>;
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Once;
-
-    use axtask as thread;
-
     use crate::Mutex;
+    use axtask as thread;
+    use std::sync::Once;
 
     static INIT: Once = Once::new();
 

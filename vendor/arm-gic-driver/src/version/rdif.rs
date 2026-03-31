@@ -5,33 +5,42 @@ use crate::fdt_parse_irq_config;
 use rdif_intc::*;
 
 impl DriverGeneric for super::v2::Gic {
-    fn name(&self) -> &str {
-        "Arm GICv2 Driver"
+    fn open(&mut self) -> Result<(), KError> {
+        self.init();
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), KError> {
+        Ok(())
     }
 }
 
 impl Interface for super::v2::Gic {
-    fn setup_irq_by_fdt(&mut self, irq_prop: &[u32]) -> IrqId {
-        let config = fdt_parse_irq_config(irq_prop).unwrap();
-        self.set_cfg(config.id, config.trigger);
-        config.id.into()
+    fn parse_dtb_fn(&self) -> Option<FuncFdtParseConfig> {
+        Some(parse_dtb_fn)
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 impl DriverGeneric for super::v3::Gic {
-    fn name(&self) -> &str {
-        "Arm GICv3 Driver"
+    fn open(&mut self) -> Result<(), KError> {
+        self.init();
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), KError> {
+        Ok(())
     }
 }
 
-#[cfg(target_arch = "aarch64")]
 impl Interface for super::v3::Gic {
-    fn setup_irq_by_fdt(&mut self, irq_prop: &[u32]) -> IrqId {
-        let config = fdt_parse_irq_config(irq_prop).unwrap();
-        self.set_cfg(config.id, config.trigger);
-        config.id.into()
+    fn parse_dtb_fn(&self) -> Option<FuncFdtParseConfig> {
+        Some(parse_dtb_fn)
     }
+}
+
+fn parse_dtb_fn(itr: &[u32]) -> Result<IrqConfig, alloc::string::String> {
+    let config = fdt_parse_irq_config(itr).map_err(alloc::string::String::from)?;
+    Ok(config.into())
 }
 
 impl From<crate::define::IntId> for IrqId {

@@ -1,6 +1,5 @@
-use alloc::alloc::Layout;
-
-use super::{AllocError, SET_SIZE};
+use super::SET_SIZE;
+use alloc::alloc::{AllocError, Layout};
 
 pub struct Slab<const BLK_SIZE: usize> {
     free_block_list: FreeBlockList<BLK_SIZE>,

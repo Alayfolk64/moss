@@ -1,5 +1,7 @@
 //! Task APIs for multi-task configuration.
 
+use core::sync::atomic::AtomicUsize;
+
 use alloc::{
     string::String,
     sync::{Arc, Weak},
@@ -8,17 +10,20 @@ use alloc::{
 use kernel_guard::NoPreemptIrqSave;
 
 pub(crate) use crate::run_queue::{current_run_queue, select_run_queue};
-#[doc(cfg(all(feature = "multitask", feature = "task-ext")))]
-#[cfg(feature = "task-ext")]
-pub use crate::task::{AxTaskExt, TaskExt};
-#[doc(cfg(all(feature = "multitask", feature = "irq")))]
-#[cfg(feature = "irq")]
-pub use crate::timers::register_timer_callback;
+
 #[doc(cfg(feature = "multitask"))]
 pub use crate::{
     task::{CurrentTask, TaskId, TaskInner, TaskState},
     wait_queue::WaitQueue,
 };
+
+#[doc(cfg(all(feature = "multitask", feature = "irq")))]
+#[cfg(feature = "irq")]
+pub use crate::timers::register_timer_callback;
+
+#[doc(cfg(all(feature = "multitask", feature = "task-ext")))]
+#[cfg(feature = "task-ext")]
+pub use crate::task::{AxTaskExt, TaskExt};
 
 /// The reference type of a task.
 pub type AxTaskRef = Arc<AxTask>;
@@ -27,7 +32,9 @@ pub type AxTaskRef = Arc<AxTask>;
 pub type WeakAxTaskRef = Weak<AxTask>;
 
 /// The wrapper type for [`cpumask::CpuMask`] with SMP configuration.
-pub type AxCpuMask = cpumask::CpuMask<{ axconfig::plat::MAX_CPU_NUM }>;
+pub type AxCpuMask = cpumask::CpuMask<{ axconfig::plat::CPU_NUM }>;
+
+static CPU_NUM: AtomicUsize = AtomicUsize::new(1);
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "sched-rr")] {
@@ -80,27 +87,21 @@ pub fn current() -> CurrentTask {
 
 /// Initializes the task scheduler (for the primary CPU).
 pub fn init_scheduler() {
-    info!("Initialize scheduling...");
+    init_scheduler_with_cpu_num(axconfig::plat::CPU_NUM);
+}
 
-    // Initialize the run queue.
+/// Initializes the task scheduler with cpu_num (for the primary CPU).
+pub fn init_scheduler_with_cpu_num(cpu_num: usize) {
+    info!("Initialize scheduling...");
+    CPU_NUM.store(cpu_num, core::sync::atomic::Ordering::Relaxed);
+
     crate::run_queue::init();
 
     info!("  use {} scheduler.", Scheduler::scheduler_name());
 }
 
-pub(crate) fn cpu_mask_full() -> AxCpuMask {
-    use spin::Lazy;
-
-    static CPU_MASK_FULL: Lazy<AxCpuMask> = Lazy::new(|| {
-        let cpu_num = axhal::cpu_num();
-        let mut cpumask = AxCpuMask::new();
-        for cpu_id in 0..cpu_num {
-            cpumask.set(cpu_id, true);
-        }
-        cpumask
-    });
-
-    *CPU_MASK_FULL
+pub(crate) fn active_cpu_num() -> usize {
+    CPU_NUM.load(core::sync::atomic::Ordering::Relaxed)
 }
 
 /// Initializes the task scheduler for secondary CPUs.

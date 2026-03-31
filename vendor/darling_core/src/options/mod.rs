@@ -1,13 +1,7 @@
-use proc_macro2::Span;
-use syn::{parse_quote, spanned::Spanned};
-
-use crate::ast::NestedMeta;
-use crate::error::Accumulator;
 use crate::{Error, FromMeta, Result};
 
 mod core;
 mod forward_attrs;
-mod forwarded_field;
 mod from_attributes;
 mod from_derive;
 mod from_field;
@@ -20,8 +14,7 @@ mod outer_from;
 mod shape;
 
 pub use self::core::Core;
-pub use self::forward_attrs::ForwardAttrsFilter;
-pub use self::forwarded_field::ForwardedField;
+pub use self::forward_attrs::ForwardAttrs;
 pub use self::from_attributes::FromAttributesOptions;
 pub use self::from_derive::FdiOptions;
 pub use self::from_field::FromFieldOptions;
@@ -31,35 +24,22 @@ pub use self::from_variant::FromVariantOptions;
 pub use self::input_field::InputField;
 pub use self::input_variant::InputVariant;
 pub use self::outer_from::OuterFrom;
-pub use self::shape::{DataShape, DeriveInputShapeSet};
+pub use self::shape::{DataShape, Shape};
 
 /// A default/fallback expression encountered in attributes during parsing.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DefaultExpression {
     /// The value should be taken from the `default` instance of the containing struct.
     /// This is not valid in container options.
     Inherit,
     Explicit(syn::Path),
-    Trait {
-        /// The input span that is responsible for the use of `Default::default`.
-        span: Span,
-    },
+    Trait,
 }
 
 #[doc(hidden)]
 impl FromMeta for DefaultExpression {
-    // Note: This cannot use `from_word` as it needs to capture the span
-    // in the `Meta::Path` case.
-    fn from_meta(item: &syn::Meta) -> Result<Self> {
-        match item {
-            syn::Meta::Path(_) => Ok(DefaultExpression::Trait { span: item.span() }),
-            syn::Meta::List(nm) => Err(Error::unsupported_format("list").with_span(nm)),
-            syn::Meta::NameValue(nv) => Self::from_expr(&nv.value),
-        }
-    }
-
-    fn from_expr(expr: &syn::Expr) -> Result<Self> {
-        syn::Path::from_expr(expr).map(DefaultExpression::Explicit)
+    fn from_word() -> Result<Self> {
+        Ok(DefaultExpression::Trait)
     }
 
     fn from_value(value: &syn::Lit) -> Result<Self> {
@@ -74,7 +54,7 @@ pub trait ParseAttribute: Sized {
     fn parse_attributes(mut self, attrs: &[syn::Attribute]) -> Result<Self> {
         let mut errors = Error::accumulator();
         for attr in attrs {
-            if attr.meta.path() == &parse_quote!(darling) {
+            if attr.path == parse_quote!(darling) {
                 errors.handle(parse_attr(attr, &mut self));
             }
         }
@@ -88,10 +68,10 @@ pub trait ParseAttribute: Sized {
 
 fn parse_attr<T: ParseAttribute>(attr: &syn::Attribute, target: &mut T) -> Result<()> {
     let mut errors = Error::accumulator();
-    match &attr.meta {
-        syn::Meta::List(data) => {
-            for item in NestedMeta::parse_meta_list(data.tokens.clone())? {
-                if let NestedMeta::Meta(ref mi) = item {
+    match attr.parse_meta().ok() {
+        Some(syn::Meta::List(data)) => {
+            for item in data.nested {
+                if let syn::NestedMeta::Meta(ref mi) = item {
                     errors.handle(target.parse_nested(mi));
                 } else {
                     panic!("Wasn't able to parse: `{:?}`", item);
@@ -100,7 +80,8 @@ fn parse_attr<T: ParseAttribute>(attr: &syn::Attribute, target: &mut T) -> Resul
 
             errors.finish()
         }
-        item => panic!("Wasn't able to parse: `{:?}`", item),
+        Some(ref item) => panic!("Wasn't able to parse: `{:?}`", item),
+        None => panic!("Unable to parse {:?}", attr),
     }
 }
 
@@ -135,8 +116,6 @@ pub trait ParseData: Sized {
             Data::Union(_) => unreachable!(),
         };
 
-        self.validate_body(&mut errors);
-
         errors.finish_with(self)
     }
 
@@ -151,10 +130,4 @@ pub trait ParseData: Sized {
     fn parse_field(&mut self, field: &syn::Field) -> Result<()> {
         Err(Error::unsupported_format("struct field").with_span(field))
     }
-
-    /// Perform validation checks that require data from more than one field or variant.
-    /// The default implementation does no validations.
-    /// Implementors can override this method as appropriate for their use-case.
-    #[allow(unused_variables)]
-    fn validate_body(&self, errors: &mut Accumulator) {}
 }

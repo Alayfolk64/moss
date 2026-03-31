@@ -14,10 +14,11 @@
 
 //! Filesystem implementations
 
-/// Ext4 filesystem implementation
+#[cfg(feature = "ext4")]
 pub mod ext4fs;
-/// FAT filesystem implementation
+
 pub mod fatfs;
 
 pub use axfs_devfs as devfs;
+
 pub use axfs_ramfs as ramfs;

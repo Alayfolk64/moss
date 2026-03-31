@@ -18,7 +18,6 @@
 //! filesystem types on each partition.
 
 use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
-
 use axerrno::{AxError, AxResult};
 use axfs_vfs::VfsOps;
 use log::{debug, info, warn};
@@ -276,7 +275,7 @@ fn parse_gpt_partitions(disk: &mut Disk) -> AxResult<Vec<PartitionInfo>> {
         };
 
         let partition = PartitionInfo {
-            index: i,
+            index: i as u32,
             name: name_str,
             partition_type_guid: entry.partition_type_guid,
             unique_partition_guid: entry.unique_partition_guid,
@@ -308,7 +307,7 @@ fn detect_filesystem_type(disk: &mut Disk, start_lba: u64) -> Option<FilesystemT
     // Set position to read from the specific LBA
     disk.set_position(start_lba * 512);
 
-    if read_exact(disk, &mut boot_sector).is_err() {
+    if let Err(_) = read_exact(disk, &mut boot_sector) {
         warn!("Failed to read boot sector at LBA {}", start_lba);
         // Restore position
         disk.set_position(original_position);
@@ -378,7 +377,7 @@ fn is_ext4_filesystem(disk: &mut Disk, start_lba: u64) -> bool {
     // Set position to read the superblock
     disk.set_position(superblock_offset);
 
-    let result = if read_exact(disk, &mut superblock).is_err() {
+    let result = if let Err(_) = read_exact(disk, &mut superblock) {
         warn!(
             "Failed to read ext4 superblock at offset {}",
             superblock_offset
@@ -416,15 +415,23 @@ pub fn create_filesystem_for_partition(
             Ok(Arc::new(fs))
         }
         Some(FilesystemType::Ext4) => {
-            info!(
-                "Creating ext4 filesystem for partition '{}'",
-                partition.name
-            );
-            // Create a partition wrapper
-            let partition_wrapper =
-                crate::dev::Partition::new(disk, partition.starting_lba, partition.ending_lba);
-            let fs = crate::fs::ext4fs::Ext4FileSystem::from_partition(partition_wrapper);
-            Ok(Arc::new(fs))
+            #[cfg(feature = "ext4")]
+            {
+                info!(
+                    "Creating ext4 filesystem for partition '{}'",
+                    partition.name
+                );
+                // Create a partition wrapper
+                let partition_wrapper =
+                    crate::dev::Partition::new(disk, partition.starting_lba, partition.ending_lba);
+                let fs = crate::fs::ext4fs::Ext4FileSystem::from_partition(partition_wrapper);
+                Ok(Arc::new(fs))
+            }
+            #[cfg(not(feature = "ext4"))]
+            {
+                warn!("ext4 support is not enabled for partition '{}'", partition.name);
+                Err(AxError::Unsupported)
+            }
         }
         Some(FilesystemType::Unknown) | None => {
             warn!("Unknown filesystem type for partition '{}'", partition.name);
@@ -475,8 +482,7 @@ fn read_ext4_uuid(disk: &mut Disk, starting_lba: u64) -> Option<String> {
         // Convert UUID bytes to string format (8-4-4-4-12)
         // ext4 stores UUID as little-endian for the first 3 fields and big-endian for the last 2 fields
         let uuid_str = format!(
-            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:\
-             02x}{:02x}{:02x}",
+            "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
             uuid_bytes[0],
             uuid_bytes[1],
             uuid_bytes[2],

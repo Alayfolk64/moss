@@ -14,14 +14,13 @@
 
 //! FAT filesystem implementation
 
-use alloc::{boxed::Box, sync::Arc};
+use alloc::boxed::Box;
+use alloc::sync::Arc;
 use core::cell::OnceCell;
 
 use axfatfs::{Dir, File, LossyOemCpConverter, NullTimeProvider, Read, Seek, SeekFrom, Write};
-use axfs_vfs::{
-    VfsDirEntry, VfsError, VfsNodeAttr, VfsNodeOps, VfsNodePerm, VfsNodeRef, VfsNodeType, VfsOps,
-    VfsResult,
-};
+use axfs_vfs::{VfsDirEntry, VfsError, VfsNodePerm, VfsResult};
+use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps};
 use spin::Mutex;
 
 use crate::dev::{Disk, Partition};

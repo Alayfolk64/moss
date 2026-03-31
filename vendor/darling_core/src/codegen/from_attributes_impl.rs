@@ -1,18 +1,16 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 
 use crate::{
     ast::Data,
     codegen::{ExtractAttribute, OuterFromImpl, TraitImpl},
+    options::ForwardAttrs,
     util::PathList,
 };
-
-use super::ForwardAttrs;
 
 pub struct FromAttributesImpl<'a> {
     pub base: TraitImpl<'a>,
     pub attr_names: &'a PathList,
-    pub forward_attrs: ForwardAttrs<'a>,
 }
 
 impl ToTokens for FromAttributesImpl<'_> {
@@ -25,7 +23,7 @@ impl ToTokens for FromAttributesImpl<'_> {
             if data.is_newtype() {
                 self.wrap(
                     quote! {
-                        fn from_attributes(#input: &[::darling::export::syn::Attribute]) -> ::darling::Result<Self> {
+                        fn from_attributes(#input: &[::syn::Attribute]) -> ::darling::Result<Self> {
                             ::darling::export::Ok(
                                 #ty_ident(::darling::FromAttributes::from_attributes(#input)?)
                             ) #post_transform
@@ -38,7 +36,6 @@ impl ToTokens for FromAttributesImpl<'_> {
             }
         }
 
-        let passed_attrs = self.forward_attrs.as_initializer();
         let inits = self.base.initializers();
         let default = self.base.fallback_decl();
 
@@ -50,7 +47,7 @@ impl ToTokens for FromAttributesImpl<'_> {
 
         self.wrap(
             quote! {
-                fn from_attributes(#input: &[::darling::export::syn::Attribute]) -> ::darling::Result<Self> {
+                fn from_attributes(#input: &[::syn::Attribute]) -> ::darling::Result<Self> {
                     #declare_errors
 
                     #grab_attrs
@@ -62,7 +59,6 @@ impl ToTokens for FromAttributesImpl<'_> {
                     #default
 
                     ::darling::export::Ok(#ty_ident {
-                        #passed_attrs
                         #inits
                     }) #post_transform
                 }
@@ -72,17 +68,21 @@ impl ToTokens for FromAttributesImpl<'_> {
     }
 }
 
-impl ExtractAttribute for FromAttributesImpl<'_> {
+impl<'a> ExtractAttribute for FromAttributesImpl<'a> {
     fn local_declarations(&self) -> TokenStream {
         self.base.local_declarations()
+    }
+
+    fn immutable_declarations(&self) -> TokenStream {
+        self.base.immutable_declarations()
     }
 
     fn attr_names(&self) -> &PathList {
         self.attr_names
     }
 
-    fn forward_attrs(&self) -> &super::ForwardAttrs<'_> {
-        &self.forward_attrs
+    fn forwarded_attrs(&self) -> Option<&ForwardAttrs> {
+        None
     }
 
     fn param_name(&self) -> TokenStream {

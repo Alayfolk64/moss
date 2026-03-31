@@ -11,13 +11,10 @@
 
 [package]
 edition = "2021"
-rust-version = "1.68"
+rust-version = "1.57"
 name = "crate_interface"
-version = "0.3.0"
-authors = [
-    "Yuekai Jia <equation618@gmail.com>",
-    "Su Mingxian <aarkegz@gmail.com>",
-]
+version = "0.1.4"
+authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
 autobins = false
@@ -37,12 +34,8 @@ categories = [
     "development-tools::procedural-macro-helpers",
     "no-std",
 ]
-license = "Apache-2.0"
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/crate_interface"
-
-[features]
-default = []
-weak_default = []
 
 [lib]
 name = "crate_interface"
@@ -53,10 +46,6 @@ proc-macro = true
 name = "test_crate_interface"
 path = "tests/test_crate_interface.rs"
 
-[[test]]
-name = "test_weak_default"
-path = "tests/test_weak_default.rs"
-
 [dependencies.proc-macro2]
 version = "1.0"
 
@@ -65,7 +54,4 @@ version = "1.0"
 
 [dependencies.syn]
 version = "2.0"
-features = [
-    "full",
-    "visit-mut",
-]
+features = ["full"]

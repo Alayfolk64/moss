@@ -126,83 +126,12 @@ impl<'input> Split<&'input str, char> {
     }
 }
 
-impl<'input> Split<&'input str, &[char]> {
-    const fn char_in_slice(&self, ch: char) -> bool {
-        let chars = self.1;
-        let mut i = 0;
-        while i < chars.len() {
-            if chars[i] == ch {
-                return true;
-            }
-            i += 1;
-        }
-        false
-    }
-
-    pub const fn output_len(&self) -> usize {
-        let mut input = self.0.as_bytes();
-        let mut ans = 0;
-
-        if self.1.is_empty() {
-            return 1; // No splitting happens if no chars to split on
-        }
-
-        while let Some((ch, count)) = crate::utf8::next_char(input) {
-            if self.char_in_slice(ch) {
-                ans += 1;
-            }
-            input = advance(input, count);
-        }
-        ans + 1 // Add 1 for the final segment
-    }
-
-    #[allow(unsafe_code)]
-    pub const fn const_eval<const N: usize>(&self) -> [&'input str; N] {
-        let mut input = self.0.as_bytes();
-        let input_str = self.0;
-        let mut buf: [&str; N] = [""; N];
-        let mut pos = 0;
-        let mut start_byte_pos = 0;
-        let mut current_byte_pos = 0;
-
-        if self.1.is_empty() {
-            // No chars to split on, return the whole string
-            buf[0] = input_str;
-            assert!(1 == N);
-            return buf;
-        }
-
-        while let Some((ch, count)) = crate::utf8::next_char(input) {
-            if self.char_in_slice(ch) {
-                // Found a split character, extract substring from start_byte_pos to current_byte_pos
-                let substr_bytes = subslice(input_str.as_bytes(), start_byte_pos..current_byte_pos);
-                buf[pos] = unsafe { core::str::from_utf8_unchecked(substr_bytes) };
-                pos += 1;
-
-                // Update start position for next substring (skip the split character)
-                start_byte_pos = current_byte_pos + count;
-            }
-            current_byte_pos += count;
-            input = advance(input, count);
-        }
-
-        // Add the final segment
-        let substr_bytes = subslice(input_str.as_bytes(), start_byte_pos..input_str.len());
-        buf[pos] = unsafe { core::str::from_utf8_unchecked(substr_bytes) };
-        pos += 1;
-
-        assert!(pos == N);
-        buf
-    }
-}
-
 /// Returns an array of substrings of a string slice, separated by characters matched by a pattern.
 ///
 /// The pattern type must be one of
 ///
 /// + [`&str`](prim@str)
 /// + [`char`]
-/// + [`&[char]`](slice)
 ///
 /// This macro is [const-context only](./index.html#const-context-only).
 ///
@@ -219,15 +148,6 @@ impl<'input> Split<&'input str, &[char]> {
 ///
 /// assert_eq!(ANIMALS_ARRAY, ANIMALS_SLICE);
 /// assert_eq!(ANIMALS_SLICE, &["lion", "tiger", "leopard"]);
-/// ```
-///
-/// Split by any character in a slice:
-/// ```
-/// const TEXT: &str = "one:two;three,four";
-/// const SEPARATORS: &[char] = &[':', ';', ','];
-/// const WORDS: &[&str] = &const_str::split!(TEXT, SEPARATORS);
-///
-/// assert_eq!(WORDS, &["one", "two", "three", "four"]);
 /// ```
 #[macro_export]
 macro_rules! split {
@@ -279,114 +199,6 @@ impl<'input> SplitInclusive<&'input str, char> {
     }
 }
 
-impl<'input> SplitInclusive<&'input str, &[char]> {
-    const fn char_in_slice(&self, ch: char) -> bool {
-        let chars = self.1;
-        let mut i = 0;
-        while i < chars.len() {
-            if chars[i] == ch {
-                return true;
-            }
-            i += 1;
-        }
-        false
-    }
-
-    pub const fn output_len(&self) -> usize {
-        if self.0.is_empty() {
-            return 0; // Empty string always returns empty result for split_inclusive
-        }
-
-        let mut input = self.0.as_bytes();
-        let mut ans = 0;
-
-        if self.1.is_empty() {
-            return 1; // No splitting happens if no chars to split on
-        }
-
-        let mut found_any_split = false;
-        while let Some((ch, count)) = crate::utf8::next_char(input) {
-            if self.char_in_slice(ch) {
-                ans += 1;
-                found_any_split = true;
-            }
-            input = advance(input, count);
-        }
-
-        if !found_any_split {
-            return 1; // If no splits, return whole string
-        }
-
-        // Check if the last character was a split character
-        let mut input_check = self.0.as_bytes();
-        let mut last_was_split = false;
-
-        while let Some((ch, count)) = crate::utf8::next_char(input_check) {
-            let remaining = advance(input_check, count);
-            if remaining.is_empty() {
-                // This is the last character
-                last_was_split = self.char_in_slice(ch);
-                break;
-            }
-            input_check = remaining;
-        }
-
-        if !last_was_split {
-            ans += 1;
-        }
-
-        ans
-    }
-
-    #[allow(unsafe_code)]
-    pub const fn const_eval<const N: usize>(&self) -> [&'input str; N] {
-        if self.0.is_empty() {
-            // Empty string returns empty array for split_inclusive
-            let buf: [&str; N] = [""; N];
-            assert!(N == 0);
-            return buf;
-        }
-
-        let mut input = self.0.as_bytes();
-        let input_str = self.0;
-        let mut buf: [&str; N] = [""; N];
-        let mut pos = 0;
-        let mut start_byte_pos = 0;
-        let mut current_byte_pos = 0;
-
-        if self.1.is_empty() {
-            // No chars to split on, return the whole string
-            buf[0] = input_str;
-            assert!(1 == N);
-            return buf;
-        }
-
-        while let Some((ch, count)) = crate::utf8::next_char(input) {
-            current_byte_pos += count;
-            if self.char_in_slice(ch) {
-                // Found a split character, extract substring from start_byte_pos to current_byte_pos (inclusive)
-                let substr_bytes = subslice(input_str.as_bytes(), start_byte_pos..current_byte_pos);
-                buf[pos] = unsafe { core::str::from_utf8_unchecked(substr_bytes) };
-                pos += 1;
-
-                // Update start position for next substring
-                start_byte_pos = current_byte_pos;
-            }
-            input = advance(input, count);
-        }
-
-        // Add the final segment if there's remaining content
-        if start_byte_pos < input_str.len() {
-            let substr_bytes = subslice(input_str.as_bytes(), start_byte_pos..input_str.len());
-            buf[pos] = unsafe { core::str::from_utf8_unchecked(substr_bytes) };
-            pos += 1;
-        }
-
-        assert!(pos == N);
-        buf
-    }
-}
-
 /// Returns an array of substrings of a string slice, separated by characters matched by a pattern.
 ///
 /// Differs from the array produced by [`split!`] in that
@@ -400,7 +212,6 @@ impl<'input> SplitInclusive<&'input str, &[char]> {
 ///
 /// + [`&str`](prim@str)
 /// + [`char`]
-/// + [`&[char]`](slice)
 ///
 /// This macro is [const-context only](./index.html#const-context-only).
 ///
@@ -416,15 +227,6 @@ impl<'input> SplitInclusive<&'input str, &[char]> {
 /// const TEXT: &str = "\nA\nB\nC\n";
 /// const ANSWER:&[&str] = &const_str::split_inclusive!(TEXT, "\n");
 /// assert_eq!(ANSWER, &["\n", "A\n", "B\n", "C\n"]);
-/// ```
-///
-/// Split by any character in a slice (inclusive):
-/// ```
-/// const TEXT: &str = "one:two;three,four";
-/// const SEPARATORS: &[char] = &[':', ';', ','];
-/// const WORDS: &[&str] = &const_str::split_inclusive!(TEXT, SEPARATORS);
-///
-/// assert_eq!(WORDS, &["one:", "two;", "three,", "four"]);
 /// ```
 #[macro_export]
 macro_rules! split_inclusive {
@@ -633,91 +435,6 @@ mod tests {
     }
 
     #[test]
-    fn test_split_char_slice() {
-        macro_rules! testcase_char_slice {
-            ($input: expr, $chars: expr) => {{
-                const CHARS: &[char] = $chars;
-                const OUTPUT: &[&str] = &$crate::split!($input, CHARS);
-
-                let ans = $input.split(CHARS).collect::<Vec<_>>();
-                assert_eq!(
-                    OUTPUT.len(),
-                    ans.len(),
-                    "Length mismatch for input: {:?}, chars: {:?}",
-                    $input,
-                    CHARS
-                );
-                assert_eq!(
-                    OUTPUT, &*ans,
-                    "Content mismatch for input: {:?}, chars: {:?}, expected: {:?}",
-                    $input, CHARS, ans
-                );
-            }};
-        }
-
-        // Start with basic cases
-        testcase_char_slice!("a,b,c", &[',']);
-        testcase_char_slice!("hello", &[]);
-        testcase_char_slice!("", &[]);
-        testcase_char_slice!("", &[',']);
-
-        // More complex cases
-        testcase_char_slice!("hello,world;test", &[',', ';']);
-        testcase_char_slice!("hello", &['x', 'y', 'z']);
-        testcase_char_slice!("a,b,,c,", &[',']);
-        testcase_char_slice!(";;;", &[';']);
-
-        // Unicode characters
-        testcase_char_slice!("a中1😂1!", &['中', '😂']);
-        testcase_char_slice!("hello世界test", &['世', '界']);
-
-        // Complex patterns
-        testcase_char_slice!("one:two;three,four", &[':', ';', ',']);
-    }
-
-    #[test]
-    fn test_split_inclusive_char_slice() {
-        macro_rules! testcase_inclusive_char_slice {
-            ($input: expr, $chars: expr) => {{
-                const CHARS: &[char] = $chars;
-                const OUTPUT: &[&str] = &$crate::split_inclusive!($input, CHARS);
-
-                let ans = $input.split_inclusive(CHARS).collect::<Vec<_>>();
-                assert_eq!(
-                    OUTPUT.len(),
-                    ans.len(),
-                    "Length mismatch for input: {:?}, chars: {:?}",
-                    $input,
-                    CHARS
-                );
-                assert_eq!(
-                    OUTPUT, &*ans,
-                    "Content mismatch for input: {:?}, chars: {:?}, expected: {:?}",
-                    $input, CHARS, ans
-                );
-            }};
-        }
-
-        // Start with basic cases
-        testcase_inclusive_char_slice!("a,b,c", &[',']);
-        testcase_inclusive_char_slice!("hello", &[]);
-        testcase_inclusive_char_slice!("", &[]);
-
-        // More cases
-        testcase_inclusive_char_slice!("hello,world;test", &[',', ';']);
-        testcase_inclusive_char_slice!("hello", &['x', 'y', 'z']);
-        testcase_inclusive_char_slice!("a,b,,c,", &[',']);
-        testcase_inclusive_char_slice!(";;;", &[';']);
-
-        // Unicode characters
-        testcase_inclusive_char_slice!("a中1😂1!", &['中', '😂']);
-        testcase_inclusive_char_slice!("hello世界test", &['世', '界']);
-
-        // Complex patterns
-        testcase_inclusive_char_slice!("one:two;three,four", &[':', ';', ',']);
-    }
-
-    #[test]
     fn test_split_ascii_whitespace() {
         macro_rules! testcase {
             ($input: expr) => {{
@@ -765,111 +482,5 @@ mod tests {
         testcase!("a");
         testcase!("a b");
         testcase!("  a  b  ");
-    }
-
-    #[test]
-    fn test_split_runtime() {
-        use super::*;
-
-        // Runtime tests for Split with &str pattern
-        let split1 = Split("a,b,c", ",");
-        assert_eq!(split1.output_len(), 3);
-        let result1: [&str; 3] = split1.const_eval();
-        assert_eq!(result1, ["a", "b", "c"]);
-
-        let split2 = Split("hello", ",");
-        assert_eq!(split2.output_len(), 1);
-        let result2: [&str; 1] = split2.const_eval();
-        assert_eq!(result2, ["hello"]);
-
-        // Test split with empty pattern (splits into chars)
-        let split_empty_pat = Split("ab", "");
-        assert_eq!(split_empty_pat.output_len(), 4); // "", "a", "b", ""
-        let result_empty: [&str; 4] = split_empty_pat.const_eval();
-        assert_eq!(result_empty, ["", "a", "b", ""]);
-
-        // Runtime tests for Split with char pattern
-        let split_char = Split("a,b,c", ',');
-        assert_eq!(split_char.output_len(), 3);
-        let result_char: [&str; 3] = split_char.const_eval();
-        assert_eq!(result_char, ["a", "b", "c"]);
-
-        let split_char2 = Split("hello", 'x');
-        assert_eq!(split_char2.output_len(), 1);
-        let result_char2: [&str; 1] = split_char2.const_eval();
-        assert_eq!(result_char2, ["hello"]);
-
-        // Runtime tests for Split with &[char] pattern
-        const CHARS: &[char] = &[',', ';'];
-        let split_chars = Split("a,b;c", CHARS);
-        assert_eq!(split_chars.output_len(), 3);
-        let result_chars: [&str; 3] = split_chars.const_eval();
-        assert_eq!(result_chars, ["a", "b", "c"]);
-
-        const CHARS2: &[char] = &['x', 'y'];
-        let split_chars2 = Split("hello", CHARS2);
-        assert_eq!(split_chars2.output_len(), 1);
-        let result_chars2: [&str; 1] = split_chars2.const_eval();
-        assert_eq!(result_chars2, ["hello"]);
-
-        // Runtime tests for SplitInclusive with &str pattern
-        let split_inc = SplitInclusive("a,b,c", ",");
-        assert_eq!(split_inc.output_len(), 3);
-        let result_inc: [&str; 3] = split_inc.const_eval();
-        assert_eq!(result_inc, ["a,", "b,", "c"]);
-
-        // Test split inclusive with empty pattern
-        let split_inc_empty = SplitInclusive("xy", "");
-        assert_eq!(split_inc_empty.output_len(), 4);
-        let result_inc_empty: [&str; 4] = split_inc_empty.const_eval();
-        assert_eq!(result_inc_empty, ["", "x", "y", ""]);
-
-        // Runtime tests for SplitInclusive with char pattern
-        let split_inc_char = SplitInclusive("a,b,c", ',');
-        assert_eq!(split_inc_char.output_len(), 3);
-        let result_inc_char: [&str; 3] = split_inc_char.const_eval();
-        assert_eq!(result_inc_char, ["a,", "b,", "c"]);
-
-        // Runtime tests for SplitInclusive with &[char] pattern
-        let split_inc_chars = SplitInclusive("a,b;c", CHARS);
-        assert_eq!(split_inc_chars.output_len(), 3);
-        let result_inc_chars: [&str; 3] = split_inc_chars.const_eval();
-        assert_eq!(result_inc_chars, ["a,", "b;", "c"]);
-
-        // Runtime tests for SplitAsciiWhitespace
-        let split_ws = SplitAsciiWhitespace("  hello  world  ");
-        assert_eq!(split_ws.output_len(), 2);
-        let result_ws: [&str; 2] = split_ws.const_eval();
-        assert_eq!(result_ws, ["hello", "world"]);
-    }
-
-    #[test]
-    fn test_split_edge_cases() {
-        // Test Split with empty char slice - covers lines 147, 170-172
-        const EMPTY_CHARS: &[char] = &[];
-        let split_empty_chars = Split("hello", EMPTY_CHARS);
-        assert_eq!(split_empty_chars.output_len(), 1);
-        let result_empty_chars: [&str; 1] = split_empty_chars.const_eval();
-        assert_eq!(result_empty_chars, ["hello"]);
-
-        // Test SplitInclusive with empty input and char slice - covers lines 297, 345-347
-        const SPLIT_CHARS: &[char] = &[','];
-        let split_inc_empty_input = SplitInclusive("", SPLIT_CHARS);
-        assert_eq!(split_inc_empty_input.output_len(), 0);
-        let result_empty_input: [&str; 0] = split_inc_empty_input.const_eval();
-        assert_eq!(result_empty_input, [] as [&str; 0]);
-
-        // Test SplitInclusive with empty char slice - covers lines 304, 359-361
-        let split_inc_empty_chars = SplitInclusive("hello", EMPTY_CHARS);
-        assert_eq!(split_inc_empty_chars.output_len(), 1);
-        let result_inc_empty: [&str; 1] = split_inc_empty_chars.const_eval();
-        assert_eq!(result_inc_empty, ["hello"]);
-
-        // Test SplitInclusive with no splits found - covers line 317
-        const NO_MATCH_CHARS: &[char] = &['x', 'y', 'z'];
-        let split_inc_no_match = SplitInclusive("hello", NO_MATCH_CHARS);
-        assert_eq!(split_inc_no_match.output_len(), 1);
-        let result_no_match: [&str; 1] = split_inc_no_match.const_eval();
-        assert_eq!(result_no_match, ["hello"]);
     }
 }

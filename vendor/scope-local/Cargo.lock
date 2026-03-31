@@ -62,21 +62,21 @@ dependencies = [
 
 [[package]]
 name = "percpu"
-version = "0.2.3-preview.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c03ecfaf97c11a791d8b65e34a6353d012a735a5cbfebba34ee6668da16ce38"
+checksum = "6a608ec74e30fdffdc18688748c1722d05b3b56a72cc5f1c731847a1e8623874"
 dependencies = [
  "cfg-if",
  "percpu_macros",
- "spin",
+ "spin 0.9.8",
  "x86",
 ]
 
 [[package]]
 name = "percpu_macros"
-version = "0.2.3-preview.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6660d83b91174e6d39fae0cdf893889dcdbffda6e99664f8ee8a45fde6a6936c"
+checksum = "15b69e2a37a17888774f5d282c78af627ea2d541a2d87c43d792e8e0075d88c3"
 dependencies = [
  "cfg-if",
  "proc-macro2",
@@ -113,11 +113,11 @@ dependencies = [
 
 [[package]]
 name = "scope-local"
-version = "0.1.2"
+version = "0.1.1"
 dependencies = [
  "ctor",
  "percpu",
- "spin",
+ "spin 0.10.0",
 ]
 
 [[package]]
@@ -128,12 +128,18 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "spin"
-version = "0.10.0"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 dependencies = [
  "lock_api",
 ]
+
+[[package]]
+name = "spin"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 
 [[package]]
 name = "syn"

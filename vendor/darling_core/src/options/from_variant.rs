@@ -6,7 +6,7 @@ use crate::codegen::FromVariantImpl;
 use crate::options::{DataShape, OuterFrom, ParseAttribute, ParseData};
 use crate::{FromMeta, Result};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FromVariantOptions {
     pub base: OuterFrom,
     /// The field on the deriving struct into which the discriminant expression
@@ -36,8 +36,9 @@ impl<'a> From<&'a FromVariantOptions> for FromVariantImpl<'a> {
             ident: v.base.ident.as_ref(),
             discriminant: v.discriminant.as_ref(),
             fields: v.fields.as_ref(),
+            attrs: v.base.attrs.as_ref(),
             attr_names: &v.base.attr_names,
-            forward_attrs: v.base.as_forward_attrs(),
+            forward_attrs: v.base.forward_attrs.as_ref(),
             from_ident: v.base.from_ident,
             supports: v.supports.as_ref(),
         }
@@ -57,21 +58,23 @@ impl ParseAttribute for FromVariantOptions {
 
 impl ParseData for FromVariantOptions {
     fn parse_field(&mut self, field: &Field) -> Result<()> {
-        match field.ident.as_ref().map(|v| v.to_string()).as_deref() {
+        match field
+            .ident
+            .as_ref()
+            .map(|v| v.to_string())
+            .as_ref()
+            .map(|v| v.as_str())
+        {
             Some("discriminant") => {
-                self.discriminant.clone_from(&field.ident);
+                self.discriminant = field.ident.clone();
                 Ok(())
             }
             Some("fields") => {
-                self.fields.clone_from(&field.ident);
+                self.fields = field.ident.clone();
                 Ok(())
             }
             _ => self.base.parse_field(field),
         }
-    }
-
-    fn validate_body(&self, errors: &mut crate::error::Accumulator) {
-        self.base.validate_body(errors);
     }
 }
 

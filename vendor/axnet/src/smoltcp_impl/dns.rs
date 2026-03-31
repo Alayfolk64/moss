@@ -1,12 +1,10 @@
 use alloc::vec::Vec;
+use axerrno::{AxError, AxResult, ax_err_type};
 use core::net::IpAddr;
 
-use axerrno::{AxError, AxResult, ax_err_type};
-use smoltcp::{
-    iface::SocketHandle,
-    socket::dns::{self, GetQueryResultError, StartQueryError},
-    wire::DnsQueryType,
-};
+use smoltcp::iface::SocketHandle;
+use smoltcp::socket::dns::{self, GetQueryResultError, StartQueryError};
+use smoltcp::wire::DnsQueryType;
 
 use super::{ETH0, SOCKET_SET, SocketSetWrapper};
 

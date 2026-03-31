@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axconfig"
-version = "0.3.0-preview.3"
+version = "0.2.2-hv.5"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = "build.rs"
 include = [
@@ -29,13 +29,14 @@ autotests = false
 autobenches = false
 description = "Platform-specific constants and parameters for ArceOS"
 homepage = "https://github.com/arceos-org/arceos"
+documentation = "https://arceos-org.github.io/arceos/axconfig/index.html"
 readme = "README.md"
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axconfig"
 
 [features]
 default = []
-plat-dyn = ["dep:const-str"]
+driver-dyn = []
 
 [lib]
 name = "axconfig"
@@ -43,7 +44,3 @@ path = "src/lib.rs"
 
 [dependencies.axconfig-macros]
 version = "0.2"
-
-[dependencies.const-str]
-version = "1.1"
-optional = true

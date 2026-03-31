@@ -1,11 +1,5 @@
 //! Helper functions to initialize the CPU states on systems bootstrapping.
 
-pub use super::gdt::init_gdt;
-pub use super::idt::init_idt;
-
-#[cfg(feature = "uspace")]
-pub use super::syscall::init_syscall;
-
 /// Initializes the per-CPU data structures.
 ///
 /// It calls the initialization function of the [`percpu`] crate. It (or other
@@ -13,26 +7,27 @@ pub use super::syscall::init_syscall;
 ///
 /// [`percpu`]: https://docs.rs/percpu/latest/percpu/index.html
 pub fn init_percpu(cpu_id: usize) {
-    percpu::init_in_place().expect("failed to initialize per-CPU data area");
+    percpu::init();
     percpu::init_percpu_reg(cpu_id);
 }
 
 /// Initializes trap handling on the current CPU.
 ///
-/// In detail, it initializes the GDT, IDT on x86_64 platforms ([`init_gdt`] and
-/// [`init_idt`]). If the `uspace` feature is enabled, it also initializes
-/// relevant model-specific registers to configure the handler for `syscall`
-/// instruction ([`init_syscall`]).
+/// In detail, it initializes the GDT, IDT on x86_64 platforms. If the `uspace`
+/// feature is enabled, it also initializes relevant model-specific registers to
+/// configure the handler for `syscall` instruction.
 ///
 /// # Notes
-/// Before calling this function, the initialization function of the [`percpu`] crate
-/// should have been invoked to ensure that the per-CPU data structures are set up
-/// correctly (i.e., by calling [`init_percpu`]).
+/// Before calling this function, the initialization function of the [`percpu`]
+/// crate should have been invoked to ensure that the per-CPU data structures
+/// are set up correctly (i.e., by calling [`init_percpu`]).
 ///
 /// [`percpu`]: https://docs.rs/percpu/latest/percpu/index.html
 pub fn init_trap() {
-    init_gdt();
-    init_idt();
     #[cfg(feature = "uspace")]
-    init_syscall();
+    crate::uspace_common::init_exception_table();
+    super::gdt::init();
+    super::idt::init();
+    #[cfg(feature = "uspace")]
+    super::uspace::init_syscall();
 }

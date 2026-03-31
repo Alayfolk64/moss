@@ -27,16 +27,25 @@ mod root;
 pub mod api;
 pub mod fops;
 
+#[cfg(feature = "fat")]
+mod disk;
+
+#[cfg(feature = "monolitic")]
+mod highlevel;
+#[cfg(feature = "monolitic")]
+mod monofs;
+#[cfg(feature = "monolitic")]
+pub use highlevel::*;
+
+use crate::partition::PartitionInfo;
 use alloc::{
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
-
 use axdriver::{AxBlockDevice, AxDeviceContainer, prelude::*};
 
-use crate::partition::PartitionInfo;
-
+#[cfg(not(feature = "monolitic"))]
 /// Initializes filesystems by block devices.
 pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>, bootargs: Option<&str>) {
     info!("Initialize filesystems...");
@@ -61,6 +70,21 @@ pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>, bootargs
             warn!("Failed to scan GPT partitions: {:?}", e);
         }
     }
+}
+
+#[cfg(feature = "monolitic")]
+/// Initializes filesystems in monolithic mode.
+pub fn init_filesystems(mut block_devs: AxDeviceContainer<AxBlockDevice>) {
+    info!("Initialize filesystem subsystem...");
+
+    let dev = block_devs.take_one().expect("No block device found!");
+    info!("  use block device 0: {:?}", dev.device_name());
+
+    let fs = monofs::new_default(dev).expect("Failed to initialize filesystem");
+    info!("  filesystem type: {:?}", fs.name());
+
+    let mp = axfs_ng_vfs::Mountpoint::new_root(&fs);
+    ROOT_FS_CONTEXT.call_once(|| FsContext::new(mp.root_location()));
 }
 
 /// Initialize filesystems with detected partitions
@@ -96,8 +120,7 @@ fn format_guid_as_partuuid(guid: &[u8; 16]) -> alloc::string::String {
     // Linux PARTUUID format is little-endian for first 3 fields,
     // and big-endian for the rest
     alloc::format!(
-        "{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:\
-         02X}{:02X}{:02X}",
+        "{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
         guid[3],
         guid[2],
         guid[1],
@@ -130,42 +153,43 @@ struct RootSpec {
 fn parse_root_spec(bootargs: Option<&str>) -> RootSpec {
     let mut spec = RootSpec::default();
 
-    if let Some(bootargs) = bootargs
-        && let Some(root_arg) = bootargs
+    if let Some(bootargs) = bootargs {
+        if let Some(root_arg) = bootargs
             .split_whitespace()
             .find(|arg| arg.starts_with("root="))
-    {
-        let root_value = root_arg.strip_prefix("root=").unwrap_or("");
+        {
+            let root_value = root_arg.strip_prefix("root=").unwrap_or("");
 
-        spec = match root_value {
-            v if v.starts_with("/dev/sda") => parse_device_path(v, "/dev/sda"),
-            v if v.starts_with("/dev/mmcblk") => parse_mmcblk_path(v),
-            v if v.starts_with("PARTUUID=") => {
-                let partuuid = v.strip_prefix("PARTUUID=").unwrap_or("").to_uppercase();
-                info!("Looking for partition with PARTUUID: {}", partuuid);
-                RootSpec {
-                    partuuid: Some(partuuid),
-                    ..Default::default()
+            spec = match root_value {
+                v if v.starts_with("/dev/sda") => parse_device_path(v, "/dev/sda"),
+                v if v.starts_with("/dev/mmcblk") => parse_mmcblk_path(v),
+                v if v.starts_with("PARTUUID=") => {
+                    let partuuid = v.strip_prefix("PARTUUID=").unwrap_or("").to_uppercase();
+                    info!("Looking for partition with PARTUUID: {}", partuuid);
+                    RootSpec {
+                        partuuid: Some(partuuid),
+                        ..Default::default()
+                    }
                 }
-            }
-            v if v.starts_with("UUID=") => {
-                let uuid = v.strip_prefix("UUID=").unwrap_or("").to_uppercase();
-                info!("Looking for filesystem with UUID: {}", uuid);
-                RootSpec {
-                    uuid: Some(uuid),
-                    ..Default::default()
+                v if v.starts_with("UUID=") => {
+                    let uuid = v.strip_prefix("UUID=").unwrap_or("").to_uppercase();
+                    info!("Looking for filesystem with UUID: {}", uuid);
+                    RootSpec {
+                        uuid: Some(uuid),
+                        ..Default::default()
+                    }
                 }
-            }
-            v if v.starts_with("PARTLABEL=") => {
-                let partlabel = v.strip_prefix("PARTLABEL=").unwrap_or("").to_string();
-                info!("Looking for partition with PARTLABEL: {}", partlabel);
-                RootSpec {
-                    partlabel: Some(partlabel),
-                    ..Default::default()
+                v if v.starts_with("PARTLABEL=") => {
+                    let partlabel = v.strip_prefix("PARTLABEL=").unwrap_or("").to_string();
+                    info!("Looking for partition with PARTLABEL: {}", partlabel);
+                    RootSpec {
+                        partlabel: Some(partlabel),
+                        ..Default::default()
+                    }
                 }
-            }
-            _ => spec,
-        };
+                _ => spec,
+            };
+        }
     }
 
     spec
@@ -173,31 +197,32 @@ fn parse_root_spec(bootargs: Option<&str>) -> RootSpec {
 
 /// Parse device path like /dev/sdaX
 fn parse_device_path(path: &str, prefix: &str) -> RootSpec {
-    if let Some(part_num) = path.strip_prefix(prefix)
-        && let Ok(num) = part_num.parse::<usize>()
-        && num > 0
-    {
-        return RootSpec {
-            partition_index: Some(num - 1),
-            ..Default::default()
-        };
+    if let Some(part_num) = path.strip_prefix(prefix) {
+        if let Ok(num) = part_num.parse::<usize>() {
+            if num > 0 {
+                return RootSpec {
+                    partition_index: Some(num - 1),
+                    ..Default::default()
+                };
+            }
+        }
     }
     RootSpec::default()
 }
 
 /// Parse mmcblk path like /dev/mmcblkXpY
 fn parse_mmcblk_path(path: &str) -> RootSpec {
-    if let Some(remaining) = path.strip_prefix("/dev/mmcblk")
-        && let Some(p_pos) = remaining.find('p')
-    {
-        let part_str = &remaining[p_pos + 1..];
-        if let Ok(num) = part_str.parse::<usize>()
-            && num > 0
-        {
-            return RootSpec {
-                partition_index: Some(num - 1),
-                ..Default::default()
-            };
+    if let Some(remaining) = path.strip_prefix("/dev/mmcblk") {
+        if let Some(p_pos) = remaining.find('p') {
+            let part_str = &remaining[p_pos + 1..];
+            if let Ok(num) = part_str.parse::<usize>() {
+                if num > 0 {
+                    return RootSpec {
+                        partition_index: Some(num - 1),
+                        ..Default::default()
+                    };
+                }
+            }
         }
     }
     RootSpec::default()
@@ -231,22 +256,23 @@ fn find_root_partition(partitions: &[PartitionInfo], root_spec: &RootSpec) -> Op
         }
 
         // Check UUID match
-        if let Some(ref uuid) = root_spec.uuid
-            && let Some(ref partition_uuid) = partition.filesystem_uuid
-            && partition_uuid.to_uppercase() == *uuid
-        {
-            info!("UUID matches partition {} ({})", i, partition.name);
-            return Some(i);
+        if let Some(ref uuid) = root_spec.uuid {
+            if let Some(ref partition_uuid) = partition.filesystem_uuid {
+                if partition_uuid.to_uppercase() == *uuid {
+                    info!("UUID matches partition {} ({})", i, partition.name);
+                    return Some(i);
+                }
+            }
         }
 
         // Check PARTLABEL match
-        if let Some(ref partlabel) = root_spec.partlabel
-            && partition.name == *partlabel
-        {
-            info!("PARTLABEL matches partition {} ({})", i, partition.name);
-            return Some(i);
+        if let Some(ref partlabel) = root_spec.partlabel {
+            if partition.name == *partlabel {
+                info!("PARTLABEL matches partition {} ({})", i, partition.name);
+                return Some(i);
+            }
         }
     }
 
-    None
+    return None;
 }

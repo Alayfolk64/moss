@@ -1,4 +1,5 @@
-use core::{marker::PhantomData, ptr::NonNull};
+use core::marker::PhantomData;
+use core::ptr::NonNull;
 
 use axalloc::{UsageKind, global_allocator};
 use axdriver_base::{BaseDriverOps, DevResult, DeviceType};

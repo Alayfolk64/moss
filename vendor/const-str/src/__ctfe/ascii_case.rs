@@ -87,11 +87,9 @@ impl<const N: usize> Boundaries<N> {
                     if k1 as u8 != k0 as u8 {
                         match (k1, k0) {
                             (Upper, Lower) => push!(i - 1),
-                            (NonAscii, Digit) => {} // Don't create boundary between NonAscii and Digit
-                            (NonAscii, Lower | Upper) => {} // Don't create boundary between NonAscii and alphabetic
-                            (Lower | Upper, Digit) => {}    // or-pattens stable since 1.53
+                            (NonAscii, Digit) => push!(i),
+                            (Lower | Upper, Digit) => {} // or-pattens stable since 1.53
                             (Digit, Lower | Upper | NonAscii) => {}
-                            (Lower | Upper, NonAscii) => {} // Don't create boundary between alphabetic and NonAscii
                             (_, Dot) => {}
                             (Dot, _) => match (k2, k0) {
                                 (None, _) => push!(i),
@@ -346,7 +344,6 @@ macro_rules! convert_ascii_case {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "case")]
     #[test]
     fn test_conv_ascii_case() {
         macro_rules! test_conv_ascii_case {
@@ -419,12 +416,12 @@ mod tests {
             const S: &str = "Hello World123!XMLHttp我4t5.c6.7b.8";
             test_conv_ascii_case!(lower_camel, S, "helloWorld123XmlHttp我4t5C67b8");
             test_conv_ascii_case!(upper_camel, S, "HelloWorld123XmlHttp我4t5C67b8");
-            test_conv_ascii_case!(title, S, "Hello World123 Xml Http我4t5 C6 7b 8");
-            test_conv_ascii_case!(train, S, "Hello-World123-Xml-Http我4t5-C6-7b-8");
-            test_conv_ascii_case!(snake, S, "hello_world123_xml_http我4t5_c6_7b_8");
-            test_conv_ascii_case!(kebab, S, "hello-world123-xml-http我4t5-c6-7b-8");
-            test_conv_ascii_case!(shouty_snake, S, "HELLO_WORLD123_XML_HTTP我4T5_C6_7B_8");
-            test_conv_ascii_case!(shouty_kebab, S, "HELLO-WORLD123-XML-HTTP我4T5-C6-7B-8");
+            test_conv_ascii_case!(title, S, "Hello World123 Xml Http 我 4t5 C6 7b 8");
+            test_conv_ascii_case!(train, S, "Hello-World123-Xml-Http-我-4t5-C6-7b-8");
+            test_conv_ascii_case!(snake, S, "hello_world123_xml_http_我_4t5_c6_7b_8");
+            test_conv_ascii_case!(kebab, S, "hello-world123-xml-http-我-4t5-c6-7b-8");
+            test_conv_ascii_case!(shouty_snake, S, "HELLO_WORLD123_XML_HTTP_我_4T5_C6_7B_8");
+            test_conv_ascii_case!(shouty_kebab, S, "HELLO-WORLD123-XML-HTTP-我-4T5-C6-7B-8");
         }
         {
             const S: &str = "XMLHttpRequest";
@@ -503,84 +500,5 @@ mod tests {
             test_conv_ascii_case!(shouty_snake, S, "FUTURES_CORE123");
             test_conv_ascii_case!(shouty_kebab, S, "FUTURES-CORE123");
         }
-    }
-
-    #[test]
-    fn test_conv_ascii_case_runtime() {
-        use super::*;
-
-        // Test Lower case
-        let conv_lower = ConvAsciiCase("HELLO", AsciiCase::Lower);
-        let len_lower = conv_lower.output_len::<6>();
-        assert_eq!(len_lower, 5);
-        let result_lower: StrBuf<5> = conv_lower.const_eval::<6, 5>();
-        assert_eq!(result_lower.as_str(), "hello");
-
-        // Test Upper case
-        let conv_upper = ConvAsciiCase("hello", AsciiCase::Upper);
-        let len_upper = conv_upper.output_len::<6>();
-        assert_eq!(len_upper, 5);
-        let result_upper: StrBuf<5> = conv_upper.const_eval::<6, 5>();
-        assert_eq!(result_upper.as_str(), "HELLO");
-
-        // Test LowerCamel case
-        let conv_camel = ConvAsciiCase("hello_world", AsciiCase::LowerCamel);
-        let _len_camel = conv_camel.output_len::<12>();
-        let result_camel: StrBuf<10> = conv_camel.const_eval::<12, 10>();
-        assert_eq!(result_camel.as_str(), "helloWorld");
-
-        // Test UpperCamel case
-        let conv_upper_camel = ConvAsciiCase("hello_world", AsciiCase::UpperCamel);
-        let _len_upper_camel = conv_upper_camel.output_len::<12>();
-        let result_upper_camel: StrBuf<10> = conv_upper_camel.const_eval::<12, 10>();
-        assert_eq!(result_upper_camel.as_str(), "HelloWorld");
-
-        // Test Title case
-        let conv_title = ConvAsciiCase("hello_world", AsciiCase::Title);
-        let _len_title = conv_title.output_len::<12>();
-        let result_title: StrBuf<11> = conv_title.const_eval::<12, 11>();
-        assert_eq!(result_title.as_str(), "Hello World");
-
-        // Test Train case
-        let conv_train = ConvAsciiCase("hello_world", AsciiCase::Train);
-        let _len_train = conv_train.output_len::<12>();
-        let result_train: StrBuf<11> = conv_train.const_eval::<12, 11>();
-        assert_eq!(result_train.as_str(), "Hello-World");
-
-        // Test Snake case
-        let conv_snake = ConvAsciiCase("HelloWorld", AsciiCase::Snake);
-        let _len_snake = conv_snake.output_len::<11>();
-        let result_snake: StrBuf<11> = conv_snake.const_eval::<11, 11>();
-        assert_eq!(result_snake.as_str(), "hello_world");
-
-        // Test Kebab case
-        let conv_kebab = ConvAsciiCase("HelloWorld", AsciiCase::Kebab);
-        let _len_kebab = conv_kebab.output_len::<11>();
-        let result_kebab: StrBuf<11> = conv_kebab.const_eval::<11, 11>();
-        assert_eq!(result_kebab.as_str(), "hello-world");
-
-        // Test ShoutySnake case
-        let conv_shouty_snake = ConvAsciiCase("helloWorld", AsciiCase::ShoutySnake);
-        let _len_shouty_snake = conv_shouty_snake.output_len::<11>();
-        let result_shouty_snake: StrBuf<11> = conv_shouty_snake.const_eval::<11, 11>();
-        assert_eq!(result_shouty_snake.as_str(), "HELLO_WORLD");
-
-        // Test ShoutyKebab case
-        let conv_shouty_kebab = ConvAsciiCase("helloWorld", AsciiCase::ShoutyKebab);
-        let _len_shouty_kebab = conv_shouty_kebab.output_len::<11>();
-        let result_shouty_kebab: StrBuf<11> = conv_shouty_kebab.const_eval::<11, 11>();
-        assert_eq!(result_shouty_kebab.as_str(), "HELLO-WORLD");
-
-        // Test edge cases with numbers and dots
-        let conv_edge = ConvAsciiCase("1.2E3", AsciiCase::LowerCamel);
-        let _len_edge = conv_edge.output_len::<6>();
-        let result_edge: StrBuf<4> = conv_edge.const_eval::<6, 4>();
-        assert_eq!(result_edge.as_str(), "12e3");
-
-        // Test empty-ish strings
-        let conv_empty = ConvAsciiCase("___", AsciiCase::LowerCamel);
-        let _len_empty = conv_empty.output_len::<4>();
-        let result_empty: StrBuf<0> = conv_empty.const_eval::<4, 0>();
-        assert_eq!(result_empty.as_str(), "");
     }
 }

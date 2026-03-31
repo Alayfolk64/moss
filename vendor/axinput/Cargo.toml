@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axinput"
-version = "0.3.0-preview.3"
+version = "0.2.2-hv.5"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -22,6 +22,7 @@ autotests = false
 autobenches = false
 description = "Input device management for ArceOS"
 homepage = "https://github.com/arceos-org/arceos"
+documentation = "https://arceos-org.github.io/arceos"
 readme = false
 keywords = [
     "arceos",
@@ -39,11 +40,11 @@ name = "axinput"
 path = "src/lib.rs"
 
 [dependencies.axdriver]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 features = ["input"]
 
 [dependencies.axsync]
-version = "=0.3.0-preview.3"
+version = "=0.2.2-hv.5"
 
 [dependencies.lazyinit]
 version = "0.2"

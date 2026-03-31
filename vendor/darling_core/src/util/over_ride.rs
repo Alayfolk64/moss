@@ -1,8 +1,7 @@
 use std::fmt;
 
-use syn::Lit;
+use syn::{Lit, NestedMeta};
 
-use crate::ast::NestedMeta;
 use crate::{FromMeta, Result};
 
 use self::Override::*;
@@ -103,10 +102,7 @@ impl<T> Override<T> {
 impl<T: Default> Override<T> {
     /// Returns the contained value or the default value of `T`.
     pub fn unwrap_or_default(self) -> T {
-        match self {
-            Inherit => Default::default(),
-            Explicit(val) => val,
-        }
+        self.unwrap_or_else(Default::default)
     }
 }
 
@@ -126,7 +122,7 @@ impl<T> From<Option<T>> for Override<T> {
 }
 
 impl<T: fmt::Display> fmt::Display for Override<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Inherit => write!(f, "Inherit"),
             Explicit(ref val) => write!(f, "Explicit `{}`", val),
@@ -137,13 +133,6 @@ impl<T: fmt::Display> fmt::Display for Override<T> {
 /// Parses a `Meta`. A bare word will produce `Override::Inherit`, while
 /// any value will be forwarded to `T::from_meta`.
 impl<T: FromMeta> FromMeta for Override<T> {
-    fn from_meta(item: &syn::Meta) -> Result<Self> {
-        match item {
-            syn::Meta::Path(_) => Self::from_word(),
-            _ => FromMeta::from_meta(item).map(Explicit),
-        }
-    }
-
     fn from_word() -> Result<Self> {
         Ok(Inherit)
     }
@@ -154,21 +143,5 @@ impl<T: FromMeta> FromMeta for Override<T> {
 
     fn from_value(lit: &Lit) -> Result<Self> {
         Ok(Explicit(FromMeta::from_value(lit)?))
-    }
-
-    fn from_expr(expr: &syn::Expr) -> Result<Self> {
-        Ok(Explicit(FromMeta::from_expr(expr)?))
-    }
-
-    fn from_char(value: char) -> Result<Self> {
-        Ok(Explicit(FromMeta::from_char(value)?))
-    }
-
-    fn from_string(value: &str) -> Result<Self> {
-        Ok(Explicit(FromMeta::from_string(value)?))
-    }
-
-    fn from_bool(value: bool) -> Result<Self> {
-        Ok(Explicit(FromMeta::from_bool(value)?))
     }
 }

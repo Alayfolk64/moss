@@ -1,6 +1,6 @@
 [package]
 name = "axplat-loongarch64-qemu-virt"
-version.workspace = true
+version = "0.3.0-preview.2"
 description = "Implementation of `axplat` hardware abstraction layer for QEMU LoongArch virtual machine."
 documentation = "https://docs.rs/axplat-loongarch64-qemu-virt"
 keywords = ["arceos", "os", "hal", "embedded", "loongarch"]
@@ -23,7 +23,7 @@ kspin = "0.1"
 lazyinit = "0.2"
 log = "0.4"
 loongArch64 = "0.2.4"
-page_table_entry = "0.6"
+page_table_entry = "0.5"
 uart_16550 = "0.4.0"
 
 axconfig-macros = "0.2"

@@ -1,6 +1,6 @@
 {
   "git": {
-    "sha1": "11f2f215013540eb9da71c61c15aaac75ee69e4d"
+    "sha1": "86a3aeaeb36a26040fff7c59623e7a6bad9640d2"
   },
-  "path_in_vcs": "driver/intc/gic"
+  "path_in_vcs": "gic-driver"
 }

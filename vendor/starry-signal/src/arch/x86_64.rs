@@ -16,7 +16,7 @@ signal_trampoline:
 "
 );
 
-#[repr(C, align(16))]
+#[repr(C)]
 #[derive(Clone)]
 pub struct MContext {
     r8: usize,

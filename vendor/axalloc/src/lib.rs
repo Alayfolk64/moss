@@ -12,7 +12,6 @@ extern crate log;
 extern crate alloc;
 
 use core::fmt;
-
 use strum::{IntoStaticStr, VariantArray};
 
 const PAGE_SIZE: usize = 0x1000;
@@ -20,9 +19,10 @@ const PAGE_SIZE: usize = 0x1000;
 mod page;
 pub use page::GlobalPage;
 
-/// Tracking of memory usage, enabled with the `tracking` feature.
 #[cfg(feature = "tracking")]
-pub mod tracking;
+mod tracking;
+#[cfg(feature = "tracking")]
+pub use tracking::*;
 
 /// Kinds of memory usage for tracking.
 #[repr(u8)]
@@ -87,13 +87,16 @@ use axvisor_impl as imp;
 mod default_impl;
 #[cfg(not(feature = "hv"))]
 use default_impl as imp;
+
+// Re-export types and functions from the implementation
+pub use imp::{GlobalAllocator, global_add_memory, global_init};
+
+// Re-export DefaultByteAllocator from both implementations
+pub use imp::DefaultByteAllocator;
+
 // Re-export AddrTranslator when using hv implementation
 #[cfg(feature = "hv")]
 pub use imp::AddrTranslator;
-// Re-export DefaultByteAllocator from both implementations
-pub use imp::DefaultByteAllocator;
-// Re-export types and functions from the implementation
-pub use imp::{GlobalAllocator, global_add_memory, global_init};
 
 /// Returns the reference to the global allocator.
 pub fn global_allocator() -> &'static GlobalAllocator {

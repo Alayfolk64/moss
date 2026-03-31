@@ -7,53 +7,64 @@ description = "Runtime library of ArceOS"
 license.workspace = true
 homepage.workspace = true
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axruntime"
+documentation = "https://arceos-org.github.io/arceos/axruntime/index.html"
 
 [features]
 default = []
 
-alloc = ["dep:axalloc"]
-dma = ["paging"]
+alloc = ["axalloc"]
 hv = ["axalloc/hv"]
+dma = ["paging"]
+driver-dyn = ["axdriver/dyn", "paging"]
 ipi = ["dep:axipi"]
-irq = ["axhal/irq", "axtask?/irq", "dep:percpu"]
-multitask = ["axtask/multitask"]
-paging = ["axhal/paging", "dep:axmm", "dep:axklib"]
-rtc = []
+irq = ["axhal/irq", "axtask?/irq", "percpu"]
+paging = ["axhal/paging", "axmm"]
 smp = ["axhal/smp", "axtask?/smp"]
 tls = ["axhal/tls", "axtask?/tls"]
 
-plat-dyn = ["axdriver/dyn", "paging"]
+# Platform-specific features (optional, enable separately if needed)
+plat-hv-aarch64 = ["dep:axplat-dyn", "dep:somehal", "axconfig/driver-dyn"]
+plat-hv-x86_64 = ["dep:axplat-x86-qemu-q35", "axconfig/driver-dyn"]
 
-axdriver = ["dep:axdriver"]
-display = ["axdriver", "dep:axdisplay"]
-fs = ["axdriver", "dep:axfs"]
-fs-ng = ["axdriver", "dep:axfs-ng"]
-input = ["axdriver", "dep:axinput"]
-net = ["axdriver", "dep:axnet"]
-net-ng = ["axdriver", "dep:axnet-ng"]
-vsock = ["net-ng", "axnet-ng/vsock"]
+display = ["axdriver", "axdisplay"]
+fs = ["axdriver", "axfs"]
+input = ["axdriver", "axinput"]
+multitask = ["axtask/multitask"]
+net = ["axdriver", "axnet"]
+rtc = []
+vsock = ["net", "axdriver"]
 
 [dependencies]
-axalloc = { workspace = true, optional = true }
-axbacktrace = { workspace = true }
-axconfig = { workspace = true }
-axdisplay = { workspace = true, optional = true }
-axdriver = { workspace = true, optional = true }
-axfs = { workspace = true, optional = true }
-axfs-ng = { workspace = true, optional = true }
-axhal = { workspace = true }
-axinput = { workspace = true, optional = true }
-axipi = { workspace = true, optional = true }
-axklib = { workspace = true, optional = true }
-axlog = { workspace = true }
-axmm = { workspace = true, optional = true }
-axnet = { workspace = true, optional = true }
-axnet-ng = { workspace = true, optional = true }
-axplat = { workspace = true }
-axtask = { workspace = true, optional = true }
-cfg-if = { workspace = true }
-chrono = { version = "0.4", default-features = false }
-crate_interface = { workspace = true }
+axalloc = {workspace = true, optional = true}
+axbacktrace = {workspace = true}
+axconfig = {workspace = true}
+axdisplay = {workspace = true, optional = true}
+axdriver = {workspace = true, optional = true}
+axerrno.workspace = true
+axfs = {workspace = true, optional = true}
+axhal = {workspace = true}
+axinput = {workspace = true, optional = true}
+axipi = {workspace = true, optional = true}
+axlog = {workspace = true}
+axmm = {workspace = true, optional = true}
+axnet = {workspace = true, optional = true}
+axplat = {workspace = true}
+axtask = {workspace = true, optional = true}
+
+log = "0.4"
+
+crate_interface = "0.1"
 ctor_bare = "0.2"
+percpu = {version = "0.2", optional = true}
+cfg-if = "1.0"
+
+chrono = {version = "0.4.38", default-features = false}
+
 indoc = "2"
-percpu = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+axplat-x86-qemu-q35 = { version ="0.1.0-preview.1", default-features = false, features = ["reboot-on-system-off", "smp", "irq"], optional = true }
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+axplat-dyn = { version = "0.4", features = ["irq", "smp", "hv"], optional = true }
+somehal = { version = "0.4", optional = true }

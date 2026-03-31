@@ -1,21 +1,23 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::Ident;
 
-use crate::codegen::{ExtractAttribute, ForwardAttrs, OuterFromImpl, TraitImpl};
+use crate::codegen::{ExtractAttribute, OuterFromImpl, TraitImpl};
+use crate::options::ForwardAttrs;
 use crate::util::PathList;
 
 pub struct FromTypeParamImpl<'a> {
     pub base: TraitImpl<'a>,
     pub ident: Option<&'a Ident>,
+    pub attrs: Option<&'a Ident>,
     pub bounds: Option<&'a Ident>,
     pub default: Option<&'a Ident>,
     pub attr_names: &'a PathList,
-    pub forward_attrs: ForwardAttrs<'a>,
+    pub forward_attrs: Option<&'a ForwardAttrs>,
     pub from_ident: bool,
 }
 
-impl ToTokens for FromTypeParamImpl<'_> {
+impl<'a> ToTokens for FromTypeParamImpl<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let input = self.param_name();
 
@@ -34,7 +36,7 @@ impl ToTokens for FromTypeParamImpl<'_> {
             .ident
             .as_ref()
             .map(|i| quote!(#i: #input.ident.clone(),));
-        let passed_attrs = self.forward_attrs.as_initializer();
+        let passed_attrs = self.attrs.as_ref().map(|i| quote!(#i: __fwd_attrs,));
         let passed_bounds = self
             .bounds
             .as_ref()
@@ -49,7 +51,7 @@ impl ToTokens for FromTypeParamImpl<'_> {
 
         self.wrap(
             quote! {
-                fn from_type_param(#input: &::darling::export::syn::TypeParam) -> ::darling::Result<Self> {
+                fn from_type_param(#input: &::syn::TypeParam) -> ::darling::Result<Self> {
                     #error_declaration
 
                     #grab_attrs
@@ -74,13 +76,13 @@ impl ToTokens for FromTypeParamImpl<'_> {
     }
 }
 
-impl ExtractAttribute for FromTypeParamImpl<'_> {
+impl<'a> ExtractAttribute for FromTypeParamImpl<'a> {
     fn attr_names(&self) -> &PathList {
         self.attr_names
     }
 
-    fn forward_attrs(&self) -> &ForwardAttrs<'_> {
-        &self.forward_attrs
+    fn forwarded_attrs(&self) -> Option<&ForwardAttrs> {
+        self.forward_attrs
     }
 
     fn param_name(&self) -> TokenStream {
@@ -93,6 +95,10 @@ impl ExtractAttribute for FromTypeParamImpl<'_> {
 
     fn local_declarations(&self) -> TokenStream {
         self.base.local_declarations()
+    }
+
+    fn immutable_declarations(&self) -> TokenStream {
+        self.base.immutable_declarations()
     }
 }
 

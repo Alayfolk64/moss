@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt};
 
 /// Declares the local variable into which errors will be accumulated.
 #[derive(Default)]
@@ -10,7 +10,7 @@ pub struct ErrorDeclaration {
 impl ToTokens for ErrorDeclaration {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.append_all(quote! {
-            let mut __errors = ::darling::Error::accumulator();
+            let mut __errors = ::darling::export::Vec::new();
         })
     }
 }
@@ -31,16 +31,18 @@ impl<'a> ErrorCheck<'a> {
     }
 }
 
-impl ToTokens for ErrorCheck<'_> {
+impl<'a> ToTokens for ErrorCheck<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let at_call = if let Some(ref s) = self.location {
-            quote!(.map_err(|e| e.at(#s)))
+            quote!(.at(#s))
         } else {
             quote!()
         };
 
         tokens.append_all(quote! {
-            __errors.finish() #at_call?;
+            if !__errors.is_empty() {
+                return ::darling::export::Err(::darling::Error::multiple(__errors) #at_call);
+            }
         })
     }
 }
