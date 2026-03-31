@@ -8,6 +8,7 @@ export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
 RUST_LLD ?= rust-lld
 RUST_OBJCOPY ?= rust-objcopy
+LOONGARCH_CC ?=
 export RUSTFLAGS ?= -Zcrate-attr=feature(unsigned_signed_diff)
 
 # QEMU Options
@@ -36,10 +37,8 @@ toolchain:
 KERNEL_NAME := $(notdir $(A))
 SDCARD_RV_IMG := $(A)/sdcard-rv.img
 SDCARD_RV_SRC := $(A)/.sdcard-rv.src.img
-SDCARD_RV_TMP := /tmp/$(KERNEL_NAME)-sdcard-rv.img
 SDCARD_LA_IMG := $(A)/sdcard-la.img
 SDCARD_LA_SRC := $(A)/.sdcard-la.src.img
-SDCARD_LA_TMP := /tmp/$(KERNEL_NAME)-sdcard-la.img
 
 ROOTFS_URL = https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG = rootfs-$(ARCH).img
@@ -61,7 +60,9 @@ defconfig justrun: toolchain
 
 makeclean:
 	@$(MAKE) -C make makeclean
-	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin $(A)/kernel-rv.dbg.elf $(A)/kernel-rv.bin.o
+	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin \
+		$(A)/kernel-rv.dbg.elf $(A)/kernel-la.dbg.elf \
+		$(A)/kernel-rv.bin.o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
 
 prepare-sdcard-rv:
 	@src="$(SDCARD_RV_SRC)"; \
@@ -69,9 +70,13 @@ prepare-sdcard-rv:
 		if [ ! -f "$$src" ]; then \
 			if [ -e "$$img" ]; then \
 				cp -Lf "$$img" "$$src"; \
+			elif [ -f "$(A)/rootfs-riscv64.img" ]; then \
+				cp -f "$(A)/rootfs-riscv64.img" "$$src"; \
+			elif [ -f "$(A)/make/disk.img" ]; then \
+				cp -f "$(A)/make/disk.img" "$$src"; \
 			else \
-				echo "missing image source: $$img"; \
-				exit 1; \
+				$(MAKE) --no-print-directory ARCH=riscv64 rootfs; \
+				cp -f "$(A)/rootfs-riscv64.img" "$$src"; \
 			fi; \
 		fi; \
 		rm -f "$$img"; \
@@ -83,9 +88,13 @@ prepare-sdcard-la:
 		if [ ! -f "$$src" ]; then \
 			if [ -e "$$img" ]; then \
 				cp -Lf "$$img" "$$src"; \
+			elif [ -f "$(A)/rootfs-loongarch64.img" ]; then \
+				cp -f "$(A)/rootfs-loongarch64.img" "$$src"; \
+			elif [ -f "$(A)/make/disk.img" ]; then \
+				cp -f "$(A)/make/disk.img" "$$src"; \
 			else \
-				echo "missing image source: $$img"; \
-				exit 1; \
+				$(MAKE) --no-print-directory ARCH=loongarch64 rootfs; \
+				cp -f "$(A)/rootfs-loongarch64.img" "$$src"; \
 			fi; \
 		fi; \
 		rm -f "$$img"; \
@@ -99,7 +108,7 @@ build run debug disasm: toolchain defconfig
 
 all: kernel-rv kernel-la
 
-kernel-rv: toolchain prepare-sdcard-rv
+kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin
@@ -107,10 +116,32 @@ kernel-rv: toolchain prepare-sdcard-rv
 	$(RUST_LLD) -flavor gnu -m elf64lriscv -T $(A)/make/kernel-rv-wrap.ld -o $(A)/kernel-rv $(A)/kernel-rv.bin.o
 	rm -f $(A)/kernel-rv.bin.o
 
-kernel-la: toolchain prepare-sdcard-la
-	$(MAKE) ARCH=loongarch64 build
-	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la
+kernel-la: toolchain
+	$(MAKE) ARCH=loongarch64 BUS=pci build
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la.bin
+	@LOONGARCH_CC_BIN="$(LOONGARCH_CC)"; \
+	if [ -z "$$LOONGARCH_CC_BIN" ]; then \
+		if command -v loongarch64-linux-musl-gcc >/dev/null 2>&1; then \
+			LOONGARCH_CC_BIN=loongarch64-linux-musl-gcc; \
+		elif command -v loongarch64-linux-gnu-gcc >/dev/null 2>&1; then \
+			LOONGARCH_CC_BIN=loongarch64-linux-gnu-gcc; \
+		else \
+			echo "missing loongarch64 cross gcc"; \
+			exit 1; \
+		fi; \
+	fi; \
+	printf '%s\n' \
+		'.section .text,"ax",@progbits' \
+		'.global _binary_kernel_la_bin_start' \
+		'.global _binary_kernel_la_bin_end' \
+		'.balign 16' \
+		'_binary_kernel_la_bin_start:' \
+		'.incbin "kernel-la.bin"' \
+		'_binary_kernel_la_bin_end:' > $(A)/kernel-la.bin.S; \
+	"$$LOONGARCH_CC_BIN" -c -o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
+	$(RUST_LLD) -flavor gnu -m elf64loongarch -T $(A)/make/kernel-la-wrap.ld -o $(A)/kernel-la $(A)/kernel-la.bin.o
+	rm -f $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
 
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
