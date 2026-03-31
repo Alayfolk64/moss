@@ -74,12 +74,12 @@ build run debug disasm: toolchain defconfig
 all: kernel-rv kernel-la
 
 kernel-rv: toolchain
-	$(MAKE) ARCH=riscv64 build
+	$(MAKE) ARCH=riscv64 BUS=mmio build
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin
 
 kernel-la: toolchain
-	$(MAKE) ARCH=loongarch64 build
+	$(MAKE) ARCH=loongarch64 BUS=pci build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la.bin
 
