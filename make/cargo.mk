@@ -1,7 +1,9 @@
 # Cargo features and build args
 
 WORKSPACE_DIR := $(abspath $(CURDIR)/..)
-VENDOR_CARGO_CONFIG := --config source.crates-io.replace-with=\"vendored-sources\" --config source.vendored-sources.directory=\"$(WORKSPACE_DIR)/vendor\"
+VENDOR_CARGO_CONFIG := \
+  --config source.crates-io.replace-with=\"vendored-sources\" \
+  --config source.vendored-sources.directory=\"$(WORKSPACE_DIR)/vendor\"
 
 ifeq ($(V),1)
   verbose := -v

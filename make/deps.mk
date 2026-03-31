@@ -3,7 +3,9 @@
 # NOTE:
 # Build logic is local-source only. No network fallback is allowed here.
 WORKSPACE_DIR := $(abspath $(CURDIR)/..)
-VENDOR_CARGO_CONFIG := --config source.crates-io.replace-with=\"vendored-sources\" --config source.vendored-sources.directory=\"$(WORKSPACE_DIR)/vendor\"
+VENDOR_CARGO_CONFIG := \
+  --config source.crates-io.replace-with=\"vendored-sources\" \
+  --config source.vendored-sources.directory=\"$(WORKSPACE_DIR)/vendor\"
 TOOLS_TAG := $(shell uname -m)-$(shell uname -s | tr '[:upper:]' '[:lower:]')
 TOOLS_ROOT := $(WORKSPACE_DIR)/.tools/$(TOOLS_TAG)
 TOOLS_BIN := $(TOOLS_ROOT)/bin

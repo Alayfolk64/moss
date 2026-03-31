@@ -96,7 +96,7 @@ starry-process = "0.2"
 starry-signal = "0.2.4-preview.1"
 starry-vm = "0.2.0"
 strum = { version = "0.28", default-features = false, features = ["derive"] }
-syscalls = { git = "https://github.com/jasonwhite/syscalls.git", rev = "92624de", default-features = false }
+syscalls = { path = "../third_party/syscalls", default-features = false }
 uluru = "3.1.0"
 weak-map = "0.1.1"
 xmas-elf = "0.9"
@@ -109,4 +109,4 @@ x86 = "0.52"
 riscv = "0.16"
 
 [target.'cfg(not(any(target_arch = "aarch64", target_arch = "loongarch64")))'.dependencies]
-page_table_multiarch = { version = "0.5", features = ["copy-from"] }
+page_table_multiarch = { version = "=0.5.8", features = ["copy-from"] }
