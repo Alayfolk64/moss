@@ -5,7 +5,7 @@ use core::arch::asm;
 use memory_addr::VirtAddr;
 use page_table_entry::aarch64::A64PTE;
 
-use crate::{PageTable64, PageTable64Cursor, PagingMetaData};
+use crate::{PageTable64, PageTable64Mut, PagingMetaData};
 
 /// Metadata of AArch64 page tables.
 pub struct A64PagingMetaData;
@@ -14,7 +14,6 @@ impl PagingMetaData for A64PagingMetaData {
     const LEVELS: usize = 4;
     const PA_MAX_BITS: usize = 48;
     const VA_MAX_BITS: usize = 48;
-
     type VirtAddr = VirtAddr;
 
     fn vaddr_is_valid(vaddr: usize) -> bool {
@@ -39,5 +38,5 @@ impl PagingMetaData for A64PagingMetaData {
 
 /// AArch64 VMSAv8-64 translation table.
 pub type A64PageTable<H> = PageTable64<A64PagingMetaData, A64PTE, H>;
-/// AArch64 VMSAv8-64 translation table cursor.
-pub type A64PageTableCursor<'a, H> = PageTable64Cursor<'a, A64PagingMetaData, A64PTE, H>;
+/// Mutable reference to an AArch64 VMSAv8-64 translation table.
+pub type A64PageTableMut<'a, H> = PageTable64Mut<'a, A64PagingMetaData, A64PTE, H>;

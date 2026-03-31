@@ -1,6 +1,7 @@
 pub mod epoll;
 pub mod event;
 mod fs;
+#[cfg(feature = "net")]
 mod net;
 mod pidfd;
 mod pipe;
@@ -22,10 +23,11 @@ use spin::RwLock;
 
 pub use self::{
     fs::{Directory, File, resolve_at, with_fs},
-    net::Socket,
     pidfd::PidFd,
     pipe::Pipe,
 };
+#[cfg(feature = "net")]
+pub use self::net::Socket;
 use crate::task::{AX_FILE_LIMIT, AsThread};
 
 #[derive(Debug, Clone, Copy)]

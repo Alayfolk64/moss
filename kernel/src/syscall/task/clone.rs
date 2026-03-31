@@ -271,7 +271,7 @@ impl CloneArgs {
                 return Err(err.into());
             }
         }
-        *new_task.task_ext_mut() = Some(AxTaskExt::from_impl(thr));
+        *new_task.task_ext_mut() = Some(unsafe { AxTaskExt::from_impl(thr) });
 
         let task = spawn_task(new_task);
         add_task_to_table(&task);

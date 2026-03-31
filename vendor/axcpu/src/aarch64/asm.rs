@@ -139,7 +139,7 @@ pub fn flush_tlb(vaddr: Option<VirtAddr>) {
         #[cfg(not(feature = "arm-el2"))]
         unsafe {
             // TLB Invalidate by VMID, All at stage 1, EL1
-            asm!("tlbi vmalle1; dsb sy; isb")
+            asm!("dsb sy; isb; tlbi vmalle1; dsb sy; isb")
         }
         #[cfg(feature = "arm-el2")]
         unsafe {
@@ -202,44 +202,19 @@ pub fn enable_fp() {
     barrier::isb(barrier::SY);
 }
 
-/// Returns the frequency of the system counter.
-#[inline]
-pub fn timer_frequency() -> u32 {
-    CNTFRQ_EL0.get() as u32
-}
+#[cfg(feature = "uspace")]
+core::arch::global_asm!(include_str!("user_copy.S"));
 
-/// Returns the current value of the physical counter.
-#[inline]
-pub fn phys_timer_counter() -> u64 {
-    CNTPCT_EL0.get()
-}
-
-/// Enables or disables the physical timer.
-#[inline]
-pub fn phys_timer_enable(enabled: bool) {
-    CNTP_CTL_EL0.modify(CNTP_CTL_EL0::ENABLE.val(enabled as u64));
-}
-
-/// Sets the physical timer to fire an interrupt after the given number of ticks.
-#[inline]
-pub fn phys_timer_set_countdown(ticks: u32) {
-    CNTP_TVAL_EL0.set(ticks as u64);
-}
-
-/// Returns the current value of the virtual counter.
-#[inline]
-pub fn virt_timer_counter() -> u64 {
-    CNTVCT_EL0.get()
-}
-
-/// Enables or disables the virtual timer.
-#[inline]
-pub fn virt_timer_enable(enabled: bool) {
-    CNTV_CTL_EL0.modify(CNTV_CTL_EL0::ENABLE.val(enabled as u64));
-}
-
-/// Sets the virtual timer to fire an interrupt after the given number of ticks.
-#[inline]
-pub fn virt_timer_set_countdown(ticks: u32) {
-    CNTV_TVAL_EL0.set(ticks as u64);
+#[cfg(feature = "uspace")]
+unsafe extern "C" {
+    /// Copies data from source to destination, where addresses may be in user
+    /// space. Equivalent to memcpy.
+    ///
+    /// # Safety
+    /// This function is unsafe because it performs raw memory operations.
+    ///
+    /// # Returns
+    /// Returns the number of bytes not copied. This means 0 indicates success,
+    /// while a value > 0 indicates failure.
+    pub fn user_copy(dst: *mut u8, src: *const u8, size: usize) -> usize;
 }

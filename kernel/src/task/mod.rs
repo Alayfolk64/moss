@@ -153,7 +153,7 @@ impl Thread {
 }
 
 #[extern_trait]
-impl TaskExt for Box<Thread> {
+unsafe impl TaskExt for Box<Thread> {
     fn on_enter(&self) {
         let scope = self.proc_data.scope.read();
         unsafe { ActiveScope::set(&scope) };
@@ -180,7 +180,7 @@ pub trait AsThread {
 impl AsThread for TaskInner {
     fn try_as_thread(&self) -> Option<&Thread> {
         self.task_ext()
-            .map(|ext| ext.downcast_ref::<Box<Thread>>().as_ref())
+            .map(|ext| unsafe { ext.downcast_ref::<Box<Thread>>().as_ref() })
     }
 }
 

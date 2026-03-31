@@ -156,7 +156,7 @@ impl AddrSpace {
         self.validate_region(start, size)?;
         let end = start + size;
 
-        let mut modify = self.pt.cursor();
+        let mut modify = self.pt.modify();
         while let Some(area) = self.areas.find(start) {
             let range = VirtAddrRange::new(start, area.end().min(end));
             area.backend()
@@ -316,7 +316,7 @@ impl AddrSpace {
                     VirtAddrRange::from_start_size(vaddr.align_down(page_size), page_size as _),
                     flags,
                     access_flags,
-                    &mut self.pt.cursor(),
+                    &mut self.pt.modify(),
                 );
                 return match populate_result {
                     Ok((n, callback)) => {
@@ -351,13 +351,13 @@ impl AddrSpace {
 
         let mut guard = new_aspace.lock();
 
-        let mut self_modify = self.pt.cursor();
+        let mut self_modify = self.pt.modify();
         for area in self.areas.iter() {
             let new_backend = area.backend().clone_map(
                 area.va_range(),
                 area.flags(),
                 &mut self_modify,
-                &mut guard.pt.cursor(),
+                &mut guard.pt.modify(),
                 &new_aspace_clone,
             )?;
 

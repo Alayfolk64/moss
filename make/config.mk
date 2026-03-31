@@ -41,6 +41,7 @@ else
   endif
 endif
 
+
 define defconfig
   $(call run_cmd,$(AXCONFIG_GEN),$(config_args))
 endef

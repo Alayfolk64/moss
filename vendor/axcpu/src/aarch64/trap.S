@@ -1,5 +1,5 @@
 .macro SAVE_REGS
-    sub     sp, sp, 34 * 8
+    sub     sp, sp, {trapframe_size}
     stp     x0, x1, [sp]
     stp     x2, x3, [sp, 2 * 8]
     stp     x4, x5, [sp, 4 * 8]
@@ -15,25 +15,19 @@
     stp     x24, x25, [sp, 24 * 8]
     stp     x26, x27, [sp, 26 * 8]
     stp     x28, x29, [sp, 28 * 8]
+    str     x30, [sp, 30 * 8]
 
-    mrs     x9, sp_el0
-    mrs     x10, elr_el1
-    mrs     x11, spsr_el1
-
-    // clear SP_EL0 for kernel use (e.g., to store the current task pointer)
-    msr     sp_el0, xzr
-
-    stp     x30, x9, [sp, 30 * 8]
-    stp     x10, x11, [sp, 32 * 8]
+    mrs     x9, elr_el1
+    mrs     x10, spsr_el1
+    stp     x9, x10, [sp, 31 * 8]
 .endm
 
 .macro RESTORE_REGS
-    ldp     x10, x11, [sp, 32 * 8]
-    ldp     x30, x9, [sp, 30 * 8]
-    msr     sp_el0, x9
-    msr     elr_el1, x10
-    msr     spsr_el1, x11
+    ldp     x9, x10, [sp, 31 * 8]
+    msr     elr_el1, x9
+    msr     spsr_el1, x10
 
+    ldr     x30, [sp, 30 * 8]
     ldp     x28, x29, [sp, 28 * 8]
     ldp     x26, x27, [sp, 26 * 8]
     ldp     x24, x25, [sp, 24 * 8]
@@ -49,33 +43,24 @@
     ldp     x4, x5, [sp, 4 * 8]
     ldp     x2, x3, [sp, 2 * 8]
     ldp     x0, x1, [sp]
-    add     sp, sp, 34 * 8
+    add     sp, sp, {trapframe_size}
 .endm
 
-.macro INVALID_EXCP, kind, source
+.macro HANDLE_TRAP, kind, source
 .p2align 7
     SAVE_REGS
     mov     x0, sp
     mov     x1, \kind
     mov     x2, \source
-    bl      invalid_exception
+    bl      aarch64_trap_handler
     b       .Lexception_return
 .endm
 
-.macro HANDLE_SYNC
+.macro EXIT_USER, kind
 .p2align 7
     SAVE_REGS
-    mov     x0, sp
-    bl      handle_sync_exception
-    b       .Lexception_return
-.endm
-
-.macro HANDLE_IRQ
-.p2align 7
-    SAVE_REGS
-    mov     x0, sp
-    bl      handle_irq_exception
-    b       .Lexception_return
+    mov     x0, \kind
+    b       .Lexit_user
 .endm
 
 .section .text
@@ -83,28 +68,68 @@
 .global exception_vector_base
 exception_vector_base:
     // current EL, with SP_EL0
-    INVALID_EXCP 0 0
-    INVALID_EXCP 1 0
-    INVALID_EXCP 2 0
-    INVALID_EXCP 3 0
+    HANDLE_TRAP {TRAP_KIND_SYNC} {TRAP_SRC_CURR_EL0}
+    HANDLE_TRAP {TRAP_KIND_IRQ} {TRAP_SRC_CURR_EL0}
+    HANDLE_TRAP {TRAP_KIND_FIQ} {TRAP_SRC_CURR_EL0}
+    HANDLE_TRAP {TRAP_KIND_SERROR} {TRAP_SRC_CURR_EL0}
 
     // current EL, with SP_ELx
-    HANDLE_SYNC
-    HANDLE_IRQ
-    INVALID_EXCP 2 1
-    INVALID_EXCP 3 1
+    HANDLE_TRAP {TRAP_KIND_SYNC} {TRAP_SRC_CURR_ELX}
+    HANDLE_TRAP {TRAP_KIND_IRQ} {TRAP_SRC_CURR_ELX}
+    HANDLE_TRAP {TRAP_KIND_FIQ} {TRAP_SRC_CURR_ELX}
+    HANDLE_TRAP {TRAP_KIND_SERROR} {TRAP_SRC_CURR_ELX}
 
-    // lower EL, aarch64
-    HANDLE_SYNC
-    HANDLE_IRQ
-    INVALID_EXCP 2 2
-    INVALID_EXCP 3 2
+    // lower EL, aarch64 {TRAP_SRC_LOWER_AARCH64}
+    EXIT_USER {TRAP_KIND_SYNC}
+    EXIT_USER {TRAP_KIND_IRQ}
+    EXIT_USER {TRAP_KIND_FIQ}
+    EXIT_USER {TRAP_KIND_SERROR}
 
     // lower EL, aarch32
-    INVALID_EXCP 0 3
-    INVALID_EXCP 1 3
-    INVALID_EXCP 2 3
-    INVALID_EXCP 3 3
+    HANDLE_TRAP {TRAP_KIND_SYNC} {TRAP_SRC_LOWER_AARCH32}
+    HANDLE_TRAP {TRAP_KIND_IRQ} {TRAP_SRC_LOWER_AARCH32}
+    HANDLE_TRAP {TRAP_KIND_FIQ} {TRAP_SRC_LOWER_AARCH32}
+    HANDLE_TRAP {TRAP_KIND_SERROR} {TRAP_SRC_LOWER_AARCH32}
+
+.p2align 7
+.Lexit_user:
+    mov     x1, sp
+
+    mrs     x8, sp_el0
+    mrs     x9, tpidr_el0
+    ldp     x10, x11, [x1, {trapframe_size}]
+    stp     x8, x9, [x1, {trapframe_size}]
+    mov     sp, x10
+    msr     tpidr_el0, x11
+
+    ldp     x19, x20, [sp]
+    ldp     x21, x22, [sp, 2 * 8]
+    ldp     x23, x24, [sp, 4 * 8]
+    ldp     x25, x26, [sp, 6 * 8]
+    ldp     x27, x28, [sp, 8 * 8]
+    ldp     x29, x30, [sp, 10 * 8]
+    add     sp, sp, 12 * 8
+
+    ret
+
+.global enter_user
+enter_user:
+    sub     sp, sp, 12 * 8
+    stp     x29, x30, [sp, 10 * 8]
+    stp     x27, x28, [sp, 8 * 8]
+    stp     x25, x26, [sp, 6 * 8]
+    stp     x23, x24, [sp, 4 * 8]
+    stp     x21, x22, [sp, 2 * 8]
+    stp     x19, x20, [sp]
+
+    mov     x10, sp
+    mrs     x11, tpidr_el0
+    ldp     x8, x9, [x0, {trapframe_size}]
+    stp     x10, x11, [x0,{trapframe_size}]
+    msr     sp_el0, x8
+    msr     tpidr_el0, x9
+
+    mov     sp, x0
 
 .Lexception_return:
     RESTORE_REGS

@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "aarch64-cpu"
-version = "11.2.0"
+version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44171e22925ec72b63d86747bc3655c7849a5b8d865c980222128839f45ac034"
+checksum = "6a21cd0131c25c438e19cd6a774adf7e3f64f7f4d723022882facc2dee0f8bc9"
 dependencies = [
  "tock-registers",
 ]
@@ -37,7 +37,7 @@ checksum = "b1f0625c50adb5f6aaf47f05cae3c4dbc13a74c659241b06c4576f3d7e1da940"
 
 [[package]]
 name = "page_table_entry"
-version = "0.6.1"
+version = "0.5.7"
 dependencies = [
  "aarch64-cpu",
  "bitflags",
@@ -53,9 +53,9 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "tock-registers"
-version = "0.10.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d2d250f87fb3fb6f225c907cf54381509f47b40b74b1d1f12d2dccbc915bdfe"
+checksum = "2b9e2fdb3a1e862c0661768b7ed25390811df1947a8acbfbefe09b47078d93c4"
 
 [[package]]
 name = "volatile"
@@ -65,9 +65,9 @@ checksum = "442887c63f2c839b346c192d047a7c87e73d0689c9157b00b53dcc27dd5ea793"
 
 [[package]]
 name = "x86_64"
-version = "0.15.4"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7841fa0098ceb15c567d93d3fae292c49e10a7662b4936d5f6a9728594555ba"
+checksum = "575f620d283cb63500b96c4bcaa12523c6a278d89b85ea35c97ad43ba754fd1e"
 dependencies = [
  "bit_field",
  "bitflags",

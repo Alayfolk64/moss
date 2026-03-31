@@ -12,19 +12,28 @@
 [package]
 edition = "2024"
 name = "axconfig"
-version = "0.2.2-preview.2"
+version = "0.2.2-preview.1"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = "build.rs"
+include = [
+    "src/**/*",
+    "build.rs",
+    "dummy.toml",
+    "Cargo.toml",
+    "README.md",
+]
 autolib = false
 autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
 description = "Platform-specific constants and parameters for ArceOS"
+homepage = "https://github.com/arceos-org/arceos"
 documentation = "https://arceos-org.github.io/arceos/axconfig/index.html"
-readme = false
-license = "Apache-2.0"
+readme = "README.md"
+license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axconfig"
+resolver = "2"
 
 [lib]
 name = "axconfig"

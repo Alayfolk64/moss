@@ -80,7 +80,7 @@ mod virtio;
 mod ixgbe;
 
 #[cfg(feature = "dyn")]
-pub mod dyn_drivers;
+mod dyn_drivers;
 
 #[cfg(feature = "dyn")]
 pub use dyn_drivers::setup;

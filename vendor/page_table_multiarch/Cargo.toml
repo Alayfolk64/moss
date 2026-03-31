@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.85"
 name = "page_table_multiarch"
-version = "0.6.1"
+version = "0.5.8"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -81,14 +81,15 @@ version = "0.4"
 version = "0.4"
 
 [dependencies.page_table_entry]
-version = "0.6"
+version = "0.5"
 
 [dev-dependencies.rand]
-version = "0.10"
+version = "0.10.0-rc.5"
+features = ["small_rng"]
 default-features = false
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64", doc, docsrs))'.dependencies.riscv]
-version = "0.16"
+version = "0.14"
 default-features = false
 
 [target.'cfg(any(target_arch = "x86_64", doc, docsrs))'.dependencies.x86]

@@ -6,27 +6,17 @@
 extern crate log;
 
 mod arch;
-#[cfg(any(target_pointer_width = "32", doc, docsrs))]
-mod bits32;
-#[cfg(any(target_pointer_width = "64", doc, docsrs))]
 mod bits64;
 
 use core::fmt::Debug;
 
-use arrayvec::ArrayVec;
-use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PhysAddr, VirtAddr};
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr};
 #[doc(no_inline)]
 pub use page_table_entry::{GenericPTE, MappingFlags};
 
-#[cfg(any(target_pointer_width = "32", doc, docsrs))]
 pub use self::{
     arch::*,
-    bits32::{PageTable32, PageTable32Cursor},
-};
-#[cfg(any(target_pointer_width = "64", doc, docsrs))]
-pub use self::{
-    arch::*,
-    bits64::{PageTable64, PageTable64Cursor},
+    bits64::{PageTable64, PageTable64Mut},
 };
 
 /// The error type for page table operation failures.
@@ -103,20 +93,9 @@ pub trait PagingMetaData: Sync + Send {
 /// [`PageTable64`].
 pub trait PagingHandler: Sized {
     /// Request to allocate a 4K-sized physical frame.
-    fn alloc_frame() -> Option<PhysAddr> {
-        Self::alloc_frames(1, PAGE_SIZE_4K)
-    }
-    /// Allocate `num` contiguous physical frames, with the starting physical
-    /// address aligned to `align` bytes (must be a power of two, and must be
-    /// a multiple of 4K).
-    fn alloc_frames(num: usize, align: usize) -> Option<PhysAddr>;
+    fn alloc_frame() -> Option<PhysAddr>;
     /// Request to free a allocated physical frame.
-    fn dealloc_frame(paddr: PhysAddr) {
-        Self::dealloc_frames(paddr, 1)
-    }
-    /// Free `num` contiguous physical frames starting from the given physical
-    /// address. The `num` must be the same as that used in allocation.
-    fn dealloc_frames(paddr: PhysAddr, num: usize);
+    fn dealloc_frame(paddr: PhysAddr);
     /// Returns a virtual address that maps to the given physical address.
     ///
     /// Used to access the physical memory directly in page table
@@ -130,8 +109,6 @@ pub trait PagingHandler: Sized {
 pub enum PageSize {
     /// Size of 4 kilobytes (2<sup>12</sup> bytes).
     Size4K = 0x1000,
-    /// Size of 1 megabytes (2<sup>20</sup> bytes).
-    Size1M = 0x10_0000,
     /// Size of 2 megabytes (2<sup>21</sup> bytes).
     Size2M = 0x20_0000,
     /// Size of 1 gigabytes (2<sup>30</sup> bytes).
@@ -141,7 +118,7 @@ pub enum PageSize {
 impl PageSize {
     /// Whether this page size is considered huge (larger than 4K).
     pub const fn is_huge(self) -> bool {
-        matches!(self, Self::Size1G | Self::Size2M | Self::Size1M)
+        matches!(self, Self::Size1G | Self::Size2M)
     }
 
     /// Checks whether a given address or size is aligned to the page size.
@@ -160,13 +137,4 @@ impl From<PageSize> for usize {
     fn from(size: PageSize) -> usize {
         size as usize
     }
-}
-
-// TODO: tune threshold; employ a more advanced data structure
-const SMALL_FLUSH_THRESHOLD: usize = 32;
-
-enum TlbFlusher<M: PagingMetaData> {
-    None,
-    Array(ArrayVec<M::VirtAddr, SMALL_FLUSH_THRESHOLD>),
-    Full,
 }

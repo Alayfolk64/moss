@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.85"
 name = "page_table_entry"
-version = "0.6.1"
+version = "0.5.7"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -50,7 +50,6 @@ all-features = true
 
 [features]
 arm-el2 = []
-xuantie-c9xx = []
 
 [lib]
 name = "page_table_entry"
@@ -63,7 +62,7 @@ version = "2.9"
 version = "0.4"
 
 [target.'cfg(any(target_arch = "aarch64", doc, docsrs))'.dependencies.aarch64-cpu]
-version = "11.0"
+version = "10.0"
 
 [target.'cfg(any(target_arch = "x86_64", doc, docsrs))'.dependencies.x86_64]
 version = "0.15"

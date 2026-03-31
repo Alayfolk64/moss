@@ -5,10 +5,11 @@ export DWARF := y
 export MEMTRACK := n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
+export RUSTFLAGS ?= -Zcrate-attr=feature(unsigned_signed_diff)
 
 # QEMU Options
 export BLK := y
-export NET := y
+export NET := n
 export VSOCK := n
 export MEM := 1G
 export ICOUNT := n
@@ -71,7 +72,7 @@ kernel-la: toolchain
 
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
-	@$(MAKE) -C make run ARCH=riscv64 BLK=y NET=y BUS=mmio DISK_IMG=$(A)/sdcard-rv.img
+	@$(MAKE) -C make run ARCH=riscv64 BLK=y NET=n BUS=mmio DISK_IMG=$(A)/sdcard-rv.img
 
 ci-test:
 	./scripts/ci-test.py $(ARCH)

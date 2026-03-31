@@ -12,7 +12,7 @@ repository.workspace = true
 dev-log = []
 input = ["dep:axinput", "axfeat/input"]
 memtrack = ["axfeat/dwarf", "axalloc/tracking", "dep:gimli", "dep:axbacktrace"]
-vsock = ["axfeat/vsock"]
+net = []
 
 [dependencies]
 axfeat = { workspace = true, features = [
@@ -30,7 +30,7 @@ axfeat = { workspace = true, features = [
     "rtc",
 
     "fs",
-    "net",
+    "fs-fat",
 ] }
 
 axalloc.workspace = true
@@ -42,7 +42,6 @@ axhal.workspace = true
 axinput = { workspace = true, optional = true }
 axlog.workspace = true
 axmm.workspace = true
-axnet.workspace = true
 axruntime.workspace = true
 axsync.workspace = true
 axtask.workspace = true
@@ -73,7 +72,7 @@ kernel-elf-parser = "0.3.4"
 kspin = "0.1"
 lazy_static = { version = "1.5", features = ["spin_no_std"] }
 linkme = "0.3"
-linux-raw-sys = { version = "0.12", default-features = false, features = [
+linux-raw-sys = { version = "0.11", default-features = false, features = [
     "no_std",
     "general",
     "net",
@@ -95,9 +94,9 @@ slab = { version = "0.4.9", default-features = false }
 spin = "0.10"
 starry-process = "0.2"
 starry-signal = "0.2.4-preview.1"
-starry-vm = "0.2"
+starry-vm = "0.2.0"
 strum = { version = "0.28", default-features = false, features = ["derive"] }
-syscalls = { version = "0.6.18", default-features = false }
+syscalls = { git = "https://github.com/jasonwhite/syscalls.git", rev = "92624de", default-features = false }
 uluru = "3.1.0"
 weak-map = "0.1.1"
 xmas-elf = "0.9"
@@ -110,4 +109,4 @@ x86 = "0.52"
 riscv = "0.16"
 
 [target.'cfg(not(any(target_arch = "aarch64", target_arch = "loongarch64")))'.dependencies]
-page_table_multiarch = { version = "0.6", features = ["copy-from"] }
+page_table_multiarch = { version = "0.5", features = ["copy-from"] }

@@ -1,6 +1,6 @@
 macro_rules! include_asm_macros {
     () => {
-        r"
+        r#"
         .ifndef REGS_MACROS_FLAG
         .equ REGS_MACROS_FLAG, 1
 
@@ -24,9 +24,6 @@ macro_rules! include_asm_macros {
         .equ LA_CSR_DMW1,          0x181
 
         .equ KSAVE_KSP,            0x30
-        .equ KSAVE_TEMP,           0x31
-        .equ KSAVE_R21,            0x32
-        .equ KSAVE_TP,             0x33
 
         .macro STD rd, rj, off
             st.d   \rd, \rj, \off*8
@@ -37,6 +34,7 @@ macro_rules! include_asm_macros {
 
         .macro PUSH_POP_GENERAL_REGS, op
             \op    $ra, $sp, 1
+            \op    $tp, $sp, 2
             \op    $a0, $sp, 4
             \op    $a1, $sp, 5
             \op    $a2, $sp, 6
@@ -54,6 +52,7 @@ macro_rules! include_asm_macros {
             \op    $t6, $sp, 18
             \op    $t7, $sp, 19
             \op    $t8, $sp, 20
+            \op    $r21,$sp, 21
             \op    $fp, $sp, 22
             \op    $s0, $sp, 23
             \op    $s1, $sp, 24
@@ -73,7 +72,15 @@ macro_rules! include_asm_macros {
             PUSH_POP_GENERAL_REGS LDD
         .endm
 
-        .endif"
+        .macro _asm_extable, from, to
+            .pushsection __ex_table, "a"
+            .balign 8
+            .quad   \from
+            .quad   \to
+            .popsection
+        .endm
+
+        .endif"#
     };
 }
 

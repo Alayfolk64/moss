@@ -5,7 +5,7 @@ use axerrno::{AxError, AxResult};
 use axfs::FileBackend;
 use axhal::{
     mem::phys_to_virt,
-    paging::{MappingFlags, PageSize, PageTableCursor, PagingError},
+    paging::{MappingFlags, PageSize, PageTableMut, PagingError},
 };
 use axsync::Mutex;
 use kspin::SpinNoIrq;
@@ -94,7 +94,7 @@ impl CowBackend {
         &self,
         vaddr: VirtAddr,
         flags: MappingFlags,
-        pt: &mut PageTableCursor,
+        pt: &mut PageTableMut,
     ) -> AxResult {
         let frame = self.alloc_new_frame(true)?;
 
@@ -124,7 +124,7 @@ impl CowBackend {
         vaddr: VirtAddr,
         paddr: PhysAddr,
         flags: MappingFlags,
-        pt: &mut PageTableCursor,
+        pt: &mut PageTableMut,
     ) -> AxResult {
         let mut frame_table = FRAME_TABLE.lock();
         let frame = frame_table
@@ -167,13 +167,13 @@ impl BackendOps for CowBackend {
         &self,
         range: VirtAddrRange,
         flags: MappingFlags,
-        _pt: &mut PageTableCursor,
+        _pt: &mut PageTableMut,
     ) -> AxResult {
         debug!("Cow::map: {range:?} {flags:?}",);
         Ok(())
     }
 
-    fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableCursor) -> AxResult {
+    fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         debug!("Cow::unmap: {range:?}");
         for addr in pages_in(range, self.size)? {
             if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
@@ -196,7 +196,7 @@ impl BackendOps for CowBackend {
         range: VirtAddrRange,
         flags: MappingFlags,
         access_flags: MappingFlags,
-        pt: &mut PageTableCursor,
+        pt: &mut PageTableMut,
     ) -> AxResult<(usize, Option<PopulateCallback>)> {
         let mut pages = 0;
         for addr in pages_in(range, self.size)? {
@@ -227,8 +227,8 @@ impl BackendOps for CowBackend {
         &self,
         range: VirtAddrRange,
         flags: MappingFlags,
-        old_pt: &mut PageTableCursor,
-        new_pt: &mut PageTableCursor,
+        old_pt: &mut PageTableMut,
+        new_pt: &mut PageTableMut,
         _new_aspace: &Arc<Mutex<AddrSpace>>,
     ) -> AxResult<Backend> {
         let cow_flags = flags - MappingFlags::WRITE;

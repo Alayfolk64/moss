@@ -144,9 +144,9 @@ dependencies = [
 
 [[package]]
 name = "axconfig"
-version = "0.2.2-preview.2"
+version = "0.2.2-preview.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7a5153c560e46bc4a1142e0afdad7a2574fe9c1bce48d9c61f1e5302c1dcf8e"
+checksum = "5119974fb25183abb35d1529a9b9705adfe7aadb1b247f662b78231e917ebdd0"
 dependencies = [
  "axconfig-macros",
 ]
@@ -175,9 +175,9 @@ dependencies = [
 
 [[package]]
 name = "axcpu"
-version = "0.3.0-preview.3"
+version = "0.3.0-preview.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eeabf0939995cb9bcc17c8f7b49099eba7ce13fb811da1071186b584cad2656"
+checksum = "7ae799db1af6ed54d666c3a0f1ea5aa1ab01ff66dbda83f10c5462deb121cba4"
 dependencies = [
  "aarch64-cpu",
  "axbacktrace",
@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "axhal"
-version = "0.2.2-preview.6"
+version = "0.2.2-preview.4"
 dependencies = [
  "axalloc",
  "axconfig",

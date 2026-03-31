@@ -66,7 +66,7 @@ pub fn init(args: &[String], envs: &[String]) {
     }
 
     let thr = Thread::new(pid, proc);
-    *task.task_ext_mut() = Some(AxTaskExt::from_impl(thr));
+    *task.task_ext_mut() = Some(unsafe { AxTaskExt::from_impl(thr) });
 
     let task = spawn_task(task);
     add_task_to_table(&task);
