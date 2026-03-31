@@ -12,10 +12,10 @@
 [package]
 edition = "2024"
 name = "axbacktrace"
-version = "0.1.1"
+version = "0.1.0"
 authors = [
     "Mivik <mivikq@gmail.com>",
-    "朝倉水希 <asakuramizu111@gmail.com>",
+    "Asakura Mizu <asakuramizu111@gmail.com>",
 ]
 build = false
 autolib = false
@@ -49,8 +49,9 @@ name = "axbacktrace"
 path = "src/lib.rs"
 
 [dependencies.addr2line]
-version = "0.25.1"
+version = "0.25"
 features = [
+    "alloc",
     "cpp_demangle",
     "rustc-demangle",
 ]

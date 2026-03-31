@@ -47,7 +47,7 @@ axruntime.workspace = true
 axsync.workspace = true
 axtask.workspace = true
 
-axbacktrace = "=0.1.1"
+axbacktrace = "=0.1.0"
 axcpu.workspace = true
 axerrno = "0.2"
 axfs-ng-vfs = "0.1"
