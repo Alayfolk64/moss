@@ -11,7 +11,7 @@ use rdrive::{
 
 mod cache;
 mod intc;
-mod klib;
+pub mod klib;
 mod pci;
 
 #[cfg(feature = "block")]

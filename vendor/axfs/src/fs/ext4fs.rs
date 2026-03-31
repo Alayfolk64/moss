@@ -56,6 +56,13 @@ unsafe impl Sync for Ext4FileSystemPartition {}
 unsafe impl Send for Ext4FileSystemPartition {}
 
 impl Ext4FileSystem {
+    #[cfg(feature = "use-ramdisk")]
+    #[allow(dead_code)]
+    pub fn new(mut disk: Disk) -> Self {
+        unimplemented!()
+    }
+
+    #[cfg(not(feature = "use-ramdisk"))]
     #[allow(dead_code)]
     pub fn new(disk: Disk) -> Self {
         info!(

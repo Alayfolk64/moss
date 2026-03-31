@@ -11,7 +11,7 @@ repository.workspace = true
 [features]
 dev-log = []
 input = ["dep:axinput", "axfeat/input"]
-memtrack = ["axfeat/dwarf", "axalloc/tracking", "dep:gimli"]
+memtrack = ["axfeat/dwarf", "axalloc/tracking", "dep:gimli", "dep:axbacktrace"]
 vsock = ["axfeat/vsock"]
 
 [dependencies]
@@ -47,7 +47,7 @@ axruntime.workspace = true
 axsync.workspace = true
 axtask.workspace = true
 
-axbacktrace = "=0.1.0"
+axbacktrace = { version = "0.1.1", optional = true }
 axcpu.workspace = true
 axerrno = "0.2"
 axfs-ng-vfs = "0.1"
@@ -97,7 +97,7 @@ starry-process = "0.2"
 starry-signal = "0.2.4-preview.1"
 starry-vm = "0.2"
 strum = { version = "0.28", default-features = false, features = ["derive"] }
-syscalls = { version = "0.8", default-features = false }
+syscalls = { version = "0.6.18", default-features = false }
 uluru = "3.1.0"
 weak-map = "0.1.1"
 xmas-elf = "0.9"

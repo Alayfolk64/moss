@@ -1,23 +1,18 @@
 //! Structures and functions for user space.
 
-use core::ops::{Deref, DerefMut};
-
-use loongArch64::register::{
-    badi, badv,
-    estat::{self, Exception, Trap},
-};
 use memory_addr::VirtAddr;
 
-use crate::{trap::PageFaultFlags, TrapFrame};
-
-pub use crate::uspace_common::{ExceptionKind, ReturnReason};
+use crate::TrapFrame;
 
 /// Context to enter user space.
-#[derive(Debug, Clone, Copy)]
-#[repr(C)]
-pub struct UserContext(TrapFrame);
+pub struct UspaceContext(TrapFrame);
 
-impl UserContext {
+impl UspaceContext {
+    /// Creates an empty context with all registers set to zero.
+    pub fn empty() -> Self {
+        Self(Default::default())
+    }
+
     /// Creates a new context with the given entry point, user stack pointer,
     /// and the argument.
     pub fn new(entry: usize, ustack_top: VirtAddr, arg0: usize) -> Self {
@@ -31,90 +26,73 @@ impl UserContext {
         Self(trap_frame)
     }
 
-    /// Enter user space.
+    /// Creates a new context from the given [`TrapFrame`].
+    pub const fn from(trap_frame: &TrapFrame) -> Self {
+        Self(*trap_frame)
+    }
+
+    /// Gets the instruction pointer.
+    pub const fn get_ip(&self) -> usize {
+        self.0.era
+    }
+
+    /// Gets the stack pointer.
+    pub const fn get_sp(&self) -> usize {
+        self.0.regs.sp
+    }
+
+    /// Sets the instruction pointer.
+    pub const fn set_ip(&mut self, pc: usize) {
+        self.0.era = pc;
+    }
+
+    /// Sets the stack pointer.
+    pub const fn set_sp(&mut self, sp: usize) {
+        self.0.regs.sp = sp;
+    }
+
+    /// Sets the return value register.
+    pub const fn set_retval(&mut self, a0: usize) {
+        self.0.regs.a0 = a0;
+    }
+
+    /// Enters user space.
     ///
     /// It restores the user registers and jumps to the user entry point
-    /// (saved in `sepc`).
+    /// (saved in `era`).
+    /// When an exception or syscall occurs, the kernel stack pointer is
+    /// switched to `kstack_top`.
     ///
-    /// This function returns when an exception or syscall occurs.
-    pub fn run(&mut self) -> ReturnReason {
-        extern "C" {
-            fn enter_user(uctx: &mut UserContext);
-        }
+    /// # Safety
+    ///
+    /// This function is unsafe because it changes processor mode and the stack.
+    pub unsafe fn enter_uspace(&self, kstack_top: VirtAddr) -> ! {
+        use loongArch64::register::era;
 
         crate::asm::disable_irqs();
-        unsafe { enter_user(self) };
+        era::set_pc(self.get_ip());
 
-        let estat = estat::read();
-        let badv = badv::read().vaddr();
-        let badi = badi::read().inst();
+        unsafe {
+            core::arch::asm!(
+                include_asm_macros!(),
+                "
+                move      $sp, {tf}
+                csrwr     $tp,  KSAVE_TP
+                csrwr     $r21, KSAVE_R21
+                LDD       $tp,  $sp, 32
+                csrwr     $tp,  LA_CSR_PRMD
+                csrwr     {kstack_top}, KSAVE_KSP // save ksp into SAVE0 CSR
 
-        let ret = match estat.cause() {
-            Trap::Interrupt(_) => {
-                let irq_num: usize = estat.is().trailing_zeros() as usize;
-                handle_trap!(IRQ, irq_num);
-                ReturnReason::Interrupt
-            }
-            Trap::Exception(Exception::Syscall) => {
-                self.era += 4;
-                ReturnReason::Syscall
-            }
-            Trap::Exception(Exception::LoadPageFault)
-            | Trap::Exception(Exception::PageNonReadableFault) => {
-                ReturnReason::PageFault(va!(badv), PageFaultFlags::READ | PageFaultFlags::USER)
-            }
-            Trap::Exception(Exception::StorePageFault)
-            | Trap::Exception(Exception::PageModifyFault) => {
-                ReturnReason::PageFault(va!(badv), PageFaultFlags::WRITE | PageFaultFlags::USER)
-            }
-            Trap::Exception(Exception::FetchPageFault)
-            | Trap::Exception(Exception::PageNonExecutableFault) => {
-                ReturnReason::PageFault(va!(badv), PageFaultFlags::EXECUTE | PageFaultFlags::USER)
-            }
-            Trap::Exception(e) => ReturnReason::Exception(ExceptionInfo { e, badv, badi }),
-            _ => ReturnReason::Unknown,
-        };
+                POP_GENERAL_REGS
 
-        crate::asm::enable_irqs();
-        ret
-    }
-}
-
-impl Deref for UserContext {
-    type Target = TrapFrame;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for UserContext {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Information about an exception that occurred in user space.
-#[derive(Debug, Clone, Copy)]
-pub struct ExceptionInfo {
-    /// The raw exception.
-    pub e: Exception,
-    /// The faulting address (from `badv`).
-    pub badv: usize,
-    /// The instruction causing the fault (from `badi`).
-    pub badi: u32,
-}
-
-impl ExceptionInfo {
-    /// Returns a generalized kind of this exception.
-    pub fn kind(&self) -> ExceptionKind {
-        match self.e {
-            Exception::Breakpoint => ExceptionKind::Breakpoint,
-            Exception::InstructionNotExist | Exception::InstructionPrivilegeIllegal => {
-                ExceptionKind::IllegalInstruction
-            }
-            Exception::AddressNotAligned => ExceptionKind::Misaligned,
-            _ => ExceptionKind::Other,
+                LDD      $tp,   $sp, 2
+                LDD      $r21,  $sp, 21
+                LDD      $sp,   $sp, 3       // user sp
+                ertn",
+                tf = in (reg) &self.0,
+                kstack_top = in(reg) kstack_top.as_usize(),
+                options(noreturn),
+            )
         }
     }
 }

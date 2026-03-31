@@ -18,7 +18,7 @@
 //! filesystem types on each partition.
 
 use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
-use axerrno::{AxError, AxResult};
+use axerrno::{AxResult, ax_err};
 use axfs_vfs::VfsOps;
 use log::{debug, info, warn};
 
@@ -139,12 +139,12 @@ fn parse_gpt_partitions(disk: &mut Disk) -> AxResult<Vec<PartitionInfo>> {
     let mut header_data = [0u8; 512];
     disk.set_position(512); // LBA 1
     if read_exact(disk, &mut header_data).is_err() {
-        return Err(AxError::InvalidData);
+        return ax_err!(InvalidData, "Failed to read GPT header");
     }
 
     // Check GPT signature
     if &header_data[0..8] != b"EFI PART" {
-        return Err(AxError::InvalidData);
+        return ax_err!(InvalidData, "Invalid GPT signature");
     }
 
     // Parse GPT header manually to avoid size mismatch
@@ -415,27 +415,19 @@ pub fn create_filesystem_for_partition(
             Ok(Arc::new(fs))
         }
         Some(FilesystemType::Ext4) => {
-            #[cfg(feature = "ext4")]
-            {
-                info!(
-                    "Creating ext4 filesystem for partition '{}'",
-                    partition.name
-                );
-                // Create a partition wrapper
-                let partition_wrapper =
-                    crate::dev::Partition::new(disk, partition.starting_lba, partition.ending_lba);
-                let fs = crate::fs::ext4fs::Ext4FileSystem::from_partition(partition_wrapper);
-                Ok(Arc::new(fs))
-            }
-            #[cfg(not(feature = "ext4"))]
-            {
-                warn!("ext4 support is not enabled for partition '{}'", partition.name);
-                Err(AxError::Unsupported)
-            }
+            info!(
+                "Creating ext4 filesystem for partition '{}'",
+                partition.name
+            );
+            // Create a partition wrapper
+            let partition_wrapper =
+                crate::dev::Partition::new(disk, partition.starting_lba, partition.ending_lba);
+            let fs = crate::fs::ext4fs::Ext4FileSystem::from_partition(partition_wrapper);
+            Ok(Arc::new(fs))
         }
         Some(FilesystemType::Unknown) | None => {
             warn!("Unknown filesystem type for partition '{}'", partition.name);
-            Err(AxError::Unsupported)
+            ax_err!(Unsupported, "Unknown filesystem type")
         }
     }
 }

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axruntime"
-version = "0.2.2-hv.5"
+version = "0.2.2-preview.2"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -26,51 +26,46 @@ documentation = "https://arceos-org.github.io/arceos/axruntime/index.html"
 readme = false
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axruntime"
+resolver = "2"
 
 [features]
-alloc = ["axalloc"]
+alloc = ["dep:axalloc"]
 default = []
 display = [
-    "axdriver",
-    "axdisplay",
+    "dep:axdriver",
+    "dep:axdisplay",
 ]
-dma = ["paging"]
+dma = [
+    "paging",
+    "dep:axdma",
+]
 driver-dyn = [
     "axdriver/dyn",
     "paging",
 ]
 fs = [
-    "axdriver",
-    "axfs",
+    "dep:axdriver",
+    "dep:axfs",
+    "axmm?/fs",
 ]
-hv = ["axalloc/hv"]
 input = [
-    "axdriver",
-    "axinput",
+    "dep:axdriver",
+    "dep:axinput",
 ]
 ipi = ["dep:axipi"]
 irq = [
     "axhal/irq",
     "axtask?/irq",
-    "percpu",
+    "dep:percpu",
 ]
 multitask = ["axtask/multitask"]
 net = [
-    "axdriver",
-    "axnet",
+    "dep:axdriver",
+    "dep:axnet",
 ]
 paging = [
     "axhal/paging",
-    "axmm",
-]
-plat-hv-aarch64 = [
-    "dep:axplat-dyn",
-    "dep:somehal",
-    "axconfig/driver-dyn",
-]
-plat-hv-x86_64 = [
-    "dep:axplat-x86-qemu-q35",
-    "axconfig/driver-dyn",
+    "dep:axmm",
 ]
 rtc = []
 smp = [
@@ -83,7 +78,7 @@ tls = [
 ]
 vsock = [
     "net",
-    "axdriver",
+    "dep:axdriver",
 ]
 
 [lib]
@@ -91,68 +86,66 @@ name = "axruntime"
 path = "src/lib.rs"
 
 [dependencies.axalloc]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axbacktrace]
 version = "0.1"
 
 [dependencies.axconfig]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [dependencies.axdisplay]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
+optional = true
+
+[dependencies.axdma]
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axdriver]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
-[dependencies.axerrno]
-version = "0.2"
-
 [dependencies.axfs]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axhal]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.4"
 
 [dependencies.axinput]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axipi]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.2"
 optional = true
 
 [dependencies.axlog]
-version = "=0.2.2-preview.1"
+version = "0.2.2-preview.1"
 
 [dependencies.axmm]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axnet]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axplat]
 version = ">=0.3.0-preview.2, <0.3.0"
 
 [dependencies.axtask]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.3"
 optional = true
 
-[dependencies.cfg-if]
-version = "1.0"
-
 [dependencies.chrono]
-version = "0.4.38"
+version = "0.4"
 default-features = false
 
 [dependencies.crate_interface]
-version = "0.1"
+version = "0.1.4"
 
 [dependencies.ctor_bare]
 version = "0.2"
@@ -160,32 +153,6 @@ version = "0.2"
 [dependencies.indoc]
 version = "2"
 
-[dependencies.log]
-version = "0.4"
-
 [dependencies.percpu]
 version = "0.2"
 optional = true
-
-[target.'cfg(target_arch = "aarch64")'.dependencies.axplat-dyn]
-version = "0.4"
-features = [
-    "irq",
-    "smp",
-    "hv",
-]
-optional = true
-
-[target.'cfg(target_arch = "aarch64")'.dependencies.somehal]
-version = "0.4"
-optional = true
-
-[target.'cfg(target_arch = "x86_64")'.dependencies.axplat-x86-qemu-q35]
-version = "0.1.0-preview.1"
-features = [
-    "reboot-on-system-off",
-    "smp",
-    "irq",
-]
-optional = true
-default-features = false

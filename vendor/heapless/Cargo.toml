@@ -11,8 +11,9 @@
 
 [package]
 edition = "2021"
+rust-version = "1.87"
 name = "heapless"
-version = "0.9.1"
+version = "0.9.2"
 authors = [
     "Jorge Aparicio <jorge@japaric.io>",
     "Per Lindgren <per.lindgren@ltu.se>",
@@ -48,16 +49,17 @@ features = [
     "portable-atomic-critical-section",
     "alloc",
 ]
+targets = ["i686-unknown-linux-gnu"]
 rustdoc-args = [
     "--cfg",
     "docsrs",
 ]
-targets = ["i686-unknown-linux-gnu"]
 
 [features]
 alloc = []
 bytes = ["dep:bytes"]
 defmt = ["dep:defmt"]
+"embedded-io-v0.7" = ["dep:embedded-io"]
 mpmc_large = []
 nightly = []
 portable-atomic = ["dep:portable-atomic"]
@@ -71,11 +73,12 @@ portable-atomic-unsafe-assume-single-core = [
     "portable-atomic",
     "portable-atomic?/unsafe-assume-single-core",
 ]
-serde = ["dep:serde"]
+serde = ["dep:serde_core"]
 ufmt = [
     "dep:ufmt",
     "dep:ufmt-write",
 ]
+zeroize = ["dep:zeroize"]
 
 [lib]
 name = "heapless"
@@ -98,6 +101,10 @@ default-features = false
 version = "1.0.1"
 optional = true
 
+[dependencies.embedded-io]
+version = "0.7"
+optional = true
+
 [dependencies.hash32]
 version = "0.3.0"
 
@@ -105,7 +112,7 @@ version = "0.3.0"
 version = "1.0"
 optional = true
 
-[dependencies.serde]
+[dependencies.serde_core]
 version = "1"
 optional = true
 default-features = false
@@ -117,6 +124,12 @@ optional = true
 [dependencies.ufmt-write]
 version = "0.1"
 optional = true
+
+[dependencies.zeroize]
+version = "1.8"
+features = ["derive"]
+optional = true
+default-features = false
 
 [dev-dependencies.critical-section]
 version = "1.1"

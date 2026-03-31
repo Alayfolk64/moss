@@ -12,17 +12,11 @@
 [package]
 edition = "2021"
 name = "syscalls"
-version = "0.8.1"
+version = "0.6.18"
 authors = [
     "Jason White <rust@jasonwhite.io>",
     "Baojun Wang <wangbj@gmail.com>",
 ]
-build = "build.rs"
-autolib = false
-autobins = false
-autoexamples = false
-autotests = false
-autobenches = false
 description = """
 A list of Linux system calls.
 """
@@ -43,12 +37,27 @@ rustdoc-args = [
     "doc_cfg",
 ]
 
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = true
+default-features = false
+
+[dependencies.serde_repr]
+version = "0.1"
+optional = true
+
+[dev-dependencies.libc]
+version = "0.2"
+
+[dev-dependencies.serde_json]
+version = "1"
+
 [features]
 aarch64 = []
 all = [
     "aarch64",
     "arm",
-    "loongarch64",
     "mips",
     "mips64",
     "powerpc",
@@ -71,7 +80,6 @@ full = [
     "serde",
     "all",
 ]
-loongarch64 = []
 mips = []
 mips64 = []
 powerpc = []
@@ -86,34 +94,9 @@ serde = [
 sparc = []
 sparc64 = []
 std = []
-thumb-mode = []
 with-serde = [
     "serde",
     "serde_repr",
 ]
 x86 = []
 x86_64 = []
-
-[lib]
-name = "syscalls"
-path = "src/lib.rs"
-
-[[test]]
-name = "test_syscall"
-path = "tests/test_syscall.rs"
-
-[dependencies.serde]
-version = "1.0"
-features = ["derive"]
-optional = true
-default-features = false
-
-[dependencies.serde_repr]
-version = "0.1"
-optional = true
-
-[dev-dependencies.libc]
-version = "0.2"
-
-[dev-dependencies.serde_json]
-version = "1"

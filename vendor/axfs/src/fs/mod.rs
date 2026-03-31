@@ -12,13 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Filesystem implementations
-
-#[cfg(feature = "ext4")]
 pub mod ext4fs;
-
 pub mod fatfs;
-
-pub use axfs_devfs as devfs;
 
 pub use axfs_ramfs as ramfs;

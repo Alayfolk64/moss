@@ -3,6 +3,8 @@ export ARCH := riscv64
 export LOG := warn
 export DWARF := y
 export MEMTRACK := n
+export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
+RUSTUP ?= rustup
 
 # QEMU Options
 export BLK := y
@@ -24,6 +26,9 @@ endif
 
 default: build
 
+toolchain:
+	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
+
 KERNEL_NAME := $(notdir $(A))
 
 ROOTFS_URL = https://github.com/Starry-OS/rootfs/releases/download/20260214
@@ -41,7 +46,7 @@ img:
 	@echo -e "\033[33mWARN: The 'img' target is deprecated. Please use 'rootfs' instead.\033[0m"
 	@$(MAKE) --no-print-directory rootfs
 
-defconfig justrun:
+defconfig justrun: toolchain
 	@$(MAKE) -C make $@
 
 makeclean:
@@ -51,16 +56,16 @@ makeclean:
 clean: makeclean
 	@:
 
-build run debug disasm: defconfig
+build run debug disasm: toolchain defconfig
 	@$(MAKE) -C make $@
 
 all: kernel-rv kernel-la
 
-kernel-rv:
+kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv
 
-kernel-la:
+kernel-la: toolchain
 	$(MAKE) ARCH=loongarch64 build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la
 
@@ -81,4 +86,4 @@ la:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain

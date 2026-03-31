@@ -12,59 +12,37 @@
 [package]
 edition = "2024"
 name = "axfs"
-version = "0.2.2-hv.5"
-authors = ["Mivik <mivikq@gmail.com>"]
+version = "0.2.2-preview.2"
+authors = [
+    "Keyang Hu <keyang.hu@qq.com>",
+    "周睿 <zrufo747@outlook.com>",
+]
 build = false
 autolib = false
 autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "ArceOS filesystem module"
-homepage = "https://github.com/arceos-org/arceos"
+description = "Axvisor filesystem module"
 readme = false
-license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
+license = "Apache-2.0"
+repository = "https://github.com/arceos-hypervisor/axvisor"
 
 [features]
-default = []
-ext4 = ["dep:lwext4_rust"]
-fat = ["dep:fatfs"]
-monolitic = []
-std = ["lwext4_rust?/std"]
-times = []
 use-ramdisk = []
 
 [lib]
 name = "axfs"
 path = "src/lib.rs"
 
-[dependencies.axalloc]
-version = "=0.2.2-hv.5"
-
 [dependencies.axdriver]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.2"
 features = ["block"]
 
 [dependencies.axdriver_block]
 version = "0.1.4-preview.3"
 
 [dependencies.axerrno]
-version = "0.2"
-
-[dependencies.axfatfs]
-version = "0.1.0-pre.0"
-features = [
-    "alloc",
-    "lfn",
-    "log_level_trace",
-    "unicode",
-]
-default-features = false
-
-[dependencies.axfs-ng-vfs]
-version = "0.1"
-
-[dependencies.axfs_devfs]
 version = "0.1"
 
 [dependencies.axfs_ramfs]
@@ -73,31 +51,12 @@ version = "0.1"
 [dependencies.axfs_vfs]
 version = "0.1"
 
-[dependencies.axhal]
-version = "=0.2.2-hv.5"
-
 [dependencies.axio]
-version = "0.3.0-pre.1"
+version = "0.2"
 features = ["alloc"]
-
-[dependencies.axpoll]
-version = "0.1"
-
-[dependencies.axsync]
-version = "=0.2.2-hv.5"
-
-[dependencies.bitflags]
-version = "2.10"
 
 [dependencies.cap_access]
 version = "0.1"
-
-[dependencies.cfg-if]
-version = "1.0"
-
-[dependencies.chrono]
-version = "0.4"
-default-features = false
 
 [dependencies.fatfs]
 version = "0.4.1-preview.2"
@@ -107,15 +66,8 @@ features = [
     "log_level_trace",
     "unicode",
 ]
-optional = true
 default-features = false
 package = "starry-fatfs"
-
-[dependencies.intrusive-collections]
-version = "0.9.7"
-
-[dependencies.kspin]
-version = "0.1"
 
 [dependencies.lazyinit]
 version = "0.2"
@@ -123,29 +75,14 @@ version = "0.2"
 [dependencies.log]
 version = "0.4"
 
-[dependencies.lru]
-version = "0.16.0"
-
-[dependencies.lwext4_rust]
-version = "0.3.1-preview.1"
-optional = true
-default-features = false
-
 [dependencies.rsext4]
 version = "0.1.0-pre.0"
 
-[dependencies.scope-local]
-version = "0.1"
-
-[dependencies.slab]
-version = "0.4.9"
-default-features = false
-
 [dependencies.spin]
-version = "0.10"
+version = "0.9"
 
 [dev-dependencies.axdriver]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.2"
 features = [
     "block",
     "ramdisk",
@@ -154,6 +91,3 @@ features = [
 [dev-dependencies.axdriver_block]
 version = "0.1.4-preview.3"
 features = ["ramdisk"]
-
-[dev-dependencies.env_logger]
-version = "0.11.8"

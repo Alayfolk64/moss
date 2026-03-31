@@ -172,8 +172,8 @@ syscall_enum! {
         fsync = 82,
         /// See [fdatasync(2)](https://man7.org/linux/man-pages/man2/fdatasync.2.html) for more info on this syscall.
         fdatasync = 83,
-        /// See [sync_file_range(2)](https://man7.org/linux/man-pages/man2/sync_file_range.2.html) for more info on this syscall.
-        sync_file_range = 84,
+        /// See [sync_file_range2(2)](https://man7.org/linux/man-pages/man2/sync_file_range2.2.html) for more info on this syscall.
+        sync_file_range2 = 84,
         /// See [timerfd_create(2)](https://man7.org/linux/man-pages/man2/timerfd_create.2.html) for more info on this syscall.
         timerfd_create = 85,
         /// See [timerfd_settime(2)](https://man7.org/linux/man-pages/man2/timerfd_settime.2.html) for more info on this syscall.
@@ -678,22 +678,6 @@ syscall_enum! {
         lsm_set_self_attr = 460,
         /// See [lsm_list_modules(2)](https://man7.org/linux/man-pages/man2/lsm_list_modules.2.html) for more info on this syscall.
         lsm_list_modules = 461,
-        /// See [mseal(2)](https://man7.org/linux/man-pages/man2/mseal.2.html) for more info on this syscall.
-        mseal = 462,
-        /// See [setxattrat(2)](https://man7.org/linux/man-pages/man2/setxattrat.2.html) for more info on this syscall.
-        setxattrat = 463,
-        /// See [getxattrat(2)](https://man7.org/linux/man-pages/man2/getxattrat.2.html) for more info on this syscall.
-        getxattrat = 464,
-        /// See [listxattrat(2)](https://man7.org/linux/man-pages/man2/listxattrat.2.html) for more info on this syscall.
-        listxattrat = 465,
-        /// See [removexattrat(2)](https://man7.org/linux/man-pages/man2/removexattrat.2.html) for more info on this syscall.
-        removexattrat = 466,
-        /// See [open_tree_attr(2)](https://man7.org/linux/man-pages/man2/open_tree_attr.2.html) for more info on this syscall.
-        open_tree_attr = 467,
-        /// See [file_getattr(2)](https://man7.org/linux/man-pages/man2/file_getattr.2.html) for more info on this syscall.
-        file_getattr = 468,
-        /// See [file_setattr(2)](https://man7.org/linux/man-pages/man2/file_setattr.2.html) for more info on this syscall.
-        file_setattr = 469,
     }
-    LAST: file_setattr;
+    LAST: lsm_list_modules;
 }

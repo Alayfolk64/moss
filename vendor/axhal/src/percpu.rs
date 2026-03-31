@@ -1,6 +1,28 @@
 //! CPU-local data structures.
 
+// Re-export platform percpu items only when a real platform is selected.
+// The `percpu` module in `axplat` is only available in newer (unpublished) versions;
+// the crates.io 0.3.0 release does not have it.
+#[cfg(any(feature = "defplat", feature = "myplat"))]
 pub use axplat::percpu::*;
+
+/// Stub for single-CPU / dummy platform when not using defplat/myplat (e.g. for crates that
+/// depend on axhal without a real platform, such as when building axipi for publish verification).
+#[cfg(not(any(feature = "defplat", feature = "myplat")))]
+#[inline]
+pub fn this_cpu_id() -> usize {
+    0
+}
+
+/// Stub: initializes percpu for the primary CPU (no-op without a real platform).
+#[cfg(not(any(feature = "defplat", feature = "myplat")))]
+#[inline]
+pub fn init_primary(_cpu_id: usize) {}
+
+/// Stub: initializes percpu for a secondary CPU (no-op without a real platform).
+#[cfg(not(any(feature = "defplat", feature = "myplat")))]
+#[inline]
+pub fn init_secondary(_cpu_id: usize) {}
 
 #[percpu::def_percpu]
 static CURRENT_TASK_PTR: usize = 0;

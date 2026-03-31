@@ -92,23 +92,6 @@
             )
         )
     ),
-    doc = "- [`Arc`][pool::arc::Arc]: Like `std::sync::Arc` but backed by a lock-free memory pool rather than `[global_allocator]`."
-)]
-#![cfg_attr(
-    any(
-        arm_llsc,
-        all(
-            target_pointer_width = "32",
-            any(target_has_atomic = "64", feature = "portable-atomic")
-        ),
-        all(
-            target_pointer_width = "64",
-            any(
-                all(target_has_atomic = "128", feature = "nightly"),
-                feature = "portable-atomic"
-            )
-        )
-    ),
     doc = "- [`Object`](pool::object::Object): Objects managed by an object pool."
 )]
 //! - [`BinaryHeap`]: A priority queue.
@@ -123,6 +106,16 @@
 //! - [`mpmc::MpMcQueue`](mpmc): A lock-free multiple-producer, multiple-consumer queue.
 //! - [`spsc::Queue`](spsc): A lock-free single-producer, single-consumer queue.
 //!
+//! # Zeroize Support
+//!
+//! The `zeroize` feature enables secure memory wiping for the data structures via the [`zeroize`](https://crates.io/crates/zeroize)
+//! crate. Sensitive data can be properly erased from memory when no longer needed.
+//!
+//! When zeroizing a container, all underlying memory (including unused portion of the containers)
+//! is overwritten with zeros, length counters are reset, and the container is left in a valid but
+//! empty state that can be reused.
+//!
+//! Check the [documentation of the zeroize crate](https://docs.rs/zeroize/) for more information.
 //! # Minimum Supported Rust Version (MSRV)
 //!
 //! This crate does *not* have a Minimum Supported Rust Version (MSRV) and may make use of language
@@ -130,7 +123,7 @@
 //!
 //! In other words, changes in the Rust version requirement of this crate are not considered semver
 //! breaking change and may occur in patch version releases.
-#![cfg_attr(docsrs, feature(doc_cfg), feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(not(test), no_std)]
 #![deny(missing_docs)]
 #![cfg_attr(
@@ -237,6 +230,9 @@ pub mod spsc;
 #[cfg(feature = "ufmt")]
 mod ufmt;
 
+#[cfg(feature = "embedded-io-v0.7")]
+mod embedded_io;
+
 /// Implementation details for macros.
 /// Do not use. Used for macros only. Not covered by semver guarantees.
 #[doc(hidden)]
@@ -245,7 +241,7 @@ pub mod _export {
 }
 
 /// The error type for fallible [`Vec`] and [`String`] methods.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct CapacityError;
 

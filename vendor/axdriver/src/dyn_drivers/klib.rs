@@ -12,29 +12,24 @@
 
 use core::time::Duration;
 
-use axerrno::AxErrorKind;
 use axklib::{AxResult, IrqHandler, Klib, PhysAddr, VirtAddr, impl_trait};
+use crate_interface::call_interface;
+
+/// Extern interface for IO memory mapping, implemented in axruntime.
+#[crate_interface::def_interface]
+pub trait IoMapIf {
+    /// Map a physical memory region for IO access.
+    fn iomap(paddr: PhysAddr, size: usize) -> AxResult<VirtAddr>;
+}
 
 struct KlibImpl;
 
 impl_trait! {
     impl Klib for KlibImpl {
-        /// Map a physical region by delegating to the memory manager (`axmm`).
-        ///
-        /// This function forwards the request to `axmm::iomap` and returns the
-        /// resulting virtual address wrapped in an `AxResult`.
+        /// Map a physical region by delegating to the memory manager via
+        /// the `IoMapIf` interface.
         fn mem_iomap(addr: PhysAddr, size: usize) -> AxResult<VirtAddr> {
-            // Convert from AxError (struct in axerrno 0.2) to AxErrorKind (enum used by axklib)
-            axmm::iomap(addr, size).map_err(|e| match AxErrorKind::try_from(e) {
-                Ok(kind) => kind,
-                Err(linux_err) => {
-                    // Convert LinuxError to AxErrorKind
-                    match AxErrorKind::try_from(linux_err) {
-                        Ok(kind) => kind,
-                        Err(_) => AxErrorKind::Io,
-                    }
-                }
-            })
+            call_interface!(IoMapIf::iomap(addr, size))
         }
 
         /// Busy-wait for the given duration by calling into `axhal`.

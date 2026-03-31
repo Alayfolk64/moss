@@ -46,6 +46,8 @@ LOG ?= warn
 V ?=
 DWARF ?=
 LTO ?=
+export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
+RUSTUP ?= rustup
 TARGET_DIR ?= $(PWD)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?= $(PWD)/.axconfig.toml
@@ -130,6 +132,7 @@ export AX_LOG=$(LOG)
 export AX_TARGET=$(TARGET)
 export AX_IP=$(IP)
 export AX_GW=$(GW)
+export RUSTUP_TOOLCHAIN
 
 ifneq ($(filter $(MAKECMDGOALS),unittest unittest_no_fail_fast clippy doc doc_check_missing),)
   # When running unit tests or other tests unrelated to a specific platform,
@@ -166,17 +169,20 @@ endif
 
 all: build
 
+ensure_toolchain:
+	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
+
 include utils.mk
 include build.mk
 include qemu.mk
 
-defconfig:
+defconfig: ensure_toolchain
 	$(call defconfig)
 
-oldconfig:
+oldconfig: ensure_toolchain
 	$(call oldconfig)
 
-build: $(OUT_DIR) $(FINAL_IMG)
+build: ensure_toolchain $(OUT_DIR) $(FINAL_IMG)
 
 disasm:
 	$(OBJDUMP) $(OUT_ELF) | less
@@ -213,7 +219,7 @@ makeclean: clean_c
 
 clean: makeclean
 
-.PHONY: all defconfig oldconfig \
+.PHONY: all defconfig oldconfig ensure_toolchain \
 	build disasm run justrun debug \
 	clippy doc doc_check_missing fmt fmt_c unittest unittest_no_fail_fast \
 	disk_img clean makeclean

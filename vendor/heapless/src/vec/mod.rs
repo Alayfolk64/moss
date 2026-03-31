@@ -1,18 +1,24 @@
 //! A fixed capacity [`Vec`](https://doc.rust-lang.org/std/vec/struct.Vec.html).
 
-use core::borrow;
-use core::marker::PhantomData;
 use core::{
+    borrow,
     cmp::Ordering,
     fmt, hash,
+    iter::FusedIterator,
+    marker::PhantomData,
     mem::{self, ManuallyDrop, MaybeUninit},
     ops::{self, Range, RangeBounds},
     ptr::{self, NonNull},
     slice,
 };
 
-use crate::len_type::{check_capacity_fits, LenType};
-use crate::CapacityError;
+#[cfg(feature = "zeroize")]
+use zeroize::Zeroize;
+
+use crate::{
+    len_type::{check_capacity_fits, LenType},
+    CapacityError,
+};
 
 mod drain;
 
@@ -31,7 +37,8 @@ mod storage {
     ///
     /// There's two implementations available:
     ///
-    /// - [`OwnedVecStorage`]: stores the data in an array `[T; N]` whose size is known at compile time.
+    /// - [`OwnedVecStorage`]: stores the data in an array `[T; N]` whose size is known at compile
+    ///   time.
     /// - [`ViewVecStorage`]: stores the data in an unsized `[T]`.
     ///
     /// This allows [`Vec`] to be generic over either sized or unsized storage. The [`vec`](super)
@@ -41,8 +48,10 @@ mod storage {
     /// - [`Vec<T, N>`](crate::vec::Vec) = `VecInner<T, OwnedStorage<T, N>>`
     /// - [`VecView<T>`](crate::vec::VecView) = `VecInner<T, ViewStorage<T>>`
     ///
-    /// `Vec` can be unsized into `VecView`, either by unsizing coercions such as `&mut Vec -> &mut VecView` or
-    /// `Box<Vec> -> Box<VecView>`, or explicitly with [`.as_view()`](crate::vec::Vec::as_view) or [`.as_mut_view()`](crate::vec::Vec::as_mut_view).
+    /// `Vec` can be unsized into `VecView`, either by unsizing coercions such as `&mut Vec -> &mut
+    /// VecView` or `Box<Vec> -> Box<VecView>`, or explicitly with
+    /// [`.as_view()`](crate::vec::Vec::as_view) or
+    /// [`.as_mut_view()`](crate::vec::Vec::as_mut_view).
     ///
     /// This trait is sealed, so you cannot implement it for your own types. You can only use
     /// the implementations provided by this crate.
@@ -54,7 +63,8 @@ mod storage {
     pub trait VecStorage<T>: VecSealedStorage<T> {}
 
     pub trait VecSealedStorage<T> {
-        // part of the sealed trait so that no trait is publicly implemented by `OwnedVecStorage` besides `Storage`
+        // part of the sealed trait so that no trait is publicly implemented by `OwnedVecStorage`
+        // besides `Storage`
         fn borrow(&self) -> &[MaybeUninit<T>];
         fn borrow_mut(&mut self) -> &mut [MaybeUninit<T>];
 
@@ -84,12 +94,17 @@ mod storage {
             Self: VecStorage<T>;
     }
 
+    #[cfg(feature = "zeroize")]
+    use zeroize::Zeroize;
+
     // One sealed layer of indirection to hide the internal details (The MaybeUninit).
+    #[cfg_attr(feature = "zeroize", derive(Zeroize))]
     pub struct VecStorageInner<T: ?Sized> {
         pub(crate) buffer: T,
     }
 
-    /// Implementation of [`VecStorage`] that stores the data in an array `[T; N]` whose size is known at compile time.
+    /// Implementation of [`VecStorage`] that stores the data in an array `[T; N]` whose size is
+    /// known at compile time.
     pub type OwnedVecStorage<T, const N: usize> = VecStorageInner<[MaybeUninit<T>; N]>;
     /// Implementation of [`VecStorage`] that stores the data in an unsized `[T]`.
     pub type ViewVecStorage<T> = VecStorageInner<[MaybeUninit<T>]>;
@@ -208,6 +223,7 @@ pub use drain::Drain;
 ///
 /// In most cases you should use [`Vec`] or [`VecView`] directly. Only use this
 /// struct if you want to write code that's generic over both.
+#[cfg_attr(feature = "zeroize", derive(Zeroize), zeroize(bound = "S: Zeroize"))]
 pub struct VecInner<T, LenT: LenType, S: VecStorage<T> + ?Sized> {
     phantom: PhantomData<T>,
     len: LenT,
@@ -243,7 +259,8 @@ pub struct VecInner<T, LenT: LenType, S: VecStorage<T> + ?Sized> {
 /// assert_eq!(*vec, [7, 1, 2, 3]);
 /// ```
 ///
-/// In some cases, the const-generic might be cumbersome. `Vec` can coerce into a [`VecView`] to remove the need for the const-generic:
+/// In some cases, the const-generic might be cumbersome. `Vec` can coerce into a [`VecView`] to
+/// remove the need for the const-generic:
 ///
 /// ```rust
 /// use heapless::{Vec, VecView};
@@ -252,18 +269,21 @@ pub struct VecInner<T, LenT: LenType, S: VecStorage<T> + ?Sized> {
 /// let view: &VecView<_, _> = &vec;
 /// ```
 ///
-/// For uncommmon capacity values, or in generic scenarios, you may have to provide the `LenT` generic yourself.
+/// For uncommmon capacity values, or in generic scenarios, you may have to provide the `LenT`
+/// generic yourself.
 ///
-/// This should be the smallest unsigned integer type that your capacity fits in, or `usize` if you don't want to consider this.
+/// This should be the smallest unsigned integer type that your capacity fits in, or `usize` if you
+/// don't want to consider this.
 pub type Vec<T, const N: usize, LenT = usize> = VecInner<T, LenT, OwnedVecStorage<T, N>>;
 
 /// A [`Vec`] with dynamic capacity
 ///
-/// [`Vec`] coerces to `VecView`. `VecView` is `!Sized`, meaning it can only ever be used by reference.
+/// [`Vec`] coerces to `VecView`. `VecView` is `!Sized`, meaning it can only ever be used by
+/// reference.
 ///
 /// Unlike [`Vec`], `VecView` does not have an `N` const-generic parameter.
-/// This has the ergonomic advantage of making it possible to use functions without needing to know at
-/// compile-time the size of the buffers used, for example for use in `dyn` traits.
+/// This has the ergonomic advantage of making it possible to use functions without needing to know
+/// at compile-time the size of the buffers used, for example for use in `dyn` traits.
 ///
 /// `VecView<T>` is to `Vec<T, N>` what `[T]` is to `[T; N]`.
 ///
@@ -409,15 +429,16 @@ impl<T, LenT: LenType, const N: usize> Vec<T, N, LenT> {
 
     /// Casts the `LenT` type to a new type, preserving everything else about the vector.
     ///
-    /// This can be useful if you need to pass a `Vec<T, N, u8>` into a `Vec<T, N, usize>` for example.
+    /// This can be useful if you need to pass a `Vec<T, N, u8>` into a `Vec<T, N, usize>` for
+    /// example.
     ///
     /// This will check at compile time if the `N` value will fit into `NewLenT`, and error if not.
     pub fn cast_len_type<NewLenT: LenType>(self) -> Vec<T, N, NewLenT> {
         const { check_capacity_fits::<NewLenT, N>() }
         let this = ManuallyDrop::new(self);
 
-        // SAFETY: Pointer argument is derived from a reference, meeting the safety documented invariants.
-        // This also prevents double drops by wrapping `self` in `ManuallyDrop`.
+        // SAFETY: Pointer argument is derived from a reference, meeting the safety documented
+        // invariants. This also prevents double drops by wrapping `self` in `ManuallyDrop`.
         Vec {
             len: NewLenT::from_usize(this.len()),
             buffer: unsafe { ptr::read(&this.buffer) },
@@ -499,7 +520,8 @@ impl<T, LenT: LenType, S: VecStorage<T> + ?Sized> VecInner<T, LenT, S> {
     /// let view: &VecView<u8, _> = vec.as_view();
     /// ```
     ///
-    /// It is often preferable to do the same through type coerction, since `Vec<T, N>` implements `Unsize<VecView<T>>`:
+    /// It is often preferable to do the same through type coerction, since `Vec<T, N>` implements
+    /// `Unsize<VecView<T>>`:
     ///
     /// ```rust
     /// # use heapless::{Vec, VecView};
@@ -519,7 +541,8 @@ impl<T, LenT: LenType, S: VecStorage<T> + ?Sized> VecInner<T, LenT, S> {
     /// let view: &mut VecView<u8, _> = vec.as_mut_view();
     /// ```
     ///
-    /// It is often preferable to do the same through type coerction, since `Vec<T, N>` implements `Unsize<VecView<T>>`:
+    /// It is often preferable to do the same through type coerction, since `Vec<T, N>` implements
+    /// `Unsize<VecView<T>>`:
     ///
     /// ```rust
     /// # use heapless::{Vec, VecView};
@@ -714,11 +737,11 @@ impl<T, LenT: LenType, S: VecStorage<T> + ?Sized> VecInner<T, LenT, S> {
     pub fn truncate(&mut self, len: usize) {
         // This is safe because:
         //
-        // * the slice passed to `drop_in_place` is valid; the `len > self.len`
-        //   case avoids creating an invalid slice, and
-        // * the `len` of the vector is shrunk before calling `drop_in_place`,
-        //   such that no value will be dropped twice in case `drop_in_place`
-        //   were to panic once (if it panics twice, the program aborts).
+        // * the slice passed to `drop_in_place` is valid; the `len > self.len` case avoids creating
+        //   an invalid slice, and
+        // * the `len` of the vector is shrunk before calling `drop_in_place`, such that no value
+        //   will be dropped twice in case `drop_in_place` were to panic once (if it panics twice,
+        //   the program aborts).
         unsafe {
             // Note: It's intentional that this is `>` and not `>=`.
             //       Changing it to `>=` has negative performance
@@ -1226,8 +1249,9 @@ impl<T, LenT: LenType, S: VecStorage<T> + ?Sized> VecInner<T, LenT, S> {
                     }
                 }
                 if DELETED {
-                    // SAFETY: `deleted_cnt` > 0, so the hole slot must not overlap with current element.
-                    // We use copy for move, and never touch this element again.
+                    // SAFETY: `deleted_cnt` > 0, so the hole slot must not overlap with current
+                    // element. We use copy for move, and never touch this
+                    // element again.
                     unsafe {
                         let hole_slot = p.add((g.processed_len - g.deleted_cnt).into_usize());
                         ptr::copy_nonoverlapping(cur, hole_slot, 1);
@@ -1463,6 +1487,31 @@ impl<T, LenT: LenType, const N: usize> Iterator for IntoIter<T, N, LenT> {
         } else {
             None
         }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+}
+
+impl<T, LenT: LenType, const N: usize> DoubleEndedIterator for IntoIter<T, N, LenT> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.next < self.vec.len {
+            // SAFETY: len must be non-zero as next is less than len.
+            let item = unsafe { self.vec.pop_unchecked() };
+            Some(item)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T, LenT: LenType, const N: usize> FusedIterator for IntoIter<T, N, LenT> {}
+
+impl<T, LenT: LenType, const N: usize> ExactSizeIterator for IntoIter<T, N, LenT> {
+    fn len(&self) -> usize {
+        (self.vec.len - self.next).into_usize()
     }
 }
 
@@ -2027,6 +2076,32 @@ mod tests {
     }
 
     #[test]
+    fn iter_move_next_back() {
+        let mut vec: Vec<&str, 3> = Vec::new();
+        vec.push("a").unwrap();
+        vec.push("b").unwrap();
+        vec.push("c").unwrap();
+        let mut items = vec.into_iter();
+        let _ = items.next(); // Remove the first item.
+        assert_eq!(items.next_back(), Some("c"));
+        assert_eq!(items.next_back(), Some("b"));
+        assert_eq!(items.next_back(), None);
+    }
+
+    #[test]
+    fn iter_move_len() {
+        let mut vec: Vec<&str, 2> = Vec::new();
+        vec.push("a").unwrap();
+        vec.push("b").unwrap();
+        let mut items = vec.into_iter();
+        assert_eq!(items.len(), 2);
+        let _ = items.next(); // Remove the first item.
+        assert_eq!(items.len(), 1);
+        let _ = items.next_back(); // Remove the last item.
+        assert_eq!(items.len(), 0);
+    }
+
+    #[test]
     fn push_and_pop() {
         let mut v: Vec<i32, 4> = Vec::new();
         assert_eq!(v.len(), 0);
@@ -2245,6 +2320,69 @@ mod tests {
 
         let _: crate::CapacityError =
             <alloc::vec::Vec<u8> as TryInto<Vec<u8, 1>>>::try_into(av.clone()).unwrap_err();
+    }
+
+    #[test]
+    #[cfg(feature = "zeroize")]
+    fn test_vec_zeroize() {
+        use zeroize::Zeroize;
+
+        let mut v: Vec<u8, 8> = Vec::new();
+        for i in 0..8 {
+            v.push(i).unwrap();
+        }
+
+        for i in 0..8 {
+            assert_eq!(v[i], i as u8);
+        }
+
+        v.truncate(4);
+        assert_eq!(v.len(), 4);
+
+        for i in 0..4 {
+            assert_eq!(v[i], i as u8);
+        }
+
+        v.zeroize();
+
+        assert_eq!(v.len(), 0);
+
+        unsafe {
+            v.set_len(8);
+        }
+
+        for i in 0..8 {
+            assert_eq!(v[i], 0);
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "zeroize")]
+    fn test_vecview_zeroize() {
+        use zeroize::Zeroize;
+
+        let mut v: Vec<u8, 8> = Vec::new();
+        for i in 0..8 {
+            v.push(i).unwrap();
+        }
+
+        let view = v.as_mut_view();
+
+        for i in 0..8 {
+            assert_eq!(view[i], i as u8);
+        }
+
+        view.zeroize();
+
+        assert_eq!(view.len(), 0);
+
+        unsafe {
+            view.set_len(8);
+        }
+
+        for i in 0..8 {
+            assert_eq!(view[i], 0);
+        }
     }
 
     fn _test_variance<'a: 'b, 'b>(x: Vec<&'a (), 42>) -> Vec<&'b (), 42> {

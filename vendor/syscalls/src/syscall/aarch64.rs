@@ -13,6 +13,8 @@
 // No other registers are clobbered.
 use core::arch::asm;
 
+use crate::arch::aarch64::Sysno;
+
 /// Issues a raw system call with 0 arguments.
 ///
 /// # Safety
@@ -20,11 +22,11 @@ use core::arch::asm;
 /// Running a system call is inherently unsafe. It is the caller's
 /// responsibility to ensure safety.
 #[inline]
-pub unsafe fn syscall0(n: usize) -> usize {
+pub unsafe fn syscall0(n: Sysno) -> usize {
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         lateout("x0") ret,
         options(nostack, preserves_flags)
     );
@@ -38,11 +40,11 @@ pub unsafe fn syscall0(n: usize) -> usize {
 /// Running a system call is inherently unsafe. It is the caller's
 /// responsibility to ensure safety.
 #[inline]
-pub unsafe fn syscall1(n: usize, arg1: usize) -> usize {
+pub unsafe fn syscall1(n: Sysno, arg1: usize) -> usize {
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         inlateout("x0") arg1 => ret,
         options(nostack, preserves_flags)
     );
@@ -56,11 +58,11 @@ pub unsafe fn syscall1(n: usize, arg1: usize) -> usize {
 /// Running a system call is inherently unsafe. It is the caller's
 /// responsibility to ensure safety.
 #[inline]
-pub unsafe fn syscall2(n: usize, arg1: usize, arg2: usize) -> usize {
+pub unsafe fn syscall2(n: Sysno, arg1: usize, arg2: usize) -> usize {
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         inlateout("x0") arg1 => ret,
         in("x1") arg2,
         options(nostack, preserves_flags)
@@ -76,7 +78,7 @@ pub unsafe fn syscall2(n: usize, arg1: usize, arg2: usize) -> usize {
 /// responsibility to ensure safety.
 #[inline]
 pub unsafe fn syscall3(
-    n: usize,
+    n: Sysno,
     arg1: usize,
     arg2: usize,
     arg3: usize,
@@ -84,7 +86,7 @@ pub unsafe fn syscall3(
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         inlateout("x0") arg1 => ret,
         in("x1") arg2,
         in("x2") arg3,
@@ -101,7 +103,7 @@ pub unsafe fn syscall3(
 /// responsibility to ensure safety.
 #[inline]
 pub unsafe fn syscall4(
-    n: usize,
+    n: Sysno,
     arg1: usize,
     arg2: usize,
     arg3: usize,
@@ -110,7 +112,7 @@ pub unsafe fn syscall4(
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         inlateout("x0") arg1 => ret,
         in("x1") arg2,
         in("x2") arg3,
@@ -128,7 +130,7 @@ pub unsafe fn syscall4(
 /// responsibility to ensure safety.
 #[inline]
 pub unsafe fn syscall5(
-    n: usize,
+    n: Sysno,
     arg1: usize,
     arg2: usize,
     arg3: usize,
@@ -138,7 +140,7 @@ pub unsafe fn syscall5(
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         inlateout("x0") arg1 => ret,
         in("x1") arg2,
         in("x2") arg3,
@@ -157,7 +159,7 @@ pub unsafe fn syscall5(
 /// responsibility to ensure safety.
 #[inline]
 pub unsafe fn syscall6(
-    n: usize,
+    n: Sysno,
     arg1: usize,
     arg2: usize,
     arg3: usize,
@@ -168,7 +170,7 @@ pub unsafe fn syscall6(
     let mut ret: usize;
     asm!(
         "svc 0",
-        in("x8") n,
+        in("x8") n as usize,
         inlateout("x0") arg1 => ret,
         in("x1") arg2,
         in("x2") arg3,

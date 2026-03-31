@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axfeat"
-version = "0.2.2-hv.5"
+version = "0.2.2-preview.1"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -26,6 +26,7 @@ documentation = "https://arceos-org.github.io/arceos/axfeat/index.html"
 readme = false
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/api/axfeat"
+resolver = "2"
 
 [features]
 alloc = [
@@ -53,7 +54,9 @@ display = [
 dma = [
     "alloc",
     "paging",
+    "axruntime/dma",
 ]
+driver-ahci = ["axdriver?/ahci"]
 driver-bcm2835-sdhci = ["axdriver?/bcm2835-sdhci"]
 driver-dyn = [
     "paging",
@@ -78,6 +81,18 @@ fs = [
     "axdriver/virtio-blk",
     "dep:axfs",
     "axruntime/fs",
+]
+fs-ext4 = [
+    "fs",
+    "axfs/ext4",
+]
+fs-fat = [
+    "fs",
+    "axfs/fat",
+]
+fs-times = [
+    "fs",
+    "axfs/times",
 ]
 input = [
     "alloc",
@@ -158,51 +173,51 @@ name = "axfeat"
 path = "src/lib.rs"
 
 [dependencies.axalloc]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axbacktrace]
 version = "0.1"
 
 [dependencies.axdisplay]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axdriver]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axfs]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axhal]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.3"
 
 [dependencies.axinput]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axipi]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.2"
 optional = true
 
 [dependencies.axlog]
-version = "=0.2.2-preview.1"
+version = "0.2.2-preview.1"
 
 [dependencies.axnet]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axruntime]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [dependencies.axsync]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axtask]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.3"
 optional = true
 
 [dependencies.kspin]

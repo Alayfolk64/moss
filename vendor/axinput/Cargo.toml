@@ -12,17 +12,20 @@
 [package]
 edition = "2024"
 name = "axinput"
-version = "0.2.2-hv.5"
-authors = ["Yuekai Jia <equation618@gmail.com>"]
+version = "0.2.2-preview.1"
+authors = [
+    "Yuekai Jia <equation618@gmail.com>",
+    "Yu Chen <yuchen@tsinghua.edu.cn>",
+]
 build = false
 autolib = false
 autobins = false
 autoexamples = false
 autotests = false
 autobenches = false
-description = "Input device management for ArceOS"
+description = "ArceOS input subsystem module"
 homepage = "https://github.com/arceos-org/arceos"
-documentation = "https://arceos-org.github.io/arceos"
+documentation = "https://arceos-org.github.io/arceos/axinput/index.html"
 readme = false
 keywords = [
     "arceos",
@@ -33,18 +36,19 @@ categories = [
     "no-std",
 ]
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
-repository = "https://github.com/arceos-org/arceos"
+repository = "https://github.com/arceos-org/arceos/tree/main/modules/axinput"
+resolver = "2"
 
 [lib]
 name = "axinput"
 path = "src/lib.rs"
 
 [dependencies.axdriver]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 features = ["input"]
 
 [dependencies.axsync]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [dependencies.lazyinit]
 version = "0.2"

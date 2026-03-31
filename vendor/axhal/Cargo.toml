@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axhal"
-version = "0.2.2-hv.5"
+version = "0.2.2-preview.6"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = "build.rs"
 autolib = false
@@ -26,6 +26,7 @@ documentation = "https://arceos-org.github.io/arceos/axhal/index.html"
 readme = "README.md"
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axhal"
+resolver = "2"
 
 [features]
 default = []
@@ -80,11 +81,11 @@ name = "axhal"
 path = "src/lib.rs"
 
 [dependencies.axalloc]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axconfig]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [dependencies.axcpu]
 version = "0.3.0-preview.2"
@@ -119,13 +120,14 @@ version = "0.4"
 
 [dependencies.page_table_multiarch]
 version = "0.5"
+features = ["axerrno"]
 optional = true
 
 [dependencies.percpu]
 version = "0.2"
 
 [build-dependencies.axconfig]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [target.'cfg(target_arch = "aarch64")'.dependencies.axplat-aarch64-qemu-virt]
 version = ">=0.3.0-preview.2, <0.3.0"

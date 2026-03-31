@@ -1,17 +1,9 @@
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
-#[cfg(all(
-    target_arch = "arm",
-    not(any(target_feature = "thumb-mode", feature = "thumb-mode"))
-))]
+#[cfg(all(target_arch = "arm", not(target_feature = "thumb-mode")))]
 mod arm;
-#[cfg(all(
-    target_arch = "arm",
-    any(target_feature = "thumb-mode", feature = "thumb-mode")
-))]
+#[cfg(all(target_arch = "arm", target_feature = "thumb-mode"))]
 mod arm_thumb;
-#[cfg(target_arch = "loongarch64")]
-mod loongarch64;
 #[cfg(target_arch = "mips")]
 mod mips;
 #[cfg(target_arch = "mips64")]
@@ -38,20 +30,11 @@ mod x86_64;
 #[cfg(target_arch = "aarch64")]
 pub use aarch64::*;
 
-#[cfg(all(
-    target_arch = "arm",
-    not(any(target_feature = "thumb-mode", feature = "thumb-mode"))
-))]
+#[cfg(all(target_arch = "arm", not(target_feature = "thumb-mode")))]
 pub use arm::*;
 
-#[cfg(all(
-    target_arch = "arm",
-    any(target_feature = "thumb-mode", feature = "thumb-mode")
-))]
+#[cfg(all(target_arch = "arm", target_feature = "thumb-mode"))]
 pub use arm_thumb::*;
-
-#[cfg(target_arch = "loongarch64")]
-pub use loongarch64::*;
 
 #[cfg(target_arch = "mips")]
 pub use mips::*;

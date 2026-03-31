@@ -20,25 +20,25 @@ homepage = "https://github.com/Starry-OS"
 repository = "https://github.com/Starry-OS/StarryOS"
 
 [workspace.dependencies]
-axfeat = { version = "=0.2.2-hv.5" }
+axfeat = { version = "0.2.2-hv.5" }
 
-axalloc = { version = "=0.2.2-hv.5" }
-axconfig = { version = "=0.2.2-hv.5" }
-axdisplay = { version = "=0.2.2-hv.5" }
-axdriver = { version = "=0.2.2-hv.5" }
-axfs = { version = "=0.2.2-hv.5" }
-axhal = { version = "=0.2.2-hv.5" }
-axinput = { version = "=0.2.2-hv.5" }
-axlog = { version = "=0.2.2-preview.1" }
-axmm = { version = "=0.2.2-hv.5" }
-axnet = { version = "=0.2.2-hv.5" }
-axruntime = { version = "=0.2.2-hv.5" }
-axsync = { version = "=0.2.2-hv.5" }
-axtask = { version = "=0.2.2-hv.5" }
-axcpu = { version = "=0.3.0-preview.3" }
-heapless = { version = "=0.9.1" }
+axalloc = { version = "0.2.2-hv.5" }
+axconfig = { version = "0.2.2-hv.5" }
+axdisplay = { version = "0.2.2-hv.5" }
+axdriver = { version = "0.2.2-hv.5" }
+axfs = { version = "0.2.2-hv.5" }
+axhal = { version = "0.2.2-hv.5" }
+axinput = { version = "0.2.2-hv.5" }
+axlog = { version = "0.2.2-preview.1" }
+axmm = { version = "0.2.2-hv.5" }
+axnet = { version = "0.2.2-hv.5" }
+axruntime = { version = "0.2.2-hv.5" }
+axsync = { version = "0.2.2-hv.5" }
+axtask = { version = "0.2.2-hv.5" }
+axcpu = { version = "0.3.0-preview.3" }
+heapless = { version = "0.9.1" }
 
-starry-kernel = { path = "kernel", version = "=0.2.0-preview.2" }
+starry-kernel = { path = "kernel", version = "0.2.0-preview.2" }
 
 [package]
 name = "starryos"

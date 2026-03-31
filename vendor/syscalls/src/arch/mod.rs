@@ -5,8 +5,6 @@ mod macros;
 pub mod aarch64;
 #[cfg(any(target_arch = "arm", feature = "arm"))]
 pub mod arm;
-#[cfg(any(target_arch = "loongarch64", feature = "loongarch64"))]
-pub mod loongarch64;
 #[cfg(any(target_arch = "mips", feature = "mips"))]
 pub mod mips;
 #[cfg(any(target_arch = "mips64", feature = "mips64"))]
@@ -35,9 +33,6 @@ pub use aarch64::*;
 
 #[cfg(target_arch = "arm")]
 pub use arm::*;
-
-#[cfg(target_arch = "loongarch64")]
-pub use loongarch64::*;
 
 #[cfg(target_arch = "mips")]
 pub use mips::*;

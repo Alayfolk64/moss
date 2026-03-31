@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axdisplay"
-version = "0.2.2-hv.5"
+version = "0.2.2-preview.1"
 authors = ["Shiping Yuan <robert_yuan@pku.edu.com>"]
 build = false
 autolib = false
@@ -26,17 +26,18 @@ documentation = "https://arceos-org.github.io/arceos/axdisplay/index.html"
 readme = false
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axdisplay"
+resolver = "2"
 
 [lib]
 name = "axdisplay"
 path = "src/lib.rs"
 
 [dependencies.axdriver]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 features = ["display"]
 
 [dependencies.axsync]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [dependencies.lazyinit]
 version = "0.2"

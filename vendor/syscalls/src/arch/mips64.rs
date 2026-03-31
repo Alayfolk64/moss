@@ -732,22 +732,6 @@ syscall_enum! {
         lsm_set_self_attr = 5460,
         /// See [lsm_list_modules(2)](https://man7.org/linux/man-pages/man2/lsm_list_modules.2.html) for more info on this syscall.
         lsm_list_modules = 5461,
-        /// See [mseal(2)](https://man7.org/linux/man-pages/man2/mseal.2.html) for more info on this syscall.
-        mseal = 5462,
-        /// See [setxattrat(2)](https://man7.org/linux/man-pages/man2/setxattrat.2.html) for more info on this syscall.
-        setxattrat = 5463,
-        /// See [getxattrat(2)](https://man7.org/linux/man-pages/man2/getxattrat.2.html) for more info on this syscall.
-        getxattrat = 5464,
-        /// See [listxattrat(2)](https://man7.org/linux/man-pages/man2/listxattrat.2.html) for more info on this syscall.
-        listxattrat = 5465,
-        /// See [removexattrat(2)](https://man7.org/linux/man-pages/man2/removexattrat.2.html) for more info on this syscall.
-        removexattrat = 5466,
-        /// See [open_tree_attr(2)](https://man7.org/linux/man-pages/man2/open_tree_attr.2.html) for more info on this syscall.
-        open_tree_attr = 5467,
-        /// See [file_getattr(2)](https://man7.org/linux/man-pages/man2/file_getattr.2.html) for more info on this syscall.
-        file_getattr = 5468,
-        /// See [file_setattr(2)](https://man7.org/linux/man-pages/man2/file_setattr.2.html) for more info on this syscall.
-        file_setattr = 5469,
     }
-    LAST: file_setattr;
+    LAST: lsm_list_modules;
 }

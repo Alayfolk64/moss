@@ -12,10 +12,10 @@
 [package]
 edition = "2024"
 name = "axbacktrace"
-version = "0.1.0"
+version = "0.1.2"
 authors = [
     "Mivik <mivikq@gmail.com>",
-    "Asakura Mizu <asakuramizu111@gmail.com>",
+    "朝倉水希 <asakuramizu111@gmail.com>",
 ]
 build = false
 autolib = false
@@ -49,9 +49,8 @@ name = "axbacktrace"
 path = "src/lib.rs"
 
 [dependencies.addr2line]
-version = "0.25"
+version = "0.26"
 features = [
-    "alloc",
     "cpp_demangle",
     "rustc-demangle",
 ]
@@ -62,7 +61,7 @@ default-features = false
 version = "1"
 
 [dependencies.gimli]
-version = "0.32"
+version = "0.33"
 features = [
     "read-core",
     "endian-reader",

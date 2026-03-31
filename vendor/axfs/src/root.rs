@@ -24,7 +24,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, ax_err};
 use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
 use lazyinit::LazyInit;
 use spin::Mutex;
@@ -72,26 +72,17 @@ impl RootDirectory {
 
     pub fn mount(&mut self, path: &str, fs: Arc<dyn VfsOps>) -> AxResult {
         if path == "/" {
-            return Err(AxError::InvalidInput);
+            return ax_err!(InvalidInput, "cannot mount root filesystem");
         }
         if !path.starts_with('/') {
-            return Err(AxError::InvalidInput);
+            return ax_err!(InvalidInput, "mount path must start with '/'");
         }
         if self.mounts.iter().any(|mp| mp.path == path) {
-            return Err(AxError::InvalidInput);
+            return ax_err!(InvalidInput, "mount point already exists");
         }
         // create the mount point in the main filesystem if it does not exist
-        self.main_fs
-            .root_dir()
-            .create(path, FileType::Dir)
-            .map_err(AxError::from)?;
-        fs.mount(
-            path,
-            self.main_fs
-                .root_dir()
-                .lookup(path)
-                .map_err(AxError::from)?,
-        )?;
+        self.main_fs.root_dir().create(path, FileType::Dir)?;
+        fs.mount(path, self.main_fs.root_dir().lookup(path)?)?;
         self.mounts.push(MountPoint::new(path.to_owned(), fs));
         Ok(())
     }
@@ -102,6 +93,22 @@ impl RootDirectory {
 
     pub fn contains(&self, path: &str) -> bool {
         self.mounts.iter().any(|mp| mp.path == path)
+    }
+
+    fn lookup_mounted_fs<F, T>(&self, path: &str, f: F) -> AxResult<T>
+    where
+        F: FnOnce(Arc<dyn VfsOps>, &str) -> AxResult<T>,
+    {
+        debug!("lookup at root: {}", path);
+        let normalized_path = self.normalize_path(path);
+
+        // Find the best matching mount point
+        if let Some((mount_fs, rest_path)) = self.find_best_mount(&normalized_path) {
+            f(mount_fs, rest_path)
+        } else {
+            // No mount point matched, use main filesystem
+            f(self.main_fs.clone(), &normalized_path)
+        }
     }
 
     /// Normalize path by trimming leading '/' and handling './' prefix
@@ -147,38 +154,27 @@ impl VfsNodeOps for RootDirectory {
     }
 
     fn lookup(self: Arc<Self>, path: &str) -> VfsResult<VfsNodeRef> {
-        let normalized_path = self.normalize_path(path);
-        if let Some((mount_fs, rest_path)) = self.find_best_mount(&normalized_path) {
-            mount_fs.root_dir().lookup(rest_path)
-        } else {
-            self.main_fs.root_dir().lookup(&normalized_path)
-        }
+        self.lookup_mounted_fs(path, |fs, rest_path| fs.root_dir().lookup(rest_path))
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {
-        let normalized_path = self.normalize_path(path);
-        if let Some((mount_fs, rest_path)) = self.find_best_mount(&normalized_path) {
+        self.lookup_mounted_fs(path, |fs, rest_path| {
             if rest_path.is_empty() {
-                Ok(())
+                Ok(()) // already exists
             } else {
-                mount_fs.root_dir().create(rest_path, ty)
+                fs.root_dir().create(rest_path, ty)
             }
-        } else {
-            self.main_fs.root_dir().create(&normalized_path, ty)
-        }
+        })
     }
 
     fn remove(&self, path: &str) -> VfsResult {
-        let normalized_path = self.normalize_path(path);
-        if let Some((mount_fs, rest_path)) = self.find_best_mount(&normalized_path) {
+        self.lookup_mounted_fs(path, |fs, rest_path| {
             if rest_path.is_empty() {
-                Err(axfs_vfs::VfsError::PermissionDenied)
+                ax_err!(PermissionDenied) // cannot remove mount points
             } else {
-                mount_fs.root_dir().remove(rest_path)
+                fs.root_dir().remove(rest_path)
             }
-        } else {
-            self.main_fs.root_dir().remove(&normalized_path)
-        }
+        })
     }
 
     fn read_dir(&self, start_idx: usize, dirents: &mut [VfsDirEntry]) -> VfsResult<usize> {
@@ -470,13 +466,11 @@ pub(crate) fn absolute_path(path: &str) -> AxResult<String> {
 
 pub(crate) fn lookup(dir: Option<&VfsNodeRef>, path: &str) -> AxResult<VfsNodeRef> {
     if path.is_empty() {
-        return Err(AxError::NotFound);
+        return ax_err!(NotFound);
     }
-    let node = parent_node_of(dir, path)
-        .lookup(path)
-        .map_err(AxError::from)?;
-    if path.ends_with('/') && !node.get_attr().map_err(AxError::from)?.is_dir() {
-        Err(AxError::NotADirectory)
+    let node = parent_node_of(dir, path).lookup(path)?;
+    if path.ends_with('/') && !node.get_attr()?.is_dir() {
+        ax_err!(NotADirectory)
     } else {
         Ok(node)
     }
@@ -484,69 +478,61 @@ pub(crate) fn lookup(dir: Option<&VfsNodeRef>, path: &str) -> AxResult<VfsNodeRe
 
 pub(crate) fn create_file(dir: Option<&VfsNodeRef>, path: &str) -> AxResult<VfsNodeRef> {
     if path.is_empty() {
-        return Err(AxError::NotFound);
+        return ax_err!(NotFound);
     } else if path.ends_with('/') {
-        return Err(AxError::NotADirectory);
+        return ax_err!(NotADirectory);
     }
     let parent = parent_node_of(dir, path);
-    parent
-        .create(path, VfsNodeType::File)
-        .map_err(AxError::from)?;
-    Ok(parent.lookup(path).map_err(AxError::from)?)
+    parent.create(path, VfsNodeType::File)?;
+    parent.lookup(path)
 }
 
 pub(crate) fn create_dir(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {
     match lookup(dir, path) {
-        Ok(_) => Err(AxError::AlreadyExists),
-        Err(AxError::NotFound) => Ok(parent_node_of(dir, path)
-            .create(path, VfsNodeType::Dir)
-            .map_err(AxError::from)?),
+        Ok(_) => ax_err!(AlreadyExists),
+        Err(AxError::NotFound) => parent_node_of(dir, path).create(path, VfsNodeType::Dir),
         Err(e) => Err(e),
     }
 }
 
 pub(crate) fn remove_file(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {
     let node = lookup(dir, path)?;
-    let attr = node.get_attr().map_err(AxError::from)?;
+    let attr = node.get_attr()?;
     if attr.is_dir() {
-        Err(AxError::IsADirectory)
+        ax_err!(IsADirectory)
     } else if !attr.perm().owner_writable() {
-        Err(AxError::PermissionDenied)
+        ax_err!(PermissionDenied)
     } else {
-        Ok(parent_node_of(dir, path)
-            .remove(path)
-            .map_err(AxError::from)?)
+        parent_node_of(dir, path).remove(path)
     }
 }
 
 pub(crate) fn remove_dir(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {
     if path.is_empty() {
-        return Err(AxError::NotFound);
+        return ax_err!(NotFound);
     }
     let path_check = path.trim_matches('/');
     if path_check.is_empty() {
-        return Err(AxError::DirectoryNotEmpty); // rm -d '/'
+        return ax_err!(DirectoryNotEmpty); // rm -d '/'
     } else if path_check == "."
         || path_check == ".."
         || path_check.ends_with("/.")
         || path_check.ends_with("/..")
     {
-        return Err(AxError::InvalidInput);
+        return ax_err!(InvalidInput);
     }
     if ROOT_DIR.contains(&absolute_path(path)?) {
-        return Err(AxError::PermissionDenied);
+        return ax_err!(PermissionDenied);
     }
 
     let node = lookup(dir, path)?;
-    let attr = node.get_attr().map_err(AxError::from)?;
+    let attr = node.get_attr()?;
     if !attr.is_dir() {
-        Err(AxError::NotADirectory)
+        ax_err!(NotADirectory)
     } else if !attr.perm().owner_writable() {
-        Err(AxError::PermissionDenied)
+        ax_err!(PermissionDenied)
     } else {
-        Ok(parent_node_of(dir, path)
-            .remove(path)
-            .map_err(AxError::from)?)
+        parent_node_of(dir, path).remove(path)
     }
 }
 
@@ -566,11 +552,11 @@ pub(crate) fn set_current_dir(path: &str) -> AxResult {
     }
 
     let node = lookup(None, &abs_path)?;
-    let attr = node.get_attr().map_err(AxError::from)?;
+    let attr = node.get_attr()?;
     if !attr.is_dir() {
-        Err(AxError::NotADirectory)
+        ax_err!(NotADirectory)
     } else if !attr.perm().owner_executable() {
-        Err(AxError::PermissionDenied)
+        ax_err!(PermissionDenied)
     } else {
         *CURRENT_DIR.lock() = node;
         *CURRENT_DIR_PATH.lock() = abs_path;
@@ -583,7 +569,5 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
         warn!("dst file already exist, now remove it");
         remove_file(None, new)?;
     }
-    Ok(parent_node_of(None, old)
-        .rename(old, new)
-        .map_err(AxError::from)?)
+    parent_node_of(None, old).rename(old, new)
 }

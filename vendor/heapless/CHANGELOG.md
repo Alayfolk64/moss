@@ -7,11 +7,35 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [v0.9.2] 2025-11-12
+
+- Minor fixes to module docs.
+- Make MSRV of 1.87.0 explicit.
+- Implement `Default` for `CapacityError`.
+- Implement `defmt::Format` for `CapacityError`.
+- Implement `TryFrom` for `Deque` from array.
+- Switch from `serde` to `serde_core` for enabling faster compilations.
+- Implement `Zeroize` trait for all data structures with the `zeroize` feature to securely clear sensitive data from memory.
+- Added `truncate` to `Deque`
+- Added `retain` to `Deque`
+- Added `retain_mut` to `Deque`
+- Added `into_raw` to `Box`
+- Added `from_raw` to `Box`
+- Added `FusedIterator` to `vec::IntoIter`, `deque::IntoIter`, `index_map::IntoIter` and `linear_map::IntoIter`.
+- Added `ExactSizeIterator` to `vec::IntoIter`, `deque::IntoIter`, `index_map::IntoIter` and `linear_map::IntoIter`.
+- Added `DoubleEndedIterator` to `vec::IntoIter` and `deque::IntoIter`.
+- Deprecate `mpmc` (see [#583](https://github.com/rust-embedded/heapless/issues/583#issuecomment-3469297720))
+- Fixed initialization of the `ArcBlock<T>` and `BoxBlock<T>` types, fixing possible Undefined Behavior
+
 ## [v0.9.1] - 2025-08-19
 
 ### Added
 
 - Added `String::insert` and `String::insert_str`.
+
+### Added
+
+- Added optional `embedded_io::Write` impl for `Vec`.
 
 ### Changed
 
@@ -21,11 +45,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Minor fixes to `pool::boxed` docs.
 - Add missing `Debug` derive to `vec::IntoIter`.
 - Removed generic from `spsc::Consumer`, `spsc::Producer` and `spsc::Iter`.
+- Added `LinearMap::entry()` API.
+- Added `LinearMap::retain()`.
 
 ### Fixed
 
 - CI now uses flags specified in `Cargo.toml` for `rustdoc` tests.
 - Fixed clippy lints.
+- Fixed the memory layout of the internal `UnionNode<T>` type, fixing possible Undefined Behaviour.
 
 ### Removed
 
@@ -142,6 +169,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Removed `sorted_linked_list::Iter` and `sorted_linked_list::IterInner`.
 - Removed `sorted_linked_list::FindMut` and `sorted_linked_list::FindMutInner`.
 - The `Q2`, `Q4`, `Q8`, `Q16`, `Q32` and `Q64` aliases for `MpMcQueue` have been removed.
+- `doc_auto_cfg` feature which was merged into `doc_cfg`. Presence of the feature led to doc
+  build failures on nightly.
 
 ## [v0.8.0] - 2023-11-07
 
@@ -700,8 +729,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Initial release
 
-[Unreleased]: https://github.com/rust-embedded/heapless/compare/v0.9.1...HEAD
-[v0.9.0]: https://github.com/rust-embedded/heapless/compare/v0.9.0...v0.9.1
+[Unreleased]: https://github.com/rust-embedded/heapless/compare/v0.9.2...HEAD
+[v0.9.2]: https://github.com/rust-embedded/heapless/compare/v0.9.1...v0.9.2
+[v0.9.1]: https://github.com/rust-embedded/heapless/compare/v0.9.0...v0.9.1
 [v0.9.0]: https://github.com/rust-embedded/heapless/compare/v0.8.0...v0.9.0
 [v0.8.0]: https://github.com/rust-embedded/heapless/compare/v0.7.16...v0.8.0
 [v0.7.16]: https://github.com/rust-embedded/heapless/compare/v0.7.15...v0.7.16

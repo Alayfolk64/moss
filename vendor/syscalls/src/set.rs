@@ -17,7 +17,7 @@ const fn words<T>(bits: usize) -> usize {
         return 0;
     }
 
-    bits / width + (!bits.is_multiple_of(width) as usize)
+    bits / width + ((bits % width != 0) as usize)
 }
 
 /// A set of syscalls.
@@ -207,7 +207,7 @@ impl SysnoSet {
     }
 
     /// Returns an iterator that iterates over the syscalls contained in the set.
-    pub fn iter(&self) -> SysnoSetIter<'_> {
+    pub fn iter(&self) -> SysnoSetIter {
         SysnoSetIter::new(self.data.iter())
     }
 }
@@ -284,7 +284,7 @@ impl<'a> NonZeroUsizeIter<'a> {
     }
 }
 
-impl Iterator for NonZeroUsizeIter<'_> {
+impl<'a> Iterator for NonZeroUsizeIter<'a> {
     type Item = NonZeroUsize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -319,7 +319,7 @@ impl<'a> SysnoSetIter<'a> {
     }
 }
 
-impl Iterator for SysnoSetIter<'_> {
+impl<'a> Iterator for SysnoSetIter<'a> {
     type Item = Sysno;
 
     fn next(&mut self) -> Option<Self::Item> {

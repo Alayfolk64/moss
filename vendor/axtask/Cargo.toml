@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "axtask"
-version = "0.2.2-hv.5"
+version = "0.2.2-preview.3"
 authors = ["Yuekai Jia <equation618@gmail.com>"]
 build = false
 autolib = false
@@ -26,10 +26,11 @@ documentation = "https://arceos-org.github.io/arceos/axtask/index.html"
 readme = "README.md"
 license = "GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0"
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axtask"
+resolver = "2"
 
 [features]
 default = []
-irq = []
+irq = ["axhal/irq"]
 multitask = [
     "dep:axconfig",
     "dep:axpoll",
@@ -68,14 +69,14 @@ name = "axtask"
 path = "src/lib.rs"
 
 [dependencies.axconfig]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 optional = true
 
 [dependencies.axerrno]
 version = "0.2"
 
 [dependencies.axhal]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 
 [dependencies.axpoll]
 version = "0.1"
@@ -138,5 +139,5 @@ version = "0.2"
 optional = true
 
 [dev-dependencies.axhal]
-version = "=0.2.2-hv.5"
+version = "0.2.2-preview.1"
 features = ["fp-simd"]

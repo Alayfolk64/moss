@@ -14,8 +14,8 @@
 
 //! Low-level filesystem operations.
 
-use axerrno::{AxError, AxResult, ax_err_type};
-use axfs_vfs::VfsNodeRef;
+use axerrno::{AxError, AxResult, ax_err, ax_err_type};
+use axfs_vfs::{VfsError, VfsNodeRef};
 use axio::SeekFrom;
 use cap_access::{Cap, WithCap};
 use core::fmt;
@@ -134,7 +134,7 @@ impl File {
     fn _open_at(dir: Option<&VfsNodeRef>, path: &str, opts: &OpenOptions) -> AxResult<Self> {
         debug!("open file: {} {:?}", path, opts);
         if !opts.is_valid() {
-            return Err(AxError::InvalidInput);
+            return ax_err!(InvalidInput);
         }
 
         let node_option = crate::root::lookup(dir, path);
@@ -143,12 +143,12 @@ impl File {
                 Ok(node) => {
                     // already exists
                     if opts.create_new {
-                        return Err(AxError::AlreadyExists);
+                        return ax_err!(AlreadyExists);
                     }
                     node
                 }
                 // not exists, create new
-                Err(AxError::NotFound) => crate::root::create_file(dir, path)?,
+                Err(VfsError::NotFound) => crate::root::create_file(dir, path)?,
                 Err(e) => return Err(e),
             }
         } else {
@@ -160,11 +160,11 @@ impl File {
         if attr.is_dir()
             && (opts.create || opts.create_new || opts.write || opts.append || opts.truncate)
         {
-            return Err(AxError::IsADirectory);
+            return ax_err!(IsADirectory);
         }
         let access_cap = opts.into();
         if !perm_to_cap(attr.perm()).contains(access_cap) {
-            return Err(AxError::PermissionDenied);
+            return ax_err!(PermissionDenied);
         }
 
         node.open()?;
@@ -259,10 +259,7 @@ impl File {
 
     /// Gets the file attributes.
     pub fn get_attr(&self) -> AxResult<FileAttr> {
-        Ok(self
-            .access_node(Cap::empty())?
-            .get_attr()
-            .map_err(AxError::from)?)
+        self.access_node(Cap::empty())?.get_attr()
     }
 }
 
@@ -274,20 +271,20 @@ impl Directory {
     fn _open_dir_at(dir: Option<&VfsNodeRef>, path: &str, opts: &OpenOptions) -> AxResult<Self> {
         debug!("open dir: {}", path);
         if !opts.read {
-            return Err(AxError::InvalidInput);
+            return ax_err!(InvalidInput);
         }
         if opts.create || opts.create_new || opts.write || opts.append || opts.truncate {
-            return Err(AxError::InvalidInput);
+            return ax_err!(InvalidInput);
         }
 
         let node = crate::root::lookup(dir, path)?;
         let attr = node.get_attr()?;
         if !attr.is_dir() {
-            return Err(AxError::NotADirectory);
+            return ax_err!(NotADirectory);
         }
         let access_cap = opts.into();
         if !perm_to_cap(attr.perm()).contains(access_cap) {
-            return Err(AxError::PermissionDenied);
+            return ax_err!(PermissionDenied);
         }
 
         node.open()?;
