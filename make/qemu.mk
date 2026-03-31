@@ -44,15 +44,37 @@ qemu_args-loongarch64 := \
 
 qemu_args-y := -m $(MEM) -smp $(SMP) $(qemu_args-$(ARCH))
 
-qemu_args-$(BLK) += \
-  -device virtio-blk-$(vdev-suffix),drive=disk0 \
-  -drive id=disk0,if=none,format=raw,file=$(DISK_IMG)
+ifeq ($(strip $(TEST_FS_IMG)),)
+  qemu_args-$(BLK) += \
+    -device virtio-blk-$(vdev-suffix),drive=disk0 \
+    -drive id=disk0,if=none,format=raw,file=$(DISK_IMG)
+else
+  ifeq ($(BUS), mmio)
+    contest-blk-dev0 := -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+    contest-blk-dev1 := -device virtio-blk-device,drive=x1,bus=virtio-mmio-bus.1
+  else
+    contest-blk-dev0 := -device virtio-blk-pci,drive=x0
+    contest-blk-dev1 := -device virtio-blk-pci,drive=x1
+  endif
+  qemu_args-$(BLK) += \
+    -drive file=$(TEST_FS_IMG),if=none,format=raw,snapshot=on,id=x0 \
+    $(contest-blk-dev0)
+  ifneq ($(strip $(BOOT_DISK_IMG)),)
+    qemu_args-$(BLK) += \
+      -drive file=$(BOOT_DISK_IMG),if=none,format=raw,snapshot=on,id=x1 \
+      $(contest-blk-dev1)
+  endif
+endif
 
 qemu_args-$(NET) += \
   -device virtio-net-$(vdev-suffix),netdev=net0
 
 ifeq ($(NET_DEV), user)
-  qemu_args-$(NET) += -netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
+  ifeq ($(CONTEST_MODE), y)
+    qemu_args-$(NET) += -netdev user,id=net0
+  else
+    qemu_args-$(NET) += -netdev user,id=net0,hostfwd=tcp::5555-:5555,hostfwd=udp::5555-:5555
+  endif
 else ifeq ($(NET_DEV), tap)
   qemu_args-$(NET) += -netdev tap,id=net0,script=scripts/net/qemu-ifup.sh,downscript=no,vhost=$(VHOST),vhostforce=$(VHOST)
   QEMU := sudo $(QEMU)
@@ -91,6 +113,7 @@ ifeq ($(QEMU_LOG), y)
 endif
 
 qemu_args-$(ICOUNT) += -icount shift=1
+qemu_args-$(CONTEST_MODE) += -no-reboot -rtc base=utc
 
 qemu_args-y += $(QEMU_ARGS)
 

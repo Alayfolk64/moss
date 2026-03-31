@@ -75,6 +75,9 @@ MEM ?=
 ACCEL ?=
 ICOUNT ?= n
 QEMU_ARGS ?=
+CONTEST_MODE ?= n
+TEST_FS_IMG ?=
+BOOT_DISK_IMG ?=
 
 DISK_IMG ?= disk.img
 QEMU_LOG ?= n
@@ -170,7 +173,14 @@ endif
 
 all: build
 
-ensure_toolchain:
+WORKSPACE_DIR ?= $(abspath $(CURDIR)/..)
+CARGO_CONFIG_TEMPLATE ?= $(WORKSPACE_DIR)/cargo-config.toml
+
+ensure_cargo_config:
+	@mkdir -p $(WORKSPACE_DIR)/.cargo
+	@cp -f $(CARGO_CONFIG_TEMPLATE) $(WORKSPACE_DIR)/.cargo/config.toml
+
+ensure_toolchain: ensure_cargo_config
 	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
 
 include utils.mk
@@ -223,4 +233,4 @@ clean: makeclean
 .PHONY: all defconfig oldconfig ensure_toolchain \
 	build disasm run justrun debug \
 	clippy doc doc_check_missing fmt fmt_c unittest unittest_no_fail_fast \
-	disk_img clean makeclean
+	disk_img clean makeclean ensure_cargo_config

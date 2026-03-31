@@ -30,6 +30,7 @@ axfeat = { workspace = true, features = [
     "rtc",
 
     "fs",
+    "fs-ext4",
     "fs-fat",
 ] }
 

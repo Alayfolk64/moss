@@ -21,6 +21,7 @@ if [ -z "$BB" ]; then
 fi
 
 echo "[TEST] using busybox: $BB"
+export PATH="/musl:/glibc:/bin:/usr/bin"
 
 run_test() {
   test_sh="$1"
@@ -29,7 +30,14 @@ run_test() {
   echo "[TEST] Running $test_sh"
   (
     cd "$test_dir" || exit 127
-    "$BB" env HOME=/root PATH=/musl:/glibc:/bin:/usr/bin "$BB" sh "./$test_name"
+    "$BB" env HOME=/root PATH=/musl:/glibc:/bin:/usr/bin "$BB" sh -s -- "$BB" "$test_name" <<'EOF'
+bb="$1"
+script="$2"
+for cmd in basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find; do
+  eval "$cmd() { \"\$bb\" $cmd \"\$@\"; }"
+done
+. "./$script"
+EOF
   )
   ret=$?
   echo "[TEST] Exit code($ret): $test_sh"
@@ -48,40 +56,33 @@ append_root() {
 }
 
 SEARCH_ROOTS=""
-append_root "/"
 append_root "/musl"
 append_root "/glibc"
 
-# Scan all mounted filesystems (exclude pseudo filesystems only).
-if [ -r /proc/mounts ]; then
-  while IFS=' ' read -r _dev m fs_type _rest; do
-    [ -n "$m" ] || continue
-    case "$fs_type" in
-      proc|sysfs|devtmpfs|devpts|tmpfs|cgroup|cgroup2|mqueue|pstore|debugfs|tracefs|securityfs|ramfs|configfs|fusectl|hugetlbfs|bpf|overlay)
-        continue
-        ;;
-    esac
-    case "$m" in
-      /proc|/proc/*|/sys|/sys/*|/dev|/dev/*|/run|/run/*)
-        continue
-        ;;
-    esac
-    append_root "$m"
-  done < /proc/mounts
-fi
-
 echo "[TEST] scan roots:$SEARCH_ROOTS"
 
-TEST_LIST=$(
-  for d in $SEARCH_ROOTS; do
-    [ -d "$d" ] || continue
-    "$BB" find "$d" -type f \
-      \( -name '*_testcode.sh' -o -name '*_test.sh' -o -name 'test_*.sh' -o -name '*test*.sh' \) \
-      2>/dev/null
-  done | "$BB" sort -u
-)
+TEST_SUITES="basic busybox cyclictest iozone iperf libcbench libctest lmbench ltp lua netperf unixbench"
+TEST_LIST=""
 
-if [ -z "$TEST_LIST" ]; then
+for d in $SEARCH_ROOTS; do
+  [ -d "$d" ] || continue
+  echo "[TEST] scanning $d"
+  for suite in $TEST_SUITES; do
+    TEST_LIST="${TEST_LIST}$d/${suite}_testcode.sh
+"
+  done
+done
+
+TEST_COUNT=0
+while IFS= read -r t; do
+  [ -n "$t" ] || continue
+  TEST_COUNT=$((TEST_COUNT + 1))
+done <<EOF
+$TEST_LIST
+EOF
+echo "[TEST] discovered $TEST_COUNT candidate scripts"
+
+if [ "$TEST_COUNT" -eq 0 ]; then
   echo "[TEST] no test shell scripts found in mounted filesystems"
 else
   total=0
@@ -102,3 +103,4 @@ EOF
 fi
 
 echo "[TEST] all discovered scripts completed"
+"$BB" poweroff -f >/dev/null 2>&1 || "$BB" reboot -f >/dev/null 2>&1 || exit 0

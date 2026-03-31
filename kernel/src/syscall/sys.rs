@@ -4,12 +4,14 @@ use core::ffi::c_char;
 use axconfig::ARCH;
 use axerrno::{AxError, AxResult};
 use axfs::FS_CONTEXT;
+use axhal::power;
 use linux_raw_sys::{
     general::{GRND_INSECURE, GRND_NONBLOCK, GRND_RANDOM},
     system::{new_utsname, sysinfo},
 };
 use starry_vm::{VmMutPtr, vm_write_slice};
 
+use crate::syscall::sys_sync;
 use crate::task::processes;
 
 pub fn sys_getuid() -> AxResult<isize> {
@@ -86,6 +88,35 @@ pub fn sys_sysinfo(info: *mut sysinfo) -> AxResult<isize> {
 
 pub fn sys_syslog(_type: i32, _buf: *mut c_char, _len: usize) -> AxResult<isize> {
     Ok(0)
+}
+
+const LINUX_REBOOT_MAGIC1: u32 = 0xfee1_dead;
+const LINUX_REBOOT_MAGIC2: [u32; 4] = [672_274_793, 850_722_78, 369_367_448, 537_993_216];
+const LINUX_REBOOT_CMD_RESTART: u32 = 0x0123_4567;
+const LINUX_REBOOT_CMD_HALT: u32 = 0xCDEF_0123;
+const LINUX_REBOOT_CMD_CAD_ON: u32 = 0x89AB_CDEF;
+const LINUX_REBOOT_CMD_CAD_OFF: u32 = 0x0000_0000;
+const LINUX_REBOOT_CMD_POWER_OFF: u32 = 0x4321_FEDC;
+const LINUX_REBOOT_CMD_RESTART2: u32 = 0xA1B2_C3D4;
+
+pub fn sys_reboot(magic1: u32, magic2: u32, cmd: u32, _arg: usize) -> AxResult<isize> {
+    debug!("sys_reboot <= magic1: {magic1:#x}, magic2: {magic2:#x}, cmd: {cmd:#x}");
+
+    if magic1 != LINUX_REBOOT_MAGIC1 || !LINUX_REBOOT_MAGIC2.contains(&magic2) {
+        return Err(AxError::InvalidInput);
+    }
+
+    match cmd {
+        LINUX_REBOOT_CMD_CAD_ON | LINUX_REBOOT_CMD_CAD_OFF => Ok(0),
+        LINUX_REBOOT_CMD_RESTART
+        | LINUX_REBOOT_CMD_RESTART2
+        | LINUX_REBOOT_CMD_HALT
+        | LINUX_REBOOT_CMD_POWER_OFF => {
+            let _ = sys_sync();
+            power::system_off();
+        }
+        _ => Err(AxError::InvalidInput),
+    }
 }
 
 bitflags::bitflags! {
