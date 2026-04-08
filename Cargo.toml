@@ -55,6 +55,7 @@ qemu = [
     "axfeat/defplat",
     "axfeat/bus-pci",
 ]
+shell-init = []
 smp = ["axfeat/smp"]
 
 vf2 = ["axfeat/driver-sdmmc"]

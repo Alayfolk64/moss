@@ -4,6 +4,7 @@ export LOG := warn
 export DWARF := n
 export MODE := release
 export MEMTRACK := n
+export SHELL_INIT ?= n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
 RUST_LLD ?= rust-lld
@@ -27,6 +28,10 @@ export APP_FEATURES := qemu
 
 ifeq ($(MEMTRACK), y)
 	APP_FEATURES += starry-api/memtrack
+endif
+
+ifeq ($(SHELL_INIT), y)
+	APP_FEATURES += shell-init
 endif
 
 default: build
@@ -154,10 +159,13 @@ ci-test:
 rv:
 	$(MAKE) ARCH=riscv64 run
 
+rv-shell:
+	$(MAKE) ARCH=riscv64 SHELL_INIT=y run
+
 la:
 	$(MAKE) ARCH=loongarch64 run
 
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain prepare-sdcard-rv prepare-sdcard-la
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain prepare-sdcard-rv prepare-sdcard-la rv-shell

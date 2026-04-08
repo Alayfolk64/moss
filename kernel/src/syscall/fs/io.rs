@@ -60,8 +60,11 @@ pub fn sys_readv(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
 /// Write data to the file indicated by `fd`.
 ///
 /// Return the written size if success.
-pub fn sys_write(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
+pub fn sys_write(fd: i32, buf: *const u8, len: usize) -> AxResult<isize> {
     debug!("sys_write <= fd: {fd}, buf: {buf:p}, len: {len}");
+    if len == 0 {
+        return Ok(0);
+    }
     Ok(get_file_like(fd)?.write(&mut VmBytes::new(buf, len))? as _)
 }
 

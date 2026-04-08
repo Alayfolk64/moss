@@ -121,6 +121,9 @@ pub fn sys_openat(
     mode: __kernel_mode_t,
 ) -> AxResult<isize> {
     let path = vm_load_string(path)?;
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
     debug!("sys_openat <= {dirfd} {path:?} {flags:#o} {mode:#o}");
 
     let mode = mode & !current().as_thread().proc_data.umask();

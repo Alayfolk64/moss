@@ -4,9 +4,14 @@
 
 extern crate alloc;
 
-use alloc::{borrow::ToOwned, vec::Vec};
+use alloc::{borrow::ToOwned, format, vec::Vec};
 
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", include_str!("init.sh")];
+pub const INIT_MODE: &str = if cfg!(feature = "shell-init") {
+    "shell"
+} else {
+    "autotest"
+};
 
 #[unsafe(no_mangle)]
 fn main() {
@@ -15,7 +20,7 @@ fn main() {
         .copied()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    let envs = [];
+    let envs = [format!("STARRY_INIT_MODE={INIT_MODE}")];
 
     starry_kernel::entry::init(&args, &envs);
 }
