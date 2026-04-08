@@ -26,9 +26,7 @@ fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
     };
 
     let busybox_variants = ["/musl/busybox", "/glibc/busybox", "/bin/busybox"];
-    let is_busybox_style = busybox_variants.contains(&exec);
-
-    if is_busybox_style {
+    if busybox_variants.contains(&exec) {
         for alt in busybox_variants {
             if alt == exec {
                 continue;
@@ -36,14 +34,6 @@ fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
             let mut candidate = args.to_vec();
             candidate[0] = alt.to_string();
             candidates.push(candidate);
-        }
-
-        if args.len() >= 4 && args[1] == "sh" && args[2] == "-c" {
-            candidates.push(vec![
-                "/bin/sh".to_string(),
-                "-c".to_string(),
-                args[3].clone(),
-            ]);
         }
     }
 

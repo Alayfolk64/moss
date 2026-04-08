@@ -11,6 +11,7 @@ use linux_raw_sys::general::{
     __WALL, __WCLONE, __WNOTHREAD, WCONTINUED, WEXITED, WNOHANG, WNOWAIT, WUNTRACED,
 };
 use starry_process::{Pid, Process};
+use starry_signal::Signo;
 use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::task::AsThread;
@@ -105,13 +106,30 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
         }
     };
 
-    block_on(interruptible(poll_fn(|cx| {
-        match check_children().transpose() {
-            Some(res) => Poll::Ready(res),
-            None => {
-                proc_data.child_exit_event.register(cx.waker());
-                Poll::Pending
+    loop {
+        match block_on(interruptible(poll_fn(|cx| {
+            match check_children().transpose() {
+                Some(res) => Poll::Ready(res),
+                None => {
+                    proc_data.child_exit_event.register(cx.waker());
+                    Poll::Pending
+                }
+            }
+        }))) {
+            Ok(res) => return res,
+            Err(_) => {
+                if let Some(res) = check_children().transpose() {
+                    return res;
+                }
+
+                let pending = curr.as_thread().signal.pending();
+                if pending.has(Signo::SIGCHLD) {
+                    debug!("sys_waitpid: interrupted by pending SIGCHLD, retrying");
+                    continue;
+                }
+
+                return Err(AxError::Interrupted);
             }
         }
-    })))?
+    }
 }
