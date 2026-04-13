@@ -77,75 +77,60 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-13 01:48:14.002183 UTC
+Boot at 2026-04-13 07:42:03.001185 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
-[TEST] Running /musl/basic/run-all.sh
-Testing brk :
-Segmentation fault (core dumped)
-Testing chdir :
-Segmentation fault (core dumped)
-Testing clone :
-Segmentation fault (core dumped)
-Testing close :
-Segmentation fault (core dumped)
-Testing dup2 :
-Segmentation fault (core dumped)
-Testing dup :
-Segmentation fault (core dumped)
-Testing execve :
-Segmentation fault (core dumped)
-Testing exit :
-Segmentation fault (core dumped)
-Testing fork :
-Segmentation fault (core dumped)
-Testing fstat :
-Segmentation fault (core dumped)
-Testing getcwd :
-Segmentation fault (core dumped)
-Testing getdents :
-Segmentation fault (core dumped)
-Testing getpid :
-Segmentation fault (core dumped)
-Testing getppid :
-Segmentation fault (core dumped)
-Testing gettimeofday :
-Segmentation fault (core dumped)
-Testing mkdir_ :
-Segmentation fault (core dumped)
-Testing mmap :
-Segmentation fault (core dumped)
-Testing mount :
-Segmentation fault (core dumped)
-Testing munmap :
-Segmentation fault (core dumped)
-Testing openat :
-Segmentation fault (core dumped)
-Testing open :
-Segmentation fault (core dumped)
-Testing pipe :
-Segmentation fault (core dumped)
-Testing read :
-Segmentation fault (core dumped)
-Testing sleep :
-Segmentation fault (core dumped)
-Testing times :
-Segmentation fault (core dumped)
-Testing umount :
-Segmentation fault (core dumped)
-Testing uname :
-Segmentation fault (core dumped)
-Testing unlink :
-Segmentation fault (core dumped)
-Testing wait :
-Segmentation fault (core dumped)
-Testing waitpid :
-Segmentation fault (core dumped)
-Testing write :
-Segmentation fault (core dumped)
-Testing yield :
-Segmentation fault (core dumped)
-[TEST] Exit code(139): /musl/basic/run-all.sh
-[TEST] all discovered scripts completed
+[TEST] enabled suites: lmbench
+[TEST] scan roots: / /musl /glibc
+[TEST] scanning /
+[TEST] scanning /musl
+[TEST] scanning /glibc
+#### OS COMP TEST GROUP START basic-musl ####
+[TEST] SKIP script: /musl/basic_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START basic-glibc ####
+[TEST] SKIP script: /glibc/basic_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-musl ####
+[TEST] SKIP script: /musl/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+[TEST] SKIP script: /glibc/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+[TEST] SKIP script: /musl/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+[TEST] SKIP script: /glibc/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-musl ####
+[TEST] SKIP script: /musl/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+[TEST] SKIP script: /glibc/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-musl ####
+[TEST] SKIP script: /musl/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+[TEST] SKIP script: /glibc/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+[TEST] SKIP script: /musl/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+[TEST] SKIP script: /glibc/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START libctest-musl ####
+[TEST] SKIP script: /musl/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START libctest-glibc ####
+[TEST] SKIP script: /glibc/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-glibc ####
+[TEST] Running /musl/lmbench_testcode.sh
+[TEST][lmbench] stage: entered test dir /musl
+[TEST][lmbench] stage: setup_runtime_tools begin
+[TEST][lmbench] stage: setup_runtime_tools end
+[TEST][lmbench] stage: prepare /code/lmbench_src/bin/build/lmbench_all begin

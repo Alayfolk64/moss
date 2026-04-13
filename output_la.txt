@@ -1,64 +1,3 @@
-
-OpenSBI v1.5.1
-   ____                    _____ ____ _____
-  / __ \                  / ____|  _ \_   _|
- | |  | |_ __   ___ _ __ | (___ | |_) || |
- | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
- | |__| | |_) |  __/ | | |____) | |_) || |_
-  \____/| .__/ \___|_| |_|_____/|____/_____|
-        | |
-        |_|
-
-Platform Name             : riscv-virtio,qemu
-Platform Features         : medeleg
-Platform HART Count       : 1
-Platform IPI Device       : aclint-mswi
-Platform Timer Device     : aclint-mtimer @ 10000000Hz
-Platform Console Device   : uart8250
-Platform HSM Device       : ---
-Platform PMU Device       : ---
-Platform Reboot Device    : syscon-reboot
-Platform Shutdown Device  : syscon-poweroff
-Platform Suspend Device   : ---
-Platform CPPC Device      : ---
-Firmware Base             : 0x80000000
-Firmware Size             : 327 KB
-Firmware RW Offset        : 0x40000
-Firmware RW Size          : 71 KB
-Firmware Heap Offset      : 0x49000
-Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
-Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
-Runtime SBI Version       : 2.0
-
-Domain0 Name              : root
-Domain0 Boot HART         : 0
-Domain0 HARTs             : 0*
-Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
-Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
-Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
-Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
-Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
-Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
-Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
-Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
-Domain0 Next Address      : 0x0000000080200000
-Domain0 Next Arg1         : 0x00000000bfe00000
-Domain0 Next Mode         : S-mode
-Domain0 SysReset          : yes
-Domain0 SysSuspend        : yes
-
-Boot HART ID              : 0
-Boot HART Domain          : root
-Boot HART Priv Version    : v1.12
-Boot HART Base ISA        : rv64imafdch
-Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
-Boot HART PMP Count       : 16
-Boot HART PMP Granularity : 2 bits
-Boot HART PMP Address Bits: 54
-Boot HART MHPM Info       : 16 (0x0007fff8)
-Boot HART Debug Triggers  : 2 triggers
-Boot HART MIDELEG         : 0x0000000000001666
-Boot HART MEDELEG         : 0x0000000000f0b509
 
        d8888                            .d88888b.   .d8888b.
       d88888                           d88P" "Y88b d88P  Y88b
@@ -69,28 +8,95 @@ Boot HART MEDELEG         : 0x0000000000f0b509
  d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
 d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
 
-arch = riscv64
-platform = riscv64-qemu-virt
-target = riscv64gc-unknown-none-elf
+arch = loongarch64
+platform = loongarch64-qemu-virt
+target = loongarch64-unknown-none-softfloat
 build_mode = release
 log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-13 01:31:19.017779800 UTC
+Boot at 2026-04-13 07:40:39.007444370 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
 [TEST] scan roots: / /musl /glibc
-[TEST] Running /glibc/basic_testcode.sh
-#### OS COMP TEST GROUP START basic-glibc ####
-./basic_testcode.sh: line 3: ./run-all.sh: not found
-#### OS COMP TEST GROUP END basic-glibc ####
-[TEST] Exit code(0): /glibc/basic_testcode.sh
+[TEST] scanning /
+[TEST] scanning /musl
+[TEST] scanning /glibc
+[TEST] discovered 24 candidate scripts
+[TEST] Running /musl/basic_testcode.sh
+#### OS COMP TEST GROUP START basic-musl ####
+Testing brk :
+sh: can't execute './brk': No such file or directory
+Testing chdir :
+sh: can't execute './chdir': No such file or directory
+Testing clone :
+sh: can't execute './clone': No such file or directory
+Testing close :
+sh: can't execute './close': No such file or directory
+Testing dup2 :
+sh: can't execute './dup2': No such file or directory
+Testing dup :
+sh: can't execute './dup': No such file or directory
+Testing execve :
+sh: can't execute './execve': No such file or directory
+Testing exit :
+sh: can't execute './exit': No such file or directory
+Testing fork :
+sh: can't execute './fork': No such file or directory
+Testing fstat :
+sh: can't execute './fstat': No such file or directory
+Testing getcwd :
+sh: can't execute './getcwd': No such file or directory
+Testing getdents :
+sh: can't execute './getdents': No such file or directory
+Testing getpid :
+sh: can't execute './getpid': No such file or directory
+Testing getppid :
+sh: can't execute './getppid': No such file or directory
+Testing gettimeofday :
+sh: can't execute './gettimeofday': No such file or directory
+Testing mkdir_ :
+sh: can't execute './mkdir_': No such file or directory
+Testing mmap :
+sh: can't execute './mmap': No such file or directory
+Testing mount :
+sh: can't execute './mount': No such file or directory
+Testing munmap :
+sh: can't execute './munmap': No such file or directory
+Testing openat :
+sh: can't execute './openat': No such file or directory
+Testing open :
+sh: can't execute './open': No such file or directory
+Testing pipe :
+sh: can't execute './pipe': No such file or directory
+Testing read :
+sh: can't execute './read': No such file or directory
+Testing sleep :
+sh: can't execute './sleep': No such file or directory
+Testing times :
+sh: can't execute './times': No such file or directory
+Testing umount :
+sh: can't execute './umount': No such file or directory
+Testing uname :
+sh: can't execute './uname': No such file or directory
+Testing unlink :
+sh: can't execute './unlink': No such file or directory
+Testing wait :
+sh: can't execute './wait': No such file or directory
+Testing waitpid :
+sh: can't execute './waitpid': No such file or directory
+Testing write :
+sh: can't execute './write': No such file or directory
+Testing yield :
+sh: can't execute './yield': No such file or directory
+#### OS COMP TEST GROUP END basic-musl ####
+[TEST] Exit code(0): /musl/basic_testcode.sh
 
-[TEST] Running /glibc/busybox_testcode.sh
-#### OS COMP TEST GROUP START busybox-glibc ####
+[TEST] Running /musl/busybox_testcode.sh
+#### OS COMP TEST GROUP START busybox-musl ####
 #### independent command test
 testcase busybox echo "#### independent command test" success
 testcase busybox ash -c exit success
@@ -107,7 +113,7 @@ Su Mo Tu We Th Fr Sa
                      
 testcase busybox cal success
 [H[Jtestcase busybox clear success
-Mon Apr 13 01:31:21 UTC 2026
+Mon Apr 13 07:40:49 UTC 2026
 testcase busybox date success
 Filesystem           1K-blocks      Used Available Use% Mounted on
 proc                        50         0        50   0% /proc
@@ -115,18 +121,18 @@ testcase busybox df success
 /aaa
 testcase busybox dirname /aaa/bbb success
 testcase busybox dmesg success
-224	./ltp/bin
+220	./ltp/bin
 392	./ltp/runtest
 12	./ltp/scenario_groups
 40	./ltp/testscripts
-2652	./ltp/testcases/bin/datafiles
 76	./ltp/testcases/bin/ftrace_stress
-1444972	./ltp/testcases/bin
+2652	./ltp/testcases/bin/datafiles
+1564840	./ltp/testcases/bin
 24	./ltp/testcases/data/ar01
-96	./ltp/testcases/data/file01
+108	./ltp/testcases/data/file01
 24	./ltp/testcases/data/ld01
-76	./ltp/testcases/data/ldd01
-68	./ltp/testcases/data/nm01
+148	./ltp/testcases/data/ldd01
+96	./ltp/testcases/data/nm01
 12	./ltp/testcases/data/unzip01
 12	./ltp/testcases/data/binfmt_misc02
 8	./ltp/testcases/data/ima_kexec
@@ -135,41 +141,40 @@ testcase busybox dmesg success
 8	./ltp/testcases/data/ima_selinux
 12	./ltp/testcases/data/lvm
 12	./ltp/testcases/data/mc_member
-380	./ltp/testcases/data
-1445356	./ltp/testcases
+492	./ltp/testcases/data
+1565336	./ltp/testcases
 208	./ltp/libkirk
 528	./ltp/metadata
-1446940	./ltp
+1566928	./ltp
+1084	./lib
 4	./basic/mnt
-1620	./basic
-4176	./lib
-1464320	.
+2012	./basic
+1578112	.
 testcase busybox du success
 2
 testcase busybox expr 1 + 1 success
 testcase busybox false success
 testcase busybox true success
-testcase busybox which ls fail
+/bin/ls
+testcase busybox which ls success
 Linux
 testcase busybox uname success
- 01:31:23 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
+ 07:40:50 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
 testcase busybox uptime success
 abcntestcase busybox printf "abcn" success
 PID   USER     TIME  COMMAND
     6 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
-   19 0         0:00 /musl/busybox sh ./busybox_testcode.sh
-   22 0         0:00 /musl/busybox sh ./busybox_testcode.sh
-   41 0         0:00 ./busybox ps
+   85 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  104 0         0:00 ./busybox ps
 testcase busybox ps success
-/glibc
+/musl
 testcase busybox pwd success
               total        used        free      shared  buff/cache   available
 Mem:              0 18014398494685956           0           0    14796028    18768344
 Swap:             0           0           0
 testcase busybox free success
-Mon Apr 13 01:31:23 2026  0.000000 seconds
+Mon Apr 13 07:40:50 2026  0.000000 seconds
 testcase busybox hwclock success
-sh: sleep: not found
 testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
 [1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
 [1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
@@ -249,7 +254,7 @@ hello world
 testcase busybox sort test.txt | ./busybox uniq success
   File: test.txt
   Size: 60        	Blocks: 8          IO Block: 4096   regular file
-Device: 1h/1d	Inode: 3217        Links: 1
+Device: 1h/1d	Inode: 3235        Links: 1
 Access: (0644/-rw-r--r--)  Uid: (    0/ UNKNOWN)   Gid: (    0/ UNKNOWN)
 Access: 1970-01-01 00:00:00.000000000 +0000
 Modify: 1970-01-01 00:00:00.000000000 +0000
@@ -285,76 +290,53 @@ testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
 testcase busybox rm busybox_cmd.bak -f success
 ./busybox_cmd.txt
 testcase busybox find -name "busybox_cmd.txt" success
-#### OS COMP TEST GROUP END busybox-glibc ####
-[TEST] Exit code(0): /glibc/busybox_testcode.sh
+#### OS COMP TEST GROUP END busybox-musl ####
+[TEST] Exit code(0): /musl/busybox_testcode.sh
 
-[TEST] Running /glibc/cyclictest_testcode.sh
-#### OS COMP TEST GROUP START cyclictest-glibc ####
+[TEST] Running /musl/cyclictest_testcode.sh
+#### OS COMP TEST GROUP START cyclictest-musl ####
 ====== cyclictest NO_STRESS_P1 begin ======
-# /dev/cpu_dma_latency set to 0us
-WARN: High resolution timers not available
-T: 0 (   86) P:99 I:1000 C:    105 Min:     90 Act: 8208 Avg: 9135 Max:   16193
-====== cyclictest NO_STRESS_P1 end: success ======
+sh: can't execute './cyclictest': No such file or directory
+====== cyclictest NO_STRESS_P1 end: fail ======
 ====== cyclictest NO_STRESS_P8 begin ======
-# /dev/cpu_dma_latency set to 0us
-WARN: High resolution timers not available
-T: 0 (   88) P:99 I:1000 C:    101 Min:     45 Act: 7077 Avg: 9458 Max:   22204
-T: 1 (   89) P:99 I:1500 C:    100 Min:     13 Act:10783 Avg: 9069 Max:   12256
-T: 2 (   90) P:99 I:2000 C:     98 Min:   6362 Act: 9914 Avg: 8576 Max:   11059
-T: 3 (   91) P:99 I:2500 C:     98 Min:   5779 Act:10782 Avg: 8496 Max:   11426
-T: 4 (   92) P:99 I:3000 C:     99 Min:   5056 Act: 8425 Avg: 8413 Max:   11651
-T: 5 (   93) P:99 I:3500 C:     98 Min:   4428 Act:10845 Avg: 8296 Max:   11835
-T: 6 (   94) P:99 I:4000 C:     98 Min:   3630 Act: 8121 Avg: 8439 Max:   12149
-T: 7 (   95) P:99 I:4500 C:     99 Min:     13 Act: 8059 Avg: 7628 Max:   11918
-====== cyclictest NO_STRESS_P8 end: success ======
+sh: can't execute './cyclictest': No such file or directory
+====== cyclictest NO_STRESS_P8 end: fail ======
 ====== start hackbench ======
-./cyclictest_testcode.sh: line 22: sleep: not found
+sh: can't execute './hackbench': No such file or directory
 ====== cyclictest STRESS_P1 begin ======
-# /dev/cpu_dma_latency set to 0us
-WARN: High resolution timers not available
-T: 0 (   98) P:99 I:1000 C:    102 Min:     34 Act:10989 Avg: 9195 Max:   11689
-====== cyclictest STRESS_P1 end: success ======
+sh: can't execute './cyclictest': No such file or directory
+====== cyclictest STRESS_P1 end: fail ======
 ====== cyclictest STRESS_P8 begin ======
-# /dev/cpu_dma_latency set to 0us
-WARN: High resolution timers not available
-T: 0 (  100) P:99 I:1000 C:    102 Min:     15 Act:10053 Avg: 9444 Max:   12168
-T: 1 (  101) P:99 I:1500 C:    101 Min:   6004 Act: 7687 Avg: 9273 Max:   11993
-T: 2 (  102) P:99 I:2000 C:    100 Min:   5318 Act:12586 Avg: 8894 Max:   12586
-T: 3 (  103) P:99 I:2500 C:    100 Min:   4737 Act:11964 Avg: 9119 Max:   12032
-T: 4 (  104) P:99 I:3000 C:    100 Min:   3515 Act:12519 Avg: 8306 Max:   12519
-T: 5 (  105) P:99 I:3500 C:    100 Min:   2936 Act:12592 Avg: 8133 Max:   12592
-T: 6 (  106) P:99 I:4000 C:    100 Min:     34 Act:11569 Avg: 8281 Max:   12053
-T: 7 (  107) P:99 I:4500 C:    100 Min:   3850 Act: 4730 Avg: 7845 Max:   11992
-====== cyclictest STRESS_P8 end: success ======
-sh: can't kill pid 96: No such process
-./cyclictest_testcode.sh: line 35: sleep: not found
+sh: can't execute './cyclictest': No such file or directory
+====== cyclictest STRESS_P8 end: fail ======
+kill: can't kill pid 162: No such process
 ====== kill hackbench: fail, ignore STRESS result ======
-#### OS COMP TEST GROUP END cyclictest-glibc ####
-[TEST] Exit code(0): /glibc/cyclictest_testcode.sh
+#### OS COMP TEST GROUP END cyclictest-musl ####
+[TEST] Exit code(0): /musl/cyclictest_testcode.sh
 
-[TEST] Running /glibc/iozone_testcode.sh
-#### OS COMP TEST GROUP START iozone-glibc ####
+[TEST] Running /musl/iozone_testcode.sh
+#### OS COMP TEST GROUP START iozone-musl ####
 iozone automatic measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughput write/read measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughput random-read measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughput read-backwards measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughput stride-read measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughput fwrite/fread measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughput pwrite/pread measurements
-Segmentation fault (core dumped)
+sh: can't execute './iozone': No such file or directory
 iozone throughtput pwritev/preadv measurements
-Segmentation fault (core dumped)
-#### OS COMP TEST GROUP END iozone-glibc ####
-[TEST] Exit code(0): /glibc/iozone_testcode.sh
+sh: can't execute './iozone': No such file or directory
+#### OS COMP TEST GROUP END iozone-musl ####
+[TEST] Exit code(0): /musl/iozone_testcode.sh
 
-[TEST] Running /glibc/iperf_testcode.sh
-#### OS COMP TEST GROUP START iperf-glibc ####
+[TEST] Running /musl/iperf_testcode.sh
+#### OS COMP TEST GROUP START iperf-musl ####
 ====== iperf BASIC_UDP begin ======
 iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
 ====== iperf BASIC_UDP end: fail ======
@@ -379,103 +361,143 @@ iperf3: error - unable to connect to server - server may have stopped running or
 iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
 ====== iperf REVERSE_TCP end: fail ======
 
-#### OS COMP TEST GROUP END iperf-glibc ####
-[TEST] Exit code(0): /glibc/iperf_testcode.sh
+#### OS COMP TEST GROUP END iperf-musl ####
+[TEST] Exit code(0): /musl/iperf_testcode.sh
 
-[TEST] Running /glibc/libcbench_testcode.sh
-#### OS COMP TEST GROUP START libcbench-glibc ####
+[TEST] Running /musl/libcbench_testcode.sh
+#### OS COMP TEST GROUP START libcbench-musl ####
 b_malloc_sparse (0)
-  time: 0.499470600, virt: 0, res: 0, dirty: 0
+  time: 0.615144540, virt: 0, res: 0, dirty: 0
 
 b_malloc_bubble (0)
-  time: 0.427378400, virt: 0, res: 0, dirty: 0
+  time: 0.566306040, virt: 0, res: 0, dirty: 0
 
 b_malloc_tiny1 (0)
-  time: 0.010087600, virt: 0, res: 0, dirty: 0
+  time: 0.039534790, virt: 0, res: 0, dirty: 0
 
 b_malloc_tiny2 (0)
-  time: 0.008449900, virt: 0, res: 0, dirty: 0
+  time: 0.033113040, virt: 0, res: 0, dirty: 0
 
 b_malloc_big1 (0)
-  time: 0.130973400, virt: 0, res: 0, dirty: 0
+  time: 0.240208420, virt: 0, res: 0, dirty: 0
 
 b_malloc_big2 (0)
-  time: 0.092635600, virt: 0, res: 0, dirty: 0
+  time: 0.204760420, virt: 0, res: 0, dirty: 0
 
 b_malloc_thread_stress (0)
-  time: 0.141396400, virt: 0, res: 0, dirty: 0
+  time: 0.140792290, virt: 0, res: 0, dirty: 0
 
 b_malloc_thread_local (0)
-  time: 0.119355600, virt: 0, res: 0, dirty: 0
+  time: 0.114861080, virt: 0, res: 0, dirty: 0
 
 b_string_strstr ("abcdefghijklmnopqrstuvwxyz")
-  time: 0.034151900, virt: 0, res: 0, dirty: 0
+  time: 0.037273960, virt: 0, res: 0, dirty: 0
 
 b_string_strstr ("azbycxdwevfugthsirjqkplomn")
-  time: 0.019112300, virt: 0, res: 0, dirty: 0
+  time: 0.035534500, virt: 0, res: 0, dirty: 0
 
 b_string_strstr ("aaaaaaaaaaaaaacccccccccccc")
-  time: 0.040949900, virt: 0, res: 0, dirty: 0
+  time: 0.028785590, virt: 0, res: 0, dirty: 0
 
 b_string_strstr ("aaaaaaaaaaaaaaaaaaaaaaaaac")
-  time: 0.018612600, virt: 0, res: 0, dirty: 0
+  time: 0.028072000, virt: 0, res: 0, dirty: 0
 
 b_string_strstr ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac")
-  time: 0.048560700, virt: 0, res: 0, dirty: 0
+  time: 0.037119170, virt: 0, res: 0, dirty: 0
 
 b_string_memset (0)
-  time: 0.022605700, virt: 0, res: 0, dirty: 0
+  time: 0.022281540, virt: 0, res: 0, dirty: 0
 
 b_string_strchr (0)
-  time: 0.024084100, virt: 0, res: 0, dirty: 0
+  time: 0.031280420, virt: 0, res: 0, dirty: 0
 
 b_string_strlen (0)
-  time: 0.020006300, virt: 0, res: 0, dirty: 0
+  time: 0.027468290, virt: 0, res: 0, dirty: 0
 
 b_pthread_createjoin_serial1 (0)
-  time: 0.964480300, virt: 0, res: 0, dirty: 0
+  time: 0.017265460, virt: 0, res: 0, dirty: 0
 
 b_pthread_createjoin_serial2 (0)
-  time: 0.291364300, virt: 0, res: 0, dirty: 0
+  time: 1.160224630, virt: 0, res: 0, dirty: 0
 
 b_pthread_create_serial1 (0)
-  time: 1.104651400, virt: 0, res: 0, dirty: 0
+  time: 0.007397250, virt: 0, res: 0, dirty: 0
 
 b_pthread_uselesslock (0)
-  time: 0.244010500, virt: 0, res: 0, dirty: 0
+  time: 0.070107410, virt: 0, res: 0, dirty: 0
 
 b_utf8_bigbuf (0)
-  time: 0.035067700, virt: 0, res: 0, dirty: 0
+  time: 0.069277910, virt: 0, res: 0, dirty: 0
 
 b_utf8_onebyone (0)
-  time: 0.030615600, virt: 0, res: 0, dirty: 0
+  time: 0.179675090, virt: 0, res: 0, dirty: 0
 
 b_stdio_putcgetc (0)
-  time: 0.535487100, virt: 0, res: 0, dirty: 0
+  time: 0.425217000, virt: 0, res: 0, dirty: 0
 
 b_stdio_putcgetc_unlocked (0)
-  time: 0.437123300, virt: 0, res: 0, dirty: 0
+  time: 0.398891830, virt: 0, res: 0, dirty: 0
 
 b_regex_compile ("(a|b|c)*d*b")
-  time: 0.150812500, virt: 0, res: 0, dirty: 0
+  time: 0.365721750, virt: 0, res: 0, dirty: 0
 
 b_regex_search ("(a|b|c)*d*b")
-  time: 0.073128800, virt: 0, res: 0, dirty: 0
+  time: 0.161367910, virt: 0, res: 0, dirty: 0
 
 b_regex_search ("a{25}b")
-  time: 0.239026400, virt: 0, res: 0, dirty: 0
+  time: 0.383522080, virt: 0, res: 0, dirty: 0
 
-#### OS COMP TEST GROUP END libcbench-glibc ####
-[TEST] Exit code(0): /glibc/libcbench_testcode.sh
+#### OS COMP TEST GROUP END libcbench-musl ####
+[TEST] Exit code(0): /musl/libcbench_testcode.sh
 
-[TEST] Running /glibc/libctest_testcode.sh
-#### OS COMP TEST GROUP START libctest-glibc ####
-./libctest_testcode.sh: line 3: ./run-static.sh: not found
-./libctest_testcode.sh: line 4: ./run-dynamic.sh: not found
-#### OS COMP TEST GROUP END libctest-glibc ####
-[TEST] Exit code(0): /glibc/libctest_testcode.sh
-
-[TEST] Running /glibc/lmbench_testcode.sh
-#### OS COMP TEST GROUP START lmbench-glibc ####
-latency measurements
-Simple syscall: 2.1563 microseconds
+[TEST] Running /musl/libctest_testcode.sh
+#### OS COMP TEST GROUP START libctest-musl ####
+========== START entry-static.exe argv ==========
+Pass!
+========== END entry-static.exe argv ==========
+========== START entry-static.exe basename ==========
+Pass!
+========== END entry-static.exe basename ==========
+========== START entry-static.exe clocale_mbfuncs ==========
+Pass!
+========== END entry-static.exe clocale_mbfuncs ==========
+========== START entry-static.exe clock_gettime ==========
+Pass!
+========== END entry-static.exe clock_gettime ==========
+========== START entry-static.exe dirname ==========
+Pass!
+========== END entry-static.exe dirname ==========
+========== START entry-static.exe env ==========
+Pass!
+========== END entry-static.exe env ==========
+========== START entry-static.exe fdopen ==========
+Pass!
+========== END entry-static.exe fdopen ==========
+========== START entry-static.exe fnmatch ==========
+Pass!
+========== END entry-static.exe fnmatch ==========
+========== START entry-static.exe fscanf ==========
+Pass!
+========== END entry-static.exe fscanf ==========
+========== START entry-static.exe fwscanf ==========
+Pass!
+========== END entry-static.exe fwscanf ==========
+========== START entry-static.exe iconv_open ==========
+Pass!
+========== END entry-static.exe iconv_open ==========
+========== START entry-static.exe inet_pton ==========
+Pass!
+========== END entry-static.exe inet_pton ==========
+========== START entry-static.exe mbc ==========
+Pass!
+========== END entry-static.exe mbc ==========
+========== START entry-static.exe memstream ==========
+Pass!
+========== END entry-static.exe memstream ==========
+========== START entry-static.exe pthread_cancel_points ==========
+Pass!
+========== END entry-static.exe pthread_cancel_points ==========
+========== START entry-static.exe pthread_cancel ==========
+Pass!
+========== END entry-static.exe pthread_cancel ==========
+========== START entry-static.exe pthread_cond ==========
