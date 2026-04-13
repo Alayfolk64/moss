@@ -6,7 +6,12 @@ extern crate alloc;
 
 use alloc::{borrow::ToOwned, vec::Vec};
 
-pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", include_str!("init.sh")];
+#[cfg(feature = "shell-init")]
+pub const INIT_SCRIPT: &str = include_str!("init-shell.sh");
+#[cfg(not(feature = "shell-init"))]
+pub const INIT_SCRIPT: &str = include_str!("init.sh");
+
+pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
 
 #[unsafe(no_mangle)]
 fn main() {

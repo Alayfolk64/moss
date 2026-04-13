@@ -55,6 +55,7 @@ qemu = [
     "axfeat/defplat",
     "axfeat/bus-pci",
 ]
+shell-init = []
 smp = ["axfeat/smp"]
 
 vf2 = ["axfeat/driver-sdmmc"]
@@ -72,5 +73,5 @@ starry-kernel.workspace = true
 lwext4_rust = { path = "third_party/lwext4_rust" }
 
 [package.metadata.vendor-filter]
-platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none"]
+platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none-softfloat"]
 all-features = true

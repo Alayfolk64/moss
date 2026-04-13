@@ -1,6 +1,8 @@
 use alloc::{
     string::{String, ToString},
     sync::Arc,
+    vec,
+    vec::Vec,
 };
 
 use axfs::FS_CONTEXT;
@@ -16,19 +18,63 @@ use crate::{
     task::{ProcessData, Thread, add_task_to_table, new_user_task, spawn_alarm_task},
 };
 
+fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
+    let mut candidates = vec![args.to_vec()];
+
+    let Some(exec) = args.first().map(String::as_str) else {
+        return candidates;
+    };
+
+    let busybox_variants = ["/musl/busybox", "/glibc/busybox", "/bin/busybox"];
+    if busybox_variants.contains(&exec) {
+        for alt in busybox_variants {
+            if alt == exec {
+                continue;
+            }
+            let mut candidate = args.to_vec();
+            candidate[0] = alt.to_string();
+            candidates.push(candidate);
+        }
+    }
+
+    candidates
+}
+
+fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
+    let mut last_err = None;
+
+    for candidate in launch_candidates(args) {
+        match FS_CONTEXT.lock().resolve(&candidate[0]) {
+            Ok(loc) => {
+                let path = loc
+                    .absolute_path()
+                    .expect("Failed to get executable absolute path")
+                    .to_string();
+                let name = loc.name().to_string();
+                if candidate != args {
+                    info!("Init executable fallback: {:?} -> {}", args.first(), candidate[0]);
+                }
+                return (candidate, path, name);
+            }
+            Err(err) => {
+                last_err = Some((candidate[0].clone(), err));
+            }
+        }
+    }
+
+    panic!(
+        "Failed to resolve executable path from {:?}, last error: {:?}",
+        args.first(),
+        last_err
+    );
+}
+
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
     pseudofs::mount_all().expect("Failed to mount pseudofs");
     spawn_alarm_task();
 
-    let loc = FS_CONTEXT
-        .lock()
-        .resolve(&args[0])
-        .expect("Failed to resolve executable path");
-    let path = loc
-        .absolute_path()
-        .expect("Failed to get executable absolute path");
-    let name = loc.name();
+    let (args, path, name) = resolve_init_command(args);
 
     let mut uspace = new_user_aspace_empty()
         .and_then(|mut it| {
@@ -37,11 +83,11 @@ pub fn init(args: &[String], envs: &[String]) {
         })
         .expect("Failed to create user address space");
 
-    let (entry_vaddr, ustack_top) = load_user_app(&mut uspace, None, args, envs)
+    let (entry_vaddr, ustack_top) = load_user_app(&mut uspace, None, &args, envs)
         .unwrap_or_else(|e| panic!("Failed to load user app: {}", e));
 
     let uctx = UserContext::new(entry_vaddr.into(), ustack_top, 0);
-    let mut task = new_user_task(name, uctx, 0);
+    let mut task = new_user_task(&name, uctx, 0);
     task.ctx_mut().set_page_table_root(uspace.page_table_root());
 
     let pid = task.id().as_u64() as Pid;
@@ -52,8 +98,8 @@ pub fn init(args: &[String], envs: &[String]) {
 
     let proc = ProcessData::new(
         proc,
-        path.to_string(),
-        Arc::new(args.to_vec()),
+        path,
+        Arc::new(args),
         Arc::new(Mutex::new(uspace)),
         Arc::default(),
         None,

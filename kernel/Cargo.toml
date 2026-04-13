@@ -31,6 +31,7 @@ axfeat = { workspace = true, features = [
 
     "fs",
     "fs-ext4",
+    "fs-fat",
 ] }
 
 axalloc.workspace = true

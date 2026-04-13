@@ -4,6 +4,7 @@ export LOG := warn
 export DWARF := n
 export MODE := release
 export MEMTRACK := n
+export SHELL_INIT ?= n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
 RUST_LLD ?= rust-lld
@@ -24,14 +25,23 @@ export A := $(PWD)
 export NO_AXSTD := y
 export AX_LIB := axfeat
 export APP_FEATURES := qemu
+CARGO_CONFIG_TEMPLATE := $(A)/cargo-config.toml
 
 ifeq ($(MEMTRACK), y)
 	APP_FEATURES += starry-api/memtrack
 endif
 
+ifeq ($(SHELL_INIT), y)
+	APP_FEATURES += shell-init
+endif
+
 default: build
 
-toolchain:
+ensure-cargo-config:
+	@mkdir -p $(A)/.cargo
+	@cp -f $(CARGO_CONFIG_TEMPLATE) $(A)/.cargo/config.toml
+
+toolchain: ensure-cargo-config
 	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
 
 KERNEL_NAME := $(notdir $(A))
@@ -154,10 +164,31 @@ ci-test:
 rv:
 	$(MAKE) ARCH=riscv64 run
 
+rv-shell:
+	$(MAKE) ARCH=riscv64 SHELL_INIT=y run
+
 la:
-	$(MAKE) ARCH=loongarch64 run
+	$(MAKE) ARCH=loongarch64 BUS=pci run
+
+la-shell:
+	$(MAKE) ARCH=loongarch64 BUS=pci SHELL_INIT=y kernel-la
+	@img="$(A)/sdcard-la.img"; \
+	tmp_img="$(A)/tmp-la-shell.img"; \
+	if [ ! -f "$$img" ]; then \
+		$(MAKE) --no-print-directory prepare-sdcard-la; \
+	fi; \
+	rm -f "$$tmp_img"; \
+	cp -f "$$img" "$$tmp_img"; \
+	qemu-system-loongarch64 -kernel $(A)/kernel-la -m 1G -nographic -smp 1 \
+		-drive file=$$tmp_img,if=none,format=raw,snapshot=on,id=x0 \
+		-device virtio-blk-pci,drive=x0 \
+		-no-reboot \
+		-device virtio-net-pci,netdev=net0 \
+		-netdev user,id=net0 \
+		-serial mon:stdio \
+		-rtc base=utc
 
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain prepare-sdcard-rv prepare-sdcard-la
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
