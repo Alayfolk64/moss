@@ -146,3 +146,8 @@ Select on 100 fd's: 106.3775 microseconds
 Signal handler installation: 6.7518 microseconds
 Signal handler overhead: 18.1125 microseconds
 Protection fault: 2.1197 microseconds
+Pipe latency: 228.0426 microseconds
+Process fork+exit: 2345.7421 microseconds
+Process fork+execve: 2375.9513 microseconds
+Process fork+/bin/sh -c: 209395.5000 microseconds
+File /var/tmp/XXX write bandwidth:12669 KB/sec
