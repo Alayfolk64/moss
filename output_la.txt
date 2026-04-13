@@ -16,7 +16,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-13 14:03:39.004306960 UTC
+Boot at 2026-04-13 17:10:11.001464460 UTC
 
 Welcome to Starry OS
 
@@ -43,6 +43,430 @@ Testing clone :
 ========== START test_clone ==========
   Child says successfully!
 clone process successfully.
-pid:34
+pid:36
 ========== END test_clone ==========
 Testing close :
+========== START test_close ==========
+  close 3 success.
+========== END test_close ==========
+Testing dup2 :
+========== START test_dup2 ==========
+  from fd 100
+========== END test_dup2 ==========
+Testing dup :
+========== START test_dup ==========
+  new fd is 3.
+========== END test_dup ==========
+Testing execve :
+========== START test_execve ==========
+  I am test_echo.
+execve success.
+========== END main ==========
+Testing exit :
+========== START test_exit ==========
+exit OK.
+========== END test_exit ==========
+Testing fork :
+========== START test_fork ==========
+  child process.
+  parent process. wstatus:0
+========== END test_fork ==========
+Testing fstat :
+========== START test_fstat ==========
+fstat ret: 0
+fstat: dev: 1, inode: 3191, mode: 33261, nlink: 1, size: 52, atime: 1774331885, mtime: 1774331885, ctime: 1774331885
+========== END test_fstat ==========
+Testing getcwd :
+========== START test_getcwd ==========
+getcwd: /musl/basic successfully!
+========== END test_getcwd ==========
+Testing getdents :
+========== START test_getdents ==========
+open fd:3
+getdents fd:496
+getdents success.
+.
+
+========== END test_getdents ==========
+Testing getpid :
+========== START test_getpid ==========
+getpid success.
+pid = 48
+========== END test_getpid ==========
+Testing getppid :
+========== START test_getppid ==========
+  getppid success. ppid : 32
+========== END test_getppid ==========
+Testing gettimeofday :
+========== START test_gettimeofday ==========
+gettimeofday success.
+start:9084014, end:9084038
+interval: 24
+========== END test_gettimeofday ==========
+Testing mkdir_ :
+========== START test_mkdir ==========
+mkdir ret: 0
+  mkdir success.
+========== END test_mkdir ==========
+Testing mmap :
+========== START test_mmap ==========
+file len: 27
+mmap content:   Hello, mmap successfully!
+========== END test_mmap ==========
+Testing mount :
+========== START test_mount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+mount successfully
+umount return: 0
+========== END test_mount ==========
+Testing munmap :
+========== START test_munmap ==========
+file len: 27
+munmap return: 0
+munmap successfully!
+========== END test_munmap ==========
+Testing openat :
+========== START test_openat ==========
+open dir fd: 3
+openat fd: 4
+openat success.
+========== END test_openat ==========
+Testing open :
+========== START test_open ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_open ==========
+Testing pipe :
+========== START test_pipe ==========
+cpid: 58
+cpid: 0
+  Write to pipe successfully.
+
+========== END test_pipe ==========
+Testing read :
+========== START test_read ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_read ==========
+Testing sleep :
+========== START test_sleep ==========
+sleep success.
+========== END test_sleep ==========
+Testing times :
+========== START test_times ==========
+mytimes success
+{tms_utime:3300, tms_stime:19526, tms_cutime:3300, tms_cstime:19526}
+========== END test_times ==========
+Testing umount :
+========== START test_umount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+umount success.
+return: 0
+========== END test_umount ==========
+Testing uname :
+========== START test_uname ==========
+Uname: Linux starry 10.0.0 10.0.0 loongarch64 https://github.com/Starry-OS/StarryOS
+========== END test_uname ==========
+Testing unlink :
+========== START test_unlink ==========
+  unlink success!
+========== END test_unlink ==========
+Testing wait :
+========== START test_wait ==========
+This is child process
+wait child success.
+wstatus: 0
+========== END test_wait ==========
+Testing waitpid :
+========== START test_waitpid ==========
+This is child process
+waitpid successfully.
+wstatus: 3
+========== END test_waitpid ==========
+Testing write :
+========== START test_write ==========
+Hello operating system contest.
+========== END test_write ==========
+Testing yield :
+========== START test_yield ==========
+  I am child process: 71. iteration 0.
+  I am child process: 72. iteration 1.
+  I am child process: 73. iteration 2.
+  I am child process: 71. iteration 0.
+  I am child process: 72. iteration 1.
+  I am child process: 73. iteration 2.
+  I am child process: 71. iteration 0.
+  I am child process: 72. iteration 1.
+  I am child process: 73. iteration 2.
+  I am child process: 71. iteration 0.
+  I am child process: 72. iteration 1.
+  I am child process: 73. iteration 2.
+  I am child process: 71. iteration 0.
+  I am child process: 72. iteration 1.
+  I am child process: 73. iteration 2.
+========== END test_yield ==========
+#### OS COMP TEST GROUP END basic-musl ####
+[TEST] Exit code(0): /musl/basic_testcode.sh
+
+[TEST] Running /glibc/basic_testcode.sh
+#### OS COMP TEST GROUP START basic-glibc ####
+Testing brk :
+========== START test_brk ==========
+Before alloc,heap pos: 1073741824
+After alloc,heap pos: 1073741888
+Alloc again,heap pos: 1073741952
+========== END test_brk ==========
+Testing chdir :
+========== START test_chdir ==========
+chdir ret: 0
+  current working dir : /glibc/basic/test_chdir
+========== END test_chdir ==========
+Testing clone :
+========== START test_clone ==========
+  Child says successfully!
+clone process successfully.
+pid:84
+========== END test_clone ==========
+Testing close :
+========== START test_close ==========
+  close 3 success.
+========== END test_close ==========
+Testing dup2 :
+========== START test_dup2 ==========
+  from fd 100
+========== END test_dup2 ==========
+Testing dup :
+========== START test_dup ==========
+  new fd is 3.
+========== END test_dup ==========
+Testing execve :
+========== START test_execve ==========
+  I am test_echo.
+execve success.
+========== END main ==========
+Testing exit :
+========== START test_exit ==========
+exit OK.
+========== END test_exit ==========
+Testing fork :
+========== START test_fork ==========
+  child process.
+  parent process. wstatus:0
+========== END test_fork ==========
+Testing fstat :
+========== START test_fstat ==========
+fstat ret: 0
+fstat: dev: 1, inode: 134253, mode: 33261, nlink: 1, size: 52, atime: 1774331852, mtime: 1774331852, ctime: 1774331852
+========== END test_fstat ==========
+Testing getcwd :
+========== START test_getcwd ==========
+getcwd: /glibc/basic successfully!
+========== END test_getcwd ==========
+Testing getdents :
+========== START test_getdents ==========
+open fd:3
+getdents fd:512
+getdents success.
+.
+
+========== END test_getdents ==========
+Testing getpid :
+========== START test_getpid ==========
+getpid success.
+pid = 96
+========== END test_getpid ==========
+Testing getppid :
+========== START test_getppid ==========
+  getppid success. ppid : 80
+========== END test_getppid ==========
+Testing gettimeofday :
+========== START test_gettimeofday ==========
+gettimeofday success.
+start:9086138, end:9086161
+interval: 23
+========== END test_gettimeofday ==========
+Testing mkdir_ :
+========== START test_mkdir ==========
+mkdir ret: 0
+  mkdir success.
+========== END test_mkdir ==========
+Testing mmap :
+========== START test_mmap ==========
+file len: 27
+mmap content:   Hello, mmap successfully!
+========== END test_mmap ==========
+Testing mount :
+========== START test_mount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+mount successfully
+umount return: 0
+========== END test_mount ==========
+Testing munmap :
+========== START test_munmap ==========
+file len: 27
+munmap return: 0
+munmap successfully!
+========== END test_munmap ==========
+Testing openat :
+========== START test_openat ==========
+open dir fd: 3
+openat fd: 4
+openat success.
+========== END test_openat ==========
+Testing open :
+========== START test_open ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_open ==========
+Testing pipe :
+========== START test_pipe ==========
+cpid: 106
+cpid: 0
+  Write to pipe successfully.
+
+========== END test_pipe ==========
+Testing read :
+========== START test_read ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_read ==========
+Testing sleep :
+========== START test_sleep ==========
+sleep success.
+========== END test_sleep ==========
+Testing times :
+========== START test_times ==========
+mytimes success
+{tms_utime:3287, tms_stime:19027, tms_cutime:3287, tms_cstime:19027}
+========== END test_times ==========
+Testing umount :
+========== START test_umount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+umount success.
+return: 0
+========== END test_umount ==========
+Testing uname :
+========== START test_uname ==========
+Uname: Linux starry 10.0.0 10.0.0 loongarch64 https://github.com/Starry-OS/StarryOS
+========== END test_uname ==========
+Testing unlink :
+========== START test_unlink ==========
+  unlink success!
+========== END test_unlink ==========
+Testing wait :
+========== START test_wait ==========
+This is child process
+wait child success.
+wstatus: 0
+========== END test_wait ==========
+Testing waitpid :
+========== START test_waitpid ==========
+This is child process
+waitpid successfully.
+wstatus: 3
+========== END test_waitpid ==========
+Testing write :
+========== START test_write ==========
+Hello operating system contest.
+========== END test_write ==========
+Testing yield :
+========== START test_yield ==========
+  I am child process: 119. iteration 0.
+  I am child process: 120. iteration 1.
+  I am child process: 121. iteration 2.
+  I am child process: 119. iteration 0.
+  I am child process: 120. iteration 1.
+  I am child process: 121. iteration 2.
+  I am child process: 119. iteration 0.
+  I am child process: 120. iteration 1.
+  I am child process: 121. iteration 2.
+  I am child process: 119. iteration 0.
+  I am child process: 120. iteration 1.
+  I am child process: 121. iteration 2.
+  I am child process: 119. iteration 0.
+  I am child process: 120. iteration 1.
+  I am child process: 121. iteration 2.
+========== END test_yield ==========
+#### OS COMP TEST GROUP END basic-glibc ####
+[TEST] Exit code(0): /glibc/basic_testcode.sh
+
+#### OS COMP TEST GROUP START busybox-musl ####
+[TEST] SKIP script: /musl/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+[TEST] SKIP script: /glibc/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+[TEST] SKIP script: /musl/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+[TEST] SKIP script: /glibc/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-musl ####
+[TEST] SKIP script: /musl/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+[TEST] SKIP script: /glibc/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-musl ####
+[TEST] SKIP script: /musl/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+[TEST] SKIP script: /glibc/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+[TEST] SKIP script: /musl/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+[TEST] SKIP script: /glibc/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START libctest-musl ####
+[TEST] SKIP script: /musl/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START libctest-glibc ####
+[TEST] SKIP script: /glibc/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-glibc ####
+#### OS COMP TEST GROUP START lmbench-musl ####
+[TEST] SKIP script: /musl/lmbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+[TEST] SKIP script: /glibc/lmbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START ltp-musl ####
+[TEST] SKIP script: /musl/ltp_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END ltp-musl ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+[TEST] SKIP script: /glibc/ltp_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END ltp-glibc ####
+#### OS COMP TEST GROUP START lua-musl ####
+[TEST] SKIP script: /musl/lua_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START lua-glibc ####
+[TEST] SKIP script: /glibc/lua_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-musl ####
+[TEST] SKIP script: /musl/netperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END netperf-musl ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+[TEST] SKIP script: /glibc/netperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END netperf-glibc ####
+#### OS COMP TEST GROUP START unixbench-musl ####
+[TEST] SKIP script: /musl/unixbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END unixbench-musl ####
+#### OS COMP TEST GROUP START unixbench-glibc ####
+[TEST] SKIP script: /glibc/unixbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END unixbench-glibc ####
+[TEST] group summary: total=12 passed=1 failed=0 skipped=11
+[TEST] script summary: total=2 passed=2 failed=0
+[TEST] all discovered scripts completed
+[37m[ 16.294426 0:257 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
+[m[37m[ 16.321166 0:258 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
+[m

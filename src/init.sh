@@ -59,7 +59,7 @@ echo "[TEST] detected arch: $ARCH_NAME"
 # 共 12 组题目，可手动修改
 # 默认全部开启，符合“扫描并依次执行所有测试点”
 # =========================
-: "${RUN_BASIC:=1}"
+: "${RUN_BASIC:=0}"
 : "${RUN_BUSYBOX:=0}"
 : "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
@@ -67,7 +67,7 @@ echo "[TEST] detected arch: $ARCH_NAME"
 : "${RUN_LIBCBENCH:=0}"
 : "${RUN_LIBCTEST:=0}"
 : "${RUN_LMBENCH:=0}"
-: "${RUN_LTP:=0}"
+: "${RUN_LTP:=1}"
 : "${RUN_LUA:=0}"
 : "${RUN_NETPERF:=0}"
 : "${RUN_UNIXBENCH:=0}"
@@ -179,9 +179,20 @@ setup_runtime_tools() {
   [ -x /bin/sh ] || "$BB" cp -f "$BB" /bin/sh >/dev/null 2>&1 || true
   [ -x /bin/bash ] || "$BB" cp -f "$BB" /bin/bash >/dev/null 2>&1 || true
   [ -x /usr/bin/env ] || "$BB" cp -f "$BB" /usr/bin/env >/dev/null 2>&1 || true
-  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock; do
+  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout; do
     ensure_bb_cmd "$cmd"
   done
+
+  # Some LTP scripts shell out to `locale`; provide a tiny fallback when the
+  # command is unavailable in busybox/rootfs.
+  if ! command -v locale >/dev/null 2>&1; then
+    rt_pwd=$PWD
+    cd / >/dev/null 2>&1 || true
+    "$BB" mkdir -p bin >/dev/null 2>&1 || true
+    "$BB" sh -c 'printf "%s\n" "#!/bin/sh" "echo LANG=C" > /bin/locale' >/dev/null 2>&1 || true
+    "$BB" chmod +x /bin/locale >/dev/null 2>&1 || true
+    cd "$rt_pwd" >/dev/null 2>&1 || true
+  fi
   SETUP_RUNTIME_DONE=1
 }
 
@@ -212,17 +223,74 @@ run_test() {
   fi
 
   if [ "$test_name" = "ltp_testcode.sh" ]; then
-    target_dir="ltp/testcases/bin"
+    ltp_root="$PWD/ltp"
+    target_dir="$ltp_root/testcases/bin"
+    ltp_lib_dir="$ltp_root/testcases/lib"
+    ltp_testscripts_dir="$ltp_root/testscripts"
+
+    # LTP shell tests often source helper scripts with `. helper.sh` and run
+    # helper commands (e.g. tst_brk) that are resolved via PATH.
+    # Export LTP paths here to avoid "not found" in those cases.
+    PATH="$target_dir:$ltp_lib_dir:$ltp_testscripts_dir:$PATH"
+    LTPROOT="$ltp_root"
+    export PATH LTPROOT
+
     suite_ret=0
+    ltp_pass=0
+    ltp_fail=0
+    ltp_skip=0
+    ltp_total_timeout=${LTP_TOTAL_TIMEOUT:-100}
+    ltp_start=$("$BB" date +%s 2>/dev/null)
+    [ -n "$ltp_start" ] || ltp_start=$(date +%s 2>/dev/null)
+    [ -n "$ltp_start" ] || ltp_start=0
     for file in "$target_dir"/*; do
       [ -f "$file" ] || continue
       base=$(basename "$file")
+
+      now=$("$BB" date +%s 2>/dev/null)
+      [ -n "$now" ] || now=$(date +%s 2>/dev/null)
+      [ -n "$now" ] || now=$ltp_start
+      elapsed=$((now - ltp_start))
+      remaining=$((ltp_total_timeout - elapsed))
+      if [ "$remaining" -le 0 ]; then
+        echo "[TEST] LTP total timeout reached (${ltp_total_timeout}s), stopping."
+        suite_ret=1
+        break
+      fi
+
       echo "RUN LTP CASE $base"
-      "$file"
-      ret=$?
-      echo "FAIL LTP CASE $base : $ret"
-      [ "$ret" -ne 0 ] && suite_ret=1
+      if command -v timeout >/dev/null 2>&1; then
+        timeout "$remaining" "$file"
+        ret=$?
+      else
+        "$file"
+        ret=$?
+      fi
+      if [ "$ret" -eq 124 ]; then
+        echo "FAIL LTP CASE $base : $ret"
+        echo "[TEST] LTP total timeout reached (${ltp_total_timeout}s), stopping."
+        ltp_fail=$((ltp_fail + 1))
+        suite_ret=1
+        break
+      fi
+      case "$ret" in
+        0)
+          echo "PASS LTP CASE $base : $ret"
+          ltp_pass=$((ltp_pass + 1))
+          ;;
+        32)
+          # LTP uses 32 for TCONF (test skipped due to missing config/deps).
+          echo "SKIP LTP CASE $base : $ret"
+          ltp_skip=$((ltp_skip + 1))
+          ;;
+        *)
+          echo "FAIL LTP CASE $base : $ret"
+          ltp_fail=$((ltp_fail + 1))
+          suite_ret=1
+          ;;
+      esac
     done
+    echo "[TEST] LTP summary: pass=$ltp_pass fail=$ltp_fail skip=$ltp_skip"
     ret=$suite_ret
     cd "$old_pwd" || true
     echo "[TEST] Exit code($ret): $test_sh"
@@ -248,7 +316,7 @@ run_test() {
   PATH=$RUNTIME_PATH
   LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
   export HOME PATH LD_LIBRARY_PATH
-  for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock; do
+  for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock ar locale timeout; do
     eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
   done
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: run patched script begin"

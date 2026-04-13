@@ -128,6 +128,23 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
                     continue;
                 }
 
+                // Some signals should restart blocking syscalls (SA_RESTART).
+                // Retry waitpid in that case to match Linux behavior.
+                let restartable = (1u8..=64).filter_map(Signo::from_repr).any(|signo| {
+                    pending.has(signo) && proc_data.signal.can_restart(signo)
+                });
+                if restartable {
+                    debug!("sys_waitpid: interrupted by restartable signal, retrying");
+                    continue;
+                }
+
+                // Be tolerant to rare spurious wakeups where interrupt flag is set
+                // but no signal is pending by the time we re-check.
+                if pending.is_empty() {
+                    debug!("sys_waitpid: interrupted with empty pending set, retrying");
+                    continue;
+                }
+
                 return Err(AxError::Interrupted);
             }
         }
