@@ -3,6 +3,7 @@ use lazyinit::LazyInit;
 use loongArch64::time::Time;
 
 static NANOS_PER_TICK: LazyInit<u64> = LazyInit::new();
+const MIN_ONESHOT_TICKS: u64 = 4;
 
 /// RTC wall time offset in nanoseconds at monotonic time base.
 static mut RTC_EPOCHOFFSET_NANOS: u64 = 0;
@@ -11,7 +12,7 @@ pub(super) fn init_percpu() {
     #[cfg(feature = "irq")]
     {
         use loongArch64::register::tcfg;
-        tcfg::set_init_val(0);
+        tcfg::set_init_val(MIN_ONESHOT_TICKS as _);
         tcfg::set_periodic(false);
         tcfg::set_en(true);
         axplat::irq::set_enable(crate::config::devices::TIMER_IRQ, true);
@@ -127,7 +128,11 @@ impl TimeIf for TimeIfImpl {
 
         let ticks_now = Self::current_ticks();
         let ticks_deadline = Self::nanos_to_ticks(deadline_ns);
-        let init_value = ticks_deadline - ticks_now;
+        let init_value = ticks_deadline
+            .saturating_sub(ticks_now)
+            .saturating_add(MIN_ONESHOT_TICKS - 1)
+            & !(MIN_ONESHOT_TICKS - 1);
+        let init_value = init_value.max(MIN_ONESHOT_TICKS);
         tcfg::set_init_val(init_value as _);
         tcfg::set_en(true);
     }

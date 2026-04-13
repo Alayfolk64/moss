@@ -1,9 +1,6 @@
 use axerrno::{AxError, AxResult};
 use axhal::time::TimeValue;
-use axtask::{
-    AxCpuMask, current,
-    future::{block_on, interruptible, sleep},
-};
+use axtask::{AxCpuMask, current};
 use linux_raw_sys::general::{
     __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, PRIO_PGRP, PRIO_PROCESS, PRIO_USER,
     SCHED_RR, TIMER_ABSTIME, timespec,
@@ -24,10 +21,11 @@ fn sleep_impl(clock: impl Fn() -> TimeValue, dur: TimeValue) -> TimeValue {
     debug!("sleep_impl <= {dur:?}");
 
     let start = clock();
+    let deadline = start.checked_add(dur).unwrap_or(TimeValue::MAX);
 
-    // TODO: currently ignoring concrete clock type
-    // We detect EINTR manually if the slept time is not enough.
-    let _ = block_on(interruptible(sleep(dur)));
+    while clock() < deadline {
+        axtask::yield_now();
+    }
 
     clock() - start
 }

@@ -87,6 +87,16 @@ const DUMMY_MEMINFO: &str = indoc! {"
     DirectMap1G:     1048576 kB
 "};
 
+const DUMMY_SCHED_DEBUG: &str = indoc! {"
+    Sched Debug Version: v0.11
+    sysctl_sched_latency                    : 12000000
+    sysctl_sched_min_granularity            : 1500000
+    sysctl_sched_wakeup_granularity         : 2000000
+    sysctl_sched_child_runs_first           : 0
+    .nr_running                    : 1
+    .load                          : 0
+"};
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -374,6 +384,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             let allocator = axalloc::global_allocator();
             Ok(format!("{:?}\n", allocator.usages()))
         }),
+    );
+    root.add(
+        "sched_debug",
+        SimpleFile::new_regular(fs.clone(), || Ok(DUMMY_SCHED_DEBUG)),
     );
     root.add(
         "instret",

@@ -41,7 +41,7 @@ setup_runtime_tools() {
     cd / >/dev/null 2>&1 || true
     "$BB" mkdir -p lib lib64 >/dev/null 2>&1 || true
     cd "$rt_pwd" >/dev/null 2>&1 || true
-    for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6; do
+    for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
     done
@@ -202,7 +202,7 @@ setup_runtime_tools() {
     cd / >/dev/null 2>&1 || true
     "$BB" mkdir -p lib lib64 >/dev/null 2>&1 || true
     cd "$rt_pwd" >/dev/null 2>&1 || true
-    for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6; do
+    for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
     done
