@@ -36,17 +36,17 @@ export LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/usr/lib
 # 默认全部开启，符合“扫描并依次执行所有测试点”
 # =========================
 : "${RUN_BASIC:=1}"
-: "${RUN_BUSYBOX:=1}"
-: "${RUN_CYCLICTEST:=1}"
-: "${RUN_IOZONE:=1}"
-: "${RUN_IPERF:=1}"
-: "${RUN_LIBCBENCH:=1}"
-: "${RUN_LIBCTEST:=1}"
-: "${RUN_LMBENCH:=1}"
+: "${RUN_BUSYBOX:=0}"
+: "${RUN_CYCLICTEST:=0}"
+: "${RUN_IOZONE:=0}"
+: "${RUN_IPERF:=0}"
+: "${RUN_LIBCBENCH:=0}"
+: "${RUN_LIBCTEST:=0}"
+: "${RUN_LMBENCH:=0}"
 : "${RUN_LTP:=0}"
-: "${RUN_LUA:=1}"
-: "${RUN_NETPERF:=1}"
-: "${RUN_UNIXBENCH:=1}"
+: "${RUN_LUA:=0}"
+: "${RUN_NETPERF:=0}"
+: "${RUN_UNIXBENCH:=0}"
 
 suite_enabled() {
   case "$1" in

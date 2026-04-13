@@ -151,3 +151,15 @@ Process fork+exit: 2345.7421 microseconds
 Process fork+execve: 2375.9513 microseconds
 Process fork+/bin/sh -c: 209395.5000 microseconds
 File /var/tmp/XXX write bandwidth:12669 KB/sec
+Pagefaults on /var/tmp/XXX: 132.8701 microseconds
+0.524288 296
+file system latency
+0k	1965	1782	7031
+1k	1049	924	5909
+4k	1035	921	5737
+10k	584	575	5603
+Bandwidth measurements
+Pipe bandwidth: 256.56 MB/sec
+0.524288 50.89
+0.524288 51.73
+0.524288 29.35
