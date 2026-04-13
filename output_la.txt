@@ -16,12 +16,12 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-13 12:02:11.004364910 UTC
+Boot at 2026-04-13 12:39:32.005360290 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
-[TEST] enabled suites: lmbench
+[TEST] enabled suites: busybox
 [TEST] scan roots: /musl /glibc
 [TEST] scanning /musl
 [TEST] scanning /glibc
@@ -31,12 +31,402 @@ Welcome to Starry OS
 #### OS COMP TEST GROUP START basic-glibc ####
 [TEST] SKIP script: /glibc/basic_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END basic-glibc ####
+[TEST] Running /musl/busybox_testcode.sh
 #### OS COMP TEST GROUP START busybox-musl ####
-[TEST] SKIP script: /musl/busybox_testcode.sh (switch=0)
+#### independent command test
+testcase busybox echo "#### independent command test" success
+testcase busybox ash -c exit success
+testcase busybox sh -c exit success
+bbb
+testcase busybox basename /aaa/bbb success
+     April 2026
+Su Mo Tu We Th Fr Sa
+          1  2  3  4
+ 5  6  7  8  9 10 11
+12 13 14 15 16 17 18
+19 20 21 22 23 24 25
+26 27 28 29 30
+                     
+testcase busybox cal success
+[H[Jtestcase busybox clear success
+Mon Apr 13 12:39:36 UTC 2026
+testcase busybox date success
+Filesystem           1K-blocks      Used Available Use% Mounted on
+proc                        50         0        50   0% /proc
+testcase busybox df success
+/aaa
+testcase busybox dirname /aaa/bbb success
+testcase busybox dmesg success
+220	./ltp/bin
+392	./ltp/runtest
+12	./ltp/scenario_groups
+40	./ltp/testscripts
+76	./ltp/testcases/bin/ftrace_stress
+2652	./ltp/testcases/bin/datafiles
+1564840	./ltp/testcases/bin
+24	./ltp/testcases/data/ar01
+108	./ltp/testcases/data/file01
+24	./ltp/testcases/data/ld01
+148	./ltp/testcases/data/ldd01
+96	./ltp/testcases/data/nm01
+12	./ltp/testcases/data/unzip01
+12	./ltp/testcases/data/binfmt_misc02
+8	./ltp/testcases/data/ima_kexec
+12	./ltp/testcases/data/ima_keys
+12	./ltp/testcases/data/ima_policy
+8	./ltp/testcases/data/ima_selinux
+12	./ltp/testcases/data/lvm
+12	./ltp/testcases/data/mc_member
+492	./ltp/testcases/data
+1565336	./ltp/testcases
+208	./ltp/libkirk
+528	./ltp/metadata
+1566928	./ltp
+1084	./lib
+4	./basic/mnt
+2012	./basic
+1578116	.
+testcase busybox du success
+2
+testcase busybox expr 1 + 1 success
+testcase busybox false success
+testcase busybox true success
+/bin/ls
+testcase busybox which ls success
+Linux
+testcase busybox uname success
+ 12:39:37 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
+testcase busybox uptime success
+abcntestcase busybox printf "abcn" success
+PID   USER     TIME  COMMAND
+    6 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+   37 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+   56 0         0:00 ./busybox ps
+testcase busybox ps success
+/musl
+testcase busybox pwd success
+              total        used        free      shared  buff/cache   available
+Mem:              0 18014398494685956           0           0    14796028    18768344
+Swap:             0           0           0
+testcase busybox free success
+Mon Apr 13 12:39:37 2026  0.000000 seconds
+testcase busybox hwclock success
+testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
+[1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
+[1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
+[1;32mbasic_testcode.sh[m       [1;32mlat_cmd[m                 [1;32mlua[m
+[1;32mbusy[m                    [1;32mlat_connect[m             [1;32mlua_testcode.sh[m
+[1;32mbusybox[m                 [1;32mlat_ctx[m                 [1;32mmax_min.lua[m
+[1;32mbusybox_cmd.txt[m         [1;32mlat_dram_page[m           [1;32mmemsize[m
+[1;32mbusybox_testcode.sh[m     [1;32mlat_fcntl[m               [1;32mmhz[m
+[1;32mbw_file_rd[m              [1;32mlat_fifo[m                [1;32mmsleep[m
+[1;32mbw_mem[m                  [1;32mlat_fs[m                  [1;32mmulti.sh[m
+[1;32mbw_mmap_rd[m              [1;32mlat_http[m                [1;32mnetperf[m
+[1;32mbw_pipe[m                 [1;32mlat_mem_rd[m              [1;32mnetperf_testcode.sh[m
+[1;32mbw_tcp[m                  [1;32mlat_mmap[m                [1;32mnetserver[m
+[1;32mbw_unix[m                 [1;32mlat_ops[m                 [1;32mpar_mem[m
+[1;32mcache[m                   [1;32mlat_pagefault[m           [1;32mpar_ops[m
+[1;32mclock[m                   [1;32mlat_pipe[m                [1;32mpipe[m
+[1;32mcontext1[m                [1;32mlat_pmake[m               [1;32mrandom.lua[m
+[1;32mcyclictest[m              [1;32mlat_proc[m                [1;32mregister[m
+[1;32mcyclictest_testcode.sh[m  [1;32mlat_rand[m                [1;32mremove.lua[m
+[1;32mdate.lua[m                [1;32mlat_rpc[m                 [1;32mrhttp[m
+[1;32mdhry2[m                   [1;32mlat_select[m              [1;32mround_num.lua[m
+[1;32mdhry2reg[m                [1;32mlat_sem[m                 [1;32mrun-dynamic.sh[m
+[1;32mdisk[m                    [1;32mlat_sig[m                 [1;32mrun-static.sh[m
+[1;32mdlopen_dso.so[m           [1;32mlat_syscall[m             [1;32mruntest.exe[m
+[1;32mdouble[m                  [1;32mlat_tcp[m                 [1;32mseek[m
+[1;32menough[m                  [1;32mlat_udp[m                 [1;32mshort[m
+[1;32mentry-dynamic.exe[m       [1;32mlat_unix[m                [1;32msin30.lua[m
+[1;32mentry-static.exe[m        [1;32mlat_unix_connect[m        [1;32msort.lua[m
+[1;32mexecl[m                   [1;32mlat_usleep[m              [1;32mspawn[m
+[1;32mfile_io.lua[m             [1;34mlib[m                     [1;32mstream[m
+[1;32mfloat[m                   [1;32mlibc-bench[m              [1;32mstrings.lua[m
+[1;32mflushdisk[m               [1;32mlibcbench_testcode.sh[m   [1;32msyscall[m
+[1;32mfstime[m                  [1;32mlibctest_testcode.sh[m    [1;32mtest.sh[m
+[1;32mgetopt[m                  [1;32mline[m                    [1;32mtiming_o[m
+[1;32mgfx-x11[m                 [1;32mlmbench[m                 [1;32mtlb[m
+[1;32mhackbench[m               [1;32mlmbench_all[m             [1;32mtls_get_new-dtv_dso.so[m
+[1;32mhanoi[m                   [1;32mlmbench_testcode.sh[m     [1;32mtst.sh[m
+[1;32mhello[m                   [1;32mlmdd[m                    [1;32munixbench.logo[m
+[1;32mindex.base[m              [1;32mlmhttp[m                  [1;32munixbench_testcode.sh[m
+[1;32mint[m                     [1;32mlong[m                    [1;32mwhetstone-double[m
+[1;32miozone[m                  [1;32mloop_o[m
+[1;32miozone_testcode.sh[m      [1;32mlooper[m
+testcase busybox ls success
+testcase busybox sleep 1 success
+#### file opration test
+testcase busybox echo "#### file opration test" success
+testcase busybox touch test.txt success
+testcase busybox echo "hello world" > test.txt success
+hello world
+testcase busybox cat test.txt success
+l
+testcase busybox cut -c 3 test.txt success
+0000000 062550 066154 020157 067567 066162 005144
+0000014
+testcase busybox od test.txt success
+hello world
+testcase busybox head test.txt success
+hello world
+testcase busybox tail test.txt success
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 0a              |hello world.|
+0000000c
+testcase busybox hexdump -C test.txt success
+6f5902ac237024bdd0c176cb93063dc4  test.txt
+testcase busybox md5sum test.txt success
+testcase busybox echo "ccccccc" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+testcase busybox echo "aaaaaaa" >> test.txt success
+testcase busybox echo "2222222" >> test.txt success
+testcase busybox echo "1111111" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+1111111
+2222222
+aaaaaaa
+bbbbbbb
+ccccccc
+hello world
+testcase busybox sort test.txt | ./busybox uniq success
+  File: test.txt
+  Size: 60        	Blocks: 8          IO Block: 4096   regular file
+Device: 1h/1d	Inode: 3238        Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/ UNKNOWN)   Gid: (    0/ UNKNOWN)
+Access: 1970-01-01 00:00:00.000000000 +0000
+Modify: 1970-01-01 00:00:00.000000000 +0000
+Change: 1970-01-01 00:00:00.000000000 +0000
+testcase busybox stat test.txt success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox strings test.txt success
+        7         8        60 test.txt
+testcase busybox wc test.txt success
+testcase busybox [ -f test.txt ] success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox more test.txt success
+testcase busybox rm test.txt -f success
+testcase busybox mkdir test_dir success
+testcase busybox mv test_dir test success
+testcase busybox rmdir test success
+echo "hello world" > test.txt
+grep hello busybox_cmd.txt
+testcase busybox grep hello busybox_cmd.txt success
+testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
+testcase busybox rm busybox_cmd.bak -f success
+./busybox_cmd.txt
+testcase busybox find -name "busybox_cmd.txt" success
 #### OS COMP TEST GROUP END busybox-musl ####
+[TEST] Exit code(0): /musl/busybox_testcode.sh
+
+[TEST] Running /glibc/busybox_testcode.sh
 #### OS COMP TEST GROUP START busybox-glibc ####
-[TEST] SKIP script: /glibc/busybox_testcode.sh (switch=0)
+#### independent command test
+testcase busybox echo "#### independent command test" success
+testcase busybox ash -c exit success
+testcase busybox sh -c exit success
+bbb
+testcase busybox basename /aaa/bbb success
+     April 2026
+Su Mo Tu We Th Fr Sa
+          1  2  3  4
+ 5  6  7  8  9 10 11
+12 13 14 15 16 17 18
+19 20 21 22 23 24 25
+26 27 28 29 30
+                     
+testcase busybox cal success
+[H[Jtestcase busybox clear success
+Mon Apr 13 12:39:42 UTC 2026
+testcase busybox date success
+Filesystem           1K-blocks      Used Available Use% Mounted on
+proc                        50         0        50   0% /proc
+testcase busybox df success
+/aaa
+testcase busybox dirname /aaa/bbb success
+testcase busybox dmesg success
+256	./ltp/bin
+392	./ltp/runtest
+12	./ltp/scenario_groups
+40	./ltp/testscripts
+76	./ltp/testcases/bin/ftrace_stress
+2652	./ltp/testcases/bin/datafiles
+1749372	./ltp/testcases/bin
+24	./ltp/testcases/data/ar01
+112	./ltp/testcases/data/file01
+24	./ltp/testcases/data/ld01
+152	./ltp/testcases/data/ldd01
+112	./ltp/testcases/data/nm01
+12	./ltp/testcases/data/unzip01
+12	./ltp/testcases/data/binfmt_misc02
+8	./ltp/testcases/data/ima_kexec
+12	./ltp/testcases/data/ima_keys
+12	./ltp/testcases/data/ima_policy
+8	./ltp/testcases/data/ima_selinux
+12	./ltp/testcases/data/lvm
+12	./ltp/testcases/data/mc_member
+516	./ltp/testcases/data
+1749892	./ltp/testcases
+208	./ltp/libkirk
+528	./ltp/metadata
+1751536	./ltp
+17456	./lib
+4	./basic/mnt
+2012	./basic
+1801788	.
+testcase busybox du success
+2
+testcase busybox expr 1 + 1 success
+testcase busybox false success
+testcase busybox true success
+/bin/ls
+testcase busybox which ls success
+Linux
+testcase busybox uname success
+ 12:39:43 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
+testcase busybox uptime success
+abcntestcase busybox printf "abcn" success
+PID   USER     TIME  COMMAND
+    6 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  102 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  121 0         0:00 ./busybox ps
+testcase busybox ps success
+/glibc
+testcase busybox pwd success
+              total        used        free      shared  buff/cache   available
+Mem:              0 18014398494685956           0           0    14796028    18768344
+Swap:             0           0           0
+testcase busybox free success
+Mon Apr 13 12:39:44 2026  0.000000 seconds
+testcase busybox hwclock success
+testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
+[1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
+[1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
+[1;32mbasic_testcode.sh[m       [1;32mlat_cmd[m                 [1;32mlua[m
+[1;32mbusy[m                    [1;32mlat_connect[m             [1;32mlua_testcode.sh[m
+[1;32mbusybox[m                 [1;32mlat_ctx[m                 [1;32mmax_min.lua[m
+[1;32mbusybox_cmd.txt[m         [1;32mlat_dram_page[m           [1;32mmemsize[m
+[1;32mbusybox_testcode.sh[m     [1;32mlat_fcntl[m               [1;32mmhz[m
+[1;32mbw_file_rd[m              [1;32mlat_fifo[m                [1;32mmsleep[m
+[1;32mbw_mem[m                  [1;32mlat_fs[m                  [1;32mmulti.sh[m
+[1;32mbw_mmap_rd[m              [1;32mlat_http[m                [1;32mnetperf[m
+[1;32mbw_pipe[m                 [1;32mlat_mem_rd[m              [1;32mnetperf_testcode.sh[m
+[1;32mbw_tcp[m                  [1;32mlat_mmap[m                [1;32mnetserver[m
+[1;32mbw_unix[m                 [1;32mlat_ops[m                 [1;32mpar_mem[m
+[1;32mcache[m                   [1;32mlat_pagefault[m           [1;32mpar_ops[m
+[1;32mclock[m                   [1;32mlat_pipe[m                [1;32mpipe[m
+[1;32mcontext1[m                [1;32mlat_pmake[m               [1;32mrandom.lua[m
+[1;32mcyclictest[m              [1;32mlat_proc[m                [1;32mregister[m
+[1;32mcyclictest_testcode.sh[m  [1;32mlat_rand[m                [1;32mremove.lua[m
+[1;32mdate.lua[m                [1;32mlat_rpc[m                 [1;32mrhttp[m
+[1;32mdhry2[m                   [1;32mlat_select[m              [1;32mround_num.lua[m
+[1;32mdhry2reg[m                [1;32mlat_sem[m                 [1;32mrun-dynamic.sh[m
+[1;32mdisk[m                    [1;32mlat_sig[m                 [1;32mrun-static.sh[m
+[1;32mdlopen_dso.so[m           [1;32mlat_syscall[m             [1;32mruntest.exe[m
+[1;32mdouble[m                  [1;32mlat_tcp[m                 [1;32mseek[m
+[1;32menough[m                  [1;32mlat_udp[m                 [1;32mshort[m
+[1;32mentry-dynamic.exe[m       [1;32mlat_unix[m                [1;32msin30.lua[m
+[1;32mentry-static.exe[m        [1;32mlat_unix_connect[m        [1;32msort.lua[m
+[1;32mexecl[m                   [1;32mlat_usleep[m              [1;32mspawn[m
+[1;32mfile_io.lua[m             [1;34mlib[m                     [1;32mstream[m
+[1;32mfloat[m                   [1;32mlibc-bench[m              [1;32mstrings.lua[m
+[1;32mflushdisk[m               [1;32mlibcbench_testcode.sh[m   [1;32msyscall[m
+[1;32mfstime[m                  [1;32mlibctest_testcode.sh[m    [1;32mtest.sh[m
+[1;32mgetopt[m                  [1;32mline[m                    [1;32mtiming_o[m
+[1;32mgfx-x11[m                 [1;32mlmbench[m                 [1;32mtlb[m
+[1;32mhackbench[m               [1;32mlmbench_all[m             [1;32mtls_get_new-dtv_dso.so[m
+[1;32mhanoi[m                   [1;32mlmbench_testcode.sh[m     [1;32mtst.sh[m
+[1;32mhello[m                   [1;32mlmdd[m                    [1;32munixbench.logo[m
+[1;32mindex.base[m              [1;32mlmhttp[m                  [1;32munixbench_testcode.sh[m
+[1;32mint[m                     [1;32mlong[m                    [1;32mwhetstone-double[m
+[1;32miozone[m                  [1;32mloop_o[m
+[1;32miozone_testcode.sh[m      [1;32mlooper[m
+testcase busybox ls success
+testcase busybox sleep 1 success
+#### file opration test
+testcase busybox echo "#### file opration test" success
+testcase busybox touch test.txt success
+testcase busybox echo "hello world" > test.txt success
+hello world
+testcase busybox cat test.txt success
+l
+testcase busybox cut -c 3 test.txt success
+0000000 062550 066154 020157 067567 066162 005144
+0000014
+testcase busybox od test.txt success
+hello world
+testcase busybox head test.txt success
+hello world
+testcase busybox tail test.txt success
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 0a              |hello world.|
+0000000c
+testcase busybox hexdump -C test.txt success
+6f5902ac237024bdd0c176cb93063dc4  test.txt
+testcase busybox md5sum test.txt success
+testcase busybox echo "ccccccc" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+testcase busybox echo "aaaaaaa" >> test.txt success
+testcase busybox echo "2222222" >> test.txt success
+testcase busybox echo "1111111" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+1111111
+2222222
+aaaaaaa
+bbbbbbb
+ccccccc
+hello world
+testcase busybox sort test.txt | ./busybox uniq success
+  File: test.txt
+  Size: 60        	Blocks: 8          IO Block: 4096   regular file
+Device: 1h/1d	Inode: 3238        Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/ UNKNOWN)   Gid: (    0/ UNKNOWN)
+Access: 1970-01-01 00:00:00.000000000 +0000
+Modify: 1970-01-01 00:00:00.000000000 +0000
+Change: 1970-01-01 00:00:00.000000000 +0000
+testcase busybox stat test.txt success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox strings test.txt success
+        7         8        60 test.txt
+testcase busybox wc test.txt success
+testcase busybox [ -f test.txt ] success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox more test.txt success
+testcase busybox rm test.txt -f success
+testcase busybox mkdir test_dir success
+testcase busybox mv test_dir test success
+testcase busybox rmdir test success
+echo "hello world" > test.txt
+grep hello busybox_cmd.txt
+testcase busybox grep hello busybox_cmd.txt success
+testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
+testcase busybox rm busybox_cmd.bak -f success
+./busybox_cmd.txt
+testcase busybox find -name "busybox_cmd.txt" success
 #### OS COMP TEST GROUP END busybox-glibc ####
+[TEST] Exit code(0): /glibc/busybox_testcode.sh
+
 #### OS COMP TEST GROUP START cyclictest-musl ####
 [TEST] SKIP script: /musl/cyclictest_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END cyclictest-musl ####
@@ -67,16 +457,39 @@ Welcome to Starry OS
 #### OS COMP TEST GROUP START libctest-glibc ####
 [TEST] SKIP script: /glibc/libctest_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END libctest-glibc ####
-[TEST] Running /musl/lmbench_testcode.sh
-[TEST][lmbench] stage: entered test dir /musl
-[TEST][lmbench] stage: setup_runtime_tools begin
-[TEST][lmbench] stage: setup_runtime_tools end
-[TEST][lmbench] stage: patched script ready ./.starry-lmbench_testcode.sh.6
-[TEST][lmbench] stage: run patched script begin
 #### OS COMP TEST GROUP START lmbench-musl ####
-latency measurements
-Simple syscall: 1.2477 microseconds
-Simple read: 4.1264 microseconds
-Simple write: 3.9778 microseconds
-Simple stat: 26.5803 microseconds
-Simple fstat: 18.5042 microseconds
+[TEST] SKIP script: /musl/lmbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+[TEST] SKIP script: /glibc/lmbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START ltp-musl ####
+[TEST] SKIP script: /musl/ltp_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END ltp-musl ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+[TEST] SKIP script: /glibc/ltp_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END ltp-glibc ####
+#### OS COMP TEST GROUP START lua-musl ####
+[TEST] SKIP script: /musl/lua_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START lua-glibc ####
+[TEST] SKIP script: /glibc/lua_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-musl ####
+[TEST] SKIP script: /musl/netperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END netperf-musl ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+[TEST] SKIP script: /glibc/netperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END netperf-glibc ####
+#### OS COMP TEST GROUP START unixbench-musl ####
+[TEST] SKIP script: /musl/unixbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END unixbench-musl ####
+#### OS COMP TEST GROUP START unixbench-glibc ####
+[TEST] SKIP script: /glibc/unixbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END unixbench-glibc ####
+[TEST] group summary: total=12 passed=1 failed=0 skipped=11
+[TEST] script summary: total=2 passed=2 failed=0
+[TEST] all discovered scripts completed
+[37m[ 24.276301 0:283 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
+[m[37m[ 24.327866 0:284 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
+[m

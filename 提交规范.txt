@@ -1,0 +1,32 @@
+feat
+新增功能。用户可感知的新功能、新接口、新页面。
+
+fix
+修复 bug。修正错误逻辑、崩溃、异常行为。
+
+docs
+只改文档。README、注释说明、接口文档，不改实际逻辑。
+
+style
+只改代码风格，不改逻辑。比如格式化、空格、分号、换行、lint 修正。
+
+refactor
+重构。修改代码结构，但不新增功能、也不是修 bug。
+
+perf
+性能优化。让程序更快、更省内存，但功能不变。
+
+test
+测试相关。新增或修改测试用例、测试脚本、测试配置。
+
+build
+构建系统或依赖变更。比如 Makefile、Cargo.toml、CMakeLists、Dockerfile、依赖版本。
+
+ci
+持续集成相关。比如 GitHub Actions、GitLab CI、Jenkins 配置。
+
+chore
+杂项维护。不是功能、不是修 bug，也不是文档，通常是一些零碎维护工作。
+
+revert
+回滚之前的提交。

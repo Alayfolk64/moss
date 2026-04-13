@@ -35,8 +35,8 @@ export LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/usr/lib
 # 共 12 组题目，可手动修改
 # 默认全部开启，符合“扫描并依次执行所有测试点”
 # =========================
-: "${RUN_BASIC:=1}"
-: "${RUN_BUSYBOX:=0}"
+: "${RUN_BASIC:=0}"
+: "${RUN_BUSYBOX:=1}"
 : "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
 : "${RUN_IPERF:=0}"
