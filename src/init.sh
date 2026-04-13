@@ -21,6 +21,12 @@ if [ -z "$BB" ]; then
 fi
 
 echo "[TEST] using busybox: $BB"
+# Ensure shebang scripts like `./run-all.sh` can find `/bin/sh`.
+"$BB" mkdir -p /bin >/dev/null 2>&1 || true
+"$BB" cp "$BB" /bin/busybox >/dev/null 2>&1 || true
+"$BB" chmod +x /bin/busybox >/dev/null 2>&1 || true
+"$BB" cp "$BB" /bin/sh >/dev/null 2>&1 || true
+"$BB" chmod +x /bin/sh >/dev/null 2>&1 || true
 # Install busybox applets (e.g. sleep, kill, grep) to avoid missing-command failures.
 "$BB" --install -s /bin >/dev/null 2>&1 || true
 

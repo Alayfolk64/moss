@@ -1,0 +1,175 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = info
+backtrace = false
+smp = 1
+
+Boot at 2026-04-13 01:34:10.017824500 UTC
+
+[37m[  0.236062 0 axruntime:169] [32mLogging is enabled.[m
+[m[37m[  0.240813 0 axruntime:170] [32mPrimary CPU 0 started, arg = 0xbfe00000.[m
+[m[37m[  0.247596 0 axruntime:173] [32mFound physcial memory regions:[m
+[m[37m[  0.249824 0 axruntime:175] [32m  [PA:0x101000, PA:0x102000) mmio (READ | WRITE | DEVICE | RESERVED)[m
+[m[37m[  0.253712 0 axruntime:175] [32m  [PA:0xc000000, PA:0xc210000) mmio (READ | WRITE | DEVICE | RESERVED)[m
+[m[37m[  0.256409 0 axruntime:175] [32m  [PA:0x10000000, PA:0x10001000) mmio (READ | WRITE | DEVICE | RESERVED)[m
+[m[37m[  0.258988 0 axruntime:175] [32m  [PA:0x10001000, PA:0x10009000) mmio (READ | WRITE | DEVICE | RESERVED)[m
+[m[37m[  0.261592 0 axruntime:175] [32m  [PA:0x30000000, PA:0x40000000) mmio (READ | WRITE | DEVICE | RESERVED)[m
+[m[37m[  0.264093 0 axruntime:175] [32m  [PA:0x40000000, PA:0x80000000) mmio (READ | WRITE | DEVICE | RESERVED)[m
+[m[37m[  0.266485 0 axruntime:175] [32m  [PA:0x80200000, PA:0x802d3000) .text (READ | EXECUTE | RESERVED)[m
+[m[37m[  0.268763 0 axruntime:175] [32m  [PA:0x802d3000, PA:0x80303000) .rodata (READ | RESERVED)[m
+[m[37m[  0.270883 0 axruntime:175] [32m  [PA:0x80303000, PA:0x80307000) .data .tdata .tbss .percpu (READ | WRITE | RESERVED)[m
+[m[37m[  0.273564 0 axruntime:175] [32m  [PA:0x80307000, PA:0x80347000) boot stack (READ | WRITE | RESERVED)[m
+[m[37m[  0.275885 0 axruntime:175] [32m  [PA:0x80347000, PA:0x8036e000) .bss (READ | WRITE | RESERVED)[m
+[m[37m[  0.278103 0 axruntime:175] [32m  [PA:0x8036e000, PA:0xc0000000) free memory (READ | WRITE | FREE)[m
+[m[37m[  0.280669 0 axruntime:280] [32mInitialize global memory allocator...[m
+[m[37m[  0.282560 0 axruntime:281] [32m  use slab allocator.[m
+[m[37m[  0.292236 0 axmm:81] [32mInitialize virtual memory management...[m
+[m[37m[  0.480252 0 axruntime:215] [32mInitialize platform devices...[m
+[m[37m[  0.484269 0 axtask::api:95] [32mInitialize scheduling...[m
+[m[37m[  0.494202 0 axtask::api:100] [32m  use Round-robin scheduler.[m
+[m[37m[  0.496343 0 axdriver:176] [32mInitialize device drivers...[m
+[m[37m[  0.498116 0 axdriver:177] [32m  device model: static[m
+[m[37m[  0.501575 0 virtio_drivers::device::blk:59] [32mconfig: 0xffffffc010001100[m
+[m[37m[  0.504261 0 virtio_drivers::device::blk:64] [32mfound a block device of size 4194304KB[m
+[m[37m[  0.510263 0 axdriver::bus::mmio:11] [32mregistered a new Block device at [PA:0x10001000, PA:0x10002000): "virtio-blk"[m
+[m[37m[  0.515500 0 axfs:20] [32mInitialize filesystem subsystem...[m
+[m[37m[  0.517447 0 axfs:23] [32m  use block device 0: "virtio-blk"[m
+[m[37m[  0.537614 0 axfs:26] [32m  filesystem type: "ext4"[m
+[m[37m[  0.540204 0 axruntime:246] [32mInitialize interrupt handlers...[m
+[m[37m[  0.544966 0 axruntime:258] [32mPrimary CPU 0 init OK.[m
+[m[37m[  0.551475 0:2 starry_kernel::pseudofs:62] [32mInitialize pseudofs...[m
+[m[37m[  0.631704 0:2 starry_kernel::pseudofs:56] [32mMounted devfs at /dev[m
+[m[37m[  0.656991 0:2 starry_kernel::pseudofs:56] [32mMounted tmpfs at /dev/shm[m
+[m[37m[  0.674199 0:2 starry_kernel::pseudofs:56] [32mMounted tmpfs at /tmp[m
+[m[37m[  0.690786 0:2 starry_kernel::pseudofs:56] [32mMounted proc at /proc[m
+[m[37m[  0.696109 0:2 starry_kernel::pseudofs:56] [32mMounted tmpfs at /sys[m
+[m[37m[  0.717649 0:2 starry_kernel::task::timer:271] [32mInitialize alarm...[m
+[m[37m[  0.810362 0:6 starry_kernel::task::user:22] [32mEnter user space: ip=0x10188, sp=0x3fffff500[m
+[mWelcome to Starry OS
+
+[TEST] using busybox: /musl/busybox
+[37m[  1.054709 0:7 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3ffffec50[m
+[m[37m[  1.105346 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.197635 0:7 starry_kernel::task::ops:204] [32mTask(7, "busybox") exit with code: 0[m
+[m[37m[  1.205670 0:7 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 6[m
+[m[37m[  1.219745 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.226306 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[37m[  1.277547 0:8 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3ffffe360[m
+[m[37m[  1.314421 0:8 starry_kernel::task::ops:204] [32mTask(8, "busybox") exit with code: 0[m
+[m[37m[  1.324742 0:8 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 6[m
+[m[37m[  1.335930 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.340448 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[37m[  1.347433 0:9 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3ffffe3c0[m
+[m[37m[  1.379753 0:9 starry_kernel::task::ops:204] [32mTask(9, "busybox") exit with code: 0[m
+[m[37m[  1.382341 0:9 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 6[m
+[m[37m[  1.386662 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.389395 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[TEST] Running /musl/basic_testcode.sh
+[37m[  1.395272 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.397974 0:10 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3ffffe740[m
+[m[37m[  1.528291 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.531253 0:11 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3fffff780[m
+[m#### OS COMP TEST GROUP START basic-musl ####
+[37m[  1.557090 0:11 starry_kernel::task::ops:204] [32mTask(11, "busybox") exit with code: 0[m
+[m[37m[  1.559550 0:11 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 10[m
+[m[37m[  1.563167 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.566972 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[37m[  1.588418 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.591087 0:12 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3fffff780[m
+[m./basic_testcode.sh: line 3: ./run-all.sh: not found
+[37m[  1.612982 0:12 starry_kernel::task::ops:204] [32mTask(12, "busybox") exit with code: 32512[m
+[m[37m[  1.623791 0:12 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 10[m
+[m[37m[  1.638009 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.640868 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[37m[  1.648377 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.650974 0:13 starry_kernel::task::user:22] [32mEnter user space: ip=0x137fa8, sp=0x3fffff780[m
+[m#### OS COMP TEST GROUP END basic-musl ####
+[37m[  1.688410 0:13 starry_kernel::task::ops:204] [32mTask(13, "busybox") exit with code: 0[m
+[m[37m[  1.690587 0:13 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 10[m
+[m[37m[  1.693644 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.696185 0:10 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[37m[  1.700896 0:10 starry_kernel::task::ops:204] [32mTask(10, "busybox") exit with code: 0[m
+[m[37m[  1.703298 0:10 starry_kernel::task::signal:96] [32mSend signal SIGCHLD to process 6[m
+[m[37m[  1.710171 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(0x0)[m
+[m[37m[  1.712671 0:6 starry_kernel::syscall::task::wait:65] [32msys_waitpid <= pid: -1, options: WaitOptions(WNOHANG)[m
+[m[TEST] Exit code(0): /musl/basic_testcode.sh
+
+[TEST] all discovered scripts completed
+[37m[  1.734562 0:6 starry_kernel::task::ops:204] [32mTask(6, "busybox") exit with code: 0[m
+[m[37m[  1.741826 0:2 starry_kernel::entry:76] [32mInit process exited with code: 0[m
+[m[37m[  1.757418 0:2 starry_kernel::entry:87] [32mInit flow completed, powering off[m
+[m[37m[  1.759713 0:2 axplat_riscv64_qemu_virt::power:25] [32mShutting down...[m
+[m

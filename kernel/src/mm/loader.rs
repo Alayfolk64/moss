@@ -21,6 +21,43 @@ use crate::{
     mm::aspace::{AddrSpace, Backend},
 };
 
+fn resolve_dynamic_linker(path: &str) -> AxResult<Location> {
+    if let Ok(loc) = FS_CONTEXT.lock().resolve(path) {
+        return Ok(loc);
+    }
+
+    if path.starts_with('/') {
+        for prefix in ["/glibc", "/musl"] {
+            let mut fallback = String::with_capacity(prefix.len() + path.len());
+            fallback.push_str(prefix);
+            fallback.push_str(path);
+            if let Ok(loc) = FS_CONTEXT.lock().resolve(&fallback) {
+                debug!("Resolved dynamic linker by fallback path: {path} -> {fallback}");
+                return Ok(loc);
+            }
+        }
+    }
+
+    FS_CONTEXT.lock().resolve(path)
+}
+
+fn resolve_exec_path(path: &str) -> AxResult<Location> {
+    if let Ok(loc) = FS_CONTEXT.lock().resolve(path) {
+        return Ok(loc);
+    }
+
+    if matches!(path, "/bin/sh" | "/bin/busybox") {
+        for fallback in ["/musl/busybox", "/glibc/busybox"] {
+            if let Ok(loc) = FS_CONTEXT.lock().resolve(fallback) {
+                debug!("Resolved executable by fallback path: {path} -> {fallback}");
+                return Ok(loc);
+            }
+        }
+    }
+
+    FS_CONTEXT.lock().resolve(path)
+}
+
 /// Creates a new empty user address space.
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     AddrSpace::new_empty(VirtAddr::from_usize(USER_SPACE_BASE), USER_SPACE_SIZE)
@@ -179,7 +216,7 @@ impl ElfLoader {
     }
 
     fn load(&mut self, uspace: &mut AddrSpace, path: &str) -> AxResult<LoadResult> {
-        let loc = FS_CONTEXT.lock().resolve(path)?;
+        let loc = resolve_exec_path(path)?;
 
         if !self.0.touch(|e| e.borrow_cache().location().ptr_eq(&loc)) {
             match ElfCacheEntry::load(loc)? {
@@ -191,9 +228,6 @@ impl ElfLoader {
                 }
             }
         }
-
-        uspace.clear();
-        map_trampoline(uspace)?;
 
         let entry = self.0.front().unwrap();
         let ldso = if let Some(header) = entry
@@ -218,7 +252,7 @@ impl ElfLoader {
         };
 
         let (elf, ldso) = if let Some(ldso) = ldso {
-            let loc = FS_CONTEXT.lock().resolve(ldso)?;
+            let loc = resolve_dynamic_linker(&ldso)?;
             if !self.0.touch(|e| e.borrow_cache().location().ptr_eq(&loc)) {
                 let e = ElfCacheEntry::load(loc)?.map_err(|_| AxError::InvalidInput)?;
                 self.0.insert(e);
@@ -231,6 +265,9 @@ impl ElfLoader {
         } else {
             (entry, None)
         };
+
+        uspace.clear();
+        map_trampoline(uspace)?;
 
         let elf = map_elf(uspace, crate::config::USER_SPACE_BASE, elf)?;
         let ldso = ldso
