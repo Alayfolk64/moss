@@ -27,16 +27,40 @@ echo "[TEST] using busybox: $BB"
 "$BB" chmod +x /bin/busybox >/dev/null 2>&1 || true
 "$BB" cp "$BB" /bin/sh >/dev/null 2>&1 || true
 "$BB" chmod +x /bin/sh >/dev/null 2>&1 || true
-export PATH=/musl:/glibc:/bin:/usr/bin
-export LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/usr/lib
+RUNTIME_PATH=/musl:/glibc:/bin:/usr/bin
+RUNTIME_LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
+PATH=$RUNTIME_PATH
+LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
+export PATH LD_LIBRARY_PATH
+
+detect_arch() {
+  detected=$("$BB" uname -m 2>/dev/null)
+  [ -n "$detected" ] || detected=$(uname -m 2>/dev/null)
+  case "$detected" in
+    loongarch64|riscv64)
+      echo "$detected"
+      return 0
+      ;;
+  esac
+  if [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]; then
+    echo "loongarch64"
+  elif [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]; then
+    echo "riscv64"
+  else
+    echo "${detected:-unknown}"
+  fi
+}
+
+ARCH_NAME=$(detect_arch)
+echo "[TEST] detected arch: $ARCH_NAME"
 
 # =========================
 # Test switches (1=run, 0=skip)
 # 共 12 组题目，可手动修改
 # 默认全部开启，符合“扫描并依次执行所有测试点”
 # =========================
-: "${RUN_BASIC:=0}"
-: "${RUN_BUSYBOX:=1}"
+: "${RUN_BASIC:=1}"
+: "${RUN_BUSYBOX:=0}"
 : "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
 : "${RUN_IPERF:=0}"
@@ -104,16 +128,51 @@ setup_runtime_tools() {
   if [ -d /glibc/lib ]; then
     rt_pwd=$PWD
     cd / >/dev/null 2>&1 || true
-    "$BB" mkdir -p lib >/dev/null 2>&1 || true
+    "$BB" mkdir -p lib lib64 >/dev/null 2>&1 || true
     cd "$rt_pwd" >/dev/null 2>&1 || true
-    for so in ld-linux-riscv64-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6; do
+    for so in libc.so libc.so.6 libm.so libm.so.6; do
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
     done
+    case "$ARCH_NAME" in
+      loongarch64)
+        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
+        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib64/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
+        ;;
+      riscv64)
+        [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1 >/dev/null 2>&1 || true
+        ;;
+      *)
+        for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1; do
+          [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
+        done
+        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib64/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
+        ;;
+    esac
   fi
   # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
   if [ -e /musl/lib/libc.so ]; then
-    [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
-    [ -e /lib/ld-musl-riscv64-sf.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1 >/dev/null 2>&1 || true
+    rt_pwd=$PWD
+    cd / >/dev/null 2>&1 || true
+    "$BB" mkdir -p lib >/dev/null 2>&1 || true
+    cd "$rt_pwd" >/dev/null 2>&1 || true
+    case "$ARCH_NAME" in
+      loongarch64)
+        [ -e /lib/ld-musl-loongarch64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1 >/dev/null 2>&1 || true
+        ;;
+      riscv64)
+        [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
+        [ -e /lib/ld-musl-riscv64-sf.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1 >/dev/null 2>&1 || true
+        ;;
+      *)
+        for ldso in ld-musl-riscv64.so.1 ld-musl-riscv64-sf.so.1 ld-musl-loongarch64.so.1; do
+          [ -e "/lib/$ldso" ] || "$BB" cp -f /musl/lib/libc.so "/lib/$ldso" >/dev/null 2>&1 || true
+        done
+        ;;
+    esac
   fi
   "$BB" --install /bin >/dev/null 2>&1 || "$BB" --install -s /bin >/dev/null 2>&1 || true
   "$BB" --install /usr/bin >/dev/null 2>&1 || "$BB" --install -s /usr/bin >/dev/null 2>&1 || true
@@ -186,8 +245,8 @@ run_test() {
     }
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: patched script ready $patched_script"
   HOME=/root
-  PATH=/musl:/glibc:/bin:/usr/bin
-  LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/usr/lib
+  PATH=$RUNTIME_PATH
+  LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
   export HOME PATH LD_LIBRARY_PATH
   for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock; do
     eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
