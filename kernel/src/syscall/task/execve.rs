@@ -68,8 +68,10 @@ pub fn sys_execve(
 
     *proc_data.signal.actions.lock() = Default::default();
 
-    // Clear set_child_tid after exec since the original address is no longer valid
+    // Clear per-thread user pointers that belong to the old image.
+    // They can become dangling once the address space is replaced.
     curr.as_thread().set_clear_child_tid(0);
+    curr.as_thread().set_robust_list_head(0);
 
     // Close CLOEXEC file descriptors
     let mut fd_table = FD_TABLE.write();

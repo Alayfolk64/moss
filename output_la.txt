@@ -16,488 +16,67 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-13 07:40:39.007444370 UTC
+Boot at 2026-04-13 12:02:11.004364910 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
-[TEST] scan roots: / /musl /glibc
-[TEST] scanning /
+[TEST] enabled suites: lmbench
+[TEST] scan roots: /musl /glibc
 [TEST] scanning /musl
 [TEST] scanning /glibc
-[TEST] discovered 24 candidate scripts
-[TEST] Running /musl/basic_testcode.sh
 #### OS COMP TEST GROUP START basic-musl ####
-Testing brk :
-sh: can't execute './brk': No such file or directory
-Testing chdir :
-sh: can't execute './chdir': No such file or directory
-Testing clone :
-sh: can't execute './clone': No such file or directory
-Testing close :
-sh: can't execute './close': No such file or directory
-Testing dup2 :
-sh: can't execute './dup2': No such file or directory
-Testing dup :
-sh: can't execute './dup': No such file or directory
-Testing execve :
-sh: can't execute './execve': No such file or directory
-Testing exit :
-sh: can't execute './exit': No such file or directory
-Testing fork :
-sh: can't execute './fork': No such file or directory
-Testing fstat :
-sh: can't execute './fstat': No such file or directory
-Testing getcwd :
-sh: can't execute './getcwd': No such file or directory
-Testing getdents :
-sh: can't execute './getdents': No such file or directory
-Testing getpid :
-sh: can't execute './getpid': No such file or directory
-Testing getppid :
-sh: can't execute './getppid': No such file or directory
-Testing gettimeofday :
-sh: can't execute './gettimeofday': No such file or directory
-Testing mkdir_ :
-sh: can't execute './mkdir_': No such file or directory
-Testing mmap :
-sh: can't execute './mmap': No such file or directory
-Testing mount :
-sh: can't execute './mount': No such file or directory
-Testing munmap :
-sh: can't execute './munmap': No such file or directory
-Testing openat :
-sh: can't execute './openat': No such file or directory
-Testing open :
-sh: can't execute './open': No such file or directory
-Testing pipe :
-sh: can't execute './pipe': No such file or directory
-Testing read :
-sh: can't execute './read': No such file or directory
-Testing sleep :
-sh: can't execute './sleep': No such file or directory
-Testing times :
-sh: can't execute './times': No such file or directory
-Testing umount :
-sh: can't execute './umount': No such file or directory
-Testing uname :
-sh: can't execute './uname': No such file or directory
-Testing unlink :
-sh: can't execute './unlink': No such file or directory
-Testing wait :
-sh: can't execute './wait': No such file or directory
-Testing waitpid :
-sh: can't execute './waitpid': No such file or directory
-Testing write :
-sh: can't execute './write': No such file or directory
-Testing yield :
-sh: can't execute './yield': No such file or directory
+[TEST] SKIP script: /musl/basic_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END basic-musl ####
-[TEST] Exit code(0): /musl/basic_testcode.sh
-
-[TEST] Running /musl/busybox_testcode.sh
+#### OS COMP TEST GROUP START basic-glibc ####
+[TEST] SKIP script: /glibc/basic_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END basic-glibc ####
 #### OS COMP TEST GROUP START busybox-musl ####
-#### independent command test
-testcase busybox echo "#### independent command test" success
-testcase busybox ash -c exit success
-testcase busybox sh -c exit success
-bbb
-testcase busybox basename /aaa/bbb success
-     April 2026
-Su Mo Tu We Th Fr Sa
-          1  2  3  4
- 5  6  7  8  9 10 11
-12 13 14 15 16 17 18
-19 20 21 22 23 24 25
-26 27 28 29 30
-                     
-testcase busybox cal success
-[H[Jtestcase busybox clear success
-Mon Apr 13 07:40:49 UTC 2026
-testcase busybox date success
-Filesystem           1K-blocks      Used Available Use% Mounted on
-proc                        50         0        50   0% /proc
-testcase busybox df success
-/aaa
-testcase busybox dirname /aaa/bbb success
-testcase busybox dmesg success
-220	./ltp/bin
-392	./ltp/runtest
-12	./ltp/scenario_groups
-40	./ltp/testscripts
-76	./ltp/testcases/bin/ftrace_stress
-2652	./ltp/testcases/bin/datafiles
-1564840	./ltp/testcases/bin
-24	./ltp/testcases/data/ar01
-108	./ltp/testcases/data/file01
-24	./ltp/testcases/data/ld01
-148	./ltp/testcases/data/ldd01
-96	./ltp/testcases/data/nm01
-12	./ltp/testcases/data/unzip01
-12	./ltp/testcases/data/binfmt_misc02
-8	./ltp/testcases/data/ima_kexec
-12	./ltp/testcases/data/ima_keys
-12	./ltp/testcases/data/ima_policy
-8	./ltp/testcases/data/ima_selinux
-12	./ltp/testcases/data/lvm
-12	./ltp/testcases/data/mc_member
-492	./ltp/testcases/data
-1565336	./ltp/testcases
-208	./ltp/libkirk
-528	./ltp/metadata
-1566928	./ltp
-1084	./lib
-4	./basic/mnt
-2012	./basic
-1578112	.
-testcase busybox du success
-2
-testcase busybox expr 1 + 1 success
-testcase busybox false success
-testcase busybox true success
-/bin/ls
-testcase busybox which ls success
-Linux
-testcase busybox uname success
- 07:40:50 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
-testcase busybox uptime success
-abcntestcase busybox printf "abcn" success
-PID   USER     TIME  COMMAND
-    6 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
-   85 0         0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
-  104 0         0:00 ./busybox ps
-testcase busybox ps success
-/musl
-testcase busybox pwd success
-              total        used        free      shared  buff/cache   available
-Mem:              0 18014398494685956           0           0    14796028    18768344
-Swap:             0           0           0
-testcase busybox free success
-Mon Apr 13 07:40:50 2026  0.000000 seconds
-testcase busybox hwclock success
-testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
-[1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
-[1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
-[1;32mbasic_testcode.sh[m       [1;32mlat_cmd[m                 [1;32mlua[m
-[1;32mbusy[m                    [1;32mlat_connect[m             [1;32mlua_testcode.sh[m
-[1;32mbusybox[m                 [1;32mlat_ctx[m                 [1;32mmax_min.lua[m
-[1;32mbusybox_cmd.txt[m         [1;32mlat_dram_page[m           [1;32mmemsize[m
-[1;32mbusybox_testcode.sh[m     [1;32mlat_fcntl[m               [1;32mmhz[m
-[1;32mbw_file_rd[m              [1;32mlat_fifo[m                [1;32mmsleep[m
-[1;32mbw_mem[m                  [1;32mlat_fs[m                  [1;32mmulti.sh[m
-[1;32mbw_mmap_rd[m              [1;32mlat_http[m                [1;32mnetperf[m
-[1;32mbw_pipe[m                 [1;32mlat_mem_rd[m              [1;32mnetperf_testcode.sh[m
-[1;32mbw_tcp[m                  [1;32mlat_mmap[m                [1;32mnetserver[m
-[1;32mbw_unix[m                 [1;32mlat_ops[m                 [1;32mpar_mem[m
-[1;32mcache[m                   [1;32mlat_pagefault[m           [1;32mpar_ops[m
-[1;32mclock[m                   [1;32mlat_pipe[m                [1;32mpipe[m
-[1;32mcontext1[m                [1;32mlat_pmake[m               [1;32mrandom.lua[m
-[1;32mcyclictest[m              [1;32mlat_proc[m                [1;32mregister[m
-[1;32mcyclictest_testcode.sh[m  [1;32mlat_rand[m                [1;32mremove.lua[m
-[1;32mdate.lua[m                [1;32mlat_rpc[m                 [1;32mrhttp[m
-[1;32mdhry2[m                   [1;32mlat_select[m              [1;32mround_num.lua[m
-[1;32mdhry2reg[m                [1;32mlat_sem[m                 [1;32mrun-dynamic.sh[m
-[1;32mdisk[m                    [1;32mlat_sig[m                 [1;32mrun-static.sh[m
-[1;32mdlopen_dso.so[m           [1;32mlat_syscall[m             [1;32mruntest.exe[m
-[1;32mdouble[m                  [1;32mlat_tcp[m                 [1;32mseek[m
-[1;32menough[m                  [1;32mlat_udp[m                 [1;32mshort[m
-[1;32mentry-dynamic.exe[m       [1;32mlat_unix[m                [1;32msin30.lua[m
-[1;32mentry-static.exe[m        [1;32mlat_unix_connect[m        [1;32msort.lua[m
-[1;32mexecl[m                   [1;32mlat_usleep[m              [1;32mspawn[m
-[1;32mfile_io.lua[m             [1;34mlib[m                     [1;32mstream[m
-[1;32mfloat[m                   [1;32mlibc-bench[m              [1;32mstrings.lua[m
-[1;32mflushdisk[m               [1;32mlibcbench_testcode.sh[m   [1;32msyscall[m
-[1;32mfstime[m                  [1;32mlibctest_testcode.sh[m    [1;32mtest.sh[m
-[1;32mgetopt[m                  [1;32mline[m                    [1;32mtiming_o[m
-[1;32mgfx-x11[m                 [1;32mlmbench[m                 [1;32mtlb[m
-[1;32mhackbench[m               [1;32mlmbench_all[m             [1;32mtls_get_new-dtv_dso.so[m
-[1;32mhanoi[m                   [1;32mlmbench_testcode.sh[m     [1;32mtst.sh[m
-[1;32mhello[m                   [1;32mlmdd[m                    [1;32munixbench.logo[m
-[1;32mindex.base[m              [1;32mlmhttp[m                  [1;32munixbench_testcode.sh[m
-[1;32mint[m                     [1;32mlong[m                    [1;32mwhetstone-double[m
-[1;32miozone[m                  [1;32mloop_o[m
-[1;32miozone_testcode.sh[m      [1;32mlooper[m
-testcase busybox ls success
-testcase busybox sleep 1 success
-#### file opration test
-testcase busybox echo "#### file opration test" success
-testcase busybox touch test.txt success
-testcase busybox echo "hello world" > test.txt success
-hello world
-testcase busybox cat test.txt success
-l
-testcase busybox cut -c 3 test.txt success
-0000000 062550 066154 020157 067567 066162 005144
-0000014
-testcase busybox od test.txt success
-hello world
-testcase busybox head test.txt success
-hello world
-testcase busybox tail test.txt success
-00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 0a              |hello world.|
-0000000c
-testcase busybox hexdump -C test.txt success
-6f5902ac237024bdd0c176cb93063dc4  test.txt
-testcase busybox md5sum test.txt success
-testcase busybox echo "ccccccc" >> test.txt success
-testcase busybox echo "bbbbbbb" >> test.txt success
-testcase busybox echo "aaaaaaa" >> test.txt success
-testcase busybox echo "2222222" >> test.txt success
-testcase busybox echo "1111111" >> test.txt success
-testcase busybox echo "bbbbbbb" >> test.txt success
-1111111
-2222222
-aaaaaaa
-bbbbbbb
-ccccccc
-hello world
-testcase busybox sort test.txt | ./busybox uniq success
-  File: test.txt
-  Size: 60        	Blocks: 8          IO Block: 4096   regular file
-Device: 1h/1d	Inode: 3235        Links: 1
-Access: (0644/-rw-r--r--)  Uid: (    0/ UNKNOWN)   Gid: (    0/ UNKNOWN)
-Access: 1970-01-01 00:00:00.000000000 +0000
-Modify: 1970-01-01 00:00:00.000000000 +0000
-Change: 1970-01-01 00:00:00.000000000 +0000
-testcase busybox stat test.txt success
-hello world
-ccccccc
-bbbbbbb
-aaaaaaa
-2222222
-1111111
-bbbbbbb
-testcase busybox strings test.txt success
-        7         8        60 test.txt
-testcase busybox wc test.txt success
-testcase busybox [ -f test.txt ] success
-hello world
-ccccccc
-bbbbbbb
-aaaaaaa
-2222222
-1111111
-bbbbbbb
-testcase busybox more test.txt success
-testcase busybox rm test.txt -f success
-testcase busybox mkdir test_dir success
-testcase busybox mv test_dir test success
-testcase busybox rmdir test success
-echo "hello world" > test.txt
-grep hello busybox_cmd.txt
-testcase busybox grep hello busybox_cmd.txt success
-testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
-testcase busybox rm busybox_cmd.bak -f success
-./busybox_cmd.txt
-testcase busybox find -name "busybox_cmd.txt" success
+[TEST] SKIP script: /musl/busybox_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END busybox-musl ####
-[TEST] Exit code(0): /musl/busybox_testcode.sh
-
-[TEST] Running /musl/cyclictest_testcode.sh
+#### OS COMP TEST GROUP START busybox-glibc ####
+[TEST] SKIP script: /glibc/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-glibc ####
 #### OS COMP TEST GROUP START cyclictest-musl ####
-====== cyclictest NO_STRESS_P1 begin ======
-sh: can't execute './cyclictest': No such file or directory
-====== cyclictest NO_STRESS_P1 end: fail ======
-====== cyclictest NO_STRESS_P8 begin ======
-sh: can't execute './cyclictest': No such file or directory
-====== cyclictest NO_STRESS_P8 end: fail ======
-====== start hackbench ======
-sh: can't execute './hackbench': No such file or directory
-====== cyclictest STRESS_P1 begin ======
-sh: can't execute './cyclictest': No such file or directory
-====== cyclictest STRESS_P1 end: fail ======
-====== cyclictest STRESS_P8 begin ======
-sh: can't execute './cyclictest': No such file or directory
-====== cyclictest STRESS_P8 end: fail ======
-kill: can't kill pid 162: No such process
-====== kill hackbench: fail, ignore STRESS result ======
+[TEST] SKIP script: /musl/cyclictest_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END cyclictest-musl ####
-[TEST] Exit code(0): /musl/cyclictest_testcode.sh
-
-[TEST] Running /musl/iozone_testcode.sh
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+[TEST] SKIP script: /glibc/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-glibc ####
 #### OS COMP TEST GROUP START iozone-musl ####
-iozone automatic measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughput write/read measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughput random-read measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughput read-backwards measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughput stride-read measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughput fwrite/fread measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughput pwrite/pread measurements
-sh: can't execute './iozone': No such file or directory
-iozone throughtput pwritev/preadv measurements
-sh: can't execute './iozone': No such file or directory
+[TEST] SKIP script: /musl/iozone_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END iozone-musl ####
-[TEST] Exit code(0): /musl/iozone_testcode.sh
-
-[TEST] Running /musl/iperf_testcode.sh
+#### OS COMP TEST GROUP START iozone-glibc ####
+[TEST] SKIP script: /glibc/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-glibc ####
 #### OS COMP TEST GROUP START iperf-musl ####
-====== iperf BASIC_UDP begin ======
-iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
-====== iperf BASIC_UDP end: fail ======
-
-====== iperf BASIC_TCP begin ======
-iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
-====== iperf BASIC_TCP end: fail ======
-
-====== iperf PARALLEL_UDP begin ======
-iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
-====== iperf PARALLEL_UDP end: fail ======
-
-====== iperf PARALLEL_TCP begin ======
-iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
-====== iperf PARALLEL_TCP end: fail ======
-
-====== iperf REVERSE_UDP begin ======
-iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
-====== iperf REVERSE_UDP end: fail ======
-
-====== iperf REVERSE_TCP begin ======
-iperf3: error - unable to connect to server - server may have stopped running or use a different port, firewall issue, etc.: Function not implemented
-====== iperf REVERSE_TCP end: fail ======
-
+[TEST] SKIP script: /musl/iperf_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END iperf-musl ####
-[TEST] Exit code(0): /musl/iperf_testcode.sh
-
-[TEST] Running /musl/libcbench_testcode.sh
+#### OS COMP TEST GROUP START iperf-glibc ####
+[TEST] SKIP script: /glibc/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-glibc ####
 #### OS COMP TEST GROUP START libcbench-musl ####
-b_malloc_sparse (0)
-  time: 0.615144540, virt: 0, res: 0, dirty: 0
-
-b_malloc_bubble (0)
-  time: 0.566306040, virt: 0, res: 0, dirty: 0
-
-b_malloc_tiny1 (0)
-  time: 0.039534790, virt: 0, res: 0, dirty: 0
-
-b_malloc_tiny2 (0)
-  time: 0.033113040, virt: 0, res: 0, dirty: 0
-
-b_malloc_big1 (0)
-  time: 0.240208420, virt: 0, res: 0, dirty: 0
-
-b_malloc_big2 (0)
-  time: 0.204760420, virt: 0, res: 0, dirty: 0
-
-b_malloc_thread_stress (0)
-  time: 0.140792290, virt: 0, res: 0, dirty: 0
-
-b_malloc_thread_local (0)
-  time: 0.114861080, virt: 0, res: 0, dirty: 0
-
-b_string_strstr ("abcdefghijklmnopqrstuvwxyz")
-  time: 0.037273960, virt: 0, res: 0, dirty: 0
-
-b_string_strstr ("azbycxdwevfugthsirjqkplomn")
-  time: 0.035534500, virt: 0, res: 0, dirty: 0
-
-b_string_strstr ("aaaaaaaaaaaaaacccccccccccc")
-  time: 0.028785590, virt: 0, res: 0, dirty: 0
-
-b_string_strstr ("aaaaaaaaaaaaaaaaaaaaaaaaac")
-  time: 0.028072000, virt: 0, res: 0, dirty: 0
-
-b_string_strstr ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac")
-  time: 0.037119170, virt: 0, res: 0, dirty: 0
-
-b_string_memset (0)
-  time: 0.022281540, virt: 0, res: 0, dirty: 0
-
-b_string_strchr (0)
-  time: 0.031280420, virt: 0, res: 0, dirty: 0
-
-b_string_strlen (0)
-  time: 0.027468290, virt: 0, res: 0, dirty: 0
-
-b_pthread_createjoin_serial1 (0)
-  time: 0.017265460, virt: 0, res: 0, dirty: 0
-
-b_pthread_createjoin_serial2 (0)
-  time: 1.160224630, virt: 0, res: 0, dirty: 0
-
-b_pthread_create_serial1 (0)
-  time: 0.007397250, virt: 0, res: 0, dirty: 0
-
-b_pthread_uselesslock (0)
-  time: 0.070107410, virt: 0, res: 0, dirty: 0
-
-b_utf8_bigbuf (0)
-  time: 0.069277910, virt: 0, res: 0, dirty: 0
-
-b_utf8_onebyone (0)
-  time: 0.179675090, virt: 0, res: 0, dirty: 0
-
-b_stdio_putcgetc (0)
-  time: 0.425217000, virt: 0, res: 0, dirty: 0
-
-b_stdio_putcgetc_unlocked (0)
-  time: 0.398891830, virt: 0, res: 0, dirty: 0
-
-b_regex_compile ("(a|b|c)*d*b")
-  time: 0.365721750, virt: 0, res: 0, dirty: 0
-
-b_regex_search ("(a|b|c)*d*b")
-  time: 0.161367910, virt: 0, res: 0, dirty: 0
-
-b_regex_search ("a{25}b")
-  time: 0.383522080, virt: 0, res: 0, dirty: 0
-
+[TEST] SKIP script: /musl/libcbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END libcbench-musl ####
-[TEST] Exit code(0): /musl/libcbench_testcode.sh
-
-[TEST] Running /musl/libctest_testcode.sh
+#### OS COMP TEST GROUP START libcbench-glibc ####
+[TEST] SKIP script: /glibc/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-glibc ####
 #### OS COMP TEST GROUP START libctest-musl ####
-========== START entry-static.exe argv ==========
-Pass!
-========== END entry-static.exe argv ==========
-========== START entry-static.exe basename ==========
-Pass!
-========== END entry-static.exe basename ==========
-========== START entry-static.exe clocale_mbfuncs ==========
-Pass!
-========== END entry-static.exe clocale_mbfuncs ==========
-========== START entry-static.exe clock_gettime ==========
-Pass!
-========== END entry-static.exe clock_gettime ==========
-========== START entry-static.exe dirname ==========
-Pass!
-========== END entry-static.exe dirname ==========
-========== START entry-static.exe env ==========
-Pass!
-========== END entry-static.exe env ==========
-========== START entry-static.exe fdopen ==========
-Pass!
-========== END entry-static.exe fdopen ==========
-========== START entry-static.exe fnmatch ==========
-Pass!
-========== END entry-static.exe fnmatch ==========
-========== START entry-static.exe fscanf ==========
-Pass!
-========== END entry-static.exe fscanf ==========
-========== START entry-static.exe fwscanf ==========
-Pass!
-========== END entry-static.exe fwscanf ==========
-========== START entry-static.exe iconv_open ==========
-Pass!
-========== END entry-static.exe iconv_open ==========
-========== START entry-static.exe inet_pton ==========
-Pass!
-========== END entry-static.exe inet_pton ==========
-========== START entry-static.exe mbc ==========
-Pass!
-========== END entry-static.exe mbc ==========
-========== START entry-static.exe memstream ==========
-Pass!
-========== END entry-static.exe memstream ==========
-========== START entry-static.exe pthread_cancel_points ==========
-Pass!
-========== END entry-static.exe pthread_cancel_points ==========
-========== START entry-static.exe pthread_cancel ==========
-Pass!
-========== END entry-static.exe pthread_cancel ==========
-========== START entry-static.exe pthread_cond ==========
+[TEST] SKIP script: /musl/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START libctest-glibc ####
+[TEST] SKIP script: /glibc/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-glibc ####
+[TEST] Running /musl/lmbench_testcode.sh
+[TEST][lmbench] stage: entered test dir /musl
+[TEST][lmbench] stage: setup_runtime_tools begin
+[TEST][lmbench] stage: setup_runtime_tools end
+[TEST][lmbench] stage: patched script ready ./.starry-lmbench_testcode.sh.6
+[TEST][lmbench] stage: run patched script begin
+#### OS COMP TEST GROUP START lmbench-musl ####
+latency measurements
+Simple syscall: 1.2477 microseconds
+Simple read: 4.1264 microseconds
+Simple write: 3.9778 microseconds
+Simple stat: 26.5803 microseconds
+Simple fstat: 18.5042 microseconds

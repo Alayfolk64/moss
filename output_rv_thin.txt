@@ -1,0 +1,265 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-04-13 11:00:37.015106100 UTC
+
+Welcome to Starry OS
+
+[TEST] using busybox: /musl/busybox
+[TEST] enabled suites: lmbench
+[TEST] scan roots: / /musl /glibc
+[TEST] scanning /
+[TEST] scanning /musl
+[TEST] scanning /glibc
+#### OS COMP TEST GROUP START basic-glibc ####
+[TEST] SKIP script: /glibc/basic_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START basic-musl ####
+[TEST] SKIP script: /musl/basic_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+[TEST] SKIP script: /glibc/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START busybox-musl ####
+[TEST] SKIP script: /musl/busybox_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+[TEST] SKIP script: /glibc/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+[TEST] SKIP script: /musl/cyclictest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+[TEST] SKIP script: /glibc/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iozone-musl ####
+[TEST] SKIP script: /musl/iozone_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+[TEST] SKIP script: /glibc/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START iperf-musl ####
+[TEST] SKIP script: /musl/iperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+[TEST] SKIP script: /glibc/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+[TEST] SKIP script: /musl/libcbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START libctest-glibc ####
+[TEST] SKIP script: /glibc/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-glibc ####
+#### OS COMP TEST GROUP START libctest-musl ####
+[TEST] SKIP script: /musl/libctest_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END libctest-musl ####
+[TEST] Running /glibc/lmbench_testcode.sh
+[TEST][lmbench] stage: entered test dir /glibc
+[TEST][lmbench] stage: setup_runtime_tools begin
+[TEST][lmbench] stage: setup_runtime_tools end
+[TEST][lmbench] stage: rewrite hardcoded lmbench wrappers begin
+[TEST][lmbench] stage: rewrite hardcoded lmbench wrappers end
+[TEST][lmbench] stage: patched script ready ./.starry-lmbench_testcode.sh.6
+[TEST][lmbench] stage: run patched script begin
+#### OS COMP TEST GROUP START lmbench-glibc ####
+latency measurements
+Simple syscall: 2.0744 microseconds
+Simple read: 6.3212 microseconds
+Simple write: 6.3188 microseconds
+Simple stat: 24.0230 microseconds
+Simple fstat: 9.9936 microseconds
+Simple open/close: 22.0987 microseconds
+Select on 100 fd's: 91.0000 microseconds
+Signal handler installation: 5.5399 microseconds
+Signal handler overhead: 18.5134 microseconds
+Protection fault: 2.3227 microseconds
+Pipe latency: 206.9330 microseconds
+Process fork+exit: 6134.1845 microseconds
+Process fork+execve: 6188.9385 microseconds
+Process fork+/bin/sh -c: 271827.0000 microseconds
+File /var/tmp/XXX write bandwidth:14427 KB/sec
+Pagefaults on /var/tmp/XXX: 126.9132 microseconds
+0.524288 265
+file system latency
+0k	109	1963	8915
+1k	53	988	7095
+4k	55	984	7045
+10k	35	622	7034
+Bandwidth measurements
+Pipe bandwidth: 288.43 MB/sec
+0.524288 54.75
+0.524288 50.12
+0.524288 31.49
+0.524288 33.34
+context switch overhead
+
+"size=32k ovr=20.39
+2 89.91
+4 92.44
+8 82.73
+16 82.66
+24 82.73
+32 82.98
+64 83.14
+96 82.95
+#### OS COMP TEST GROUP END lmbench-glibc ####
+[TEST] Exit code(0): /glibc/lmbench_testcode.sh
+
+[TEST] Running /musl/lmbench_testcode.sh
+[TEST][lmbench] stage: entered test dir /musl
+[TEST][lmbench] stage: setup_runtime_tools begin
+[TEST][lmbench] stage: setup_runtime_tools end
+[TEST][lmbench] stage: rewrite hardcoded lmbench wrappers begin
+[TEST][lmbench] stage: rewrite hardcoded lmbench wrappers end
+[TEST][lmbench] stage: patched script ready ./.starry-lmbench_testcode.sh.6
+[TEST][lmbench] stage: run patched script begin
+#### OS COMP TEST GROUP START lmbench-musl ####
+latency measurements
+Simple syscall: 2.2053 microseconds
+Simple read: 6.4852 microseconds
+Simple write: 6.5280 microseconds
+Simple stat: 24.2710 microseconds
+Simple fstat: 10.5433 microseconds
+Simple open/close: 23.0341 microseconds
+Select on 100 fd's: 88.0794 microseconds
+Signal handler installation: 5.9686 microseconds
+Signal handler overhead: 17.9443 microseconds
+Protection fault: 2.4904 microseconds
+Pipe latency: 213.2318 microseconds
+Process fork+exit: 2204.3333 microseconds
+Process fork+execve: 2384.7726 microseconds
+Process fork+/bin/sh -c: 210203.0000 microseconds
+File /var/tmp/XXX write bandwidth:9947 KB/sec
+Pagefaults on /var/tmp/XXX: 128.4414 microseconds
+0.524288 271
+file system latency
+0k	2053	1881	8035
+1k	1021	967	6524
+4k	1076	969	6534
+10k	689	617	6509
+Bandwidth measurements
+Pipe bandwidth: 292.54 MB/sec
+0.524288 53.67
+0.524288 54.94
+0.524288 31.08
+0.524288 32.83
+context switch overhead
+
+"size=32k ovr=20.05
+2 94.13
+4 92.01
+8 92.17
+16 90.73
+24 91.77
+32 91.67
+64 90.10
+96 93.19
+#### OS COMP TEST GROUP END lmbench-musl ####
+[TEST] Exit code(0): /musl/lmbench_testcode.sh
+
+#### OS COMP TEST GROUP START ltp-glibc ####
+[TEST] SKIP script: /glibc/ltp_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END ltp-glibc ####
+#### OS COMP TEST GROUP START ltp-musl ####
+[TEST] SKIP script: /musl/ltp_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END ltp-musl ####
+#### OS COMP TEST GROUP START lua-glibc ####
+[TEST] SKIP script: /glibc/lua_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START lua-musl ####
+[TEST] SKIP script: /musl/lua_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+[TEST] SKIP script: /glibc/netperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END netperf-glibc ####
+#### OS COMP TEST GROUP START netperf-musl ####
+[TEST] SKIP script: /musl/netperf_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END netperf-musl ####
+#### OS COMP TEST GROUP START unixbench-glibc ####
+[TEST] SKIP script: /glibc/unixbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END unixbench-glibc ####
+#### OS COMP TEST GROUP START unixbench-musl ####
+[TEST] SKIP script: /musl/unixbench_testcode.sh (switch=0)
+#### OS COMP TEST GROUP END unixbench-musl ####
+[TEST] group summary: total=12 passed=1 failed=0 skipped=11
+[TEST] script summary: total=2 passed=2 failed=0
+[TEST] all discovered scripts completed
+[37m[1879.867893 0:10214 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
+[m[37m[1879.923777 0:10215 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
+[m

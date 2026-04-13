@@ -77,14 +77,13 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-13 07:42:03.001185 UTC
+Boot at 2026-04-13 12:00:48.004361900 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
 [TEST] enabled suites: lmbench
-[TEST] scan roots: / /musl /glibc
-[TEST] scanning /
+[TEST] scan roots: /musl /glibc
 [TEST] scanning /musl
 [TEST] scanning /glibc
 #### OS COMP TEST GROUP START basic-musl ####
@@ -133,4 +132,17 @@ Welcome to Starry OS
 [TEST][lmbench] stage: entered test dir /musl
 [TEST][lmbench] stage: setup_runtime_tools begin
 [TEST][lmbench] stage: setup_runtime_tools end
-[TEST][lmbench] stage: prepare /code/lmbench_src/bin/build/lmbench_all begin
+[TEST][lmbench] stage: patched script ready ./.starry-lmbench_testcode.sh.6
+[TEST][lmbench] stage: run patched script begin
+#### OS COMP TEST GROUP START lmbench-musl ####
+latency measurements
+Simple syscall: 2.1085 microseconds
+Simple read: 6.5433 microseconds
+Simple write: 6.9524 microseconds
+Simple stat: 26.6261 microseconds
+Simple fstat: 11.2276 microseconds
+Simple open/close: 25.5930 microseconds
+Select on 100 fd's: 106.3775 microseconds
+Signal handler installation: 6.7518 microseconds
+Signal handler overhead: 18.1125 microseconds
+Protection fault: 2.1197 microseconds
