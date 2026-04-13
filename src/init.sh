@@ -28,7 +28,7 @@ echo "[TEST] using busybox: $BB"
 "$BB" cp "$BB" /bin/sh >/dev/null 2>&1 || true
 "$BB" chmod +x /bin/sh >/dev/null 2>&1 || true
 export PATH=/musl:/glibc:/bin:/usr/bin
-export LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/usr/lib
+export LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
 TEST_SUITES="basic busybox cyclictest iozone iperf libcbench libctest lmbench ltp lua netperf unixbench"
 
 setup_runtime_tools() {
@@ -48,16 +48,18 @@ setup_runtime_tools() {
   if [ -d /glibc/lib ]; then
     rt_pwd=$PWD
     cd / >/dev/null 2>&1 || true
-    "$BB" mkdir -p lib >/dev/null 2>&1 || true
+    "$BB" mkdir -p lib lib64 >/dev/null 2>&1 || true
     cd "$rt_pwd" >/dev/null 2>&1 || true
-    for so in ld-linux-riscv64-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6; do
+    for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6; do
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
+      [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
     done
   fi
   # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
   if [ -e /musl/lib/libc.so ]; then
     [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
     [ -e /lib/ld-musl-riscv64-sf.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1 >/dev/null 2>&1 || true
+    [ -e /lib/ld-musl-loongarch64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1 >/dev/null 2>&1 || true
   fi
   "$BB" --install /bin >/dev/null 2>&1 || "$BB" --install -s /bin >/dev/null 2>&1 || true
   "$BB" --install /usr/bin >/dev/null 2>&1 || "$BB" --install -s /usr/bin >/dev/null 2>&1 || true
@@ -134,7 +136,7 @@ run_test() {
     }
   HOME=/root
   PATH=/musl:/glibc:/bin:/usr/bin
-  LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/usr/lib
+  LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
   export HOME PATH LD_LIBRARY_PATH
   for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock; do
     eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
