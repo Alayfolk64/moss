@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-14 12:16:02.001346700 UTC
+Boot at 2026-04-14 15:48:50.001370400 UTC
 
 Welcome to Starry OS
 
@@ -137,6 +137,7 @@ Welcome to Starry OS
 [TEST] SKIP script: /glibc/lmbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END lmbench-glibc ####
 [TEST] Running /musl/ltp_testcode.sh
+#### OS COMP TEST GROUP START ltp-musl ####
 RUN LTP CASE abort01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
@@ -481,7 +482,7 @@ warnings 0
 PASS LTP CASE access03 : 0
 RUN LTP CASE access04
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accPkpdAg/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accdNGEoo/mntpoint fstyp=tmpfs flags=21
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 access04.c:68: [1;32mTPASS: [0maccess as root : EINVAL (22)
@@ -503,14 +504,14 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accPkpdAg) failed: unlink(/tmp/LTP_accPkpdAg) failed; errno=21: EISDIR
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accdNGEoo) failed: unlink(/tmp/LTP_accdNGEoo) failed; errno=21: EISDIR
 PASS LTP CASE access04 : 0
 RUN LTP CASE acct01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accLNhfnD/ro_mntpoint fstyp=tmpfs flags=21
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accMAOAlO/ro_mntpoint fstyp=tmpfs flags=21
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[ 27.551204 0:321 starry_kernel::syscall:653] [33mUnimplemented syscall: acct[m
+[37m[ 29.923674 0:304 starry_kernel::syscall:653] [33mUnimplemented syscall: acct[m
 [macct01.c:84: [1;33mTCONF: [0macct() system call isn't configured in kernel
 
 Summary:
@@ -519,7 +520,7 @@ failed   0
 broken   0
 skipped  1
 warnings 0
-tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accLNhfnD) failed: unlink(/tmp/LTP_accLNhfnD) failed; errno=21: EISDIR
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accMAOAlO) failed: unlink(/tmp/LTP_accMAOAlO) failed; errno=21: EISDIR
 SKIP LTP CASE acct01 : 32
 RUN LTP CASE acct02
 tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
@@ -865,11 +866,432 @@ broken   1
 skipped  0
 warnings 0
 FAIL LTP CASE ar01.sh : 2
+RUN LTP CASE arch_prctl01
+tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+SKIP LTP CASE arch_prctl01 : 32
+RUN LTP CASE arping01.sh
+arping01 1 [1;34mTINFO: [0mRunning: arping01.sh 
+arping01 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+arping01 1 [1;33mTCONF: [0m(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+veth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE arping01.sh : 32
+RUN LTP CASE asapi_01
+asapi_01    1  [1;32mTPASS[0m  :  IN6_ARE_ADDR_EQUAL
+asapi_01    2  [1;31mTFAIL[0m  :  asapi_01.c:119: "hopopt" protocols entry
+asapi_01    3  [1;32mTPASS[0m  :  "ipv6" protocols entry
+asapi_01    4  [1;32mTPASS[0m  :  "ipv6-route" protocols entry
+asapi_01    5  [1;32mTPASS[0m  :  "ipv6-frag" protocols entry
+asapi_01    6  [1;32mTPASS[0m  :  "esp" protocols entry
+asapi_01    7  [1;32mTPASS[0m  :  "ah" protocols entry
+asapi_01    8  [1;32mTPASS[0m  :  "ipv6-icmp" protocols entry
+asapi_01    9  [1;32mTPASS[0m  :  "ipv6-nonxt" protocols entry
+asapi_01   10  [1;32mTPASS[0m  :  "ipv6-opts" protocols entry
+asapi_01   11  [1;31mTBROK[0m  :  asapi_01.c:351: socket(2, 1, 0) failed: errno=ENOSYS(38): Function not implemented
+asapi_01   12  [1;31mTBROK[0m  :  asapi_01.c:351: Remaining cases broken
+FAIL LTP CASE asapi_01 : 3
+RUN LTP CASE asapi_02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+asapi_02.c:219: [1;31mTBROK: [0msocket(10, 3, 58) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE asapi_02 : 2
+RUN LTP CASE asapi_03
+asapi_03    1  [1;31mTBROK[0m  :  asapi_03.c:255: socket(10, 3, 159) failed: errno=ENOSYS(38): Function not implemented
+asapi_03    2  [1;31mTBROK[0m  :  asapi_03.c:255: Remaining cases broken
+FAIL LTP CASE asapi_03 : 2
+RUN LTP CASE ask_password.sh
+/musl/ltp/testcases/bin/ask_password.sh: line 50: can't create /dev/ttyS0: Operation not permitted
+PASS LTP CASE ask_password.sh : 0
+RUN LTP CASE aslr01
+tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
+tst_kconfig.c:207: [1;31mTBROK: [0mCannot parse kernel .config
+FAIL LTP CASE aslr01 : 2
+RUN LTP CASE assign_password.sh
+/musl/ltp/testcases/bin/assign_password.sh: line 48: can't create /dev/ttyS0: Operation not permitted
+PASS LTP CASE assign_password.sh : 0
+RUN LTP CASE atof01
+atof01      1  [1;32mTPASS[0m  :  Test passed
+atof01      2  [1;32mTPASS[0m  :  Test passed
+atof01      3  [1;32mTPASS[0m  :  Test passed
+atof01      4  [1;32mTPASS[0m  :  Test passed
+PASS LTP CASE atof01 : 0
+RUN LTP CASE autogroup01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+autogroup01.c:65: [1;33mTCONF: [0mautogroup not supported
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE autogroup01 : 32
+RUN LTP CASE bbr01.sh
+bbr01 1 [1;34mTINFO: [0mRunning: bbr01.sh 
+bbr01 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+bbr01 1 [1;33mTCONF: [0m(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+veth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE bbr01.sh : 32
+RUN LTP CASE bbr02.sh
+bbr02 1 [1;34mTINFO: [0mRunning: bbr02.sh 
+bbr02 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+bbr02 1 [1;33mTCONF: [0m(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+veth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE bbr02.sh : 32
+RUN LTP CASE bind01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind01.c:75: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+bind01.c:103: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+bind01.c:104: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 2
+FAIL LTP CASE bind01 : 6
+RUN LTP CASE bind02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind02.c:52: [1;34mTINFO: [0mSwitching credentials to user: nobody, group: nobody
+bind02.c:34: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bind02 : 2
+RUN LTP CASE bind03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind03.c:56: [1;31mTBROK: [0msocket(1, 1, 0) failed: ENOSYS (38)
+bind03.c:78: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE bind03 : 6
+RUN LTP CASE bind04
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind04.c:117: [1;34mTINFO: [0mTesting AF_UNIX pathname stream
+bind04.c:118: [1;31mTBROK: [0msocket(1, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bind04 : 2
+RUN LTP CASE bind05
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind05.c:131: [1;34mTINFO: [0mTesting AF_UNIX pathname datagram
+bind05.c:132: [1;31mTBROK: [0msocket(1, 2, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bind05 : 2
+RUN LTP CASE bind06
+tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
+tst_kconfig.c:207: [1;31mTBROK: [0mCannot parse kernel .config
+FAIL LTP CASE bind06 : 2
+RUN LTP CASE bind_noport01.sh
+bind_noport01 1 [1;34mTINFO: [0mRunning: bind_noport01.sh 
+bind_noport01 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+bind_noport01 1 [1;33mTCONF: [0m(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+veth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE bind_noport01.sh : 32
+RUN LTP CASE binfmt_misc01.sh
+binfmt_misc01 1 [1;34mTINFO: [0mRunning: binfmt_misc01.sh 
+binfmt_misc01 1 [1;33mTCONF: [0m(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+binfmt_misc(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE binfmt_misc01.sh : 32
+RUN LTP CASE binfmt_misc02.sh
+binfmt_misc02 1 [1;34mTINFO: [0mRunning: binfmt_misc02.sh 
+binfmt_misc02 1 [1;33mTCONF: [0m(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+binfmt_misc(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE binfmt_misc02.sh : 32
+RUN LTP CASE binfmt_misc_lib.sh
+binfmt_misc_lib 1 [1;35mTWARN: [0mTest /musl/ltp/testcases/bin/binfmt_misc_lib.sh must call tst_run!
+binfmt_misc_lib 1 [1;35mTWARN: [0mTST_TESTFUNC is not defined
+binfmt_misc_lib 1 [1;34mTINFO: [0mRunning: binfmt_misc_lib.sh 
+PASS LTP CASE binfmt_misc_lib.sh : 0
+RUN LTP CASE block_dev
+block_dev    1  [1;33mTCONF[0m  :  tst_module.c:69: Failed to find module 'ltp_block_dev.ko'
+block_dev    2  [1;33mTCONF[0m  :  tst_module.c:69: Remaining cases not appropriate for configuration
+SKIP LTP CASE block_dev : 32
+RUN LTP CASE bpf_map01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+[37m[117.100943 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:53: [1;32mTPASS: [0mCreated hash map
+[37m[117.101446 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:67: [1;31mTFAIL: [0mEmpty hash map lookup should fail with ENOENT: SUCCESS (0)
+[37m[117.102718 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:102: [1;32mTPASS: [0mUpdate hash map element
+[37m[117.103031 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:118: [1;31mTFAIL: [0mhash map lookup returned different value
+[37m[117.103699 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:53: [1;32mTPASS: [0mCreated array map
+[37m[117.106265 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:77: [1;31mTFAIL: [0mPreallocated array map val not zero
+bpf_map01.c:83: [1;32mTPASS: [0mPreallocated array map lookup
+[37m[117.106996 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:102: [1;32mTPASS: [0mUpdate array map element
+[37m[117.109201 0:1416 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:118: [1;31mTFAIL: [0marray map lookup returned different value
+
+Summary:
+passed   5
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_map01 : 1
+RUN LTP CASE bpf_prog01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+[37m[117.643615 0:1423 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[117.649134 0:1423 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_common.c:114: [1;32mTPASS: [0mLoaded program
+bpf_common.c:135: [1;31mTBROK: [0msocketpair(1, 2, 0, 0x3fffffc18) failed: ENOSYS (38)
+
+Summary:
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog01 : 2
+RUN LTP CASE bpf_prog02
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+[37m[118.117227 0:1430 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[118.118839 0:1430 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_common.c:114: [1;32mTPASS: [0mLoaded program
+bpf_common.c:135: [1;31mTBROK: [0msocketpair(1, 2, 0, 0x3fffffb38) failed: ENOSYS (38)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3612af783cf5
+
+Summary:
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog02 : 2
+RUN LTP CASE bpf_prog03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+[37m[118.571033 0:1437 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[118.571316 0:1437 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[118.572417 0:1437 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_prog03.c:97: [1;34mTINFO: [0mVerification log:
+bpf_prog03.c:135: [1;31mTFAIL: [0mLoaded bad eBPF, now we will run it and maybe crash
+bpf_common.c:135: [1;31mTBROK: [0msocketpair(1, 2, 0, 0x3fffffb08) failed: ENOSYS (38)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
+
+Summary:
+passed   0
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog03 : 3
+RUN LTP CASE bpf_prog04
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b799207e1e18
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-18445
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog04 : 2
+RUN LTP CASE bpf_prog05
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f6b1b3bf0d5f
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=468f6eafa6c4
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e88b2c6e5a4d
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9b00f1b78809
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-3444
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog05 : 2
+RUN LTP CASE bpf_prog06
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-4204
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog06 : 2
+RUN LTP CASE bpf_prog07
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2022-23222
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog07 : 2
+RUN LTP CASE brk01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+brk01.c:24: [1;34mTINFO: [0mTesting libc variant
+brk01.c:35: [1;33mTCONF: [0mbrk() not implemented
+brk01.c:21: [1;34mTINFO: [0mTesting syscall variant
+brk01.c:70: [1;32mTPASS: [0mbrk() works fine
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+PASS LTP CASE brk01 : 0
 [TEST] LTP total timeout reached (100s), stopping.
-[TEST] LTP summary: pass=14 fail=13 skip=15
+[TEST] LTP summary: pass=19 fail=31 skip=24
+#### OS COMP TEST GROUP END ltp-musl ####
 [TEST] Exit code(1): /musl/ltp_testcode.sh
 
 [TEST] Running /glibc/ltp_testcode.sh
+#### OS COMP TEST GROUP START ltp-glibc ####
 RUN LTP CASE abort01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
@@ -1236,14 +1658,14 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accoKqmK7) failed: unlink(/tmp/LTP_accoKqmK7) failed; errno=21: EISDIR
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accIkZDBS) failed: unlink(/tmp/LTP_accIkZDBS) failed; errno=21: EISDIR
 PASS LTP CASE access04 : 0
 RUN LTP CASE acct01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1017: [1;34mTINFO: [0mCannot resolve the absolute path of ro_mntpoint: ENOENT (2)
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[131.264704 0:2015 starry_kernel::syscall:653] [33mUnimplemented syscall: acct[m
+[37m[132.307270 0:1678 starry_kernel::syscall:653] [33mUnimplemented syscall: acct[m
 [macct01.c:84: [1;33mTCONF: [0macct() system call isn't configured in kernel
 
 Summary:
@@ -1252,7 +1674,7 @@ failed   0
 broken   0
 skipped  1
 warnings 0
-tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accmDWmge) failed: unlink(/tmp/LTP_accmDWmge) failed; errno=21: EISDIR
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accYe2nfL) failed: unlink(/tmp/LTP_accYe2nfL) failed; errno=21: EISDIR
 SKIP LTP CASE acct01 : 32
 RUN LTP CASE acct02
 tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
@@ -1614,8 +2036,505 @@ broken   1
 skipped  0
 warnings 0
 FAIL LTP CASE ar01.sh : 2
+RUN LTP CASE arch_prctl01
+tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+SKIP LTP CASE arch_prctl01 : 32
+RUN LTP CASE arping01.sh
+arping01 1 [1;34mTINFO: [0mRunning: arping01.sh 
+arping01 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[202.534422 0:2189 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[marping01 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE arping01.sh : 32
+RUN LTP CASE asapi_01
+asapi_01    1  [1;32mTPASS[0m  :  IN6_ARE_ADDR_EQUAL
+asapi_01    2  [1;31mTFAIL[0m  :  asapi_01.c:119: "hopopt" protocols entry
+asapi_01    3  [1;31mTFAIL[0m  :  asapi_01.c:119: "ipv6" protocols entry
+asapi_01    4  [1;31mTFAIL[0m  :  asapi_01.c:119: "ipv6-route" protocols entry
+asapi_01    5  [1;31mTFAIL[0m  :  asapi_01.c:119: "ipv6-frag" protocols entry
+asapi_01    6  [1;31mTFAIL[0m  :  asapi_01.c:119: "esp" protocols entry
+asapi_01    7  [1;31mTFAIL[0m  :  asapi_01.c:119: "ah" protocols entry
+asapi_01    8  [1;31mTFAIL[0m  :  asapi_01.c:119: "ipv6-icmp" protocols entry
+asapi_01    9  [1;31mTFAIL[0m  :  asapi_01.c:119: "ipv6-nonxt" protocols entry
+asapi_01   10  [1;31mTFAIL[0m  :  asapi_01.c:119: "ipv6-opts" protocols entry
+asapi_01   11  [1;31mTBROK[0m  :  asapi_01.c:351: socket(2, 1, 0) failed: errno=ENOSYS(38): Function not implemented
+asapi_01   12  [1;31mTBROK[0m  :  asapi_01.c:351: Remaining cases broken
+FAIL LTP CASE asapi_01 : 3
+RUN LTP CASE asapi_02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+asapi_02.c:219: [1;31mTBROK: [0msocket(10, 3, 58) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE asapi_02 : 2
+RUN LTP CASE asapi_03
+asapi_03    1  [1;31mTBROK[0m  :  asapi_03.c:255: socket(10, 3, 159) failed: errno=ENOSYS(38): Function not implemented
+asapi_03    2  [1;31mTBROK[0m  :  asapi_03.c:255: Remaining cases broken
+FAIL LTP CASE asapi_03 : 2
+RUN LTP CASE ask_password.sh
+/glibc/ltp/testcases/bin/ask_password.sh: line 50: can't create /dev/ttyS0: Operation not permitted
+PASS LTP CASE ask_password.sh : 0
+RUN LTP CASE aslr01
+tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
+tst_kconfig.c:207: [1;31mTBROK: [0mCannot parse kernel .config
+FAIL LTP CASE aslr01 : 2
+RUN LTP CASE assign_password.sh
+/glibc/ltp/testcases/bin/assign_password.sh: line 48: can't create /dev/ttyS0: Operation not permitted
+PASS LTP CASE assign_password.sh : 0
+RUN LTP CASE atof01
+atof01      1  [1;32mTPASS[0m  :  Test passed
+atof01      2  [1;32mTPASS[0m  :  Test passed
+atof01      3  [1;32mTPASS[0m  :  Test passed
+atof01      4  [1;32mTPASS[0m  :  Test passed
+PASS LTP CASE atof01 : 0
+RUN LTP CASE autogroup01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+autogroup01.c:65: [1;33mTCONF: [0mautogroup not supported
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE autogroup01 : 32
+RUN LTP CASE bbr01.sh
+bbr01 1 [1;34mTINFO: [0mRunning: bbr01.sh 
+bbr01 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[206.217770 0:2256 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbbr01 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE bbr01.sh : 32
+RUN LTP CASE bbr02.sh
+bbr02 1 [1;34mTINFO: [0mRunning: bbr02.sh 
+bbr02 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[208.139354 0:2273 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbbr02 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE bbr02.sh : 32
+RUN LTP CASE bind01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind01.c:75: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+bind01.c:103: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+bind01.c:104: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 2
+FAIL LTP CASE bind01 : 6
+RUN LTP CASE bind02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind02.c:52: [1;34mTINFO: [0mSwitching credentials to user: nobody, group: nobody
+bind02.c:34: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bind02 : 2
+RUN LTP CASE bind03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind03.c:56: [1;31mTBROK: [0msocket(1, 1, 0) failed: ENOSYS (38)
+bind03.c:78: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE bind03 : 6
+RUN LTP CASE bind04
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind04.c:117: [1;34mTINFO: [0mTesting AF_UNIX pathname stream
+bind04.c:118: [1;31mTBROK: [0msocket(1, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bind04 : 2
+RUN LTP CASE bind05
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind05.c:131: [1;34mTINFO: [0mTesting AF_UNIX pathname datagram
+bind05.c:132: [1;31mTBROK: [0msocket(1, 2, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bind05 : 2
+RUN LTP CASE bind06
+tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
+tst_kconfig.c:207: [1;31mTBROK: [0mCannot parse kernel .config
+FAIL LTP CASE bind06 : 2
+RUN LTP CASE bind_noport01.sh
+bind_noport01 1 [1;34mTINFO: [0mRunning: bind_noport01.sh 
+bind_noport01 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[211.741561 0:2331 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbind_noport01 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE bind_noport01.sh : 32
+RUN LTP CASE binfmt_misc01.sh
+binfmt_misc01 1 [1;34mTINFO: [0mRunning: binfmt_misc01.sh 
+[37m[212.813512 0:2350 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbinfmt_misc01 1 [1;33mTCONF: [0mbinfmt_misc(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE binfmt_misc01.sh : 32
+RUN LTP CASE binfmt_misc02.sh
+binfmt_misc02 1 [1;34mTINFO: [0mRunning: binfmt_misc02.sh 
+[37m[213.816478 0:2369 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbinfmt_misc02 1 [1;33mTCONF: [0mbinfmt_misc(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE binfmt_misc02.sh : 32
+RUN LTP CASE binfmt_misc_lib.sh
+binfmt_misc_lib 1 [1;35mTWARN: [0mTest /glibc/ltp/testcases/bin/binfmt_misc_lib.sh must call tst_run!
+binfmt_misc_lib 1 [1;35mTWARN: [0mTST_TESTFUNC is not defined
+binfmt_misc_lib 1 [1;34mTINFO: [0mRunning: binfmt_misc_lib.sh 
+PASS LTP CASE binfmt_misc_lib.sh : 0
+RUN LTP CASE block_dev
+block_dev    1  [1;33mTCONF[0m  :  tst_module.c:69: Failed to find module 'ltp_block_dev.ko'
+block_dev    2  [1;33mTCONF[0m  :  tst_module.c:69: Remaining cases not appropriate for configuration
+SKIP LTP CASE block_dev : 32
+RUN LTP CASE bpf_map01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+[37m[215.154699 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:53: [1;32mTPASS: [0mCreated hash map
+[37m[215.155187 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:67: [1;31mTFAIL: [0mEmpty hash map lookup should fail with ENOENT: SUCCESS (0)
+[37m[215.158035 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:102: [1;32mTPASS: [0mUpdate hash map element
+[37m[215.158330 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:118: [1;31mTFAIL: [0mhash map lookup returned different value
+[37m[215.158879 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:53: [1;32mTPASS: [0mCreated array map
+[37m[215.159126 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:77: [1;31mTFAIL: [0mPreallocated array map val not zero
+bpf_map01.c:83: [1;32mTPASS: [0mPreallocated array map lookup
+[37m[215.159499 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:102: [1;32mTPASS: [0mUpdate array map element
+[37m[215.159721 0:2393 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_map01.c:118: [1;31mTFAIL: [0marray map lookup returned different value
+
+Summary:
+passed   5
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_map01 : 1
+RUN LTP CASE bpf_prog01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+[37m[215.619596 0:2400 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[215.620363 0:2400 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_common.c:114: [1;32mTPASS: [0mLoaded program
+bpf_common.c:135: [1;31mTBROK: [0msocketpair(1, 2, 0, 0x3fffffa70) failed: ENOSYS (38)
+
+Summary:
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog01 : 2
+RUN LTP CASE bpf_prog02
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+[37m[216.086872 0:2407 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[216.088249 0:2407 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_common.c:114: [1;32mTPASS: [0mLoaded program
+bpf_common.c:135: [1;31mTBROK: [0msocketpair(1, 2, 0, 0x3fffff9a0) failed: ENOSYS (38)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3612af783cf5
+
+Summary:
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog02 : 2
+RUN LTP CASE bpf_prog03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097152
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+[37m[216.446645 0:2414 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[216.448241 0:2414 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[216.450532 0:2414 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[mbpf_prog03.c:97: [1;34mTINFO: [0mVerification log:
+bpf_prog03.c:135: [1;31mTFAIL: [0mLoaded bad eBPF, now we will run it and maybe crash
+bpf_common.c:135: [1;31mTBROK: [0msocketpair(1, 2, 0, 0x3fffff970) failed: ENOSYS (38)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
+
+Summary:
+passed   0
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog03 : 3
+RUN LTP CASE bpf_prog04
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b799207e1e18
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-18445
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog04 : 2
+RUN LTP CASE bpf_prog05
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f6b1b3bf0d5f
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=468f6eafa6c4
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e88b2c6e5a4d
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9b00f1b78809
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-3444
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog05 : 2
+RUN LTP CASE bpf_prog06
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-4204
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog06 : 2
+RUN LTP CASE bpf_prog07
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_taint.c:42: [1;31mTBROK: [0mFailed to open FILE '/proc/sys/kernel/tainted' for reading: ENOENT (2)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2022-23222
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog07 : 2
+RUN LTP CASE brk01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+brk01.c:24: [1;34mTINFO: [0mTesting libc variant
+brk01.c:70: [1;32mTPASS: [0mbrk() works fine
+brk01.c:21: [1;34mTINFO: [0mTesting syscall variant
+brk01.c:70: [1;32mTPASS: [0mbrk() works fine
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+PASS LTP CASE brk01 : 0
+RUN LTP CASE brk02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+brk02.c:42: [1;34mTINFO: [0mTesting libc variant
+brk02.c:86: [1;32mTPASS: [0mmunmap at least two VMAs of brk() passed
+brk02.c:39: [1;34mTINFO: [0mTesting syscall variant
+brk02.c:86: [1;32mTPASS: [0mmunmap at least two VMAs of brk() passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+PASS LTP CASE brk02 : 0
+RUN LTP CASE broken_ip-checksum.sh
+broken_ip-checksum 1 [1;34mTINFO: [0mRunning: broken_ip-checksum.sh 
+broken_ip-checksum 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[220.236332 0:2470 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbroken_ip-checksum 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE broken_ip-checksum.sh : 32
+RUN LTP CASE broken_ip-dstaddr.sh
+broken_ip-dstaddr 1 [1;34mTINFO: [0mRunning: broken_ip-dstaddr.sh 
+broken_ip-dstaddr 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[221.341527 0:2487 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbroken_ip-dstaddr 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE broken_ip-dstaddr.sh : 32
+RUN LTP CASE broken_ip-fragment.sh
+broken_ip-fragment 1 [1;34mTINFO: [0mRunning: broken_ip-fragment.sh 
+broken_ip-fragment 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[222.446180 0:2504 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbroken_ip-fragment 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE broken_ip-fragment.sh : 32
+RUN LTP CASE broken_ip-ihl.sh
+broken_ip-ihl 1 [1;34mTINFO: [0mRunning: broken_ip-ihl.sh 
+broken_ip-ihl 1 [1;34mTINFO: [0mIPv6 disabled on lhost via kernel command line or not compiled in
+[37m[223.906745 0:2521 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mbroken_ip-ihl 1 [1;33mTCONF: [0mveth(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+(null)      0  TWARN  :  tst_kernel.c:126: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+SKIP LTP CASE broken_ip-ihl.sh : 32
 [TEST] LTP total timeout reached (100s), stopping.
-[TEST] LTP summary: pass=14 fail=14 skip=14
+[TEST] LTP summary: pass=20 fail=32 skip=27
+#### OS COMP TEST GROUP END ltp-glibc ####
 [TEST] Exit code(1): /glibc/ltp_testcode.sh
 
 #### OS COMP TEST GROUP START lua-musl ####

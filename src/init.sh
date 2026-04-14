@@ -211,6 +211,23 @@ setup_runtime_tools() {
   SETUP_RUNTIME_DONE=1
 }
 
+suite_group_name() {
+  test_sh="$1"
+  suite="$2"
+  case "$test_sh" in
+    /musl/*) echo "$suite-musl" ;;
+    /glibc/*) echo "$suite-glibc" ;;
+    *) echo "$suite" ;;
+  esac
+}
+
+group_marker_line() {
+  kind="$1"
+  test_sh="$2"
+  suite="$3"
+  echo "#### OS COMP TEST GROUP $kind $(suite_group_name "$test_sh" "$suite") ####"
+}
+
 run_test() {
   test_sh="$1"
   test_dir=${test_sh%/*}
@@ -249,6 +266,10 @@ run_test() {
     PATH="$target_dir:$ltp_lib_dir:$ltp_testscripts_dir:$PATH"
     LTPROOT="$ltp_root"
     export PATH LTPROOT
+
+    ltp_start_line=$(group_marker_line START "$test_sh" ltp)
+    ltp_end_line=$(group_marker_line END "$test_sh" ltp)
+    echo "$ltp_start_line"
 
     suite_ret=0
     ltp_pass=0
@@ -318,6 +339,7 @@ run_test() {
       esac
     done
     echo "[TEST] LTP summary: pass=$ltp_pass fail=$ltp_fail skip=$ltp_skip"
+    echo "$ltp_end_line"
     ret=$suite_ret
     cd "$old_pwd" || true
     echo "[TEST] Exit code($ret): $test_sh"
@@ -395,10 +417,8 @@ find_suite_scripts() {
 emit_skip_markers() {
   test_sh="$1"
   suite="$2"
-  start_line=$("$BB" sed -n 's/.*\(#### OS COMP TEST GROUP START .* ####\).*/\1/p' "$test_sh" 2>/dev/null | "$BB" head -n 1)
-  end_line=$("$BB" sed -n 's/.*\(#### OS COMP TEST GROUP END .* ####\).*/\1/p' "$test_sh" 2>/dev/null | "$BB" head -n 1)
-  [ -n "$start_line" ] || start_line="#### OS COMP TEST GROUP START $suite ####"
-  [ -n "$end_line" ] || end_line="#### OS COMP TEST GROUP END $suite ####"
+  start_line=$(group_marker_line START "$test_sh" "$suite")
+  end_line=$(group_marker_line END "$test_sh" "$suite")
   echo "$start_line"
   echo "[TEST] SKIP script: $test_sh (switch=0)"
   echo "$end_line"
