@@ -157,6 +157,14 @@ contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
 	@$(MAKE) -C make run ARCH=riscv64 BLK=y NET=n BUS=mmio DISK_IMG=$(A)/sdcard-rv.img
 
+repair-sdcard-rv:
+	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
+	@docker run --rm --platform linux/amd64 \
+		-v "$(A):/work" \
+		-w /work \
+		docker.io/zhouzhouyi/os-contest:20260104 \
+		bash -lc 'e2fsck -fy /work/sdcard-rv.img >/tmp/e2fsck-rv.log 2>&1; rc=$$?; cat /tmp/e2fsck-rv.log; [ $$rc -le 2 ]'
+
 ci-test:
 	./scripts/ci-test.py $(ARCH)
 
@@ -191,4 +199,4 @@ la-shell:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell

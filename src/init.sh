@@ -27,25 +27,49 @@ echo "[TEST] using busybox: $BB"
 "$BB" chmod +x /bin/busybox >/dev/null 2>&1 || true
 "$BB" cp "$BB" /bin/sh >/dev/null 2>&1 || true
 "$BB" chmod +x /bin/sh >/dev/null 2>&1 || true
-export PATH=/musl:/glibc:/bin:/usr/bin
-export LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
+RUNTIME_PATH=/musl:/glibc:/bin:/usr/bin
+RUNTIME_LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
+PATH=$RUNTIME_PATH
+LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
+export PATH LD_LIBRARY_PATH
+
+detect_arch() {
+  detected=$("$BB" uname -m 2>/dev/null)
+  [ -n "$detected" ] || detected=$(uname -m 2>/dev/null)
+  case "$detected" in
+    loongarch64|riscv64)
+      echo "$detected"
+      return 0
+      ;;
+  esac
+  if [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]; then
+    echo "loongarch64"
+  elif [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]; then
+    echo "riscv64"
+  else
+    echo "${detected:-unknown}"
+  fi
+}
+
+ARCH_NAME=$(detect_arch)
+echo "[TEST] detected arch: $ARCH_NAME"
 
 # =========================
 # Test switches (1=run, 0=skip)
-# 共 12 组题目，可手动修改
+# 12 suites; defaults can be overridden by environment variables.
 # =========================
-RUN_BASIC=1
-RUN_BUSYBOX=1
-RUN_CYCLICTEST=1
-RUN_IOZONE=0
-RUN_IPERF=1
-RUN_LIBCBENCH=1
-RUN_LIBCTEST=1
-RUN_LMBENCH=0
-RUN_LTP=1
-RUN_LUA=1
-RUN_NETPERF=1
-RUN_UNIXBENCH=1
+: "${RUN_BASIC:=1}"
+: "${RUN_BUSYBOX:=1}"
+: "${RUN_CYCLICTEST:=1}"
+: "${RUN_IOZONE:=0}"
+: "${RUN_IPERF:=1}"
+: "${RUN_LIBCBENCH:=1}"
+: "${RUN_LIBCTEST:=1}"
+: "${RUN_LMBENCH:=0}"
+: "${RUN_LTP:=1}"
+: "${RUN_LUA:=1}"
+: "${RUN_NETPERF:=1}"
+: "${RUN_UNIXBENCH:=1}"
 
 suite_enabled() {
   case "$1" in
@@ -105,25 +129,71 @@ setup_runtime_tools() {
     cd / >/dev/null 2>&1 || true
     "$BB" mkdir -p lib lib64 >/dev/null 2>&1 || true
     cd "$rt_pwd" >/dev/null 2>&1 || true
-    for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1 libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
+    for so in libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
       [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
     done
+    case "$ARCH_NAME" in
+      loongarch64)
+        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
+        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib64/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
+        ;;
+      riscv64)
+        [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1 >/dev/null 2>&1 || true
+        [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ] && \
+          "$BB" cp -f /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib64/ld-linux-riscv64-lp64d.so.1 >/dev/null 2>&1 || true
+        ;;
+      *)
+        for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1; do
+          [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
+          [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
+        done
+        ;;
+    esac
   fi
   # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
   if [ -e /musl/lib/libc.so ]; then
-    [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
-    [ -e /lib/ld-musl-riscv64-sf.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1 >/dev/null 2>&1 || true
-    [ -e /lib/ld-musl-loongarch64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1 >/dev/null 2>&1 || true
+    rt_pwd=$PWD
+    cd / >/dev/null 2>&1 || true
+    "$BB" mkdir -p lib >/dev/null 2>&1 || true
+    cd "$rt_pwd" >/dev/null 2>&1 || true
+    case "$ARCH_NAME" in
+      loongarch64)
+        [ -e /lib/ld-musl-loongarch64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1 >/dev/null 2>&1 || true
+        ;;
+      riscv64)
+        [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
+        [ -e /lib/ld-musl-riscv64-sf.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1 >/dev/null 2>&1 || true
+        ;;
+      *)
+        for ldso in ld-musl-riscv64.so.1 ld-musl-riscv64-sf.so.1 ld-musl-loongarch64.so.1; do
+          [ -e "/lib/$ldso" ] || "$BB" cp -f /musl/lib/libc.so "/lib/$ldso" >/dev/null 2>&1 || true
+        done
+        ;;
+    esac
   fi
   "$BB" --install /bin >/dev/null 2>&1 || "$BB" --install -s /bin >/dev/null 2>&1 || true
   "$BB" --install /usr/bin >/dev/null 2>&1 || "$BB" --install -s /usr/bin >/dev/null 2>&1 || true
   [ -x /bin/sh ] || "$BB" cp -f "$BB" /bin/sh >/dev/null 2>&1 || true
   [ -x /bin/bash ] || "$BB" cp -f "$BB" /bin/bash >/dev/null 2>&1 || true
   [ -x /usr/bin/env ] || "$BB" cp -f "$BB" /usr/bin/env >/dev/null 2>&1 || true
-  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock; do
+  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout; do
     ensure_bb_cmd "$cmd"
   done
+
+  # Some LTP scripts shell out to `locale`; provide a tiny fallback when the
+  # command is unavailable in busybox/rootfs.
+  if ! command -v locale >/dev/null 2>&1; then
+    rt_pwd=$PWD
+    cd / >/dev/null 2>&1 || true
+    "$BB" mkdir -p bin >/dev/null 2>&1 || true
+    "$BB" sh -c 'printf "%s\n" "#!/bin/sh" "echo LANG=C" > /bin/locale' >/dev/null 2>&1 || true
+    "$BB" chmod +x /bin/locale >/dev/null 2>&1 || true
+    cd "$rt_pwd" >/dev/null 2>&1 || true
+  fi
   SETUP_RUNTIME_DONE=1
 }
 
@@ -146,38 +216,82 @@ run_test() {
   setup_runtime_tools
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: setup_runtime_tools end"
   if [ "$test_name" = "lmbench_testcode.sh" ] && [ -x ./lmbench_all ]; then
-    # Some lmbench helper scripts hardcode /code/lmbench_src/bin/build/lmbench_all.
-    # Rewrite them in-place to use ./lmbench_all to avoid absolute-path issues.
-    [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: rewrite hardcoded lmbench wrappers begin"
-    for f in *; do
-      [ -f "$f" ] || continue
-      "$BB" grep -q "/code/lmbench_src/bin/build/lmbench_all" "$f" >/dev/null 2>&1 || continue
-      tmpf="/tmp/.starry-lmbench-wrap.$$"
-      "$BB" sed 's#/code/lmbench_src/bin/build/lmbench_all#./lmbench_all#g' "$f" > "$tmpf" 2>/dev/null || continue
-      "$BB" cp -f "$tmpf" "$f" >/dev/null 2>&1 || true
-      "$BB" chmod +x "$f" >/dev/null 2>&1 || true
-    done
-    [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: rewrite hardcoded lmbench wrappers end"
+    # Keep compatibility for wrappers that hardcode this path,
+    # without scanning/rewriting all files in the test directory.
+    "$BB" mkdir -p /code/lmbench_src/bin/build >/dev/null 2>&1 || true
+    "$BB" cp -f ./lmbench_all /code/lmbench_src/bin/build/lmbench_all >/dev/null 2>&1 || true
+    "$BB" chmod +x /code/lmbench_src/bin/build/lmbench_all >/dev/null 2>&1 || true
   fi
 
   if [ "$test_name" = "ltp_testcode.sh" ]; then
-    target_dir="ltp/testcases/bin"
+    ltp_root="$PWD/ltp"
+    target_dir="$ltp_root/testcases/bin"
+    ltp_lib_dir="$ltp_root/testcases/lib"
+    ltp_testscripts_dir="$ltp_root/testscripts"
+
+    # LTP shell tests often source helper scripts with `. helper.sh` and run
+    # helper commands (e.g. tst_brk) that are resolved via PATH.
+    # Export LTP paths here to avoid "not found" in those cases.
+    PATH="$target_dir:$ltp_lib_dir:$ltp_testscripts_dir:$PATH"
+    LTPROOT="$ltp_root"
+    export PATH LTPROOT
+
     suite_ret=0
+    ltp_pass=0
+    ltp_fail=0
+    ltp_skip=0
+    ltp_total_timeout=${LTP_TOTAL_TIMEOUT:-100}
+    ltp_start=$("$BB" date +%s 2>/dev/null)
+    [ -n "$ltp_start" ] || ltp_start=$(date +%s 2>/dev/null)
+    [ -n "$ltp_start" ] || ltp_start=0
     for file in "$target_dir"/*; do
       [ -f "$file" ] || continue
       base=$(basename "$file")
-      case "$base" in
-        cgroup_regression_3_1.sh)
-          echo "SKIP LTP CASE $base (requires path argument)"
-          continue
+
+      now=$("$BB" date +%s 2>/dev/null)
+      [ -n "$now" ] || now=$(date +%s 2>/dev/null)
+      [ -n "$now" ] || now=$ltp_start
+      elapsed=$((now - ltp_start))
+      remaining=$((ltp_total_timeout - elapsed))
+      if [ "$remaining" -le 0 ]; then
+        echo "[TEST] LTP total timeout reached (${ltp_total_timeout}s), stopping."
+        suite_ret=1
+        break
+      fi
+
+      echo "RUN LTP CASE $base"
+      if command -v timeout >/dev/null 2>&1; then
+        timeout "$remaining" "$file"
+        ret=$?
+      else
+        "$file"
+        ret=$?
+      fi
+      if [ "$ret" -eq 124 ]; then
+        echo "FAIL LTP CASE $base : $ret"
+        echo "[TEST] LTP total timeout reached (${ltp_total_timeout}s), stopping."
+        ltp_fail=$((ltp_fail + 1))
+        suite_ret=1
+        break
+      fi
+      case "$ret" in
+        0)
+          echo "PASS LTP CASE $base : $ret"
+          ltp_pass=$((ltp_pass + 1))
+          ;;
+        32)
+          # LTP uses 32 for TCONF (test skipped due to missing config/deps).
+          echo "SKIP LTP CASE $base : $ret"
+          ltp_skip=$((ltp_skip + 1))
+          ;;
+        *)
+          echo "FAIL LTP CASE $base : $ret"
+          ltp_fail=$((ltp_fail + 1))
+          suite_ret=1
           ;;
       esac
-      echo "RUN LTP CASE $base"
-      "$file"
-      ret=$?
-      echo "FAIL LTP CASE $base : $ret"
-      [ "$ret" -ne 0 ] && suite_ret=1
     done
+    echo "[TEST] LTP summary: pass=$ltp_pass fail=$ltp_fail skip=$ltp_skip"
     ret=$suite_ret
     cd "$old_pwd" || true
     echo "[TEST] Exit code($ret): $test_sh"
@@ -201,10 +315,10 @@ run_test() {
     }
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: patched script ready $patched_script"
   HOME=/root
-  PATH=/musl:/glibc:/bin:/usr/bin
-  LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
+  PATH=$RUNTIME_PATH
+  LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
   export HOME PATH LD_LIBRARY_PATH
-  for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock; do
+  for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock ar locale timeout; do
     eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
   done
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: run patched script begin"
@@ -242,10 +356,12 @@ done
 find_suite_scripts() {
   suite="$1"
   SUITE_SCRIPT_LIST=""
-  for d in $SEARCH_ROOTS; do
-    [ -d "$d" ] || continue
-    p="$d/${suite}_testcode.sh"
-    [ -f "$p" ] && SUITE_SCRIPT_LIST="${SUITE_SCRIPT_LIST}$p
+
+  for root in $SEARCH_ROOTS; do
+    [ -d "$root" ] || continue
+    p="$root/${suite}_testcode.sh"
+    [ -f "$p" ] || continue
+    SUITE_SCRIPT_LIST="${SUITE_SCRIPT_LIST}$p
 "
   done
 }
@@ -320,4 +436,5 @@ echo "[TEST] group summary: total=$group_total passed=$group_passed failed=$grou
 echo "[TEST] script summary: total=$script_total passed=$script_passed failed=$script_failed"
 
 echo "[TEST] all discovered scripts completed"
+"$BB" sync >/dev/null 2>&1 || true
 "$BB" poweroff -f >/dev/null 2>&1 || "$BB" reboot -f >/dev/null 2>&1 || exit 0

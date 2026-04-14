@@ -122,7 +122,9 @@ impl NodeOps for Inode {
     }
 
     fn sync(&self, _data_only: bool) -> VfsResult<()> {
-        Ok(())
+        // ext4 uses a filesystem-level block cache; flushing one inode must
+        // drain pending metadata/data updates to keep directory integrity.
+        self.fs.lock().flush().map_err(into_vfs_err)
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {

@@ -17,7 +17,7 @@ use linux_raw_sys::{
 use starry_vm::{VmPtr, vm_write_slice};
 
 use crate::{
-    file::{Directory, FileLike, get_file_like, resolve_at, with_fs},
+    file::{Directory, File, FileLike, get_file_like, resolve_at, with_fs},
     mm::vm_load_string,
     task::AsThread,
     time::TimeValueLike,
@@ -515,11 +515,19 @@ pub fn sys_renameat2(
 }
 
 pub fn sys_sync() -> AxResult<isize> {
-    warn!("dummy sys_sync");
+    // Flush the root filesystem (ext4 on contest images).
+    FS_CONTEXT.lock().root_dir().filesystem().flush()?;
     Ok(0)
 }
 
-pub fn sys_syncfs(_fd: i32) -> AxResult<isize> {
-    warn!("dummy sys_syncfs");
-    Ok(0)
+pub fn sys_syncfs(fd: i32) -> AxResult<isize> {
+    if let Ok(file) = File::from_fd(fd) {
+        file.inner().location().filesystem().flush()?;
+        return Ok(0);
+    }
+    if let Ok(dir) = Directory::from_fd(fd) {
+        dir.inner().filesystem().flush()?;
+        return Ok(0);
+    }
+    Err(AxError::BadFileDescriptor)
 }
