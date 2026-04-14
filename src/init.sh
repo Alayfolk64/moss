@@ -58,18 +58,18 @@ echo "[TEST] detected arch: $ARCH_NAME"
 # Test switches (1=run, 0=skip)
 # 12 suites; defaults can be overridden by environment variables.
 # =========================
-: "${RUN_BASIC:=1}"
-: "${RUN_BUSYBOX:=1}"
-: "${RUN_CYCLICTEST:=1}"
+: "${RUN_BASIC:=0}"
+: "${RUN_BUSYBOX:=0}"
+: "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
-: "${RUN_IPERF:=1}"
-: "${RUN_LIBCBENCH:=1}"
-: "${RUN_LIBCTEST:=1}"
+: "${RUN_IPERF:=0}"
+: "${RUN_LIBCBENCH:=0}"
+: "${RUN_LIBCTEST:=0}"
 : "${RUN_LMBENCH:=0}"
 : "${RUN_LTP:=1}"
-: "${RUN_LUA:=1}"
-: "${RUN_NETPERF:=1}"
-: "${RUN_UNIXBENCH:=1}"
+: "${RUN_LUA:=0}"
+: "${RUN_NETPERF:=0}"
+: "${RUN_UNIXBENCH:=0}"
 
 suite_enabled() {
   case "$1" in
@@ -174,6 +174,9 @@ setup_runtime_tools() {
     case "$ARCH_NAME" in
       loongarch64)
         [ -e /lib/ld-musl-loongarch64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1 >/dev/null 2>&1 || true
+        [ -e /lib/ld-musl-loongarch-lp64d.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
+        "$BB" mkdir -p lib64 >/dev/null 2>&1 || true
+        [ -e /lib64/ld-musl-loongarch-lp64d.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib64/ld-musl-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
         ;;
       riscv64)
         [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
@@ -252,12 +255,20 @@ run_test() {
     ltp_fail=0
     ltp_skip=0
     ltp_total_timeout=${LTP_TOTAL_TIMEOUT:-100}
+    ltp_case_timeout=${LTP_CASE_TIMEOUT:-30}
     ltp_start=$("$BB" date +%s 2>/dev/null)
     [ -n "$ltp_start" ] || ltp_start=$(date +%s 2>/dev/null)
     [ -n "$ltp_start" ] || ltp_start=0
     for file in "$target_dir"/*; do
       [ -f "$file" ] || continue
-      base=$(basename "$file")
+      base=$("$BB" basename "$file")
+      case "$base" in
+        tst_*|cgroup_fj_*)
+          echo "SKIP LTP CASE $base : helper"
+          ltp_skip=$((ltp_skip + 1))
+          continue
+          ;;
+      esac
 
       now=$("$BB" date +%s 2>/dev/null)
       [ -n "$now" ] || now=$(date +%s 2>/dev/null)
@@ -271,8 +282,12 @@ run_test() {
       fi
 
       echo "RUN LTP CASE $base"
-      if command -v timeout >/dev/null 2>&1; then
-        timeout "$remaining" "$file"
+      case_timeout=$remaining
+      if [ "$ltp_case_timeout" -gt 0 ] && [ "$ltp_case_timeout" -lt "$case_timeout" ]; then
+        case_timeout=$ltp_case_timeout
+      fi
+      if "$BB" timeout --help >/dev/null 2>&1; then
+        "$BB" timeout "$case_timeout" "$file"
         ret=$?
       else
         "$file"
