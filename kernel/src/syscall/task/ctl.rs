@@ -53,15 +53,41 @@ pub fn sys_umask(mask: u32) -> AxResult<isize> {
     Ok(old as isize)
 }
 
-pub fn sys_setreuid(_ruid: u32, _euid: u32) -> AxResult<isize> {
+const UID_GID_NO_CHANGE: u32 = u32::MAX;
+
+pub fn sys_setreuid(ruid: u32, euid: u32) -> AxResult<isize> {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    if ruid != UID_GID_NO_CHANGE {
+        proc_data.set_real_uid(ruid);
+    }
+    if euid != UID_GID_NO_CHANGE {
+        proc_data.set_euid(euid);
+    }
     Ok(0)
 }
 
-pub fn sys_setresuid(_ruid: u32, _euid: u32, _suid: u32) -> AxResult<isize> {
+pub fn sys_setresuid(ruid: u32, euid: u32, _suid: u32) -> AxResult<isize> {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    if ruid != UID_GID_NO_CHANGE {
+        proc_data.set_real_uid(ruid);
+    }
+    if euid != UID_GID_NO_CHANGE {
+        proc_data.set_euid(euid);
+    }
     Ok(0)
 }
 
-pub fn sys_setresgid(_rgid: u32, _egid: u32, _sgid: u32) -> AxResult<isize> {
+pub fn sys_setresgid(rgid: u32, egid: u32, _sgid: u32) -> AxResult<isize> {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    if rgid != UID_GID_NO_CHANGE {
+        proc_data.set_real_gid(rgid);
+    }
+    if egid != UID_GID_NO_CHANGE {
+        proc_data.set_egid(egid);
+    }
     Ok(0)
 }
 

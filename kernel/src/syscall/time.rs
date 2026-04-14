@@ -13,6 +13,99 @@ use crate::{
     time::TimeValueLike,
 };
 
+const ADJ_OFFSET: u32 = 0x0001;
+const ADJ_FREQUENCY: u32 = 0x0002;
+const ADJ_MAXERROR: u32 = 0x0004;
+const ADJ_ESTERROR: u32 = 0x0008;
+const ADJ_STATUS: u32 = 0x0010;
+const ADJ_TIMECONST: u32 = 0x0020;
+const ADJ_TAI: u32 = 0x0080;
+const ADJ_SETOFFSET: u32 = 0x0100;
+const ADJ_MICRO: u32 = 0x1000;
+const ADJ_NANO: u32 = 0x2000;
+const ADJ_TICK: u32 = 0x4000;
+const ADJ_OFFSET_SINGLESHOT: u32 = 0x8001;
+const ADJ_OFFSET_SS_READ: u32 = 0xa001;
+const ADJ_OFFSET_SINGLESHOT_FLAG: u32 = ADJ_OFFSET_SINGLESHOT & !ADJ_OFFSET;
+const ADJ_READ_ONLY_MODES: u32 = ADJ_OFFSET_SS_READ;
+const ADJ_VALID_MODES: u32 = ADJ_OFFSET
+    | ADJ_FREQUENCY
+    | ADJ_MAXERROR
+    | ADJ_ESTERROR
+    | ADJ_STATUS
+    | ADJ_TIMECONST
+    | ADJ_TAI
+    | ADJ_SETOFFSET
+    | ADJ_MICRO
+    | ADJ_NANO
+    | ADJ_TICK
+    | ADJ_OFFSET_SINGLESHOT
+    | ADJ_OFFSET_SS_READ;
+
+const TIME_OK: isize = 0;
+const MIN_TICK: isize = 9000;
+const MAX_TICK: isize = 11000;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Timex {
+    modes: u32,
+    _pad0: i32,
+    offset: isize,
+    freq: isize,
+    maxerror: isize,
+    esterror: isize,
+    status: i32,
+    _pad1: i32,
+    constant: isize,
+    precision: isize,
+    tolerance: isize,
+    time: timeval,
+    tick: isize,
+    ppsfreq: isize,
+    jitter: isize,
+    shift: i32,
+    _pad2: i32,
+    stabil: isize,
+    jitcnt: isize,
+    calcnt: isize,
+    errcnt: isize,
+    stbcnt: isize,
+    tai: i32,
+    _pad3: [i32; 11],
+}
+
+impl Timex {
+    fn snapshot(modes: u32) -> Self {
+        Self {
+            modes,
+            _pad0: 0,
+            offset: 0,
+            freq: 0,
+            maxerror: 0,
+            esterror: 0,
+            status: 0,
+            _pad1: 0,
+            constant: 0,
+            precision: 1,
+            tolerance: 0,
+            time: timeval::from_time_value(wall_time()),
+            tick: 10_000,
+            ppsfreq: 0,
+            jitter: 0,
+            shift: 0,
+            _pad2: 0,
+            stabil: 0,
+            jitcnt: 0,
+            calcnt: 0,
+            errcnt: 0,
+            stbcnt: 0,
+            tai: 0,
+            _pad3: [0; 11],
+        }
+    }
+}
+
 pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxResult<isize> {
     let now = match clock_id as u32 {
         CLOCK_REALTIME | CLOCK_REALTIME_COARSE => wall_time(),
@@ -31,6 +124,28 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
     };
     ts.vm_write(timespec::from_time_value(now))?;
     Ok(0)
+}
+
+pub fn sys_adjtimex(buf: *mut Timex) -> AxResult<isize> {
+    let curr = unsafe { buf.vm_read_uninit()?.assume_init() };
+    if curr.modes & !ADJ_VALID_MODES != 0 || curr.modes == ADJ_OFFSET_SINGLESHOT_FLAG {
+        return Err(AxError::InvalidInput);
+    }
+    if curr.modes & ADJ_TICK != 0 && !(MIN_TICK..=MAX_TICK).contains(&curr.tick) {
+        return Err(AxError::InvalidInput);
+    }
+    if curr.modes & !ADJ_READ_ONLY_MODES != 0 && current().as_thread().proc_data.euid() != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+    buf.vm_write(Timex::snapshot(curr.modes))?;
+    Ok(TIME_OK)
+}
+
+pub fn sys_clock_adjtime(clock_id: __kernel_clockid_t, buf: *mut Timex) -> AxResult<isize> {
+    if clock_id as u32 != CLOCK_REALTIME {
+        return Err(AxError::InvalidInput);
+    }
+    sys_adjtimex(buf)
 }
 
 pub fn sys_gettimeofday(ts: *mut timeval) -> AxResult<isize> {

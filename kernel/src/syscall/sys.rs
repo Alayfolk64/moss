@@ -2,7 +2,7 @@ use alloc::vec;
 use core::ffi::c_char;
 
 use axconfig::ARCH;
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FS_CONTEXT;
 use linux_raw_sys::{
     general::{GRND_INSECURE, GRND_NONBLOCK, GRND_RANDOM},
@@ -10,31 +10,33 @@ use linux_raw_sys::{
 };
 use starry_vm::{VmMutPtr, vm_write_slice};
 
-use crate::task::processes;
+use crate::task::{AsThread, processes};
 
 pub fn sys_getuid() -> AxResult<isize> {
-    Ok(0)
+    Ok(axtask::current().as_thread().proc_data.uid() as _)
 }
 
 pub fn sys_geteuid() -> AxResult<isize> {
-    Ok(0)
+    Ok(axtask::current().as_thread().proc_data.euid() as _)
 }
 
 pub fn sys_getgid() -> AxResult<isize> {
-    Ok(0)
+    Ok(axtask::current().as_thread().proc_data.gid() as _)
 }
 
 pub fn sys_getegid() -> AxResult<isize> {
+    Ok(axtask::current().as_thread().proc_data.egid() as _)
+}
+
+pub fn sys_setuid(uid: u32) -> AxResult<isize> {
+    debug!("sys_setuid <= uid: {uid}");
+    axtask::current().as_thread().proc_data.set_uid(uid);
     Ok(0)
 }
 
-pub fn sys_setuid(_uid: u32) -> AxResult<isize> {
-    debug!("sys_setuid <= uid: {_uid}");
-    Ok(0)
-}
-
-pub fn sys_setgid(_gid: u32) -> AxResult<isize> {
-    debug!("sys_setgid <= gid: {_gid}");
+pub fn sys_setgid(gid: u32) -> AxResult<isize> {
+    debug!("sys_setgid <= gid: {gid}");
+    axtask::current().as_thread().proc_data.set_gid(gid);
     Ok(0)
 }
 
@@ -123,6 +125,30 @@ pub fn sys_getrandom(buf: *mut u8, len: usize, flags: u32) -> AxResult<isize> {
 pub fn sys_seccomp(_op: u32, _flags: u32, _args: *const ()) -> AxResult<isize> {
     warn!("dummy sys_seccomp");
     Ok(0)
+}
+
+pub fn sys_add_key(
+    _type: *const c_char,
+    _description: *const c_char,
+    _payload: *const u8,
+    _plen: usize,
+    _ringid: i32,
+) -> AxResult<isize> {
+    Err(AxError::from(LinuxError::ENOSYS))
+}
+
+pub fn sys_keyctl(
+    _operation: i32,
+    _arg2: usize,
+    _arg3: usize,
+    _arg4: usize,
+    _arg5: usize,
+) -> AxResult<isize> {
+    Err(AxError::from(LinuxError::ENOSYS))
+}
+
+pub fn sys_reboot(_magic: u32, _magic2: u32, _cmd: u32, _arg: *mut c_char) -> AxResult<isize> {
+    axhal::power::system_off();
 }
 
 #[cfg(target_arch = "riscv64")]

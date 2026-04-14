@@ -218,6 +218,10 @@ pub struct ProcessData {
 
     /// The default mask for file permissions.
     umask: AtomicU32,
+    uid: AtomicU32,
+    euid: AtomicU32,
+    gid: AtomicU32,
+    egid: AtomicU32,
 }
 
 impl ProcessData {
@@ -252,6 +256,10 @@ impl ProcessData {
             futex_table: Arc::new(FutexTable::new()),
 
             umask: AtomicU32::new(0o022),
+            uid: AtomicU32::new(0),
+            euid: AtomicU32::new(0),
+            gid: AtomicU32::new(0),
+            egid: AtomicU32::new(0),
         })
     }
 
@@ -284,5 +292,47 @@ impl ProcessData {
     /// Set the umask and return the old value.
     pub fn replace_umask(&self, umask: u32) -> u32 {
         self.umask.swap(umask, Ordering::SeqCst)
+    }
+
+    pub fn uid(&self) -> u32 {
+        self.uid.load(Ordering::SeqCst)
+    }
+
+    pub fn euid(&self) -> u32 {
+        self.euid.load(Ordering::SeqCst)
+    }
+
+    pub fn gid(&self) -> u32 {
+        self.gid.load(Ordering::SeqCst)
+    }
+
+    pub fn egid(&self) -> u32 {
+        self.egid.load(Ordering::SeqCst)
+    }
+
+    pub fn set_uid(&self, uid: u32) {
+        self.uid.store(uid, Ordering::SeqCst);
+        self.euid.store(uid, Ordering::SeqCst);
+    }
+
+    pub fn set_real_uid(&self, uid: u32) {
+        self.uid.store(uid, Ordering::SeqCst);
+    }
+
+    pub fn set_euid(&self, euid: u32) {
+        self.euid.store(euid, Ordering::SeqCst);
+    }
+
+    pub fn set_gid(&self, gid: u32) {
+        self.gid.store(gid, Ordering::SeqCst);
+        self.egid.store(gid, Ordering::SeqCst);
+    }
+
+    pub fn set_real_gid(&self, gid: u32) {
+        self.gid.store(gid, Ordering::SeqCst);
+    }
+
+    pub fn set_egid(&self, egid: u32) {
+        self.egid.store(egid, Ordering::SeqCst);
     }
 }

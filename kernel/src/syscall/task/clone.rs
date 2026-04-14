@@ -228,6 +228,10 @@ impl CloneArgs {
             );
             proc_data.set_umask(old_proc_data.umask());
             proc_data.set_heap_top(old_proc_data.get_heap_top());
+            proc_data.set_uid(old_proc_data.uid());
+            proc_data.set_euid(old_proc_data.euid());
+            proc_data.set_gid(old_proc_data.gid());
+            proc_data.set_egid(old_proc_data.egid());
 
             {
                 let mut scope = proc_data.scope.write();

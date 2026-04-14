@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-14 01:55:49.003410600 UTC
+Boot at 2026-04-14 07:32:30.002398200 UTC
 
 Welcome to Starry OS
 
@@ -307,8 +307,7 @@ RUN LTP CASE add_key01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[ 28.200575 0:229 starry_kernel::syscall:625] [33mUnimplemented syscall: add_key[m
-[m../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
+../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
 
 Summary:
 passed   0
@@ -320,8 +319,7 @@ SKIP LTP CASE add_key01 : 32
 RUN LTP CASE add_key02
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[ 28.602087 0:235 starry_kernel::syscall:625] [33mUnimplemented syscall: add_key[m
-[m../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
+../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
 
 Summary:
 passed   0
@@ -333,8 +331,7 @@ SKIP LTP CASE add_key02 : 32
 RUN LTP CASE add_key03
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[ 28.934502 0:241 starry_kernel::syscall:625] [33mUnimplemented syscall: add_key[m
-[m../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
+../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
 
 Summary:
 passed   0
@@ -347,8 +344,7 @@ RUN LTP CASE add_key04
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-[37m[ 29.293929 0:247 starry_kernel::syscall:625] [33mUnimplemented syscall: keyctl[m
-[m../../../../include/lapi/keyctl.h:54: [1;33mTCONF: [0msyscall(219) __NR_keyctl not supported on your arch
+../../../../include/lapi/keyctl.h:54: [1;33mTCONF: [0msyscall(219) __NR_keyctl not supported on your arch
 
 Summary:
 passed   0
@@ -364,46 +360,22 @@ RUN LTP CASE adjtimex01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[ 30.004066 0:258 starry_kernel::syscall:625] [33mUnimplemented syscall: adjtimex[m
-[madjtimex01.c:48: [1;31mTBROK: [0madjtimex(): failed to save current params: ENOSYS (38)
+adjtimex01.c:24: [1;32mTPASS: [0madjtimex() with mode 0x403f 
+adjtimex01.c:33: [1;32mTPASS: [0madjtimex() with mode 0x8001 
 
 Summary:
-passed   0
+passed   2
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE adjtimex01 : 2
+PASS LTP CASE adjtimex01 : 0
 RUN LTP CASE adjtimex02
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: libc adjtimex()
 adjtimex02.c:115: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
-[37m[ 30.366605 0:264 starry_kernel::syscall:625] [33mUnimplemented syscall: adjtimex[m
-[madjtimex02.c:141: [1;35mTWARN: [0mFailed to restore saved parameters
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 1
-FAIL LTP CASE adjtimex02 : 6
-RUN LTP CASE adjtimex03
-tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[ 30.750387 0:270 starry_kernel::syscall:625] [33mUnimplemented syscall: adjtimex[m
-[madjtimex03.c:57: [1;31mTBROK: [0madjtimex(): Unexpeceted error, expecting EINVAL with mode 0x8000: ENOSYS (38)
-
-[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0a0b98734479
-
-[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-11508
 
 Summary:
 passed   0
@@ -411,7 +383,40 @@ failed   0
 broken   1
 skipped  0
 warnings 0
-FAIL LTP CASE adjtimex03 : 2
+FAIL LTP CASE adjtimex02 : 2
+RUN LTP CASE adjtimex03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:73: [1;32mTPASS: [0mData leak not observed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+PASS LTP CASE adjtimex03 : 0
 RUN LTP CASE af_alg01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
@@ -623,7 +628,7 @@ skipped  0
 warnings 0
 FAIL LTP CASE ar01.sh : 2
 [TEST] LTP total timeout reached (100s), stopping.
-[TEST] LTP summary: pass=7 fail=21 skip=14
+[TEST] LTP summary: pass=9 fail=19 skip=14
 [TEST] Exit code(1): /musl/ltp_testcode.sh
 
 [TEST] Running /glibc/ltp_testcode.sh
@@ -797,8 +802,7 @@ RUN LTP CASE add_key01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[132.570474 0:1468 starry_kernel::syscall:625] [33mUnimplemented syscall: add_key[m
-[m../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
+../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
 
 Summary:
 passed   0
@@ -810,8 +814,7 @@ SKIP LTP CASE add_key01 : 32
 RUN LTP CASE add_key02
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[133.145716 0:1474 starry_kernel::syscall:625] [33mUnimplemented syscall: add_key[m
-[m../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
+../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
 
 Summary:
 passed   0
@@ -823,8 +826,7 @@ SKIP LTP CASE add_key02 : 32
 RUN LTP CASE add_key03
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[133.702630 0:1480 starry_kernel::syscall:625] [33mUnimplemented syscall: add_key[m
-[m../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
+../../../../include/lapi/keyctl.h:29: [1;33mTCONF: [0msyscall(217) __NR_add_key not supported on your arch
 
 Summary:
 passed   0
@@ -837,8 +839,7 @@ RUN LTP CASE add_key04
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-[37m[134.284017 0:1486 starry_kernel::syscall:625] [33mUnimplemented syscall: keyctl[m
-[m../../../../include/lapi/keyctl.h:54: [1;33mTCONF: [0msyscall(219) __NR_keyctl not supported on your arch
+../../../../include/lapi/keyctl.h:54: [1;33mTCONF: [0msyscall(219) __NR_keyctl not supported on your arch
 
 Summary:
 passed   0
@@ -854,46 +855,22 @@ RUN LTP CASE adjtimex01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[135.351918 0:1497 starry_kernel::syscall:625] [33mUnimplemented syscall: clock_adjtime[m
-[madjtimex01.c:48: [1;31mTBROK: [0madjtimex(): failed to save current params: ENOSYS (38)
+adjtimex01.c:24: [1;32mTPASS: [0madjtimex() with mode 0x403f 
+adjtimex01.c:33: [1;32mTPASS: [0madjtimex() with mode 0x8001 
 
 Summary:
-passed   0
+passed   2
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE adjtimex01 : 2
+PASS LTP CASE adjtimex01 : 0
 RUN LTP CASE adjtimex02
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: libc adjtimex()
 adjtimex02.c:115: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
-[37m[135.957198 0:1503 starry_kernel::syscall:625] [33mUnimplemented syscall: clock_adjtime[m
-[madjtimex02.c:141: [1;35mTWARN: [0mFailed to restore saved parameters
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 1
-FAIL LTP CASE adjtimex02 : 6
-RUN LTP CASE adjtimex03
-tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-[37m[136.497369 0:1509 starry_kernel::syscall:625] [33mUnimplemented syscall: clock_adjtime[m
-[madjtimex03.c:57: [1;31mTBROK: [0madjtimex(): Unexpeceted error, expecting EINVAL with mode 0x8000: ENOSYS (38)
-
-[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0a0b98734479
-
-[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-11508
 
 Summary:
 passed   0
@@ -901,7 +878,40 @@ failed   0
 broken   1
 skipped  0
 warnings 0
-FAIL LTP CASE adjtimex03 : 2
+FAIL LTP CASE adjtimex02 : 2
+RUN LTP CASE adjtimex03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:73: [1;32mTPASS: [0mData leak not observed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+PASS LTP CASE adjtimex03 : 0
 RUN LTP CASE af_alg01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
@@ -1129,7 +1139,7 @@ skipped  0
 warnings 0
 FAIL LTP CASE ar01.sh : 2
 [TEST] LTP total timeout reached (100s), stopping.
-[TEST] LTP summary: pass=7 fail=22 skip=13
+[TEST] LTP summary: pass=9 fail=20 skip=13
 [TEST] Exit code(1): /glibc/ltp_testcode.sh
 
 #### OS COMP TEST GROUP START lua-musl ####
@@ -1153,6 +1163,3 @@ FAIL LTP CASE ar01.sh : 2
 [TEST] group summary: total=12 passed=0 failed=1 skipped=11
 [TEST] script summary: total=2 passed=0 failed=2
 [TEST] all discovered scripts completed
-[37m[226.999959 0:2089 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
-[m[37m[227.061221 0:2090 starry_kernel::syscall:625] [33mUnimplemented syscall: reboot[m
-[m

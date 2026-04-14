@@ -123,6 +123,17 @@ setup_runtime_tools() {
   rt_pwd=$PWD
   cd / >/dev/null 2>&1 || true
   "$BB" mkdir -p bin usr usr/bin >/dev/null 2>&1 || true
+  "$BB" mkdir -p etc home/nobody >/dev/null 2>&1 || true
+  if [ ! -f /etc/passwd ]; then
+    "$BB" sh -c 'printf "%s\n" "root:x:0:0:root:/root:/bin/sh" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" > /etc/passwd' >/dev/null 2>&1 || true
+  elif ! "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
+    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" >> /etc/passwd' >/dev/null 2>&1 || true
+  fi
+  if [ ! -f /etc/group ]; then
+    "$BB" sh -c 'printf "%s\n" "root:x:0:" "nobody:x:65534:" > /etc/group' >/dev/null 2>&1 || true
+  elif ! "$BB" grep -q '^nobody:' /etc/group >/dev/null 2>&1; then
+    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:" >> /etc/group' >/dev/null 2>&1 || true
+  fi
   cd "$rt_pwd" >/dev/null 2>&1 || true
   if [ -d /glibc/lib ]; then
     rt_pwd=$PWD
