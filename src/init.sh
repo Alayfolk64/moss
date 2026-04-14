@@ -58,18 +58,18 @@ echo "[TEST] detected arch: $ARCH_NAME"
 # Test switches (1=run, 0=skip)
 # 12 suites; defaults can be overridden by environment variables.
 # =========================
-: "${RUN_BASIC:=0}"
-: "${RUN_BUSYBOX:=0}"
-: "${RUN_CYCLICTEST:=0}"
-: "${RUN_IOZONE:=0}"
-: "${RUN_IPERF:=0}"
-: "${RUN_LIBCBENCH:=0}"
-: "${RUN_LIBCTEST:=0}"
-: "${RUN_LMBENCH:=0}"
+: "${RUN_BASIC:=1}"
+: "${RUN_BUSYBOX:=1}"
+: "${RUN_CYCLICTEST:=1}"
+: "${RUN_IOZONE:=1}"
+: "${RUN_IPERF:=1}"
+: "${RUN_LIBCBENCH:=1}"
+: "${RUN_LIBCTEST:=1}"
+: "${RUN_LMBENCH:=1}"
 : "${RUN_LTP:=1}"
-: "${RUN_LUA:=0}"
-: "${RUN_NETPERF:=0}"
-: "${RUN_UNIXBENCH:=0}"
+: "${RUN_LUA:=1}"
+: "${RUN_NETPERF:=1}"
+: "${RUN_UNIXBENCH:=1}"
 
 suite_enabled() {
   case "$1" in

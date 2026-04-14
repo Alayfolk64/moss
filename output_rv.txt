@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-14 07:32:30.002398200 UTC
+Boot at 2026-04-14 12:16:02.001346700 UTC
 
 Welcome to Starry OS
 
@@ -226,71 +226,301 @@ FAIL LTP CASE accept4_01 : 2
 RUN LTP CASE access01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-access01.c:275: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK) as nobody passed
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
 
 Summary:
-passed   0
+passed   199
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access01 : 2
+PASS LTP CASE access01 : 0
 RUN LTP CASE access02
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-access02.c:165: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+access02.c:139: [1;32mTPASS: [0maccess(file_f, F_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_r, R_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_w, W_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_x, X_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_x, X_OK) as nobody behaviour is correct.
 
 Summary:
-passed   0
+passed   16
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access02 : 2
+PASS LTP CASE access02 : 0
 RUN LTP CASE access03
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-access03.c:55: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
 
 Summary:
-passed   0
+passed   8
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access03 : 2
+PASS LTP CASE access03 : 0
 RUN LTP CASE access04
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1003: [1;34mTINFO: [0mCan't mount (null) at mntpoint (tmpfs): EFAULT (14)
-tst_test.c:1303: [1;34mTINFO: [0mCan't mount tmpfs read-only, falling back to block device...
-tst_device.c:135: [1;34mTINFO: [0mFound free device '/dev/loop0'
-tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext2 opts='' extra opts=''
-mkfs.ext2: image is too small
-tst_test.c:1106: [1;31mTBROK: [0mmkfs.ext2 failed with exit code 1
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accPkpdAg/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+access04.c:68: [1;32mTPASS: [0maccess as root : EINVAL (22)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : EINVAL (22)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENOENT (2)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENOENT (2)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENAMETOOLONG (36)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENAMETOOLONG (36)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENOTDIR (20)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENOTDIR (20)
+access04.c:68: [1;32mTPASS: [0maccess as root : ELOOP (40)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ELOOP (40)
+access04.c:68: [1;32mTPASS: [0maccess as root : EROFS (30)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : EROFS (30)
 
 Summary:
-passed   0
+passed   12
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access04 : 2
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accPkpdAg) failed: unlink(/tmp/LTP_accPkpdAg) failed; errno=21: EISDIR
+PASS LTP CASE access04 : 0
 RUN LTP CASE acct01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1003: [1;34mTINFO: [0mCan't mount (null) at ro_mntpoint (tmpfs): EFAULT (14)
-tst_test.c:1303: [1;34mTINFO: [0mCan't mount tmpfs read-only, falling back to block device...
-tst_device.c:135: [1;34mTINFO: [0mFound free device '/dev/loop0'
-tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext2 opts='' extra opts=''
-mkfs.ext2: image is too small
-tst_test.c:1106: [1;31mTBROK: [0mmkfs.ext2 failed with exit code 1
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accLNhfnD/ro_mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+[37m[ 27.551204 0:321 starry_kernel::syscall:653] [33mUnimplemented syscall: acct[m
+[macct01.c:84: [1;33mTCONF: [0macct() system call isn't configured in kernel
 
 Summary:
 passed   0
 failed   0
-broken   1
-skipped  0
+broken   0
+skipped  1
 warnings 0
-FAIL LTP CASE acct01 : 2
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accLNhfnD) failed: unlink(/tmp/LTP_accLNhfnD) failed; errno=21: EISDIR
+SKIP LTP CASE acct01 : 32
 RUN LTP CASE acct02
 tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
 tst_kconfig.c:207: [1;31mTBROK: [0mCannot parse kernel .config
@@ -375,15 +605,23 @@ tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: libc adjtimex()
-adjtimex02.c:115: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EPERM (1)
+adjtimex02.c:95: [1;33mTCONF: [0mEFAULT is skipped for libc variant
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: __NR_adjtimex syscall
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EPERM (1)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EFAULT (14)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
 
 Summary:
-passed   0
+passed   7
 failed   0
-broken   1
-skipped  0
+broken   0
+skipped  1
 warnings 0
-FAIL LTP CASE adjtimex02 : 2
+PASS LTP CASE adjtimex02 : 0
 RUN LTP CASE adjtimex03
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
@@ -628,7 +866,7 @@ skipped  0
 warnings 0
 FAIL LTP CASE ar01.sh : 2
 [TEST] LTP total timeout reached (100s), stopping.
-[TEST] LTP summary: pass=9 fail=19 skip=14
+[TEST] LTP summary: pass=14 fail=13 skip=15
 [TEST] Exit code(1): /musl/ltp_testcode.sh
 
 [TEST] Running /glibc/ltp_testcode.sh
@@ -721,71 +959,301 @@ FAIL LTP CASE accept4_01 : 2
 RUN LTP CASE access01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-access01.c:275: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK) as nobody passed
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
 
 Summary:
-passed   0
+passed   199
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access01 : 2
+PASS LTP CASE access01 : 0
 RUN LTP CASE access02
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-access02.c:165: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+access02.c:139: [1;32mTPASS: [0maccess(file_f, F_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_r, R_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_w, W_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_x, X_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_x, X_OK) as nobody behaviour is correct.
 
 Summary:
-passed   0
+passed   16
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access02 : 2
+PASS LTP CASE access02 : 0
 RUN LTP CASE access03
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-access03.c:55: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
 
 Summary:
-passed   0
+passed   8
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access03 : 2
+PASS LTP CASE access03 : 0
 RUN LTP CASE access04
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1003: [1;34mTINFO: [0mCan't mount (null) at mntpoint (tmpfs): EFAULT (14)
-tst_test.c:1303: [1;34mTINFO: [0mCan't mount tmpfs read-only, falling back to block device...
-tst_device.c:135: [1;34mTINFO: [0mFound free device '/dev/loop0'
-tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext2 opts='' extra opts=''
-mkfs.ext2: image is too small
-tst_test.c:1106: [1;31mTBROK: [0mmkfs.ext2 failed with exit code 1
+tst_test.c:1017: [1;34mTINFO: [0mCannot resolve the absolute path of mntpoint: ENOENT (2)
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+access04.c:68: [1;32mTPASS: [0maccess as root : EINVAL (22)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : EINVAL (22)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENOENT (2)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENOENT (2)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENAMETOOLONG (36)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENAMETOOLONG (36)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENOTDIR (20)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENOTDIR (20)
+access04.c:68: [1;32mTPASS: [0maccess as root : ELOOP (40)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ELOOP (40)
+access04.c:68: [1;32mTPASS: [0maccess as root : EROFS (30)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : EROFS (30)
 
 Summary:
-passed   0
+passed   12
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE access04 : 2
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accoKqmK7) failed: unlink(/tmp/LTP_accoKqmK7) failed; errno=21: EISDIR
+PASS LTP CASE access04 : 0
 RUN LTP CASE acct01
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1003: [1;34mTINFO: [0mCan't mount (null) at ro_mntpoint (tmpfs): EFAULT (14)
-tst_test.c:1303: [1;34mTINFO: [0mCan't mount tmpfs read-only, falling back to block device...
-tst_device.c:135: [1;34mTINFO: [0mFound free device '/dev/loop0'
-tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext2 opts='' extra opts=''
-mkfs.ext2: image is too small
-tst_test.c:1106: [1;31mTBROK: [0mmkfs.ext2 failed with exit code 1
+tst_test.c:1017: [1;34mTINFO: [0mCannot resolve the absolute path of ro_mntpoint: ENOENT (2)
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+[37m[131.264704 0:2015 starry_kernel::syscall:653] [33mUnimplemented syscall: acct[m
+[macct01.c:84: [1;33mTCONF: [0macct() system call isn't configured in kernel
 
 Summary:
 passed   0
 failed   0
-broken   1
-skipped  0
+broken   0
+skipped  1
 warnings 0
-FAIL LTP CASE acct01 : 2
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accmDWmge) failed: unlink(/tmp/LTP_accmDWmge) failed; errno=21: EISDIR
+SKIP LTP CASE acct01 : 32
 RUN LTP CASE acct02
 tst_kconfig.c:71: [1;34mTINFO: [0mCouldn't locate kernel config!
 tst_kconfig.c:207: [1;31mTBROK: [0mCannot parse kernel .config
@@ -870,15 +1338,23 @@ tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: libc adjtimex()
-adjtimex02.c:115: [1;31mTBROK: [0mgetpwnam(nobody) failed: ENOENT (2)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EPERM (1)
+adjtimex02.c:95: [1;33mTCONF: [0mEFAULT is skipped for libc variant
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: __NR_adjtimex syscall
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EPERM (1)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EFAULT (14)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
 
 Summary:
-passed   0
+passed   7
 failed   0
-broken   1
-skipped  0
+broken   0
+skipped  1
 warnings 0
-FAIL LTP CASE adjtimex02 : 2
+PASS LTP CASE adjtimex02 : 0
 RUN LTP CASE adjtimex03
 tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
@@ -1139,7 +1615,7 @@ skipped  0
 warnings 0
 FAIL LTP CASE ar01.sh : 2
 [TEST] LTP total timeout reached (100s), stopping.
-[TEST] LTP summary: pass=9 fail=20 skip=13
+[TEST] LTP summary: pass=14 fail=14 skip=14
 [TEST] Exit code(1): /glibc/ltp_testcode.sh
 
 #### OS COMP TEST GROUP START lua-musl ####

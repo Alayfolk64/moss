@@ -2,6 +2,8 @@ use core::ffi::{c_char, c_void};
 
 use axerrno::{AxError, AxResult};
 use axfs::FS_CONTEXT;
+use linux_raw_sys::general::MS_RDONLY;
+use starry_vm::VmPtr;
 
 use crate::{mm::vm_load_string, pseudofs::MemoryFs};
 
@@ -26,10 +28,10 @@ pub fn sys_mount(
     source: *const c_char,
     target: *const c_char,
     fs_type: *const c_char,
-    _flags: i32,
+    flags: i32,
     _data: *const c_void,
 ) -> AxResult<isize> {
-    let source = vm_load_string(source)?;
+    let source = source.nullable().map(vm_load_string).transpose()?;
     let target = vm_load_string(target)?;
     let fs_type = vm_load_string(fs_type)?;
     debug!("sys_mount <= source: {source:?}, target: {target:?}, fs_type: {fs_type:?}");
@@ -38,7 +40,7 @@ pub fn sys_mount(
         return Err(AxError::NoSuchDevice);
     };
 
-    let fs = MemoryFs::new();
+    let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
     if kind == MountKind::CompatVfat {
         debug!(
             "mount: use tmpfs-compatible backend for fs_type={fs_type:?}, source={source:?}, target={target:?}"

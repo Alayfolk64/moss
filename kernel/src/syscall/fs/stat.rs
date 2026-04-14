@@ -2,15 +2,18 @@ use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult};
 use axfs::FS_CONTEXT;
-use axfs_ng_vfs::{Location, NodePermission};
+use axfs_ng_vfs::Location;
+use axtask::current;
 use linux_raw_sys::general::{
-    __kernel_fsid_t, AT_EMPTY_PATH, R_OK, W_OK, X_OK, stat, statfs, statx,
+    __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, MS_RDONLY, R_OK, W_OK, X_OK,
+    stat, statfs, statx,
 };
 use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::{
     file::{File, FileLike, resolve_at},
     mm::vm_load_string,
+    task::AsThread,
 };
 
 /// Get the file metadata by `path` and write into `statbuf`.
@@ -109,27 +112,113 @@ pub fn sys_faccessat2(dirfd: c_int, path: *const c_char, mode: u32, flags: u32) 
     let path = path.nullable().map(vm_load_string).transpose()?;
     debug!("sys_faccessat2 <= dirfd: {dirfd}, path: {path:?}, mode: {mode}, flags: {flags}");
 
-    let file = resolve_at(dirfd, path.as_deref(), flags)?;
+    if mode & !(R_OK | W_OK | X_OK) != 0 {
+        return Err(AxError::InvalidInput);
+    }
 
-    if mode == 0 {
-        return Ok(0);
+    let file = resolve_at(dirfd, path.as_deref(), flags)?;
+    let stat = file.stat()?;
+    let read_only_fs = mode & W_OK != 0
+        && file.into_file().is_some_and(|loc| {
+            loc.filesystem()
+                .stat()
+                .is_ok_and(|stat| stat.mount_flags & MS_RDONLY != 0)
+        });
+
+    let (uid, gid) = access_ids(flags);
+    check_parent_search_access(dirfd, path.as_deref(), flags, uid, gid)?;
+
+    if read_only_fs {
+        return Err(AxError::ReadOnlyFilesystem);
     }
-    let mut required_mode = NodePermission::empty();
-    if mode & R_OK != 0 {
-        required_mode |= NodePermission::OWNER_READ;
-    }
-    if mode & W_OK != 0 {
-        required_mode |= NodePermission::OWNER_WRITE;
-    }
-    if mode & X_OK != 0 {
-        required_mode |= NodePermission::OWNER_EXEC;
-    }
-    let required_mode = required_mode.bits();
-    if (file.stat()?.mode as u16 & required_mode) != required_mode {
+    if !has_access(mode, stat.mode, stat.uid, stat.gid, uid, gid) {
         return Err(AxError::PermissionDenied);
     }
 
     Ok(0)
+}
+
+fn access_ids(flags: u32) -> (u32, u32) {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    if flags & AT_EACCESS != 0 {
+        (proc_data.euid(), proc_data.egid())
+    } else {
+        (proc_data.uid(), proc_data.gid())
+    }
+}
+
+fn check_parent_search_access(
+    dirfd: c_int,
+    path: Option<&str>,
+    flags: u32,
+    uid: u32,
+    gid: u32,
+) -> AxResult<()> {
+    let Some(path) = path else {
+        return Ok(());
+    };
+    if path.is_empty() || uid == 0 {
+        return Ok(());
+    }
+
+    let parent_flags = flags & !AT_SYMLINK_NOFOLLOW;
+    let bytes = path.as_bytes();
+    for index in 0..bytes.len() {
+        if bytes[index] != b'/' || index == 0 || index + 1 == bytes.len() {
+            continue;
+        }
+        if bytes[index - 1] == b'/' {
+            continue;
+        }
+
+        let parent = &path[..index];
+        if parent == "." {
+            continue;
+        }
+
+        let stat = resolve_at(dirfd, Some(parent), parent_flags)?.stat()?;
+        if !has_access(X_OK, stat.mode, stat.uid, stat.gid, uid, gid) {
+            return Err(AxError::PermissionDenied);
+        }
+    }
+
+    Ok(())
+}
+
+fn has_access(mode: u32, st_mode: u32, st_uid: u32, st_gid: u32, uid: u32, gid: u32) -> bool {
+    const OWNER_SHIFT: u32 = 6;
+    const GROUP_SHIFT: u32 = 3;
+    const OTHER_SHIFT: u32 = 0;
+    const EXEC_MASK: u32 = 0o111;
+
+    if mode == 0 {
+        return true;
+    }
+
+    if uid == 0 {
+        return mode & X_OK == 0 || st_mode & EXEC_MASK != 0;
+    }
+
+    let shift = if uid == st_uid {
+        OWNER_SHIFT
+    } else if gid == st_gid {
+        GROUP_SHIFT
+    } else {
+        OTHER_SHIFT
+    };
+    let mut required = 0;
+    if mode & R_OK != 0 {
+        required |= 0o4 << shift;
+    }
+    if mode & W_OK != 0 {
+        required |= 0o2 << shift;
+    }
+    if mode & X_OK != 0 {
+        required |= 0o1 << shift;
+    }
+
+    st_mode & required == required
 }
 
 fn statfs(loc: &Location) -> AxResult<statfs> {

@@ -53,6 +53,7 @@ impl Borrow<str> for FileName {
 /// A simple in-memory filesystem that supports basic file operations.
 pub struct MemoryFs {
     inodes: Mutex<Slab<Arc<Inode>>>,
+    mount_flags: u32,
     root: Mutex<Option<DirEntry>>,
 }
 
@@ -60,8 +61,15 @@ impl MemoryFs {
     /// Creates a new empty memory filesystem.
     #[allow(clippy::new_ret_no_self)]
     pub fn new() -> Filesystem {
+        Self::new_with_flags(0)
+    }
+
+    /// Creates a new empty memory filesystem with mount flags.
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new_with_flags(mount_flags: u32) -> Filesystem {
         let fs = Arc::new(Self {
             inodes: Mutex::new(Slab::new()),
+            mount_flags,
             root: Mutex::default(),
         });
         let root_ino = Inode::new(
@@ -92,7 +100,9 @@ impl FilesystemOps for MemoryFs {
     }
 
     fn stat(&self) -> VfsResult<StatFs> {
-        Ok(dummy_stat_fs(0x01021994))
+        let mut stat = dummy_stat_fs(0x01021994);
+        stat.mount_flags = self.mount_flags;
+        Ok(stat)
     }
 }
 
