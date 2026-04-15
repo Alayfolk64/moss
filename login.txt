@@ -1,0 +1,2 @@
+ssh ubuntu@117.50.176.71
+O45nBH97d238h6yD
