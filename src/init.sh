@@ -319,6 +319,8 @@ run_test() {
     target_dir="$ltp_root/testcases/bin"
     ltp_lib_dir="$ltp_root/testcases/lib"
     ltp_testscripts_dir="$ltp_root/testscripts"
+    ltp_group_name=$(suite_group_name "$test_sh" "ltp")
+    ltp_case_list=${LTP_CASE_LIST:-/ltp.txt}
 
     # LTP shell tests often source helper scripts with `. helper.sh` and run
     # helper commands (e.g. tst_brk) that are resolved via PATH.
@@ -327,13 +329,51 @@ run_test() {
     LTPROOT="$ltp_root"
     export PATH LTPROOT
 
-    if [ -x "./$test_name" ]; then
-      "./$test_name"
-      ret=$?
-    else
-      sh "./$test_name"
-      ret=$?
+    if [ ! -f "$ltp_case_list" ]; then
+      if : > "$ltp_case_list" 2>/dev/null; then
+        echo "[TEST][ltp] created empty case list: $ltp_case_list"
+      else
+        ltp_case_list="$PWD/ltp.txt"
+        if : > "$ltp_case_list" 2>/dev/null; then
+          echo "[TEST][ltp] created empty case list: $ltp_case_list"
+        fi
+      fi
     fi
+
+    echo "#### OS COMP TEST GROUP START $ltp_group_name ####"
+    ret=0
+    if cd "$target_dir" 2>/dev/null; then
+      if [ -r "$ltp_case_list" ]; then
+        while IFS= read -r ltp_case_raw || [ -n "$ltp_case_raw" ]; do
+          ltp_case=$(printf "%s" "$ltp_case_raw" | tr -d '\r')
+          [ -n "$ltp_case" ] || continue
+          case "$ltp_case" in
+            \#*) continue ;;
+          esac
+
+          echo "RUN LTP CASE $ltp_case"
+          if [ -x "./$ltp_case" ]; then
+            "./$ltp_case"
+            case_ret=$?
+          elif [ -f "./$ltp_case" ]; then
+            sh "./$ltp_case"
+            case_ret=$?
+          else
+            case_ret=127
+            echo "[TEST][ltp] missing case: $target_dir/$ltp_case"
+          fi
+          echo "FAIL LTP CASE $ltp_case : $case_ret"
+        done < "$ltp_case_list"
+      else
+        ret=127
+        echo "[TEST][ltp] case list not readable: $ltp_case_list"
+      fi
+    else
+      ret=127
+      echo "[TEST][ltp] missing target dir: $target_dir"
+    fi
+    echo "#### OS COMP TEST GROUP END $ltp_group_name ####"
+
     cd "$old_pwd" || true
     return "$ret"
   fi
