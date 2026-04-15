@@ -77,13 +77,15 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-15 12:45:48.006297200 UTC
+Boot at 2026-04-15 13:11:51.004479900 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
 [TEST] detected arch: riscv64
 [TEST] enabled suites: ltp
+[TEST][runtime] libgcc bound: arch=riscv64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64
+[TEST][runtime] locale bound: /usr/lib/locale/C.utf8,/usr/lib/locale/C.UTF-8 /usr/share/locale/locale.alias
 [TEST] scan roots: / /musl /glibc
 [TEST] scanning /
 [TEST] scanning /musl
@@ -136,17 +138,19 @@ Welcome to Starry OS
 #### OS COMP TEST GROUP START lmbench-glibc ####
 [TEST] SKIP script: /glibc/lmbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END lmbench-glibc ####
-[TEST][ltp] loaded case list from embedded src/ltp.txt: /ltp.txt
+[TEST][ltp] loaded case list from embedded src/ltp.txt: /tmp/.ltp_cases_from_src.txt
 #### OS COMP TEST GROUP START ltp-musl ####
+[TEST][ltp] /etc/passwd present
+[TEST][ltp] /etc/passwd has nobody
 RUN LTP CASE accept01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
-[37m[ 15.360684 0:112 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[  5.658087 0:125 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
-[37m[ 15.362584 0:112 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[  5.664497 0:125 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
-[37m[ 15.363140 0:112 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[  5.666104 0:125 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
 accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
 
@@ -156,7 +160,7 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-PASS LTP CASE accept01 : 0
+FAIL LTP CASE accept01 : 0
 RUN LTP CASE accept02
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
@@ -192,29 +196,29 @@ accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
-[37m[ 26.131695 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
+[37m[ 16.366331 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
-[37m[ 26.133031 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[37m[ 16.368574 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
-[37m[ 26.133569 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[37m[ 16.369222 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
-[37m[ 26.134077 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[37m[ 16.369703 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on userfaultfd : ENOTSOCK (88)
-[37m[ 26.134682 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[37m[ 16.370225 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
-[37m[ 26.135274 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[37m[ 16.370743 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on io uring : ENOTSOCK (88)
-[37m[ 26.135795 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 16.371254 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
-[37m[ 26.136273 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[37m[ 16.371730 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
-[37m[ 26.140392 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[37m[ 16.372171 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
-[37m[ 26.141735 0:123 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[37m[ 16.372579 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
 [maccept03.c:48: [1;31mTFAIL: [0maccept() on open_tree expected EBADF: ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
-[37m[ 26.148019 0:123 starry_kernel::syscall:24] [33mInvalid syscall number: 18446744073709551615[m
+[37m[ 16.377395 0:136 starry_kernel::syscall:24] [33mInvalid syscall number: 18446744073709551615[m
 [mtst_fd.c:260: [1;33mTCONF: [0mSkipping memfd secret: ENOSYS (38)
 
 Summary:
@@ -250,19 +254,21 @@ failed   0
 broken   0
 skipped  1
 warnings 0
-PASS LTP CASE accept4_01 : 0
+FAIL LTP CASE accept4_01 : 0
 #### OS COMP TEST GROUP END ltp-musl ####
-[TEST][ltp] loaded case list from embedded src/ltp.txt: /ltp.txt
+[TEST][ltp] loaded case list from embedded src/ltp.txt: /tmp/.ltp_cases_from_src.txt
 #### OS COMP TEST GROUP START ltp-glibc ####
+[TEST][ltp] /etc/passwd present
+[TEST][ltp] /etc/passwd has nobody
 RUN LTP CASE accept01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
-[37m[ 27.212048 0:138 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[ 17.375177 0:152 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
-[37m[ 27.212652 0:138 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[ 17.376295 0:152 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
-[37m[ 27.213109 0:138 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[ 17.376668 0:152 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
 accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
 
@@ -272,7 +278,7 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-PASS LTP CASE accept01 : 0
+FAIL LTP CASE accept01 : 0
 RUN LTP CASE accept02
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
@@ -308,29 +314,29 @@ accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
-[37m[ 38.257103 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
+[37m[ 28.218094 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
-[37m[ 38.257925 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[37m[ 28.219308 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
-[37m[ 38.258435 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[37m[ 28.219802 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
-[37m[ 38.259467 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[37m[ 28.220233 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on userfaultfd : ENOTSOCK (88)
-[37m[ 38.260340 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[37m[ 28.221038 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
-[37m[ 38.261566 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[37m[ 28.221597 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on io uring : ENOTSOCK (88)
-[37m[ 38.262317 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 28.222117 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
-[37m[ 38.262974 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[37m[ 28.222599 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
-[37m[ 38.263550 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[37m[ 28.223009 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
-[37m[ 38.264060 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[37m[ 28.223407 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
 [maccept03.c:48: [1;31mTFAIL: [0maccept() on open_tree expected EBADF: ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
-[37m[ 38.268066 0:149 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
+[37m[ 28.226968 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on memfd secret : ENOTSOCK (88)
 
 Summary:
@@ -366,7 +372,7 @@ failed   0
 broken   0
 skipped  1
 warnings 0
-PASS LTP CASE accept4_01 : 0
+FAIL LTP CASE accept4_01 : 0
 #### OS COMP TEST GROUP END ltp-glibc ####
 #### OS COMP TEST GROUP START lua-musl ####
 [TEST] SKIP script: /musl/lua_testcode.sh (switch=0)
@@ -386,6 +392,6 @@ PASS LTP CASE accept4_01 : 0
 #### OS COMP TEST GROUP START unixbench-glibc ####
 [TEST] SKIP script: /glibc/unixbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END unixbench-glibc ####
-[TEST] group summary: total=12 passed=0 failed=1 skipped=11
-[TEST] script summary: total=2 passed=0 failed=2
+[TEST] group summary: total=12 passed=1 failed=0 skipped=11
+[TEST] script summary: total=2 passed=2 failed=0
 [TEST] all discovered scripts completed

@@ -53,8 +53,38 @@ ensure_runtime_dirs() {
   bb_try chmod 1777 /tmp /var/tmp
 }
 
+etc_is_writable() {
+  "$BB" sh -c 'printf "x\n" > /etc/.starry-rw-test' >/dev/null 2>&1 || return 1
+  "$BB" rm -f /etc/.starry-rw-test >/dev/null 2>&1 || true
+  return 0
+}
+
+ensure_writable_etc() {
+  bb_try mkdir -p /etc
+  etc_is_writable && return 0
+
+  # Some images mount root read-only. Try remounting root first.
+  "$BB" mount -o remount,rw / >/dev/null 2>&1 || true
+  "$BB" mount -o remount,rw rootfs / >/dev/null 2>&1 || true
+  bb_try mkdir -p /etc
+  etc_is_writable && return 0
+
+  # Fallback: mount tmpfs on /etc if mountpoint exists.
+  if [ -d /etc ] || "$BB" mkdir -p /etc >/dev/null 2>&1; then
+    "$BB" mount -t tmpfs -o mode=755,size=1m tmpfs /etc >/dev/null 2>&1 || true
+  fi
+  etc_is_writable && return 0
+
+  return 1
+}
+
 setup_runtime_users() {
-  bb_try mkdir -p /etc /home/nobody
+  bb_try mkdir -p /home/nobody
+  if ! ensure_writable_etc; then
+    echo "[TEST][runtime] WARN: /etc is not writable; cannot prepare passwd/group"
+    return 0
+  fi
+
   if [ ! -f /etc/passwd ]; then
     "$BB" sh -c 'printf "%s\n" "root:x:0:0:root:/root:/bin/sh" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" > /etc/passwd' >/dev/null 2>&1 || true
   elif ! "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
@@ -66,13 +96,18 @@ setup_runtime_users() {
   elif ! "$BB" grep -q '^nobody:' /etc/group >/dev/null 2>&1; then
     "$BB" sh -c 'printf "%s\n" "nobody:x:65534:" >> /etc/group' >/dev/null 2>&1 || true
   fi
+
+  if [ ! -f /etc/nsswitch.conf ]; then
+    "$BB" sh -c 'printf "%s\n" "passwd: files" "group: files" "shadow: files" "hosts: files dns" > /etc/nsswitch.conf' >/dev/null 2>&1 || true
+  fi
+
 }
 
 setup_glibc_runtime() {
   [ -d /glibc/lib ] || return 0
 
   bb_try mkdir -p /lib /lib64
-  for so in libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
+  for so in libc.so libc.so.6 libm.so libm.so.6 libnss_files.so.2 libresolv.so.2 libnss_dns.so.2; do
     copy_if_exists "/glibc/lib/$so" "/lib/$so"
     copy_if_exists "/glibc/lib/$so" "/lib64/$so"
   done
@@ -86,12 +121,6 @@ setup_glibc_runtime() {
       copy_if_exists /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
       copy_if_exists /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib64/ld-linux-riscv64-lp64d.so.1
       ;;
-    *)
-      for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1; do
-        copy_if_exists "/glibc/lib/$so" "/lib/$so"
-        copy_if_exists "/glibc/lib/$so" "/lib64/$so"
-      done
-      ;;
   esac
 }
 
@@ -99,7 +128,7 @@ setup_musl_runtime() {
   # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
   [ -e /musl/lib/libc.so ] || return 0
 
-  bb_try mkdir -p /lib /lib64
+  bb_try mkdir -p /lib /lib64 /musl/lib
   case "$ARCH_NAME" in
     loongarch64)
       copy_if_missing /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1
@@ -110,12 +139,47 @@ setup_musl_runtime() {
       copy_if_missing /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
       copy_if_missing /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
       ;;
-    *)
-      for ldso in ld-musl-riscv64.so.1 ld-musl-riscv64-sf.so.1 ld-musl-loongarch64.so.1; do
-        copy_if_missing /musl/lib/libc.so "/lib/$ldso"
-      done
+  esac
+}
+
+setup_libgcc_runtime() {
+  case "$ARCH_NAME" in
+    riscv64)
+      bb_try mkdir -p /lib /lib64 /usr/lib /usr/lib64 /glibc/lib64 /musl/lib
+      copy_if_missing /musl/lib/libgcc_s.so.1 /lib/libgcc_s.so.1
+      copy_if_missing /musl/lib/libgcc_s.so.1 /lib64/libgcc_s.so.1
+      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
+      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib64/libgcc_s.so.1
+      copy_if_missing /glibc/lib/libgcc_s.so.1 /glibc/lib64/libgcc_s.so.1
+      echo "[TEST][runtime] libgcc bound: arch=riscv64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64"
+      ;;
+    loongarch64)
+      bb_try mkdir -p /lib /lib64 /usr/lib /usr/lib64 /glibc/lib64 /musl/lib
+      copy_if_missing /musl/lib/libgcc_s.so.1 /lib/libgcc_s.so.1
+      copy_if_missing /musl/lib/libgcc_s.so.1 /lib64/libgcc_s.so.1
+      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
+      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib64/libgcc_s.so.1
+      copy_if_missing /glibc/lib/libgcc_s.so.1 /glibc/lib64/libgcc_s.so.1
+      echo "[TEST][runtime] libgcc bound: arch=loongarch64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64"
       ;;
   esac
+}
+
+setup_locale_runtime() {
+  bb_try mkdir -p /usr/lib/locale /usr/share/locale
+
+  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /glibc/usr/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
+  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /glibc/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
+  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /musl/usr/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
+  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /musl/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
+  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /usr/lib/locale/C.UTF-8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
+  [ -d /usr/lib/locale/C.UTF-8 ] || "$BB" cp -a /usr/lib/locale/C.utf8 /usr/lib/locale/C.UTF-8 >/dev/null 2>&1 || true
+  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /glibc/usr/share/locale/locale.alias /usr/share/locale/locale.alias
+  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /glibc/lib/locale/locale.alias /usr/share/locale/locale.alias
+  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /musl/usr/share/locale/locale.alias /usr/share/locale/locale.alias
+  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /musl/lib/locale/locale.alias /usr/share/locale/locale.alias
+  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /usr/lib/locale/locale.alias /usr/share/locale/locale.alias
+  echo "[TEST][runtime] locale bound: /usr/lib/locale/C.utf8,/usr/lib/locale/C.UTF-8 /usr/share/locale/locale.alias"
 }
 
 install_busybox_commands() {
@@ -181,10 +245,16 @@ copy_if_missing "$BB" /bin/sh
 bb_try chmod +x /bin/sh
 
 RUNTIME_PATH=/musl:/glibc:/bin:/usr/bin
-RUNTIME_LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
+RUNTIME_LD_LIBRARY_PATH=/glibc/lib:/glibc/lib64:/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64
+RUNTIME_LOCALE=C.UTF-8
+RUNTIME_LOCPATH=/usr/lib/locale:/glibc/usr/lib/locale:/glibc/lib/locale:/musl/usr/lib/locale:/musl/lib/locale
 PATH=$RUNTIME_PATH
 LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
-export PATH LD_LIBRARY_PATH
+LANG=$RUNTIME_LOCALE
+LC_ALL=$RUNTIME_LOCALE
+LC_CTYPE=$RUNTIME_LOCALE
+LOCPATH=$RUNTIME_LOCPATH
+export PATH LD_LIBRARY_PATH LANG LC_ALL LC_CTYPE LOCPATH
 
 detect_arch() {
   detected=$("$BB" uname -m 2>/dev/null)
@@ -197,14 +267,31 @@ detect_arch() {
   esac
   if [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]; then
     echo "loongarch64"
+    return 0
   elif [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]; then
     echo "riscv64"
-  else
-    echo "${detected:-unknown}"
+    return 0
   fi
+  echo "[TEST] unsupported arch: ${detected:-unknown} (only riscv64/loongarch64 supported)" >&2
+  return 1
 }
 
-ARCH_NAME=$(detect_arch)
+runtime_ld_library_path_for_test() {
+  test_sh="$1"
+  case "$test_sh" in
+    /musl/*)
+      echo "/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
+      ;;
+    /glibc/*)
+      echo "/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
+      ;;
+    *)
+      echo "$RUNTIME_LD_LIBRARY_PATH"
+      ;;
+  esac
+}
+
+ARCH_NAME=$(detect_arch) || exit 1
 echo "[TEST] detected arch: $ARCH_NAME"
 
 # =========================
@@ -261,6 +348,8 @@ setup_runtime_tools() {
   setup_runtime_users
   setup_glibc_runtime
   setup_musl_runtime
+  setup_libgcc_runtime
+  setup_locale_runtime
   install_busybox_commands
   prefer_gnu_ar
   ensure_locale_fallback
@@ -320,7 +409,9 @@ run_test() {
     ltp_lib_dir="$ltp_root/testcases/lib"
     ltp_testscripts_dir="$ltp_root/testscripts"
     ltp_group_name=$(suite_group_name "$test_sh" "ltp")
-    ltp_case_list=${LTP_CASE_LIST:-/ltp.txt}
+    # Hardcode to embedded src/ltp.txt content only (via LTP_CASES from main.rs).
+    # Do not consume in-image /ltp.txt to avoid stale case lists.
+    ltp_case_list=/tmp/.ltp_cases_from_src.txt
 
     # LTP shell tests often source helper scripts with `. helper.sh` and run
     # helper commands (e.g. tst_brk) that are resolved via PATH.
@@ -329,33 +420,27 @@ run_test() {
     LTPROOT="$ltp_root"
     export PATH LTPROOT
 
-    if [ ! -f "$ltp_case_list" ]; then
-      if : > "$ltp_case_list" 2>/dev/null; then
-        echo "[TEST][ltp] created empty case list: $ltp_case_list"
-      else
-        ltp_case_list="$PWD/ltp.txt"
-        if : > "$ltp_case_list" 2>/dev/null; then
-          echo "[TEST][ltp] created empty case list: $ltp_case_list"
-        fi
-      fi
-    fi
-
-
-    # Keep the runtime whitelist in sync with the build-time list
-    # (src/ltp.txt) injected as LTP_CASES by src/main.rs. The disk image may
-    # already contain an old /ltp.txt from a previous run, so rewrite it instead
-    # of only filling it when empty.
-    if [ -n "${LTP_CASES:-}" ]; then
-      if : > "$ltp_case_list" 2>/dev/null; then
-        for ltp_case in $LTP_CASES; do
-          printf "%s\n" "$ltp_case" >> "$ltp_case_list"
-        done
-        echo "[TEST][ltp] loaded case list from embedded src/ltp.txt: $ltp_case_list"
-      fi
+    if [ -n "${LTP_CASES:-}" ] && : > "$ltp_case_list" 2>/dev/null; then
+      for ltp_case in $LTP_CASES; do
+        printf "%s\n" "$ltp_case" >> "$ltp_case_list"
+      done
+      echo "[TEST][ltp] loaded case list from embedded src/ltp.txt: $ltp_case_list"
+    else
+      echo "[TEST][ltp] missing embedded case list (LTP_CASES) or cannot write: $ltp_case_list"
     fi
     echo "#### OS COMP TEST GROUP START $ltp_group_name ####"
     ret=0
     if cd "$target_dir" 2>/dev/null; then
+      if [ -f /etc/passwd ]; then
+        echo "[TEST][ltp] /etc/passwd present"
+        if "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
+          echo "[TEST][ltp] /etc/passwd has nobody"
+        else
+          echo "[TEST][ltp] /etc/passwd missing nobody"
+        fi
+      else
+        echo "[TEST][ltp] /etc/passwd absent"
+      fi
       if [ -r "$ltp_case_list" ]; then
         while IFS= read -r ltp_case_raw || [ -n "$ltp_case_raw" ]; do
           ltp_case=$(printf "%s" "$ltp_case_raw" | tr -d '\r')
@@ -375,18 +460,7 @@ run_test() {
             case_ret=127
             echo "[TEST][ltp] missing case: $target_dir/$ltp_case"
           fi
-          case "$case_ret" in
-            0)
-              echo "PASS LTP CASE $ltp_case : $case_ret"
-              ;;
-            32)
-              echo "SKIP LTP CASE $ltp_case : $case_ret"
-              ;;
-            *)
-              echo "FAIL LTP CASE $ltp_case : $case_ret"
-              ret=1
-              ;;
-          esac
+          echo "FAIL LTP CASE $ltp_case : $case_ret"
         done < "$ltp_case_list"
       else
         ret=127
@@ -419,8 +493,12 @@ run_test() {
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: patched script ready $patched_script"
   HOME=/root
   PATH=$RUNTIME_PATH
-  LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
-  export HOME PATH LD_LIBRARY_PATH
+  LD_LIBRARY_PATH=$(runtime_ld_library_path_for_test "$test_sh")
+  LANG=$RUNTIME_LOCALE
+  LC_ALL=$RUNTIME_LOCALE
+  LC_CTYPE=$RUNTIME_LOCALE
+  LOCPATH=$RUNTIME_LOCPATH
+  export HOME PATH LD_LIBRARY_PATH LANG LC_ALL LC_CTYPE LOCPATH
   for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock ar locale timeout; do
     eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
   done
