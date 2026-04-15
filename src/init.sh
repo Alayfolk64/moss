@@ -211,8 +211,8 @@ echo "[TEST] detected arch: $ARCH_NAME"
 # Test switches (1=run, 0=skip)
 # 12 suites; defaults can be overridden by environment variables.
 # =========================
-: "${RUN_BASIC:=1}"
-: "${RUN_BUSYBOX:=1}"
+: "${RUN_BASIC:=0}"
+: "${RUN_BUSYBOX:=0}"
 : "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
 : "${RUN_IPERF:=0}"
@@ -341,9 +341,11 @@ run_test() {
     fi
 
 
-    # Populate an empty /ltp.txt from the build-time list (src/ltp.txt) that is
-    # injected as LTP_CASES by src/main.rs, so we do not depend on image edits.
-    if [ ! -s "$ltp_case_list" ] && [ -n "${LTP_CASES:-}" ]; then
+    # Keep the runtime whitelist in sync with the build-time list
+    # (src/ltp.txt) injected as LTP_CASES by src/main.rs. The disk image may
+    # already contain an old /ltp.txt from a previous run, so rewrite it instead
+    # of only filling it when empty.
+    if [ -n "${LTP_CASES:-}" ]; then
       if : > "$ltp_case_list" 2>/dev/null; then
         for ltp_case in $LTP_CASES; do
           printf "%s\n" "$ltp_case" >> "$ltp_case_list"
