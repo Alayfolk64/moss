@@ -442,8 +442,11 @@ run_test() {
         echo "[TEST][ltp] /etc/passwd absent"
       fi
       if [ -r "$ltp_case_list" ]; then
+        # Avoid depending on external `tr` on minimal judge images.
+        # Strip one trailing CR (Windows line ending) with POSIX shell expansion.
+        ltp_cr=$(printf '\r')
         while IFS= read -r ltp_case_raw || [ -n "$ltp_case_raw" ]; do
-          ltp_case=$(printf "%s" "$ltp_case_raw" | tr -d '\r')
+          ltp_case=${ltp_case_raw%"$ltp_cr"}
           [ -n "$ltp_case" ] || continue
           case "$ltp_case" in
             \#*) continue ;;
