@@ -16,7 +16,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-15 02:59:24.002675370 UTC
+Boot at 2026-04-15 03:30:35.002909100 UTC
 
 Welcome to Starry OS
 
@@ -75,10 +75,143 @@ Welcome to Starry OS
 #### OS COMP TEST GROUP START lmbench-glibc ####
 [TEST] SKIP script: /glibc/lmbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END lmbench-glibc ####
-[TEST][ltp] created empty case list: /ltp.txt
 #### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE accept01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept01.c:71: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+accept01.c:85: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE accept01 : 6
+RUN LTP CASE accept02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+accept02.c:130: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=657831ff
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-8890
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE accept02 : 2
+RUN LTP CASE accept03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept03.c:48: [1;31mTFAIL: [0maccept() on file expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on O_PATH file expected EBADF: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on directory expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on /dev/zero expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on /proc/self/maps expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on pipe read end expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on pipe write end expected ENOTSOCK: ENOSYS (38)
+tst_fd.c:93: [1;31mTBROK: [0msocket(1, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   7
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE accept03 : 3
+RUN LTP CASE accept4_01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept4_01.c:71: [1;34mTINFO: [0mTesting variant: libc accept4()
+accept4_01.c:57: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE accept4_01 : 2
 #### OS COMP TEST GROUP END ltp-musl ####
 #### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE accept01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept01.c:71: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+accept01.c:85: [1;35mTWARN: [0mclose(0) failed: EBADF (9)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE accept01 : 6
+RUN LTP CASE accept02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+accept02.c:130: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+
+[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=657831ff
+
+[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
+
+https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-8890
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE accept02 : 2
+RUN LTP CASE accept03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept03.c:48: [1;31mTFAIL: [0maccept() on file expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on O_PATH file expected EBADF: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on directory expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on /dev/zero expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on /proc/self/maps expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on pipe read end expected ENOTSOCK: ENOSYS (38)
+accept03.c:48: [1;31mTFAIL: [0maccept() on pipe write end expected ENOTSOCK: ENOSYS (38)
+tst_fd.c:93: [1;31mTBROK: [0msocket(1, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   7
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE accept03 : 3
+RUN LTP CASE accept4_01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept4_01.c:71: [1;34mTINFO: [0mTesting variant: libc accept4()
+accept4_01.c:57: [1;31mTBROK: [0msocket(2, 1, 0) failed: ENOSYS (38)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE accept4_01 : 2
 #### OS COMP TEST GROUP END ltp-glibc ####
 #### OS COMP TEST GROUP START lua-musl ####
 [TEST] SKIP script: /musl/lua_testcode.sh (switch=0)

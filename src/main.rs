@@ -10,8 +10,26 @@ use alloc::{borrow::ToOwned, vec::Vec};
 pub const INIT_SCRIPT: &str = include_str!("init-shell.sh");
 #[cfg(not(feature = "shell-init"))]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
+pub const LTP_CASES_RAW: &str = include_str!("ltp.txt");
 
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
+
+fn build_ltp_cases_env() -> alloc::string::String {
+    let mut env = alloc::string::String::from("LTP_CASES=");
+    let mut first = true;
+    for line in LTP_CASES_RAW.lines() {
+        let case = line.trim();
+        if case.is_empty() || case.starts_with('#') {
+            continue;
+        }
+        if !first {
+            env.push(' ');
+        }
+        first = false;
+        env.push_str(case);
+    }
+    env
+}
 
 #[unsafe(no_mangle)]
 fn main() {
@@ -20,7 +38,8 @@ fn main() {
         .copied()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    let envs = [];
+    let ltp_cases_env = build_ltp_cases_env();
+    let envs = [ltp_cases_env.as_str()];
 
     starry_kernel::entry::init(&args, &envs);
 }

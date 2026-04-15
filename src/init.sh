@@ -340,6 +340,17 @@ run_test() {
       fi
     fi
 
+
+    # Populate an empty /ltp.txt from the build-time list (src/ltp.txt) that is
+    # injected as LTP_CASES by src/main.rs, so we do not depend on image edits.
+    if [ ! -s "$ltp_case_list" ] && [ -n "${LTP_CASES:-}" ]; then
+      if : > "$ltp_case_list" 2>/dev/null; then
+        for ltp_case in $LTP_CASES; do
+          printf "%s\n" "$ltp_case" >> "$ltp_case_list"
+        done
+        echo "[TEST][ltp] loaded case list from embedded src/ltp.txt: $ltp_case_list"
+      fi
+    fi
     echo "#### OS COMP TEST GROUP START $ltp_group_name ####"
     ret=0
     if cd "$target_dir" 2>/dev/null; then
