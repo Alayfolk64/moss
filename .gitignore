@@ -13,6 +13,9 @@
 /.crates*
 /.tools/
 /mnt
+/ltp_bin_export
+/_img_probe
+/_ltp_cases_head
 *.swp
 *.swo
 *.o

@@ -21,12 +21,165 @@ if [ -z "$BB" ]; then
 fi
 
 echo "[TEST] using busybox: $BB"
+
+bb_try() {
+  "$BB" "$@" >/dev/null 2>&1 || true
+}
+
+copy_if_exists() {
+  src="$1"
+  dst="$2"
+  [ -e "$src" ] || return 0
+  bb_try cp -f "$src" "$dst"
+}
+
+copy_if_missing() {
+  src="$1"
+  dst="$2"
+  [ -e "$dst" ] && return 0
+  copy_if_exists "$src" "$dst"
+}
+
+ensure_bb_cmd() {
+  cmd="$1"
+  [ -n "$cmd" ] || return 0
+  [ -x "/bin/$cmd" ] && return 0
+  bb_try cp -f "$BB" "/bin/$cmd"
+  bb_try chmod +x "/bin/$cmd"
+}
+
+ensure_runtime_dirs() {
+  bb_try mkdir -p /tmp /var /var/tmp /var/tmp/lmbench
+  bb_try chmod 1777 /tmp /var/tmp
+}
+
+setup_runtime_users() {
+  bb_try mkdir -p /etc /home/nobody
+  if [ ! -f /etc/passwd ]; then
+    "$BB" sh -c 'printf "%s\n" "root:x:0:0:root:/root:/bin/sh" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" > /etc/passwd' >/dev/null 2>&1 || true
+  elif ! "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
+    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" >> /etc/passwd' >/dev/null 2>&1 || true
+  fi
+
+  if [ ! -f /etc/group ]; then
+    "$BB" sh -c 'printf "%s\n" "root:x:0:" "nobody:x:65534:" > /etc/group' >/dev/null 2>&1 || true
+  elif ! "$BB" grep -q '^nobody:' /etc/group >/dev/null 2>&1; then
+    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:" >> /etc/group' >/dev/null 2>&1 || true
+  fi
+}
+
+setup_glibc_runtime() {
+  [ -d /glibc/lib ] || return 0
+
+  bb_try mkdir -p /lib /lib64
+  for so in libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
+    copy_if_exists "/glibc/lib/$so" "/lib/$so"
+    copy_if_exists "/glibc/lib/$so" "/lib64/$so"
+  done
+
+  case "$ARCH_NAME" in
+    loongarch64)
+      copy_if_exists /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+      copy_if_exists /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib64/ld-linux-loongarch-lp64d.so.1
+      ;;
+    riscv64)
+      copy_if_exists /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+      copy_if_exists /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib64/ld-linux-riscv64-lp64d.so.1
+      ;;
+    *)
+      for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1; do
+        copy_if_exists "/glibc/lib/$so" "/lib/$so"
+        copy_if_exists "/glibc/lib/$so" "/lib64/$so"
+      done
+      ;;
+  esac
+}
+
+setup_musl_runtime() {
+  # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
+  [ -e /musl/lib/libc.so ] || return 0
+
+  bb_try mkdir -p /lib /lib64
+  case "$ARCH_NAME" in
+    loongarch64)
+      copy_if_missing /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1
+      copy_if_missing /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+      copy_if_missing /musl/lib/libc.so /lib64/ld-musl-loongarch-lp64d.so.1
+      ;;
+    riscv64)
+      copy_if_missing /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+      copy_if_missing /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+      ;;
+    *)
+      for ldso in ld-musl-riscv64.so.1 ld-musl-riscv64-sf.so.1 ld-musl-loongarch64.so.1; do
+        copy_if_missing /musl/lib/libc.so "/lib/$ldso"
+      done
+      ;;
+  esac
+}
+
+install_busybox_commands() {
+  bb_try --install /bin
+  bb_try --install -s /bin
+  bb_try --install /usr/bin
+  bb_try --install -s /usr/bin
+
+  copy_if_missing "$BB" /bin/sh
+  copy_if_missing "$BB" /bin/bash
+  copy_if_missing "$BB" /usr/bin/env
+  bb_try chmod +x /bin/sh
+  bb_try chmod +x /bin/bash
+  bb_try chmod +x /usr/bin/env
+
+  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout; do
+    ensure_bb_cmd "$cmd"
+  done
+}
+
+is_gnu_ar() {
+  tool="$1"
+  [ -x "$tool" ] || return 1
+  "$tool" --version 2>/dev/null | grep -qi "GNU ar"
+}
+
+prefer_gnu_ar() {
+  if command -v ar >/dev/null 2>&1; then
+    current_ar=$(command -v ar 2>/dev/null)
+    if [ -n "$current_ar" ] && is_gnu_ar "$current_ar"; then
+      return 0
+    fi
+  fi
+
+  for tool in /musl/bin/ar /glibc/bin/ar /usr/local/bin/ar /musl/ar /glibc/ar; do
+    if is_gnu_ar "$tool"; then
+      copy_if_exists "$tool" /usr/bin/ar
+      copy_if_exists "$tool" /bin/ar
+      bb_try chmod +x /usr/bin/ar /bin/ar
+      return 0
+    fi
+  done
+
+  # Fallback: keep busybox ar if GNU ar is unavailable in this rootfs.
+  ensure_bb_cmd ar
+}
+
+ensure_locale_fallback() {
+  # Some LTP scripts shell out to `locale`; provide a tiny fallback when the
+  # command is unavailable in busybox/rootfs.
+  if ! command -v locale >/dev/null 2>&1; then
+    bb_try mkdir -p /bin
+    "$BB" sh -c 'printf "%s\n" "#!/bin/sh" "echo LANG=C" > /bin/locale' >/dev/null 2>&1 || true
+    bb_try chmod +x /bin/locale
+  fi
+}
+
 # Ensure shebang scripts like `./run-all.sh` can find `/bin/sh`.
-"$BB" mkdir -p /bin >/dev/null 2>&1 || true
-"$BB" cp "$BB" /bin/busybox >/dev/null 2>&1 || true
-"$BB" chmod +x /bin/busybox >/dev/null 2>&1 || true
-"$BB" cp "$BB" /bin/sh >/dev/null 2>&1 || true
-"$BB" chmod +x /bin/sh >/dev/null 2>&1 || true
+bb_try mkdir -p /bin
+bb_try cp -f "$BB" /bin/busybox
+bb_try chmod +x /bin/busybox
+copy_if_missing "$BB" /bin/sh
+bb_try chmod +x /bin/sh
+
 RUNTIME_PATH=/musl:/glibc:/bin:/usr/bin
 RUNTIME_LD_LIBRARY_PATH=/glibc/lib:/musl/lib:/lib:/lib64:/usr/lib
 PATH=$RUNTIME_PATH
@@ -101,113 +254,16 @@ echo "[TEST] enabled suites:$TEST_SUITES"
 SETUP_RUNTIME_DONE=0
 
 setup_runtime_tools() {
-  ensure_runtime_dirs() {
-    rt_pwd=$PWD
-    cd / >/dev/null 2>&1 || true
-    "$BB" mkdir -p tmp var var/tmp var/tmp/lmbench >/dev/null 2>&1 || true
-    "$BB" chmod 1777 tmp var/tmp >/dev/null 2>&1 || true
-    cd "$rt_pwd" >/dev/null 2>&1 || true
-  }
-
-  ensure_bb_cmd() {
-    cmd="$1"
-    [ -n "$cmd" ] || return 0
-    [ -x "/bin/$cmd" ] && return 0
-    "$BB" cp -f "$BB" "/bin/$cmd" >/dev/null 2>&1 || true
-    "$BB" chmod +x "/bin/$cmd" >/dev/null 2>&1 || true
-  }
-
   ensure_runtime_dirs
   [ "$SETUP_RUNTIME_DONE" = "1" ] && return 0
 
-  rt_pwd=$PWD
-  cd / >/dev/null 2>&1 || true
-  "$BB" mkdir -p bin usr usr/bin >/dev/null 2>&1 || true
-  "$BB" mkdir -p etc home/nobody >/dev/null 2>&1 || true
-  if [ ! -f /etc/passwd ]; then
-    "$BB" sh -c 'printf "%s\n" "root:x:0:0:root:/root:/bin/sh" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" > /etc/passwd' >/dev/null 2>&1 || true
-  elif ! "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
-    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" >> /etc/passwd' >/dev/null 2>&1 || true
-  fi
-  if [ ! -f /etc/group ]; then
-    "$BB" sh -c 'printf "%s\n" "root:x:0:" "nobody:x:65534:" > /etc/group' >/dev/null 2>&1 || true
-  elif ! "$BB" grep -q '^nobody:' /etc/group >/dev/null 2>&1; then
-    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:" >> /etc/group' >/dev/null 2>&1 || true
-  fi
-  cd "$rt_pwd" >/dev/null 2>&1 || true
-  if [ -d /glibc/lib ]; then
-    rt_pwd=$PWD
-    cd / >/dev/null 2>&1 || true
-    "$BB" mkdir -p lib lib64 >/dev/null 2>&1 || true
-    cd "$rt_pwd" >/dev/null 2>&1 || true
-    for so in libc.so libc.so.6 libm.so libm.so.6 libgcc_s.so.1; do
-      [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
-      [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
-    done
-    case "$ARCH_NAME" in
-      loongarch64)
-        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
-          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
-        [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ] && \
-          "$BB" cp -f /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib64/ld-linux-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
-        ;;
-      riscv64)
-        [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ] && \
-          "$BB" cp -f /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1 >/dev/null 2>&1 || true
-        [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ] && \
-          "$BB" cp -f /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib64/ld-linux-riscv64-lp64d.so.1 >/dev/null 2>&1 || true
-        ;;
-      *)
-        for so in ld-linux-riscv64-lp64d.so.1 ld-linux-loongarch-lp64d.so.1; do
-          [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib/$so" >/dev/null 2>&1 || true
-          [ -e "/glibc/lib/$so" ] && "$BB" cp -f "/glibc/lib/$so" "/lib64/$so" >/dev/null 2>&1 || true
-        done
-        ;;
-    esac
-  fi
-  # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
-  if [ -e /musl/lib/libc.so ]; then
-    rt_pwd=$PWD
-    cd / >/dev/null 2>&1 || true
-    "$BB" mkdir -p lib >/dev/null 2>&1 || true
-    cd "$rt_pwd" >/dev/null 2>&1 || true
-    case "$ARCH_NAME" in
-      loongarch64)
-        [ -e /lib/ld-musl-loongarch64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1 >/dev/null 2>&1 || true
-        [ -e /lib/ld-musl-loongarch-lp64d.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
-        "$BB" mkdir -p lib64 >/dev/null 2>&1 || true
-        [ -e /lib64/ld-musl-loongarch-lp64d.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib64/ld-musl-loongarch-lp64d.so.1 >/dev/null 2>&1 || true
-        ;;
-      riscv64)
-        [ -e /lib/ld-musl-riscv64.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64.so.1 >/dev/null 2>&1 || true
-        [ -e /lib/ld-musl-riscv64-sf.so.1 ] || "$BB" cp -f /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1 >/dev/null 2>&1 || true
-        ;;
-      *)
-        for ldso in ld-musl-riscv64.so.1 ld-musl-riscv64-sf.so.1 ld-musl-loongarch64.so.1; do
-          [ -e "/lib/$ldso" ] || "$BB" cp -f /musl/lib/libc.so "/lib/$ldso" >/dev/null 2>&1 || true
-        done
-        ;;
-    esac
-  fi
-  "$BB" --install /bin >/dev/null 2>&1 || "$BB" --install -s /bin >/dev/null 2>&1 || true
-  "$BB" --install /usr/bin >/dev/null 2>&1 || "$BB" --install -s /usr/bin >/dev/null 2>&1 || true
-  [ -x /bin/sh ] || "$BB" cp -f "$BB" /bin/sh >/dev/null 2>&1 || true
-  [ -x /bin/bash ] || "$BB" cp -f "$BB" /bin/bash >/dev/null 2>&1 || true
-  [ -x /usr/bin/env ] || "$BB" cp -f "$BB" /usr/bin/env >/dev/null 2>&1 || true
-  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout; do
-    ensure_bb_cmd "$cmd"
-  done
-
-  # Some LTP scripts shell out to `locale`; provide a tiny fallback when the
-  # command is unavailable in busybox/rootfs.
-  if ! command -v locale >/dev/null 2>&1; then
-    rt_pwd=$PWD
-    cd / >/dev/null 2>&1 || true
-    "$BB" mkdir -p bin >/dev/null 2>&1 || true
-    "$BB" sh -c 'printf "%s\n" "#!/bin/sh" "echo LANG=C" > /bin/locale' >/dev/null 2>&1 || true
-    "$BB" chmod +x /bin/locale >/dev/null 2>&1 || true
-    cd "$rt_pwd" >/dev/null 2>&1 || true
-  fi
+  bb_try mkdir -p /bin /usr/bin
+  setup_runtime_users
+  setup_glibc_runtime
+  setup_musl_runtime
+  install_busybox_commands
+  prefer_gnu_ar
+  ensure_locale_fallback
   SETUP_RUNTIME_DONE=1
 }
 
@@ -232,13 +288,17 @@ run_test() {
   test_sh="$1"
   test_dir=${test_sh%/*}
   test_name=${test_sh##*/}
+  is_ltp_script=0
+  [ "$test_name" = "ltp_testcode.sh" ] && is_ltp_script=1
   old_pwd=$PWD
   [ "$test_dir" = "$test_sh" ] && test_dir=.
-  echo "[TEST] Running $test_sh"
+  [ "$is_ltp_script" -eq 1 ] || echo "[TEST] Running $test_sh"
   cd "$test_dir" || {
     ret=127
-    echo "[TEST] Exit code($ret): $test_sh"
-    echo
+    if [ "$is_ltp_script" -ne 1 ]; then
+      echo "[TEST] Exit code($ret): $test_sh"
+      echo
+    fi
     return "$ret"
   }
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: entered test dir $test_dir"
@@ -267,83 +327,14 @@ run_test() {
     LTPROOT="$ltp_root"
     export PATH LTPROOT
 
-    ltp_start_line=$(group_marker_line START "$test_sh" ltp)
-    ltp_end_line=$(group_marker_line END "$test_sh" ltp)
-    echo "$ltp_start_line"
-
-    suite_ret=0
-    ltp_pass=0
-    ltp_fail=0
-    ltp_skip=0
-    ltp_total_timeout=${LTP_TOTAL_TIMEOUT:-100}
-    ltp_case_timeout=${LTP_CASE_TIMEOUT:-30}
-    ltp_start=$("$BB" date +%s 2>/dev/null)
-    [ -n "$ltp_start" ] || ltp_start=$(date +%s 2>/dev/null)
-    [ -n "$ltp_start" ] || ltp_start=0
-    for file in "$target_dir"/*; do
-      [ -f "$file" ] || continue
-      base=$("$BB" basename "$file")
-      case "$base" in
-        tst_*|cgroup_fj_*)
-          echo "SKIP LTP CASE $base : helper"
-          ltp_skip=$((ltp_skip + 1))
-          continue
-          ;;
-      esac
-
-      now=$("$BB" date +%s 2>/dev/null)
-      [ -n "$now" ] || now=$(date +%s 2>/dev/null)
-      [ -n "$now" ] || now=$ltp_start
-      elapsed=$((now - ltp_start))
-      remaining=$((ltp_total_timeout - elapsed))
-      if [ "$remaining" -le 0 ]; then
-        echo "[TEST] LTP total timeout reached (${ltp_total_timeout}s), stopping."
-        suite_ret=1
-        break
-      fi
-
-      echo "RUN LTP CASE $base"
-      case_timeout=$remaining
-      if [ "$ltp_case_timeout" -gt 0 ] && [ "$ltp_case_timeout" -lt "$case_timeout" ]; then
-        case_timeout=$ltp_case_timeout
-      fi
-      if "$BB" timeout --help >/dev/null 2>&1; then
-        "$BB" timeout "$case_timeout" "$file"
-        ret=$?
-      else
-        "$file"
-        ret=$?
-      fi
-      if [ "$ret" -eq 124 ]; then
-        echo "FAIL LTP CASE $base : $ret"
-        echo "[TEST] LTP total timeout reached (${ltp_total_timeout}s), stopping."
-        ltp_fail=$((ltp_fail + 1))
-        suite_ret=1
-        break
-      fi
-      case "$ret" in
-        0)
-          echo "PASS LTP CASE $base : $ret"
-          ltp_pass=$((ltp_pass + 1))
-          ;;
-        32)
-          # LTP uses 32 for TCONF (test skipped due to missing config/deps).
-          echo "SKIP LTP CASE $base : $ret"
-          ltp_skip=$((ltp_skip + 1))
-          ;;
-        *)
-          echo "FAIL LTP CASE $base : $ret"
-          ltp_fail=$((ltp_fail + 1))
-          suite_ret=1
-          ;;
-      esac
-    done
-    echo "[TEST] LTP summary: pass=$ltp_pass fail=$ltp_fail skip=$ltp_skip"
-    echo "$ltp_end_line"
-    ret=$suite_ret
+    if [ -x "./$test_name" ]; then
+      "./$test_name"
+      ret=$?
+    else
+      sh "./$test_name"
+      ret=$?
+    fi
     cd "$old_pwd" || true
-    echo "[TEST] Exit code($ret): $test_sh"
-    echo
     return "$ret"
   fi
 
