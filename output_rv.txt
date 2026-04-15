@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-15 13:11:51.004479900 UTC
+Boot at 2026-04-15 13:39:47.004517400 UTC
 
 Welcome to Starry OS
 
@@ -146,11 +146,11 @@ RUN LTP CASE accept01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
-[37m[  5.658087 0:125 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[  5.569309 0:124 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
-[37m[  5.664497 0:125 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[  5.574070 0:124 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
-[37m[  5.666104 0:125 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[  5.575068 0:124 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
 accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
 
@@ -196,29 +196,29 @@ accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
-[37m[ 16.366331 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
+[37m[ 16.267301 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
-[37m[ 16.368574 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[37m[ 16.269691 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
-[37m[ 16.369222 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[37m[ 16.270355 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
-[37m[ 16.369703 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[37m[ 16.270831 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on userfaultfd : ENOTSOCK (88)
-[37m[ 16.370225 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[37m[ 16.271361 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
-[37m[ 16.370743 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[37m[ 16.271968 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on io uring : ENOTSOCK (88)
-[37m[ 16.371254 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 16.272442 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
-[37m[ 16.371730 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[37m[ 16.272861 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
-[37m[ 16.372171 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[37m[ 16.273242 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
-[37m[ 16.372579 0:136 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[37m[ 16.273667 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
 [maccept03.c:48: [1;31mTFAIL: [0maccept() on open_tree expected EBADF: ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
-[37m[ 16.377395 0:136 starry_kernel::syscall:24] [33mInvalid syscall number: 18446744073709551615[m
+[37m[ 16.278978 0:135 starry_kernel::syscall:24] [33mInvalid syscall number: 18446744073709551615[m
 [mtst_fd.c:260: [1;33mTCONF: [0mSkipping memfd secret: ENOSYS (38)
 
 Summary:
@@ -264,11 +264,11 @@ RUN LTP CASE accept01
 tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
 tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
 accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
-[37m[ 17.375177 0:152 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[ 17.253147 0:151 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
-[37m[ 17.376295 0:152 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[ 17.254315 0:151 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
-[37m[ 17.376668 0:152 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
+[37m[ 17.254723 0:151 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
 [maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
 accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
 
@@ -314,29 +314,29 @@ accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
-[37m[ 28.218094 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
+[37m[ 28.111959 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
-[37m[ 28.219308 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[37m[ 28.113260 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
-[37m[ 28.219802 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[37m[ 28.113715 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
-[37m[ 28.220233 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[37m[ 28.114195 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on userfaultfd : ENOTSOCK (88)
-[37m[ 28.221038 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[37m[ 28.114950 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
-[37m[ 28.221597 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[37m[ 28.115522 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on io uring : ENOTSOCK (88)
-[37m[ 28.222117 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 28.116054 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
-[37m[ 28.222599 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[37m[ 28.116466 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
-[37m[ 28.223009 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[37m[ 28.116851 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
-[37m[ 28.223407 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[37m[ 28.117222 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
 [maccept03.c:48: [1;31mTFAIL: [0maccept() on open_tree expected EBADF: ENOTSOCK (88)
 accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
-[37m[ 28.226968 0:163 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
+[37m[ 28.120823 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
 [maccept03.c:48: [1;32mTPASS: [0maccept() on memfd secret : ENOTSOCK (88)
 
 Summary:
