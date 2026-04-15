@@ -21,3 +21,6 @@
 *.o
 *.bin
 *.exec
+*.xz
+*.bak
+*.img
