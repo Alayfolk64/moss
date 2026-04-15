@@ -211,8 +211,8 @@ echo "[TEST] detected arch: $ARCH_NAME"
 # Test switches (1=run, 0=skip)
 # 12 suites; defaults can be overridden by environment variables.
 # =========================
-: "${RUN_BASIC:=0}"
-: "${RUN_BUSYBOX:=0}"
+: "${RUN_BASIC:=1}"
+: "${RUN_BUSYBOX:=1}"
 : "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
 : "${RUN_IPERF:=0}"
@@ -373,7 +373,18 @@ run_test() {
             case_ret=127
             echo "[TEST][ltp] missing case: $target_dir/$ltp_case"
           fi
-          echo "FAIL LTP CASE $ltp_case : $case_ret"
+          case "$case_ret" in
+            0)
+              echo "PASS LTP CASE $ltp_case : $case_ret"
+              ;;
+            32)
+              echo "SKIP LTP CASE $ltp_case : $case_ret"
+              ;;
+            *)
+              echo "FAIL LTP CASE $ltp_case : $case_ret"
+              ret=1
+              ;;
+          esac
         done < "$ltp_case_list"
       else
         ret=127

@@ -54,6 +54,7 @@ default = []
 qemu = [
     "axfeat/defplat",
     "axfeat/bus-pci",
+    "starry-kernel/net",
 ]
 shell-init = []
 smp = ["axfeat/smp"]

@@ -38,8 +38,7 @@ fn main() {
         .copied()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    let ltp_cases_env = build_ltp_cases_env();
-    let envs = [ltp_cases_env.as_str()];
+    let envs = [build_ltp_cases_env()];
 
     starry_kernel::entry::init(&args, &envs);
 }

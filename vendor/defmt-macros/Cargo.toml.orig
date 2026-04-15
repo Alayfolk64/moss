@@ -1,0 +1,29 @@
+[package]
+authors = ["The Knurling-rs developers"]
+description = "defmt macros"
+edition = "2021"
+keywords = ["knurling", "defmt"]
+license = "MIT OR Apache-2.0"
+name = "defmt-macros"
+readme = "../README.md"
+repository = "https://github.com/knurling-rs/defmt"
+version = "0.3.2"
+
+[lib]
+proc-macro = true
+
+[features]
+# WARNING: for internal use only, not covered by semver guarantees
+unstable-test = []
+
+[dependencies]
+defmt-parser = { path = "../parser", features = ["unstable"], version = "=0.3.1" }
+proc-macro-error = "1"
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "1", features = ["full"] }
+
+[dev_dependencies]
+maplit = "1"
+pretty_assertions = "1"
+rstest = "0.11"
