@@ -419,10 +419,10 @@ libctest_loader_for_test() {
       case "$ARCH_NAME" in
         riscv64)
           for cand in \
-            /musl/lib/ld-musl-riscv64-sf.so.1 \
             /musl/lib/ld-musl-riscv64.so.1 \
-            /lib/ld-musl-riscv64-sf.so.1 \
             /lib/ld-musl-riscv64.so.1 \
+            /musl/lib/ld-musl-riscv64-sf.so.1 \
+            /lib/ld-musl-riscv64-sf.so.1 \
             /musl/lib/libc.so
           do
             [ -e "$cand" ] || continue
