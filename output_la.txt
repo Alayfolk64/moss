@@ -16,31 +16,791 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-15 13:40:17.004223330 UTC
+Boot at 2026-04-16 02:24:21.005376580 UTC
 
 Welcome to Starry OS
 
 [TEST] using busybox: /musl/busybox
 [TEST] detected arch: loongarch64
-[TEST] enabled suites: ltp
+[TEST] enabled suites: basic busybox
 [TEST][runtime] libgcc bound: arch=loongarch64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64
 [TEST][runtime] locale bound: /usr/lib/locale/C.utf8,/usr/lib/locale/C.UTF-8 /usr/share/locale/locale.alias
 [TEST] scan roots: / /musl /glibc
 [TEST] scanning /
 [TEST] scanning /musl
 [TEST] scanning /glibc
+[TEST] Running /musl/basic_testcode.sh
 #### OS COMP TEST GROUP START basic-musl ####
-[TEST] SKIP script: /musl/basic_testcode.sh (switch=0)
+Testing brk :
+========== START test_brk ==========
+Before alloc,heap pos: 1073741824
+After alloc,heap pos: 1073741888
+Alloc again,heap pos: 1073741952
+========== END test_brk ==========
+Testing chdir :
+========== START test_chdir ==========
+chdir ret: 0
+  current working dir : /musl/basic/test_chdir
+========== END test_chdir ==========
+Testing clone :
+========== START test_clone ==========
+  Child says successfully!
+clone process successfully.
+pid:61
+========== END test_clone ==========
+Testing close :
+========== START test_close ==========
+  close 3 success.
+========== END test_close ==========
+Testing dup2 :
+========== START test_dup2 ==========
+  from fd 100
+========== END test_dup2 ==========
+Testing dup :
+========== START test_dup ==========
+  new fd is 3.
+========== END test_dup ==========
+Testing execve :
+========== START test_execve ==========
+  I am test_echo.
+execve success.
+========== END main ==========
+Testing exit :
+========== START test_exit ==========
+exit OK.
+========== END test_exit ==========
+Testing fork :
+========== START test_fork ==========
+  child process.
+  parent process. wstatus:0
+========== END test_fork ==========
+Testing fstat :
+========== START test_fstat ==========
+fstat ret: 0
+fstat: dev: 1, inode: 3191, mode: 33261, nlink: 1, size: 52, atime: 1774331885, mtime: 1774331885, ctime: 1774331885
+========== END test_fstat ==========
+Testing getcwd :
+========== START test_getcwd ==========
+getcwd: /musl/basic successfully!
+========== END test_getcwd ==========
+Testing getdents :
+========== START test_getdents ==========
+open fd:3
+getdents fd:496
+getdents success.
+.
+
+========== END test_getdents ==========
+Testing getpid :
+========== START test_getpid ==========
+getpid success.
+pid = 73
+========== END test_getpid ==========
+Testing getppid :
+========== START test_getppid ==========
+  getppid success. ppid : 57
+========== END test_getppid ==========
+Testing gettimeofday :
+========== START test_gettimeofday ==========
+gettimeofday success.
+start:18525802, end:18525847
+interval: 45
+========== END test_gettimeofday ==========
+Testing mkdir_ :
+========== START test_mkdir ==========
+mkdir ret: -17
+  mkdir success.
+========== END test_mkdir ==========
+Testing mmap :
+========== START test_mmap ==========
+file len: 27
+mmap content:   Hello, mmap successfully!
+========== END test_mmap ==========
+Testing mount :
+========== START test_mount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+mount successfully
+umount return: 0
+========== END test_mount ==========
+Testing munmap :
+========== START test_munmap ==========
+file len: 27
+munmap return: 0
+munmap successfully!
+========== END test_munmap ==========
+Testing openat :
+========== START test_openat ==========
+open dir fd: 3
+openat fd: 4
+openat success.
+========== END test_openat ==========
+Testing open :
+========== START test_open ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_open ==========
+Testing pipe :
+========== START test_pipe ==========
+cpid: 83
+cpid: 0
+  Write to pipe successfully.
+
+========== END test_pipe ==========
+Testing read :
+========== START test_read ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_read ==========
+Testing sleep :
+========== START test_sleep ==========
+sleep success.
+========== END test_sleep ==========
+Testing times :
+========== START test_times ==========
+mytimes success
+{tms_utime:24219, tms_stime:27337, tms_cutime:24219, tms_cstime:27337}
+========== END test_times ==========
+Testing umount :
+========== START test_umount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+umount success.
+return: 0
+========== END test_umount ==========
+Testing uname :
+========== START test_uname ==========
+Uname: Linux starry 10.0.0 10.0.0 loongarch64 https://github.com/Starry-OS/StarryOS
+========== END test_uname ==========
+Testing unlink :
+========== START test_unlink ==========
+  unlink success!
+========== END test_unlink ==========
+Testing wait :
+========== START test_wait ==========
+This is child process
+wait child success.
+wstatus: 0
+========== END test_wait ==========
+Testing waitpid :
+========== START test_waitpid ==========
+This is child process
+waitpid successfully.
+wstatus: 3
+========== END test_waitpid ==========
+Testing write :
+========== START test_write ==========
+Hello operating system contest.
+========== END test_write ==========
+Testing yield :
+========== START test_yield ==========
+  I am child process: 96. iteration 0.
+  I am child process: 97. iteration 1.
+  I am child process: 98. iteration 2.
+  I am child process: 96. iteration 0.
+  I am child process: 97. iteration 1.
+  I am child process: 98. iteration 2.
+  I am child process: 96. iteration 0.
+  I am child process: 97. iteration 1.
+  I am child process: 98. iteration 2.
+  I am child process: 96. iteration 0.
+  I am child process: 97. iteration 1.
+  I am child process: 98. iteration 2.
+  I am child process: 96. iteration 0.
+  I am child process: 97. iteration 1.
+  I am child process: 98. iteration 2.
+========== END test_yield ==========
 #### OS COMP TEST GROUP END basic-musl ####
+[TEST] Exit code(0): /musl/basic_testcode.sh
+
+[TEST] Running /glibc/basic_testcode.sh
 #### OS COMP TEST GROUP START basic-glibc ####
-[TEST] SKIP script: /glibc/basic_testcode.sh (switch=0)
+Testing brk :
+========== START test_brk ==========
+Before alloc,heap pos: 1073741824
+After alloc,heap pos: 1073741888
+Alloc again,heap pos: 1073741952
+========== END test_brk ==========
+Testing chdir :
+========== START test_chdir ==========
+chdir ret: 0
+  current working dir : /glibc/basic/test_chdir
+========== END test_chdir ==========
+Testing clone :
+========== START test_clone ==========
+  Child says successfully!
+clone process successfully.
+pid:111
+========== END test_clone ==========
+Testing close :
+========== START test_close ==========
+  close 3 success.
+========== END test_close ==========
+Testing dup2 :
+========== START test_dup2 ==========
+  from fd 100
+========== END test_dup2 ==========
+Testing dup :
+========== START test_dup ==========
+  new fd is 3.
+========== END test_dup ==========
+Testing execve :
+========== START test_execve ==========
+  I am test_echo.
+execve success.
+========== END main ==========
+Testing exit :
+========== START test_exit ==========
+exit OK.
+========== END test_exit ==========
+Testing fork :
+========== START test_fork ==========
+  child process.
+  parent process. wstatus:0
+========== END test_fork ==========
+Testing fstat :
+========== START test_fstat ==========
+fstat ret: 0
+fstat: dev: 1, inode: 134253, mode: 33261, nlink: 1, size: 52, atime: 1774331852, mtime: 1774331852, ctime: 1774331852
+========== END test_fstat ==========
+Testing getcwd :
+========== START test_getcwd ==========
+getcwd: /glibc/basic successfully!
+========== END test_getcwd ==========
+Testing getdents :
+========== START test_getdents ==========
+open fd:3
+getdents fd:512
+getdents success.
+.
+
+========== END test_getdents ==========
+Testing getpid :
+========== START test_getpid ==========
+getpid success.
+pid = 123
+========== END test_getpid ==========
+Testing getppid :
+========== START test_getppid ==========
+  getppid success. ppid : 107
+========== END test_getppid ==========
+Testing gettimeofday :
+========== START test_gettimeofday ==========
+gettimeofday success.
+start:18529295, end:18529338
+interval: 43
+========== END test_gettimeofday ==========
+Testing mkdir_ :
+========== START test_mkdir ==========
+mkdir ret: -17
+  mkdir success.
+========== END test_mkdir ==========
+Testing mmap :
+========== START test_mmap ==========
+file len: 27
+mmap content:   Hello, mmap successfully!
+========== END test_mmap ==========
+Testing mount :
+========== START test_mount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+mount successfully
+umount return: 0
+========== END test_mount ==========
+Testing munmap :
+========== START test_munmap ==========
+file len: 27
+munmap return: 0
+munmap successfully!
+========== END test_munmap ==========
+Testing openat :
+========== START test_openat ==========
+open dir fd: 3
+openat fd: 4
+openat success.
+========== END test_openat ==========
+Testing open :
+========== START test_open ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_open ==========
+Testing pipe :
+========== START test_pipe ==========
+cpid: 133
+cpid: 0
+  Write to pipe successfully.
+
+========== END test_pipe ==========
+Testing read :
+========== START test_read ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_read ==========
+Testing sleep :
+========== START test_sleep ==========
+sleep success.
+========== END test_sleep ==========
+Testing times :
+========== START test_times ==========
+mytimes success
+{tms_utime:25056, tms_stime:26308, tms_cutime:25056, tms_cstime:26308}
+========== END test_times ==========
+Testing umount :
+========== START test_umount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+umount success.
+return: 0
+========== END test_umount ==========
+Testing uname :
+========== START test_uname ==========
+Uname: Linux starry 10.0.0 10.0.0 loongarch64 https://github.com/Starry-OS/StarryOS
+========== END test_uname ==========
+Testing unlink :
+========== START test_unlink ==========
+  unlink success!
+========== END test_unlink ==========
+Testing wait :
+========== START test_wait ==========
+This is child process
+wait child success.
+wstatus: 0
+========== END test_wait ==========
+Testing waitpid :
+========== START test_waitpid ==========
+This is child process
+waitpid successfully.
+wstatus: 3
+========== END test_waitpid ==========
+Testing write :
+========== START test_write ==========
+Hello operating system contest.
+========== END test_write ==========
+Testing yield :
+========== START test_yield ==========
+  I am child process: 146. iteration 0.
+  I am child process: 147. iteration 1.
+  I am child process: 148. iteration 2.
+  I am child process: 146. iteration 0.
+  I am child process: 147. iteration 1.
+  I am child process: 148. iteration 2.
+  I am child process: 146. iteration 0.
+  I am child process: 147. iteration 1.
+  I am child process: 148. iteration 2.
+  I am child process: 146. iteration 0.
+  I am child process: 147. iteration 1.
+  I am child process: 148. iteration 2.
+  I am child process: 146. iteration 0.
+  I am child process: 147. iteration 1.
+  I am child process: 148. iteration 2.
+========== END test_yield ==========
 #### OS COMP TEST GROUP END basic-glibc ####
+[TEST] Exit code(0): /glibc/basic_testcode.sh
+
+[TEST] Running /musl/busybox_testcode.sh
 #### OS COMP TEST GROUP START busybox-musl ####
-[TEST] SKIP script: /musl/busybox_testcode.sh (switch=0)
+#### independent command test
+testcase busybox echo "#### independent command test" success
+testcase busybox ash -c exit success
+testcase busybox sh -c exit success
+bbb
+testcase busybox basename /aaa/bbb success
+     April 2026
+Su Mo Tu We Th Fr Sa
+          1  2  3  4
+ 5  6  7  8  9 10 11
+12 13 14 15 16 17 18
+19 20 21 22 23 24 25
+26 27 28 29 30
+                     
+testcase busybox cal success
+[H[Jtestcase busybox clear success
+Thu Apr 16 02:24:36 UTC 2026
+testcase busybox date success
+Filesystem           1K-blocks      Used Available Use% Mounted on
+proc                        50         0        50   0% /proc
+testcase busybox df success
+/aaa
+testcase busybox dirname /aaa/bbb success
+testcase busybox dmesg success
+220	./ltp/bin
+392	./ltp/runtest
+12	./ltp/scenario_groups
+40	./ltp/testscripts
+76	./ltp/testcases/bin/ftrace_stress
+2652	./ltp/testcases/bin/datafiles
+1564840	./ltp/testcases/bin
+24	./ltp/testcases/data/ar01
+108	./ltp/testcases/data/file01
+24	./ltp/testcases/data/ld01
+148	./ltp/testcases/data/ldd01
+96	./ltp/testcases/data/nm01
+12	./ltp/testcases/data/unzip01
+12	./ltp/testcases/data/binfmt_misc02
+8	./ltp/testcases/data/ima_kexec
+12	./ltp/testcases/data/ima_keys
+12	./ltp/testcases/data/ima_policy
+8	./ltp/testcases/data/ima_selinux
+12	./ltp/testcases/data/lvm
+12	./ltp/testcases/data/mc_member
+492	./ltp/testcases/data
+1565336	./ltp/testcases
+208	./ltp/libkirk
+528	./ltp/metadata
+1566928	./ltp
+1084	./lib
+4	./basic/mnt
+4	./basic/test_chdir
+4	./basic/test_mkdir
+2028	./basic
+1578132	.
+testcase busybox du success
+2
+testcase busybox expr 1 + 1 success
+testcase busybox false success
+testcase busybox true success
+/bin/ls
+testcase busybox which ls success
+Linux
+testcase busybox uname success
+ 02:24:36 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
+testcase busybox uptime success
+abcntestcase busybox printf "abcn" success
+PID   USER     TIME  COMMAND
+    6 root      0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  158 root      0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  177 root      0:00 ./busybox ps
+testcase busybox ps success
+/musl
+testcase busybox pwd success
+              total        used        free      shared  buff/cache   available
+Mem:              0 18014398494685956           0           0    14796028    18768344
+Swap:             0           0           0
+testcase busybox free success
+Thu Apr 16 02:24:37 2026  0.000000 seconds
+testcase busybox hwclock success
+testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
+[1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
+[1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
+[1;32mbasic_testcode.sh[m       [1;32mlat_cmd[m                 [1;32mlua[m
+[1;32mbusy[m                    [1;32mlat_connect[m             [1;32mlua_testcode.sh[m
+[1;32mbusybox[m                 [1;32mlat_ctx[m                 [1;32mmax_min.lua[m
+[1;32mbusybox_cmd.txt[m         [1;32mlat_dram_page[m           [1;32mmemsize[m
+[1;32mbusybox_testcode.sh[m     [1;32mlat_fcntl[m               [1;32mmhz[m
+[1;32mbw_file_rd[m              [1;32mlat_fifo[m                [1;32mmsleep[m
+[1;32mbw_mem[m                  [1;32mlat_fs[m                  [1;32mmulti.sh[m
+[1;32mbw_mmap_rd[m              [1;32mlat_http[m                [1;32mnetperf[m
+[1;32mbw_pipe[m                 [1;32mlat_mem_rd[m              [1;32mnetperf_testcode.sh[m
+[1;32mbw_tcp[m                  [1;32mlat_mmap[m                [1;32mnetserver[m
+[1;32mbw_unix[m                 [1;32mlat_ops[m                 [1;32mpar_mem[m
+[1;32mcache[m                   [1;32mlat_pagefault[m           [1;32mpar_ops[m
+[1;32mclock[m                   [1;32mlat_pipe[m                [1;32mpipe[m
+[1;32mcontext1[m                [1;32mlat_pmake[m               [1;32mrandom.lua[m
+[1;32mcyclictest[m              [1;32mlat_proc[m                [1;32mregister[m
+[1;32mcyclictest_testcode.sh[m  [1;32mlat_rand[m                [1;32mremove.lua[m
+[1;32mdate.lua[m                [1;32mlat_rpc[m                 [1;32mrhttp[m
+[1;32mdhry2[m                   [1;32mlat_select[m              [1;32mround_num.lua[m
+[1;32mdhry2reg[m                [1;32mlat_sem[m                 [1;32mrun-dynamic.sh[m
+[1;32mdisk[m                    [1;32mlat_sig[m                 [1;32mrun-static.sh[m
+[1;32mdlopen_dso.so[m           [1;32mlat_syscall[m             [1;32mruntest.exe[m
+[1;32mdouble[m                  [1;32mlat_tcp[m                 [1;32mseek[m
+[1;32menough[m                  [1;32mlat_udp[m                 [1;32mshort[m
+[1;32mentry-dynamic.exe[m       [1;32mlat_unix[m                [1;32msin30.lua[m
+[1;32mentry-static.exe[m        [1;32mlat_unix_connect[m        [1;32msort.lua[m
+[1;32mexecl[m                   [1;32mlat_usleep[m              [1;32mspawn[m
+[1;32mfile_io.lua[m             [1;34mlib[m                     [1;32mstream[m
+[1;32mfloat[m                   [1;32mlibc-bench[m              [1;32mstrings.lua[m
+[1;32mflushdisk[m               [1;32mlibcbench_testcode.sh[m   [1;32msyscall[m
+[1;32mfstime[m                  [1;32mlibctest_testcode.sh[m    [1;32mtest.sh[m
+[1;32mgetopt[m                  [1;32mline[m                    [1;32mtiming_o[m
+[1;32mgfx-x11[m                 [1;32mlmbench[m                 [1;32mtlb[m
+[1;32mhackbench[m               [1;32mlmbench_all[m             [1;32mtls_get_new-dtv_dso.so[m
+[1;32mhanoi[m                   [1;32mlmbench_testcode.sh[m     [1;32mtst.sh[m
+[1;32mhello[m                   [1;32mlmdd[m                    [1;32munixbench.logo[m
+[1;32mindex.base[m              [1;32mlmhttp[m                  [1;32munixbench_testcode.sh[m
+[1;32mint[m                     [1;32mlong[m                    [1;32mwhetstone-double[m
+[1;32miozone[m                  [1;32mloop_o[m
+[1;32miozone_testcode.sh[m      [1;32mlooper[m
+testcase busybox ls success
+testcase busybox sleep 1 success
+#### file opration test
+testcase busybox echo "#### file opration test" success
+testcase busybox touch test.txt success
+testcase busybox echo "hello world" > test.txt success
+hello world
+testcase busybox cat test.txt success
+l
+testcase busybox cut -c 3 test.txt success
+0000000 062550 066154 020157 067567 066162 005144
+0000014
+testcase busybox od test.txt success
+hello world
+testcase busybox head test.txt success
+hello world
+testcase busybox tail test.txt success
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 0a              |hello world.|
+0000000c
+testcase busybox hexdump -C test.txt success
+6f5902ac237024bdd0c176cb93063dc4  test.txt
+testcase busybox md5sum test.txt success
+testcase busybox echo "ccccccc" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+testcase busybox echo "aaaaaaa" >> test.txt success
+testcase busybox echo "2222222" >> test.txt success
+testcase busybox echo "1111111" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+1111111
+2222222
+aaaaaaa
+bbbbbbb
+ccccccc
+hello world
+testcase busybox sort test.txt | ./busybox uniq success
+  File: test.txt
+  Size: 60        	Blocks: 8          IO Block: 4096   regular file
+Device: 1h/1d	Inode: 3265        Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 1970-01-01 00:00:00.000000000 +0000
+Modify: 1970-01-01 00:00:00.000000000 +0000
+Change: 1970-01-01 00:00:00.000000000 +0000
+testcase busybox stat test.txt success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox strings test.txt success
+        7         8        60 test.txt
+testcase busybox wc test.txt success
+testcase busybox [ -f test.txt ] success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox more test.txt success
+testcase busybox rm test.txt -f success
+testcase busybox mkdir test_dir success
+testcase busybox mv test_dir test success
+testcase busybox rmdir test success
+echo "hello world" > test.txt
+grep hello busybox_cmd.txt
+testcase busybox grep hello busybox_cmd.txt success
+testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
+testcase busybox rm busybox_cmd.bak -f success
+./busybox_cmd.txt
+testcase busybox find -name "busybox_cmd.txt" success
 #### OS COMP TEST GROUP END busybox-musl ####
+[TEST] Exit code(0): /musl/busybox_testcode.sh
+
+[TEST] Running /glibc/busybox_testcode.sh
 #### OS COMP TEST GROUP START busybox-glibc ####
-[TEST] SKIP script: /glibc/busybox_testcode.sh (switch=0)
+#### independent command test
+testcase busybox echo "#### independent command test" success
+testcase busybox ash -c exit success
+testcase busybox sh -c exit success
+bbb
+testcase busybox basename /aaa/bbb success
+     April 2026
+Su Mo Tu We Th Fr Sa
+          1  2  3  4
+ 5  6  7  8  9 10 11
+12 13 14 15 16 17 18
+19 20 21 22 23 24 25
+26 27 28 29 30
+                     
+testcase busybox cal success
+[H[Jtestcase busybox clear success
+Thu Apr 16 02:24:41 UTC 2026
+testcase busybox date success
+Filesystem           1K-blocks      Used Available Use% Mounted on
+proc                        50         0        50   0% /proc
+testcase busybox df success
+/aaa
+testcase busybox dirname /aaa/bbb success
+testcase busybox dmesg success
+256	./ltp/bin
+392	./ltp/runtest
+12	./ltp/scenario_groups
+40	./ltp/testscripts
+76	./ltp/testcases/bin/ftrace_stress
+2652	./ltp/testcases/bin/datafiles
+1749372	./ltp/testcases/bin
+24	./ltp/testcases/data/ar01
+112	./ltp/testcases/data/file01
+24	./ltp/testcases/data/ld01
+152	./ltp/testcases/data/ldd01
+112	./ltp/testcases/data/nm01
+12	./ltp/testcases/data/unzip01
+12	./ltp/testcases/data/binfmt_misc02
+8	./ltp/testcases/data/ima_kexec
+12	./ltp/testcases/data/ima_keys
+12	./ltp/testcases/data/ima_policy
+8	./ltp/testcases/data/ima_selinux
+12	./ltp/testcases/data/lvm
+12	./ltp/testcases/data/mc_member
+516	./ltp/testcases/data
+1749892	./ltp/testcases
+208	./ltp/libkirk
+528	./ltp/metadata
+1751536	./ltp
+17456	./lib
+4	./basic/mnt
+4	./basic/test_chdir
+4	./basic/test_mkdir
+2028	./basic
+1801804	.
+testcase busybox du success
+2
+testcase busybox expr 1 + 1 success
+testcase busybox false success
+testcase busybox true success
+/bin/ls
+testcase busybox which ls success
+Linux
+testcase busybox uname success
+ 02:24:42 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
+testcase busybox uptime success
+abcntestcase busybox printf "abcn" success
+PID   USER     TIME  COMMAND
+    6 root      0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  225 root      0:00 /musl/busybox sh -c #!/bin/sh  export HOME=/root  echo "We
+  244 root      0:00 ./busybox ps
+testcase busybox ps success
+/glibc
+testcase busybox pwd success
+              total        used        free      shared  buff/cache   available
+Mem:              0 18014398494685956           0           0    14796028    18768344
+Swap:             0           0           0
+testcase busybox free success
+Thu Apr 16 02:24:43 2026  0.000000 seconds
+testcase busybox hwclock success
+testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
+[1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
+[1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
+[1;32mbasic_testcode.sh[m       [1;32mlat_cmd[m                 [1;32mlua[m
+[1;32mbusy[m                    [1;32mlat_connect[m             [1;32mlua_testcode.sh[m
+[1;32mbusybox[m                 [1;32mlat_ctx[m                 [1;32mmax_min.lua[m
+[1;32mbusybox_cmd.txt[m         [1;32mlat_dram_page[m           [1;32mmemsize[m
+[1;32mbusybox_testcode.sh[m     [1;32mlat_fcntl[m               [1;32mmhz[m
+[1;32mbw_file_rd[m              [1;32mlat_fifo[m                [1;32mmsleep[m
+[1;32mbw_mem[m                  [1;32mlat_fs[m                  [1;32mmulti.sh[m
+[1;32mbw_mmap_rd[m              [1;32mlat_http[m                [1;32mnetperf[m
+[1;32mbw_pipe[m                 [1;32mlat_mem_rd[m              [1;32mnetperf_testcode.sh[m
+[1;32mbw_tcp[m                  [1;32mlat_mmap[m                [1;32mnetserver[m
+[1;32mbw_unix[m                 [1;32mlat_ops[m                 [1;32mpar_mem[m
+[1;32mcache[m                   [1;32mlat_pagefault[m           [1;32mpar_ops[m
+[1;32mclock[m                   [1;32mlat_pipe[m                [1;32mpipe[m
+[1;32mcontext1[m                [1;32mlat_pmake[m               [1;32mrandom.lua[m
+[1;32mcyclictest[m              [1;32mlat_proc[m                [1;32mregister[m
+[1;32mcyclictest_testcode.sh[m  [1;32mlat_rand[m                [1;32mremove.lua[m
+[1;32mdate.lua[m                [1;32mlat_rpc[m                 [1;32mrhttp[m
+[1;32mdhry2[m                   [1;32mlat_select[m              [1;32mround_num.lua[m
+[1;32mdhry2reg[m                [1;32mlat_sem[m                 [1;32mrun-dynamic.sh[m
+[1;32mdisk[m                    [1;32mlat_sig[m                 [1;32mrun-static.sh[m
+[1;32mdlopen_dso.so[m           [1;32mlat_syscall[m             [1;32mruntest.exe[m
+[1;32mdouble[m                  [1;32mlat_tcp[m                 [1;32mseek[m
+[1;32menough[m                  [1;32mlat_udp[m                 [1;32mshort[m
+[1;32mentry-dynamic.exe[m       [1;32mlat_unix[m                [1;32msin30.lua[m
+[1;32mentry-static.exe[m        [1;32mlat_unix_connect[m        [1;32msort.lua[m
+[1;32mexecl[m                   [1;32mlat_usleep[m              [1;32mspawn[m
+[1;32mfile_io.lua[m             [1;34mlib[m                     [1;32mstream[m
+[1;32mfloat[m                   [1;32mlibc-bench[m              [1;32mstrings.lua[m
+[1;32mflushdisk[m               [1;32mlibcbench_testcode.sh[m   [1;32msyscall[m
+[1;32mfstime[m                  [1;32mlibctest_testcode.sh[m    [1;32mtest.sh[m
+[1;32mgetopt[m                  [1;32mline[m                    [1;32mtiming_o[m
+[1;32mgfx-x11[m                 [1;32mlmbench[m                 [1;32mtlb[m
+[1;32mhackbench[m               [1;32mlmbench_all[m             [1;32mtls_get_new-dtv_dso.so[m
+[1;32mhanoi[m                   [1;32mlmbench_testcode.sh[m     [1;32mtst.sh[m
+[1;32mhello[m                   [1;32mlmdd[m                    [1;32munixbench.logo[m
+[1;32mindex.base[m              [1;32mlmhttp[m                  [1;32munixbench_testcode.sh[m
+[1;32mint[m                     [1;32mlong[m                    [1;32mwhetstone-double[m
+[1;32miozone[m                  [1;32mloop_o[m
+[1;32miozone_testcode.sh[m      [1;32mlooper[m
+testcase busybox ls success
+testcase busybox sleep 1 success
+#### file opration test
+testcase busybox echo "#### file opration test" success
+testcase busybox touch test.txt success
+testcase busybox echo "hello world" > test.txt success
+hello world
+testcase busybox cat test.txt success
+l
+testcase busybox cut -c 3 test.txt success
+0000000 062550 066154 020157 067567 066162 005144
+0000014
+testcase busybox od test.txt success
+hello world
+testcase busybox head test.txt success
+hello world
+testcase busybox tail test.txt success
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 0a              |hello world.|
+0000000c
+testcase busybox hexdump -C test.txt success
+6f5902ac237024bdd0c176cb93063dc4  test.txt
+testcase busybox md5sum test.txt success
+testcase busybox echo "ccccccc" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+testcase busybox echo "aaaaaaa" >> test.txt success
+testcase busybox echo "2222222" >> test.txt success
+testcase busybox echo "1111111" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+1111111
+2222222
+aaaaaaa
+bbbbbbb
+ccccccc
+hello world
+testcase busybox sort test.txt | ./busybox uniq success
+  File: test.txt
+  Size: 60        	Blocks: 8          IO Block: 4096   regular file
+Device: 1h/1d	Inode: 3265        Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 1970-01-01 00:00:00.000000000 +0000
+Modify: 1970-01-01 00:00:00.000000000 +0000
+Change: 1970-01-01 00:00:00.000000000 +0000
+testcase busybox stat test.txt success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox strings test.txt success
+        7         8        60 test.txt
+testcase busybox wc test.txt success
+testcase busybox [ -f test.txt ] success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox more test.txt success
+testcase busybox rm test.txt -f success
+testcase busybox mkdir test_dir success
+testcase busybox mv test_dir test success
+testcase busybox rmdir test success
+echo "hello world" > test.txt
+grep hello busybox_cmd.txt
+testcase busybox grep hello busybox_cmd.txt success
+testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
+testcase busybox rm busybox_cmd.bak -f success
+./busybox_cmd.txt
+testcase busybox find -name "busybox_cmd.txt" success
 #### OS COMP TEST GROUP END busybox-glibc ####
+[TEST] Exit code(0): /glibc/busybox_testcode.sh
+
 #### OS COMP TEST GROUP START cyclictest-musl ####
 [TEST] SKIP script: /musl/cyclictest_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END cyclictest-musl ####
@@ -77,241 +837,11 @@ Welcome to Starry OS
 #### OS COMP TEST GROUP START lmbench-glibc ####
 [TEST] SKIP script: /glibc/lmbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END lmbench-glibc ####
-[TEST][ltp] loaded case list from embedded src/ltp.txt: /tmp/.ltp_cases_from_src.txt
 #### OS COMP TEST GROUP START ltp-musl ####
-[TEST][ltp] /etc/passwd present
-[TEST][ltp] /etc/passwd has nobody
-RUN LTP CASE accept01
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
-[37m[  7.140891 0:124 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
-[maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
-[37m[  7.146148 0:124 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
-[maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
-[37m[  7.147488 0:124 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
-[maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
-accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE accept01 : 0
-RUN LTP CASE accept02
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-accept02.c:131: [1;34mTINFO: [0mStarting listener on port: 49153
-accept02.c:54: [1;31mTBROK: [0msetsockopt(3, 0, 42, 0x6f78, 136) failed: ENOPROTOOPT (92)
-
-[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=657831ff
-
-[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-8890
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE accept02 : 2
-RUN LTP CASE accept03
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-accept03.c:48: [1;32mTPASS: [0maccept() on file : ENOTSOCK (88)
-accept03.c:48: [1;31mTFAIL: [0maccept() on O_PATH file expected EBADF: ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on directory : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on /dev/zero : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on /proc/self/maps : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on pipe read end : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
-[37m[ 17.664372 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
-[37m[ 17.666273 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
-[37m[ 17.666808 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
-[37m[ 17.667171 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on userfaultfd : ENOTSOCK (88)
-[37m[ 17.667566 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
-[37m[ 17.667935 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on io uring : ENOTSOCK (88)
-[37m[ 17.668305 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
-[37m[ 17.668598 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
-[37m[ 17.668895 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
-[37m[ 17.669183 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
-[maccept03.c:48: [1;31mTFAIL: [0maccept() on open_tree expected EBADF: ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
-[37m[ 17.672630 0:135 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on memfd secret : ENOTSOCK (88)
-
-Summary:
-passed   21
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE accept03 : 1
-RUN LTP CASE accept4_01
-tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-accept4_01.c:71: [1;34mTINFO: [0mTesting variant: libc accept4()
-accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49154
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 1
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 1
-accept4_01.c:71: [1;34mTINFO: [0mTesting variant: __NR_accept4 syscall
-accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49159
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 1
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 1
-accept4_01.c:71: [1;34mTINFO: [0mTesting variant: __NR_socketcall SYS_ACCEPT4 syscall
-accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49164
-accept4_01.c:43: [1;33mTCONF: [0msyscall(-1) __NR_socketcall not supported on your arch
-
-Summary:
-passed   8
-failed   0
-broken   0
-skipped  1
-warnings 0
-FAIL LTP CASE accept4_01 : 0
+[TEST] SKIP script: /musl/ltp_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END ltp-musl ####
-[TEST][ltp] loaded case list from embedded src/ltp.txt: /tmp/.ltp_cases_from_src.txt
 #### OS COMP TEST GROUP START ltp-glibc ####
-[TEST][ltp] /etc/passwd present
-[TEST][ltp] /etc/passwd has nobody
-RUN LTP CASE accept01
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
-[37m[ 18.484279 0:151 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
-[maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
-[37m[ 18.485122 0:151 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
-[maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
-[37m[ 18.485382 0:151 axnet::tcp:328] [33m[AxErrorKind::InvalidInput] not listening[m
-[maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
-accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE accept01 : 0
-RUN LTP CASE accept02
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-accept02.c:131: [1;34mTINFO: [0mStarting listener on port: 49167
-accept02.c:54: [1;31mTBROK: [0msetsockopt(3, 0, 42, 0x24af78, 136) failed: ENOPROTOOPT (92)
-
-[1;33mHINT: [0mYou _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=657831ff
-
-[1;33mHINT: [0mYou _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-8890
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE accept02 : 2
-RUN LTP CASE accept03
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-accept03.c:48: [1;32mTPASS: [0maccept() on file : ENOTSOCK (88)
-accept03.c:48: [1;31mTFAIL: [0maccept() on O_PATH file expected EBADF: ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on directory : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on /dev/zero : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on /proc/self/maps : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on pipe read end : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
-[37m[ 29.171013 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
-[37m[ 29.171963 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
-[37m[ 29.172298 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
-[37m[ 29.172644 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on userfaultfd : ENOTSOCK (88)
-[37m[ 29.173108 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
-[37m[ 29.173590 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on io uring : ENOTSOCK (88)
-[37m[ 29.173976 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
-[37m[ 29.174302 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
-[37m[ 29.174610 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
-[37m[ 29.174907 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
-[maccept03.c:48: [1;31mTFAIL: [0maccept() on open_tree expected EBADF: ENOTSOCK (88)
-accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
-[37m[ 29.177701 0:162 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
-[maccept03.c:48: [1;32mTPASS: [0maccept() on memfd secret : ENOTSOCK (88)
-
-Summary:
-passed   21
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE accept03 : 1
-RUN LTP CASE accept4_01
-tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
-accept4_01.c:71: [1;34mTINFO: [0mTesting variant: libc accept4()
-accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49168
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 1
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 1
-accept4_01.c:71: [1;34mTINFO: [0mTesting variant: __NR_accept4 syscall
-accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49173
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 0
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 1
-accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 1
-accept4_01.c:71: [1;34mTINFO: [0mTesting variant: __NR_socketcall SYS_ACCEPT4 syscall
-accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49178
-accept4_01.c:43: [1;33mTCONF: [0msyscall(-1) __NR_socketcall not supported on your arch
-
-Summary:
-passed   8
-failed   0
-broken   0
-skipped  1
-warnings 0
-FAIL LTP CASE accept4_01 : 0
+[TEST] SKIP script: /glibc/ltp_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END ltp-glibc ####
 #### OS COMP TEST GROUP START lua-musl ####
 [TEST] SKIP script: /musl/lua_testcode.sh (switch=0)
@@ -331,6 +861,6 @@ FAIL LTP CASE accept4_01 : 0
 #### OS COMP TEST GROUP START unixbench-glibc ####
 [TEST] SKIP script: /glibc/unixbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END unixbench-glibc ####
-[TEST] group summary: total=12 passed=1 failed=0 skipped=11
-[TEST] script summary: total=2 passed=2 failed=0
+[TEST] group summary: total=12 passed=2 failed=0 skipped=10
+[TEST] script summary: total=4 passed=4 failed=0
 [TEST] all discovered scripts completed

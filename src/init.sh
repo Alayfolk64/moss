@@ -112,16 +112,15 @@ setup_glibc_runtime() {
     copy_if_exists "/glibc/lib/$so" "/lib64/$so"
   done
 
-  case "$ARCH_NAME" in
-    loongarch64)
-      copy_if_exists /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
-      copy_if_exists /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib64/ld-linux-loongarch-lp64d.so.1
-      ;;
-    riscv64)
-      copy_if_exists /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
-      copy_if_exists /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib64/ld-linux-riscv64-lp64d.so.1
-      ;;
-  esac
+  # Do not rely on arch detection here; just populate all known loaders.
+  # Missing files are ignored by copy_if_exists.
+  for ldso in \
+    ld-linux-loongarch-lp64d.so.1 \
+    ld-linux-riscv64-lp64d.so.1
+  do
+    copy_if_exists "/glibc/lib/$ldso" "/lib/$ldso"
+    copy_if_exists "/glibc/lib/$ldso" "/lib64/$ldso"
+  done
 }
 
 setup_musl_runtime() {
@@ -129,17 +128,17 @@ setup_musl_runtime() {
   [ -e /musl/lib/libc.so ] || return 0
 
   bb_try mkdir -p /lib /lib64 /musl/lib
-  case "$ARCH_NAME" in
-    loongarch64)
-      copy_if_missing /musl/lib/libc.so /lib/ld-musl-loongarch64.so.1
-      copy_if_missing /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-      copy_if_missing /musl/lib/libc.so /lib64/ld-musl-loongarch-lp64d.so.1
-      ;;
-    riscv64)
-      copy_if_missing /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
-      copy_if_missing /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
-      ;;
-  esac
+  # Do not rely on arch detection here; just populate all known loader names.
+  # Existing files are kept and copy_if_missing suppresses failures.
+  for musl_ldso in \
+    /lib/ld-musl-loongarch64.so.1 \
+    /lib/ld-musl-loongarch-lp64d.so.1 \
+    /lib64/ld-musl-loongarch-lp64d.so.1 \
+    /lib/ld-musl-riscv64.so.1 \
+    /lib/ld-musl-riscv64-sf.so.1
+  do
+    copy_if_missing /musl/lib/libc.so "$musl_ldso"
+  done
 }
 
 setup_libgcc_runtime() {
