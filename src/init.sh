@@ -421,9 +421,9 @@ libctest_loader_for_test() {
           for cand in \
             /musl/lib/ld-musl-riscv64-sf.so.1 \
             /musl/lib/ld-musl-riscv64.so.1 \
-            /musl/lib/libc.so \
             /lib/ld-musl-riscv64-sf.so.1 \
-            /lib/ld-musl-riscv64.so.1
+            /lib/ld-musl-riscv64.so.1 \
+            /musl/lib/libc.so
           do
             [ -e "$cand" ] || continue
             _loader="$cand"
@@ -434,9 +434,9 @@ libctest_loader_for_test() {
           for cand in \
             /musl/lib/ld-musl-loongarch-lp64d.so.1 \
             /musl/lib/ld-musl-loongarch64.so.1 \
-            /musl/lib/libc.so \
             /lib/ld-musl-loongarch-lp64d.so.1 \
-            /lib/ld-musl-loongarch64.so.1
+            /lib/ld-musl-loongarch64.so.1 \
+            /musl/lib/libc.so
           do
             [ -e "$cand" ] || continue
             _loader="$cand"
@@ -509,11 +509,6 @@ create_libctest_dynamic_wrapper() {
   return 0
 }
 
-cleanup_libctest_temp_files() {
-  [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "$libctest_dynamic_temp" >/dev/null 2>&1 || true
-  [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
-}
-
 prepare_libctest_dynamic_binary_wrapper() {
   _test_sh="$1"
   libctest_entry_dynamic_real=""
@@ -528,6 +523,7 @@ prepare_libctest_dynamic_binary_wrapper() {
     esac
     return 0
   fi
+  [ "$_loader" = "/musl/lib/libc.so" ] && echo "[TEST][libctest] WARN: fallback loader /musl/lib/libc.so in use"
 
   _loader_library_path=$(libctest_loader_library_path_for_test "$_test_sh")
   libctest_entry_dynamic_real="$PWD/.starry-entry-dynamic.real.$$"
@@ -665,13 +661,8 @@ run_test() {
   # Keep libctest in-place: recursive copy to temp dir can trigger severe memory
   # pressure on constrained images and causes unrelated failures.
 
-  run_dynamic_cmd='sh ./run-dynamic.sh'
-  libctest_dynamic_temp=""
-  libctest_dynamic_wrapper=""
   libctest_entry_dynamic_real=""
-  # Do not rewrite libctest dynamic runner at runtime.
-  # After libgcc is copied into standard library locations, run the original
-  # dynamic script/binary path directly without /dev/shm wrapper indirection.
+  # Keep run-dynamic.sh unchanged; only wrap entry-dynamic.exe in place.
   if [ "$test_name" = "libctest_testcode.sh" ]; then
     prepare_libctest_dynamic_binary_wrapper "$test_sh"
   fi
@@ -764,12 +755,11 @@ run_test() {
   "$BB" sed \
     -e 's#\./run-all\.sh#sh ./run-all.sh#g' \
     -e 's#\./run-static\.sh#sh ./run-static.sh#g' \
-    -e "s#\\./run-dynamic\\.sh#$run_dynamic_cmd#g" \
+    -e 's#\./run-dynamic\.sh#sh ./run-dynamic.sh#g' \
     -e 's#\./busybox mkdir -p /var/tmp#true#g' \
     -e 's#\./lmbench_all lat_fs /var/tmp#echo "[TEST] SKIP lmbench lat_fs /var/tmp (known hang)"#g' \
     "./$test_name" > "$patched_script" || {
       ret=1
-      cleanup_libctest_temp_files
       restore_libctest_dynamic_binary_wrapper
       cd "$old_pwd" || true
       echo "[TEST] Exit code($ret): $test_sh"
@@ -795,7 +785,6 @@ run_test() {
   . "$patched_script"
   ret=$?
   "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
-  cleanup_libctest_temp_files
   restore_libctest_dynamic_binary_wrapper
   cd "$old_pwd" || true
   echo "[TEST] Exit code($ret): $test_sh"
