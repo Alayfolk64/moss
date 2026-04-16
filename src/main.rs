@@ -6,9 +6,6 @@ extern crate alloc;
 
 use alloc::{borrow::ToOwned, vec::Vec};
 
-#[cfg(feature = "shell-init")]
-pub const INIT_SCRIPT: &str = include_str!("init-shell.sh");
-#[cfg(not(feature = "shell-init"))]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
 pub const LTP_CASES_RAW: &str = include_str!("ltp.txt");
 
@@ -38,7 +35,10 @@ fn main() {
         .copied()
         .map(str::to_owned)
         .collect::<Vec<_>>();
-    let envs = [build_ltp_cases_env()];
+    let mut envs = Vec::new();
+    envs.push(build_ltp_cases_env());
+    #[cfg(feature = "shell-init")]
+    envs.push("STARRY_SHELL_MODE=1".to_owned());
 
     starry_kernel::entry::init(&args, &envs);
 }

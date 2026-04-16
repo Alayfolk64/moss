@@ -44,6 +44,7 @@ RUNTIME_EXTRA_LD_LIBRARY_PATH=""
 RUNTIME_DISK_MOUNT_DIR=/dev/shm/.starry-runtime-disk
 RUNTIME_DISK_LIBGCC_SRC=""
 RUNTIME_TMP_BASE=/tmp
+SHELL_ENV_RC=""
 
 append_extra_ld_library_path() {
   d="$1"
@@ -60,14 +61,30 @@ append_extra_ld_library_path() {
 }
 
 detect_runtime_tmp_base() {
-  for d in /dev/shm /tmp /var/tmp /root; do
+  found_writable=""
+  for d in /tmp /var/tmp /root /dev/shm; do
     [ -d "$d" ] || continue
     probe="$d/.starry-writable.$$"
     "$BB" touch "$probe" >/dev/null 2>&1 || continue
     "$BB" rm -f "$probe" >/dev/null 2>&1 || true
+    [ -n "$found_writable" ] || found_writable="$d"
+
+    # Prefer dirs that are executable for binaries; /dev/shm is often noexec.
+    probe_bb="$d/.starry-bb.$$"
+    "$BB" cp -f "$BB" "$probe_bb" >/dev/null 2>&1 || continue
+    "$BB" chmod +x "$probe_bb" >/dev/null 2>&1 || {
+      "$BB" rm -f "$probe_bb" >/dev/null 2>&1 || true
+      continue
+    }
+    "$probe_bb" true >/dev/null 2>&1
+    probe_ok=$?
+    "$BB" rm -f "$probe_bb" >/dev/null 2>&1 || true
+    [ "$probe_ok" -eq 0 ] || continue
+
     RUNTIME_TMP_BASE="$d"
-    break
+    return 0
   done
+  [ -n "$found_writable" ] && RUNTIME_TMP_BASE="$found_writable"
 }
 
 find_libgcc_from_runtime_disk() {
@@ -221,14 +238,16 @@ setup_musl_runtime() {
   [ -e /musl/lib/libc.so ] || return 0
 
   bb_try mkdir -p /lib /lib64 /musl/lib
-  # Do not rely on arch detection here; just populate all known loader names.
+  # Do not rely on arch detection here; populate known loader names.
   # Existing files are kept and copy_if_missing suppresses failures.
   for musl_ldso in \
     /lib/ld-musl-loongarch64.so.1 \
     /lib/ld-musl-loongarch-lp64d.so.1 \
     /lib64/ld-musl-loongarch-lp64d.so.1 \
     /lib/ld-musl-riscv64.so.1 \
-    /lib/ld-musl-riscv64-sf.so.1
+    /lib/ld-musl-riscv64-sf.so.1 \
+    /lib64/ld-musl-riscv64.so.1 \
+    /lib64/ld-musl-riscv64-sf.so.1
   do
     copy_if_missing /musl/lib/libc.so "$musl_ldso"
   done
@@ -475,6 +494,23 @@ libctest_loader_for_test() {
   echo "$_loader"
 }
 
+setup_interactive_shell_env() {
+  PATH=/bin:/usr/bin:/musl:/glibc
+  LD_LIBRARY_PATH=/glibc/lib:/glibc/lib64:/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64
+  export PATH LD_LIBRARY_PATH
+
+  # Root cause of "ls: not found" in shell mode:
+  # some images cannot reliably provide executable PATH applet shims.
+  # For interactive shell, dispatch common commands directly via busybox.
+  SHELL_ENV_RC="$RUNTIME_TMP_BASE/.starry-shell.env"
+  {
+    printf 'BB="%s"\n' "$BB"
+    for cmd in ls cp mv rm cat mkdir rmdir ln chmod chown chgrp grep sed awk cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout sync mount umount; do
+      printf '%s\n' "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
+    done
+  } >"$SHELL_ENV_RC" 2>/dev/null || SHELL_ENV_RC=""
+}
+
 libctest_loader_library_path_for_test() {
   _test_sh="$1"
   case "$_test_sh" in
@@ -509,11 +545,43 @@ create_libctest_dynamic_wrapper() {
   return 0
 }
 
+is_elf_binary() {
+  _f="$1"
+  [ -f "$_f" ] || return 1
+  _magic=$("$BB" od -An -tx1 -N4 "$_f" 2>/dev/null | "$BB" tr -s ' ' | "$BB" sed 's/^ //')
+  [ "$_magic" = "7f 45 4c 46" ]
+}
+
+recover_libctest_entry_dynamic_if_needed() {
+  # If previous run crashed before restore, entry-dynamic.exe might still be
+  # our wrapper script; recover an ELF backup first.
+  [ -f ./entry-dynamic.exe ] || return 0
+  if is_elf_binary ./entry-dynamic.exe; then
+    return 0
+  fi
+
+  for cand in ./.starry-entry-dynamic.real.*; do
+    [ -f "$cand" ] || continue
+    if is_elf_binary "$cand"; then
+      "$BB" mv -f "$cand" ./entry-dynamic.exe >/dev/null 2>&1 || true
+      if is_elf_binary ./entry-dynamic.exe; then
+        echo "[TEST][libctest] recovered entry-dynamic.exe from stale wrapper backup"
+        return 0
+      fi
+    fi
+  done
+}
+
 prepare_libctest_dynamic_binary_wrapper() {
   _test_sh="$1"
   libctest_entry_dynamic_real=""
 
+  recover_libctest_entry_dynamic_if_needed
   [ -f ./entry-dynamic.exe ] || return 0
+  if ! is_elf_binary ./entry-dynamic.exe; then
+    echo "[TEST][libctest] WARN: entry-dynamic.exe is not ELF, skip wrapper"
+    return 0
+  fi
 
   _loader=$(libctest_loader_for_test "$_test_sh")
   if [ -z "$_loader" ]; then
@@ -661,9 +729,11 @@ run_test() {
   # Keep libctest in-place: recursive copy to temp dir can trigger severe memory
   # pressure on constrained images and causes unrelated failures.
 
+  libctest_dynamic_enabled=0
   libctest_entry_dynamic_real=""
   # Keep run-dynamic.sh unchanged; only wrap entry-dynamic.exe in place.
   if [ "$test_name" = "libctest_testcode.sh" ]; then
+    libctest_dynamic_enabled=1
     prepare_libctest_dynamic_binary_wrapper "$test_sh"
   fi
 
@@ -760,7 +830,7 @@ run_test() {
     -e 's#\./lmbench_all lat_fs /var/tmp#echo "[TEST] SKIP lmbench lat_fs /var/tmp (known hang)"#g' \
     "./$test_name" > "$patched_script" || {
       ret=1
-      restore_libctest_dynamic_binary_wrapper
+      [ "$libctest_dynamic_enabled" = "1" ] && restore_libctest_dynamic_binary_wrapper
       cd "$old_pwd" || true
       echo "[TEST] Exit code($ret): $test_sh"
       echo
@@ -785,7 +855,7 @@ run_test() {
   . "$patched_script"
   ret=$?
   "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
-  restore_libctest_dynamic_binary_wrapper
+  [ "$libctest_dynamic_enabled" = "1" ] && restore_libctest_dynamic_binary_wrapper
   cd "$old_pwd" || true
   echo "[TEST] Exit code($ret): $test_sh"
   echo
@@ -808,6 +878,21 @@ append_root "/musl"
 append_root "/glibc"
 
 setup_runtime_tools
+if [ "${STARRY_SHELL_MODE:-0}" = "1" ] && [ "${STARRY_FORCE_AUTOTEST:-0}" != "1" ]; then
+  setup_interactive_shell_env
+  echo "[TEST][shell] BB=$BB"
+  echo "[TEST][shell] RUNTIME_TMP_BASE=$RUNTIME_TMP_BASE"
+  echo "[TEST][shell] PATH=$PATH"
+  echo "[TEST][shell] LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+  echo "[TEST][shell] ENV=${SHELL_ENV_RC:-<none>}"
+  echo "[TEST] interactive shell is ready"
+  echo
+  cd / || true
+  if [ -n "$SHELL_ENV_RC" ] && [ -r "$SHELL_ENV_RC" ]; then
+    exec "$BB" env -i HOME=/root PATH="$PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" ENV="$SHELL_ENV_RC" "$BB" sh
+  fi
+  exec "$BB" env -i HOME=/root PATH="$PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" "$BB" sh
+fi
 echo "[TEST] scan roots:$SEARCH_ROOTS"
 for d in $SEARCH_ROOTS; do
   [ -d "$d" ] || continue
