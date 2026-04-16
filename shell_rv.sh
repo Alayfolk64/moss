@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 make ARCH=riscv64 SHELL_INIT=y kernel-rv disk.img
 

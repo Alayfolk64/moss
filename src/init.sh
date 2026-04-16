@@ -40,6 +40,15 @@ copy_if_missing() {
   copy_if_exists "$src" "$dst"
 }
 
+first_existing_path() {
+  for p in "$@"; do
+    [ -e "$p" ] || continue
+    echo "$p"
+    return 0
+  done
+  return 1
+}
+
 RUNTIME_EXTRA_LD_LIBRARY_PATH=""
 RUNTIME_DISK_MOUNT_DIR=/dev/shm/.starry-runtime-disk
 RUNTIME_DISK_LIBGCC_SRC=""
@@ -234,27 +243,56 @@ setup_glibc_runtime() {
 }
 
 setup_musl_runtime() {
-  # FAT/ext files in test images often miss musl ldso symlink; provide real files in /lib.
+  # Sync musl loader names only from existing ldso files.
+  # Do not fabricate ldso from libc.so; that can cause
+  # "Not a valid dynamic program" on some judge images.
   [ -e /musl/lib/libc.so ] || return 0
 
   bb_try mkdir -p /lib /lib64 /musl/lib
-  # Do not rely on arch detection here; populate known loader names.
-  # Existing files are kept and copy_if_missing suppresses failures.
-  for musl_ldso in \
-    /musl/lib/ld-musl-loongarch64.so.1 \
-    /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+
+  rv_loader_src=$(first_existing_path \
     /musl/lib/ld-musl-riscv64.so.1 \
     /musl/lib/ld-musl-riscv64-sf.so.1 \
-    /lib/ld-musl-loongarch64.so.1 \
-    /lib/ld-musl-loongarch-lp64d.so.1 \
-    /lib64/ld-musl-loongarch-lp64d.so.1 \
     /lib/ld-musl-riscv64.so.1 \
     /lib/ld-musl-riscv64-sf.so.1 \
     /lib64/ld-musl-riscv64.so.1 \
-    /lib64/ld-musl-riscv64-sf.so.1
-  do
-    copy_if_missing /musl/lib/libc.so "$musl_ldso"
-  done
+    /lib64/ld-musl-riscv64-sf.so.1)
+  if [ -z "$rv_loader_src" ] && [ -e /musl/lib/libc.so ]; then
+    rv_loader_src=/musl/lib/libc.so
+  fi
+  if [ -n "$rv_loader_src" ]; then
+    for musl_ldso in \
+      /musl/lib/ld-musl-riscv64.so.1 \
+      /musl/lib/ld-musl-riscv64-sf.so.1 \
+      /lib/ld-musl-riscv64.so.1 \
+      /lib/ld-musl-riscv64-sf.so.1 \
+      /lib64/ld-musl-riscv64.so.1 \
+      /lib64/ld-musl-riscv64-sf.so.1
+    do
+      copy_if_missing "$rv_loader_src" "$musl_ldso"
+    done
+  fi
+
+  la_loader_src=$(first_existing_path \
+    /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+    /musl/lib/ld-musl-loongarch64.so.1 \
+    /lib/ld-musl-loongarch-lp64d.so.1 \
+    /lib/ld-musl-loongarch64.so.1 \
+    /lib64/ld-musl-loongarch-lp64d.so.1)
+  if [ -z "$la_loader_src" ] && [ -e /musl/lib/libc.so ]; then
+    la_loader_src=/musl/lib/libc.so
+  fi
+  if [ -n "$la_loader_src" ]; then
+    for musl_ldso in \
+      /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+      /musl/lib/ld-musl-loongarch64.so.1 \
+      /lib/ld-musl-loongarch-lp64d.so.1 \
+      /lib/ld-musl-loongarch64.so.1 \
+      /lib64/ld-musl-loongarch-lp64d.so.1
+    do
+      copy_if_missing "$la_loader_src" "$musl_ldso"
+    done
+  fi
 }
 
 setup_libgcc_runtime() {
@@ -441,31 +479,136 @@ libctest_loader_for_test() {
     /musl/*)
       case "$ARCH_NAME" in
         riscv64)
-          for cand in \
-            /musl/lib/ld-musl-riscv64.so.1 \
-            /musl/lib/ld-musl-riscv64-sf.so.1 \
-            /lib/ld-musl-riscv64.so.1 \
-            /lib/ld-musl-riscv64-sf.so.1 \
-            /lib64/ld-musl-riscv64.so.1 \
-            /lib64/ld-musl-riscv64-sf.so.1
-          do
-            [ -e "$cand" ] || continue
-            _loader="$cand"
-            break
-          done
+          riscv_interp_sf=0
+          riscv_interp_prefix=lib
+          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/ld-musl-riscv64-sf.so.1' ./entry-dynamic.exe 2>/dev/null; then
+            riscv_interp_sf=1
+          fi
+          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/musl/lib/ld-musl-riscv64' ./entry-dynamic.exe 2>/dev/null; then
+            riscv_interp_prefix=musl
+          fi
+          echo "[TEST][libctest] riscv musl interp hint: $( [ \"$riscv_interp_sf\" = \"1\" ] && echo sf || echo default ) prefix=$riscv_interp_prefix" >&2
+          if [ "$riscv_interp_prefix" = "musl" ]; then
+            if [ "$riscv_interp_sf" = "1" ]; then
+              for cand in \
+                /musl/lib/ld-musl-riscv64-sf.so.1 \
+                /musl/lib/ld-musl-riscv64.so.1 \
+                /lib/ld-musl-riscv64-sf.so.1 \
+                /lib64/ld-musl-riscv64-sf.so.1 \
+                /lib/ld-musl-riscv64.so.1 \
+                /lib64/ld-musl-riscv64.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            else
+              for cand in \
+                /musl/lib/ld-musl-riscv64.so.1 \
+                /musl/lib/ld-musl-riscv64-sf.so.1 \
+                /lib/ld-musl-riscv64.so.1 \
+                /lib64/ld-musl-riscv64.so.1 \
+                /lib/ld-musl-riscv64-sf.so.1 \
+                /lib64/ld-musl-riscv64-sf.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            fi
+          else
+            if [ "$riscv_interp_sf" = "1" ]; then
+              for cand in \
+                /lib/ld-musl-riscv64-sf.so.1 \
+                /lib64/ld-musl-riscv64-sf.so.1 \
+                /lib/ld-musl-riscv64.so.1 \
+                /lib64/ld-musl-riscv64.so.1 \
+                /musl/lib/ld-musl-riscv64-sf.so.1 \
+                /musl/lib/ld-musl-riscv64.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            else
+              for cand in \
+                /lib/ld-musl-riscv64.so.1 \
+                /lib64/ld-musl-riscv64.so.1 \
+                /lib/ld-musl-riscv64-sf.so.1 \
+                /lib64/ld-musl-riscv64-sf.so.1 \
+                /musl/lib/ld-musl-riscv64.so.1 \
+                /musl/lib/ld-musl-riscv64-sf.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            fi
+          fi
           ;;
         loongarch64)
-          for cand in \
-            /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-            /musl/lib/ld-musl-loongarch64.so.1 \
-            /lib/ld-musl-loongarch-lp64d.so.1 \
-            /lib/ld-musl-loongarch64.so.1 \
-            /lib64/ld-musl-loongarch-lp64d.so.1
-          do
-            [ -e "$cand" ] || continue
-            _loader="$cand"
-            break
-          done
+          loong_interp_lp64d=0
+          loong_interp_prefix=lib
+          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/ld-musl-loongarch-lp64d.so.1' ./entry-dynamic.exe 2>/dev/null; then
+            loong_interp_lp64d=1
+          fi
+          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/musl/lib/ld-musl-loongarch' ./entry-dynamic.exe 2>/dev/null; then
+            loong_interp_prefix=musl
+          fi
+          echo "[TEST][libctest] loong musl interp hint: $( [ \"$loong_interp_lp64d\" = \"1\" ] && echo lp64d || echo loongarch64 ) prefix=$loong_interp_prefix" >&2
+          if [ "$loong_interp_prefix" = "musl" ]; then
+            if [ "$loong_interp_lp64d" = "1" ]; then
+              for cand in \
+                /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+                /musl/lib/ld-musl-loongarch64.so.1 \
+                /lib/ld-musl-loongarch-lp64d.so.1 \
+                /lib64/ld-musl-loongarch-lp64d.so.1 \
+                /lib/ld-musl-loongarch64.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            else
+              for cand in \
+                /musl/lib/ld-musl-loongarch64.so.1 \
+                /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+                /lib/ld-musl-loongarch64.so.1 \
+                /lib/ld-musl-loongarch-lp64d.so.1 \
+                /lib64/ld-musl-loongarch-lp64d.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            fi
+          else
+            if [ "$loong_interp_lp64d" = "1" ]; then
+              for cand in \
+                /lib/ld-musl-loongarch-lp64d.so.1 \
+                /lib64/ld-musl-loongarch-lp64d.so.1 \
+                /lib/ld-musl-loongarch64.so.1 \
+                /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+                /musl/lib/ld-musl-loongarch64.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            else
+              for cand in \
+                /lib/ld-musl-loongarch64.so.1 \
+                /lib/ld-musl-loongarch-lp64d.so.1 \
+                /lib64/ld-musl-loongarch-lp64d.so.1 \
+                /musl/lib/ld-musl-loongarch64.so.1 \
+                /musl/lib/ld-musl-loongarch-lp64d.so.1
+              do
+                [ -e "$cand" ] || continue
+                _loader="$cand"
+                break
+              done
+            fi
+          fi
           ;;
       esac
       ;;

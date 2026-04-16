@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 rm -rf sdcard-la.img
 rm -rf sdcard-rv.img
