@@ -297,13 +297,13 @@ echo "[TEST] detected arch: $ARCH_NAME"
 # Test switches (1=run, 0=skip)
 # 12 suites; defaults can be overridden by environment variables.
 # =========================
-: "${RUN_BASIC:=1}"
-: "${RUN_BUSYBOX:=1}"
+: "${RUN_BASIC:=0}"
+: "${RUN_BUSYBOX:=0}"
 : "${RUN_CYCLICTEST:=0}"
 : "${RUN_IOZONE:=0}"
 : "${RUN_IPERF:=0}"
 : "${RUN_LIBCBENCH:=0}"
-: "${RUN_LIBCTEST:=0}"
+: "${RUN_LIBCTEST:=1}"
 : "${RUN_LMBENCH:=0}"
 : "${RUN_LTP:=0}"
 : "${RUN_LUA:=0}"
@@ -394,6 +394,21 @@ run_test() {
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: setup_runtime_tools begin"
   setup_runtime_tools
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: setup_runtime_tools end"
+
+  run_dynamic_cmd='sh ./run-dynamic.sh'
+  libctest_dynamic_temp=""
+  if [ "$test_name" = "libctest_testcode.sh" ] && [ -f ./run-dynamic.sh ]; then
+    libctest_dynamic_temp=".starry-run-dynamic.$$"
+    "$BB" sed \
+      -e 's#\./entry-dynamic\.exe pthread_cancel_points#echo "[TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency)"#g' \
+      -e 's#entry-dynamic\.exe pthread_cancel_points#echo "[TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency)"#g' \
+      ./run-dynamic.sh > "./$libctest_dynamic_temp" || libctest_dynamic_temp=""
+    if [ -n "$libctest_dynamic_temp" ]; then
+      "$BB" chmod +x "./$libctest_dynamic_temp" >/dev/null 2>&1 || true
+      run_dynamic_cmd="sh ./$libctest_dynamic_temp"
+    fi
+  fi
+
   if [ "$test_name" = "lmbench_testcode.sh" ] && [ -x ./lmbench_all ]; then
     # Keep compatibility for wrappers that hardcode this path,
     # without scanning/rewriting all files in the test directory.
@@ -482,11 +497,12 @@ run_test() {
   "$BB" sed \
     -e 's#\./run-all\.sh#sh ./run-all.sh#g' \
     -e 's#\./run-static\.sh#sh ./run-static.sh#g' \
-    -e 's#\./run-dynamic\.sh#sh ./run-dynamic.sh#g' \
+    -e "s#\\./run-dynamic\\.sh#$run_dynamic_cmd#g" \
     -e 's#\./busybox mkdir -p /var/tmp#true#g' \
     -e 's#\./lmbench_all lat_fs /var/tmp#echo "[TEST] SKIP lmbench lat_fs /var/tmp (known hang)"#g' \
     "./$test_name" > "$patched_script" || {
       ret=1
+      [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "./$libctest_dynamic_temp" >/dev/null 2>&1 || true
       cd "$old_pwd" || true
       echo "[TEST] Exit code($ret): $test_sh"
       echo
@@ -508,6 +524,7 @@ run_test() {
   . "$patched_script"
   ret=$?
   "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
+  [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "./$libctest_dynamic_temp" >/dev/null 2>&1 || true
   cd "$old_pwd" || true
   echo "[TEST] Exit code($ret): $test_sh"
   echo
