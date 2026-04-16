@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-16 07:27:07.004660 UTC
+Boot at 2026-04-16 07:43:46.004746900 UTC
 
 Welcome to Starry OS
 
@@ -87,7 +87,7 @@ Welcome to Starry OS
 [TEST][runtime] WARN: /etc is not writable; cannot prepare passwd/group
 [TEST][runtime] probing runtime disk for libgcc...
 [TEST][runtime] try mount /dev/vda -> /dev/shm
-[37m[  3.969687 0:49 starry_kernel::syscall::fs::mount:90] [33mmount ext4: source=/dev/vda index=0 is unavailable[m
+[37m[  4.183729 0:49 starry_kernel::syscall::fs::mount:90] [33mmount ext4: source=/dev/vda index=0 is unavailable[m
 [m[TEST][runtime] try mount /dev/vdb -> /dev/shm
 [TEST][runtime] mounted /dev/vdb
 [TEST][runtime] libgcc source from runtime disk: /dev/shm/libgcc/riscv64/libgcc_s.so.1
@@ -375,7 +375,7 @@ Pass!
 Pass!
 ========== END entry-static.exe printf_fmt_n ==========
 ========== START entry-static.exe pthread_robust_detach ==========
-[37m[ 19.895371 0:433 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::FilesystemLoop[m
+[37m[ 20.509512 0:435 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::FilesystemLoop[m
 [mPass!
 ========== END entry-static.exe pthread_robust_detach ==========
 ========== START entry-static.exe pthread_cancel_sem_wait ==========
@@ -706,7 +706,7 @@ Pass!
 Pass!
 ========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
 ========== START /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
-[37m[ 43.500298 0:712 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
+[37m[ 43.241948 0:714 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
 [mPass!
 ========== END /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
 ========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
@@ -1316,7 +1316,7 @@ FAIL wcstol [status 1]
 ========== END entry-static.exe wcstol ==========
 ========== START entry-static.exe daemon_failure ==========
 src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 9 [Bad file descriptor]
-src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 941, pid is 942, old pid is 941
+src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 944, pid is 945, old pid is 944
 src/regression/daemon-failure.c:73: child failed
 FAIL daemon_failure [status 1]
 ========== END entry-static.exe daemon_failure ==========
@@ -2027,7 +2027,7 @@ FAIL wcstol [status 1]
 ========== END /dev/shm/.starry-entry-dynamic.6 wcstol ==========
 ========== START /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
 src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 9 [Bad file descriptor]
-src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 1219, pid is 1220, old pid is 1219
+src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 1222, pid is 1223, old pid is 1222
 src/regression/daemon-failure.c:73: child failed
 FAIL daemon_failure [status 1]
 ========== END /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========

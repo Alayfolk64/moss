@@ -411,6 +411,152 @@ runtime_locale_for_test() {
   esac
 }
 
+libctest_loader_for_test() {
+  _test_sh="$1"
+  _loader=""
+  case "$_test_sh" in
+    /musl/*)
+      case "$ARCH_NAME" in
+        riscv64)
+          for cand in \
+            /musl/lib/ld-musl-riscv64-sf.so.1 \
+            /musl/lib/ld-musl-riscv64.so.1 \
+            /musl/lib/libc.so \
+            /lib/ld-musl-riscv64-sf.so.1 \
+            /lib/ld-musl-riscv64.so.1
+          do
+            [ -e "$cand" ] || continue
+            _loader="$cand"
+            break
+          done
+          ;;
+        loongarch64)
+          for cand in \
+            /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+            /musl/lib/ld-musl-loongarch64.so.1 \
+            /musl/lib/libc.so \
+            /lib/ld-musl-loongarch-lp64d.so.1 \
+            /lib/ld-musl-loongarch64.so.1
+          do
+            [ -e "$cand" ] || continue
+            _loader="$cand"
+            break
+          done
+          ;;
+      esac
+      ;;
+    /glibc/*)
+      case "$ARCH_NAME" in
+        riscv64)
+          for cand in \
+            /glibc/lib/ld-linux-riscv64-lp64d.so.1 \
+            /lib/ld-linux-riscv64-lp64d.so.1 \
+            /lib64/ld-linux-riscv64-lp64d.so.1
+          do
+            [ -e "$cand" ] || continue
+            _loader="$cand"
+            break
+          done
+          ;;
+        loongarch64)
+          for cand in \
+            /glibc/lib/ld-linux-loongarch-lp64d.so.1 \
+            /lib/ld-linux-loongarch-lp64d.so.1 \
+            /lib64/ld-linux-loongarch-lp64d.so.1
+          do
+            [ -e "$cand" ] || continue
+            _loader="$cand"
+            break
+          done
+          ;;
+      esac
+      ;;
+  esac
+  echo "$_loader"
+}
+
+libctest_loader_library_path_for_test() {
+  _test_sh="$1"
+  case "$_test_sh" in
+    /musl/*)
+      _path="/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
+      ;;
+    /glibc/*)
+      _path="/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
+      ;;
+    *)
+      _path="$RUNTIME_LD_LIBRARY_PATH"
+      ;;
+  esac
+  if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
+    echo "$_path:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
+  else
+    echo "$_path"
+  fi
+}
+
+create_libctest_dynamic_wrapper() {
+  _loader="$1"
+  _lib_path="$2"
+  _entry="$3"
+  _wrapper="$4"
+  {
+    printf '%s\n' '#!/bin/sh'
+    printf 'exec "%s" --library-path "%s" "%s" "$@"\n' \
+      "$_loader" "$_lib_path" "$_entry"
+  } >"$_wrapper" 2>/dev/null || return 1
+  "$BB" chmod +x "$_wrapper" >/dev/null 2>&1 || true
+  return 0
+}
+
+cleanup_libctest_temp_files() {
+  [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+  [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
+}
+
+prepare_libctest_dynamic_runner() {
+  _test_sh="$1"
+  run_dynamic_cmd='sh ./run-dynamic.sh'
+  libctest_dynamic_temp=""
+  libctest_dynamic_wrapper=""
+
+  [ -f ./run-dynamic.sh ] || return 0
+
+  libctest_dynamic_temp="$RUNTIME_TMP_BASE/.starry-run-dynamic.$$"
+  _loader=$(libctest_loader_for_test "$_test_sh")
+  if [ -n "$_loader" ]; then
+    _loader_library_path=$(libctest_loader_library_path_for_test "$_test_sh")
+    libctest_dynamic_wrapper="$RUNTIME_TMP_BASE/.starry-entry-dynamic.$$"
+    _entry_dynamic_path="$PWD/entry-dynamic.exe"
+    if create_libctest_dynamic_wrapper "$_loader" "$_loader_library_path" "$_entry_dynamic_path" "$libctest_dynamic_wrapper"; then
+      echo "[TEST][libctest] dynamic wrapper: $libctest_dynamic_wrapper (loader=$_loader)"
+    else
+      libctest_dynamic_wrapper=""
+      echo "[TEST][libctest] WARN: failed to create dynamic wrapper under $RUNTIME_TMP_BASE"
+    fi
+  else
+    case "$_test_sh" in
+      /musl/*) echo "[TEST][libctest] WARN: musl loader not found, keep original run-dynamic.sh" ;;
+      /glibc/*) echo "[TEST][libctest] WARN: glibc loader not found, keep original run-dynamic.sh" ;;
+    esac
+  fi
+
+  if [ -n "$libctest_dynamic_wrapper" ]; then
+    "$BB" sed -e "s#entry-dynamic\\.exe#$libctest_dynamic_wrapper#g" \
+      ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
+  else
+    "$BB" cp -f ./run-dynamic.sh "$libctest_dynamic_temp" >/dev/null 2>&1 || libctest_dynamic_temp=""
+  fi
+
+  if [ -n "$libctest_dynamic_temp" ]; then
+    "$BB" chmod +x "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+    run_dynamic_cmd="sh $libctest_dynamic_temp"
+    echo "[TEST][libctest] run dynamic via: $libctest_dynamic_temp"
+  else
+    echo "[TEST][libctest] WARN: failed to prepare patched run-dynamic script"
+  fi
+}
+
 ARCH_NAME=$(detect_arch) || exit 1
 echo "[TEST] detected arch: $ARCH_NAME"
 
@@ -523,127 +669,8 @@ run_test() {
   run_dynamic_cmd='sh ./run-dynamic.sh'
   libctest_dynamic_temp=""
   libctest_dynamic_wrapper=""
-  if [ "$test_name" = "libctest_testcode.sh" ] && [ -f ./run-dynamic.sh ]; then
-    libctest_dynamic_temp="$RUNTIME_TMP_BASE/.starry-run-dynamic.$$"
-    case "$test_sh" in
-      /musl/*)
-        musl_loader=""
-        case "$ARCH_NAME" in
-          riscv64)
-            for cand in \
-              /musl/lib/ld-musl-riscv64-sf.so.1 \
-              /musl/lib/ld-musl-riscv64.so.1 \
-              /musl/lib/libc.so \
-              /lib/ld-musl-riscv64-sf.so.1 \
-              /lib/ld-musl-riscv64.so.1
-            do
-              [ -e "$cand" ] || continue
-              musl_loader="$cand"
-              break
-            done
-            ;;
-          loongarch64)
-            for cand in \
-              /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-              /musl/lib/ld-musl-loongarch64.so.1 \
-              /musl/lib/libc.so \
-              /lib/ld-musl-loongarch-lp64d.so.1 \
-              /lib/ld-musl-loongarch64.so.1
-            do
-              [ -e "$cand" ] || continue
-              musl_loader="$cand"
-              break
-            done
-            ;;
-        esac
-
-        if [ -n "$musl_loader" ]; then
-          loader_library_path="/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
-          if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
-            loader_library_path="$loader_library_path:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
-          fi
-          libctest_dynamic_wrapper="$RUNTIME_TMP_BASE/.starry-entry-dynamic.$$"
-          entry_dynamic_path="$PWD/entry-dynamic.exe"
-          {
-            printf '%s\n' '#!/bin/sh'
-            printf 'exec "%s" --library-path "%s" "%s" "$@"\n' \
-              "$musl_loader" "$loader_library_path" "$entry_dynamic_path"
-          } >"$libctest_dynamic_wrapper" 2>/dev/null || libctest_dynamic_wrapper=""
-          [ -n "$libctest_dynamic_wrapper" ] && "$BB" chmod +x "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
-          if [ -n "$libctest_dynamic_wrapper" ]; then
-            echo "[TEST][libctest] dynamic wrapper: $libctest_dynamic_wrapper (loader=$musl_loader)"
-          else
-            echo "[TEST][libctest] WARN: failed to create dynamic wrapper under $RUNTIME_TMP_BASE"
-          fi
-        else
-          echo "[TEST][libctest] WARN: musl loader not found, keep original run-dynamic.sh"
-        fi
-        ;;
-      /glibc/*)
-        glibc_loader=""
-        case "$ARCH_NAME" in
-          riscv64)
-            for cand in \
-              /glibc/lib/ld-linux-riscv64-lp64d.so.1 \
-              /lib/ld-linux-riscv64-lp64d.so.1 \
-              /lib64/ld-linux-riscv64-lp64d.so.1
-            do
-              [ -e "$cand" ] || continue
-              glibc_loader="$cand"
-              break
-            done
-            ;;
-          loongarch64)
-            for cand in \
-              /glibc/lib/ld-linux-loongarch-lp64d.so.1 \
-              /lib/ld-linux-loongarch-lp64d.so.1 \
-              /lib64/ld-linux-loongarch-lp64d.so.1
-            do
-              [ -e "$cand" ] || continue
-              glibc_loader="$cand"
-              break
-            done
-            ;;
-        esac
-
-        if [ -n "$glibc_loader" ]; then
-          loader_library_path="/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
-          if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
-            loader_library_path="$loader_library_path:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
-          fi
-          libctest_dynamic_wrapper="$RUNTIME_TMP_BASE/.starry-entry-dynamic.$$"
-          entry_dynamic_path="$PWD/entry-dynamic.exe"
-          {
-            printf '%s\n' '#!/bin/sh'
-            printf 'exec "%s" --library-path "%s" "%s" "$@"\n' \
-              "$glibc_loader" "$loader_library_path" "$entry_dynamic_path"
-          } >"$libctest_dynamic_wrapper" 2>/dev/null || libctest_dynamic_wrapper=""
-          [ -n "$libctest_dynamic_wrapper" ] && "$BB" chmod +x "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
-          if [ -n "$libctest_dynamic_wrapper" ]; then
-            echo "[TEST][libctest] dynamic wrapper: $libctest_dynamic_wrapper (loader=$glibc_loader)"
-          else
-            echo "[TEST][libctest] WARN: failed to create dynamic wrapper under $RUNTIME_TMP_BASE"
-          fi
-        else
-          echo "[TEST][libctest] WARN: glibc loader not found, keep original run-dynamic.sh"
-        fi
-        ;;
-    esac
-
-    if [ -n "$libctest_dynamic_wrapper" ]; then
-      "$BB" sed -e "s#entry-dynamic\\.exe#$libctest_dynamic_wrapper#g" \
-        ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
-    else
-      "$BB" cp -f ./run-dynamic.sh "$libctest_dynamic_temp" >/dev/null 2>&1 || libctest_dynamic_temp=""
-    fi
-
-    if [ -n "$libctest_dynamic_temp" ]; then
-      "$BB" chmod +x "$libctest_dynamic_temp" >/dev/null 2>&1 || true
-      run_dynamic_cmd="sh $libctest_dynamic_temp"
-      echo "[TEST][libctest] run dynamic via: $libctest_dynamic_temp"
-    else
-      echo "[TEST][libctest] WARN: failed to prepare patched run-dynamic script"
-    fi
+  if [ "$test_name" = "libctest_testcode.sh" ]; then
+    prepare_libctest_dynamic_runner "$test_sh"
   fi
 
   if [ "$test_name" = "lmbench_testcode.sh" ] && [ -x ./lmbench_all ]; then
@@ -739,9 +766,7 @@ run_test() {
     -e 's#\./lmbench_all lat_fs /var/tmp#echo "[TEST] SKIP lmbench lat_fs /var/tmp (known hang)"#g' \
     "./$test_name" > "$patched_script" || {
       ret=1
-      [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "$libctest_dynamic_temp" >/dev/null 2>&1 || true
-      [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
-      [ -n "$libctest_work_dir" ] && "$BB" rm -rf "$libctest_work_dir" >/dev/null 2>&1 || true
+      cleanup_libctest_temp_files
       cd "$old_pwd" || true
       echo "[TEST] Exit code($ret): $test_sh"
       echo
@@ -766,9 +791,7 @@ run_test() {
   . "$patched_script"
   ret=$?
   "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
-  [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "$libctest_dynamic_temp" >/dev/null 2>&1 || true
-  [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
-  [ -n "$libctest_work_dir" ] && "$BB" rm -rf "$libctest_work_dir" >/dev/null 2>&1 || true
+  cleanup_libctest_temp_files
   cd "$old_pwd" || true
   echo "[TEST] Exit code($ret): $test_sh"
   echo
