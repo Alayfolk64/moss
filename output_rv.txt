@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-16 08:30:57.005186300 UTC
+Boot at 2026-04-16 08:57:30.005185600 UTC
 
 Welcome to Starry OS
 
@@ -87,11 +87,11 @@ Welcome to Starry OS
 [TEST][runtime] WARN: /etc is not writable; cannot prepare passwd/group
 [TEST][runtime] probing runtime disk for libgcc...
 [TEST][runtime] try mount /dev/vda -> /dev/shm
-[37m[  3.996621 0:49 starry_kernel::syscall::fs::mount:90] [33mmount ext4: source=/dev/vda index=0 is unavailable[m
+[37m[  3.977999 0:49 starry_kernel::syscall::fs::mount:90] [33mmount ext4: source=/dev/vda index=0 is unavailable[m
 [m[TEST][runtime] try mount /dev/vdb -> /dev/shm
 [TEST][runtime] mounted /dev/vdb
 [TEST][runtime] libgcc source from runtime disk: /dev/shm/libgcc/riscv64/libgcc_s.so.1
-[TEST][runtime] libgcc bound: arch=riscv64 source=/dev/shm/libgcc/riscv64/libgcc_s.so.1 target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib
+[TEST][runtime] libgcc copied: arch=riscv64 source=/dev/shm/libgcc/riscv64/libgcc_s.so.1 target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib
 [TEST][runtime] locale bound: /usr/lib/locale/C.utf8,/usr/lib/locale/C.UTF-8 /usr/share/locale/locale.alias
 [TEST] scan roots: / /musl /glibc
 [TEST] scanning /
@@ -134,9 +134,7 @@ Welcome to Starry OS
 [TEST] SKIP script: /glibc/libcbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END libcbench-glibc ####
 [TEST] Running /musl/libctest_testcode.sh
-[TEST][libctest] dynamic wrapper: /dev/shm/.starry-entry-dynamic.6 (loader=/musl/lib/libc.so)
-[TEST][libctest] dynamic patch applied (fallback-global)
-[TEST][libctest] run dynamic via: /dev/shm/.starry-run-dynamic.6
+[TEST][libctest] dynamic binary wrapper active: ./entry-dynamic.exe (loader=/musl/lib/libc.so)
 #### OS COMP TEST GROUP START libctest-musl ####
 ========== START entry-static.exe argv ==========
 Pass!
@@ -376,7 +374,7 @@ Pass!
 Pass!
 ========== END entry-static.exe printf_fmt_n ==========
 ========== START entry-static.exe pthread_robust_detach ==========
-[37m[ 21.075189 0:440 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::FilesystemLoop[m
+[37m[ 19.727908 0:434 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::FilesystemLoop[m
 [mPass!
 ========== END entry-static.exe pthread_robust_detach ==========
 ========== START entry-static.exe pthread_cancel_sem_wait ==========
@@ -460,344 +458,342 @@ Pass!
 ========== START entry-static.exe wcsstr_false_negative ==========
 Pass!
 ========== END entry-static.exe wcsstr_false_negative ==========
-========== START /dev/shm/.starry-entry-dynamic.6 argv ==========
+========== START entry-dynamic.exe argv ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 argv ==========
-========== START /dev/shm/.starry-entry-dynamic.6 basename ==========
+========== END entry-dynamic.exe argv ==========
+========== START entry-dynamic.exe basename ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 basename ==========
-========== START /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
+========== END entry-dynamic.exe basename ==========
+========== START entry-dynamic.exe clocale_mbfuncs ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
-========== START /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
+========== END entry-dynamic.exe clocale_mbfuncs ==========
+========== START entry-dynamic.exe clock_gettime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dirname ==========
+========== END entry-dynamic.exe clock_gettime ==========
+========== START entry-dynamic.exe dirname ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 dirname ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dlopen ==========
+========== END entry-dynamic.exe dirname ==========
+========== START entry-dynamic.exe dlopen ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 dlopen ==========
-========== START /dev/shm/.starry-entry-dynamic.6 env ==========
+========== END entry-dynamic.exe dlopen ==========
+========== START entry-dynamic.exe env ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 env ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fdopen ==========
+========== END entry-dynamic.exe env ==========
+========== START entry-dynamic.exe fdopen ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fdopen ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
+========== END entry-dynamic.exe fdopen ==========
+========== START entry-dynamic.exe fnmatch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fscanf ==========
+========== END entry-dynamic.exe fnmatch ==========
+========== START entry-dynamic.exe fscanf ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fscanf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
+========== END entry-dynamic.exe fscanf ==========
+========== START entry-dynamic.exe fwscanf ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
+========== END entry-dynamic.exe fwscanf ==========
+========== START entry-dynamic.exe iconv_open ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
-========== START /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
+========== END entry-dynamic.exe iconv_open ==========
+========== START entry-dynamic.exe inet_pton ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mbc ==========
+========== END entry-dynamic.exe inet_pton ==========
+========== START entry-dynamic.exe mbc ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mbc ==========
-========== START /dev/shm/.starry-entry-dynamic.6 memstream ==========
+========== END entry-dynamic.exe mbc ==========
+========== START entry-dynamic.exe memstream ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 memstream ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
+========== END entry-dynamic.exe memstream ==========
+========== START entry-dynamic.exe pthread_cancel_points ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
+========== END entry-dynamic.exe pthread_cancel_points ==========
+========== START entry-dynamic.exe pthread_cancel ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
+========== END entry-dynamic.exe pthread_cancel ==========
+========== START entry-dynamic.exe pthread_cond ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
+========== END entry-dynamic.exe pthread_cond ==========
+========== START entry-dynamic.exe pthread_tsd ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
-========== START /dev/shm/.starry-entry-dynamic.6 qsort ==========
+========== END entry-dynamic.exe pthread_tsd ==========
+========== START entry-dynamic.exe qsort ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 qsort ==========
-========== START /dev/shm/.starry-entry-dynamic.6 random ==========
+========== END entry-dynamic.exe qsort ==========
+========== START entry-dynamic.exe random ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 random ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
+========== END entry-dynamic.exe random ==========
+========== START entry-dynamic.exe search_hsearch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_insque ==========
+========== END entry-dynamic.exe search_hsearch ==========
+========== START entry-dynamic.exe search_insque ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_insque ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
+========== END entry-dynamic.exe search_insque ==========
+========== START entry-dynamic.exe search_lsearch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
+========== END entry-dynamic.exe search_lsearch ==========
+========== START entry-dynamic.exe search_tsearch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sem_init ==========
+========== END entry-dynamic.exe search_tsearch ==========
+========== START entry-dynamic.exe sem_init ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sem_init ==========
-========== START /dev/shm/.starry-entry-dynamic.6 setjmp ==========
+========== END entry-dynamic.exe sem_init ==========
+========== START entry-dynamic.exe setjmp ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 setjmp ==========
-========== START /dev/shm/.starry-entry-dynamic.6 snprintf ==========
+========== END entry-dynamic.exe setjmp ==========
+========== START entry-dynamic.exe snprintf ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 snprintf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 socket ==========
+========== END entry-dynamic.exe snprintf ==========
+========== START entry-dynamic.exe socket ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 socket ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sscanf ==========
+========== END entry-dynamic.exe socket ==========
+========== START entry-dynamic.exe sscanf ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sscanf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
+========== END entry-dynamic.exe sscanf ==========
+========== START entry-dynamic.exe sscanf_long ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
-========== START /dev/shm/.starry-entry-dynamic.6 stat ==========
+========== END entry-dynamic.exe sscanf_long ==========
+========== START entry-dynamic.exe stat ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 stat ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strftime ==========
+========== END entry-dynamic.exe stat ==========
+========== START entry-dynamic.exe strftime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strftime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string ==========
+========== END entry-dynamic.exe strftime ==========
+========== START entry-dynamic.exe string ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
+========== END entry-dynamic.exe string ==========
+========== START entry-dynamic.exe string_memcpy ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
+========== END entry-dynamic.exe string_memcpy ==========
+========== START entry-dynamic.exe string_memmem ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_memset ==========
+========== END entry-dynamic.exe string_memmem ==========
+========== START entry-dynamic.exe string_memset ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_memset ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
+========== END entry-dynamic.exe string_memset ==========
+========== START entry-dynamic.exe string_strchr ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
+========== END entry-dynamic.exe string_strchr ==========
+========== START entry-dynamic.exe string_strcspn ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
+========== END entry-dynamic.exe string_strcspn ==========
+========== START entry-dynamic.exe string_strstr ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strptime ==========
+========== END entry-dynamic.exe string_strstr ==========
+========== START entry-dynamic.exe strptime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strptime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtod ==========
+========== END entry-dynamic.exe strptime ==========
+========== START entry-dynamic.exe strtod ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtod ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
+========== END entry-dynamic.exe strtod ==========
+========== START entry-dynamic.exe strtod_simple ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtof ==========
+========== END entry-dynamic.exe strtod_simple ==========
+========== START entry-dynamic.exe strtof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtol ==========
+========== END entry-dynamic.exe strtof ==========
+========== START entry-dynamic.exe strtol ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtol ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtold ==========
+========== END entry-dynamic.exe strtol ==========
+========== START entry-dynamic.exe strtold ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtold ==========
-========== START /dev/shm/.starry-entry-dynamic.6 swprintf ==========
+========== END entry-dynamic.exe strtold ==========
+========== START entry-dynamic.exe swprintf ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 swprintf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tgmath ==========
+========== END entry-dynamic.exe swprintf ==========
+========== START entry-dynamic.exe tgmath ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tgmath ==========
-========== START /dev/shm/.starry-entry-dynamic.6 time ==========
+========== END entry-dynamic.exe tgmath ==========
+========== START entry-dynamic.exe time ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 time ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tls_init ==========
+========== END entry-dynamic.exe time ==========
+========== START entry-dynamic.exe tls_init ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tls_init ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
+========== END entry-dynamic.exe tls_init ==========
+========== START entry-dynamic.exe tls_local_exec ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
-========== START /dev/shm/.starry-entry-dynamic.6 udiv ==========
+========== END entry-dynamic.exe tls_local_exec ==========
+========== START entry-dynamic.exe udiv ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 udiv ==========
-========== START /dev/shm/.starry-entry-dynamic.6 ungetc ==========
+========== END entry-dynamic.exe udiv ==========
+========== START entry-dynamic.exe ungetc ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 ungetc ==========
-========== START /dev/shm/.starry-entry-dynamic.6 utime ==========
+========== END entry-dynamic.exe ungetc ==========
+========== START entry-dynamic.exe utime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 utime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
+========== END entry-dynamic.exe utime ==========
+========== START entry-dynamic.exe wcsstr ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcstol ==========
+========== END entry-dynamic.exe wcsstr ==========
+========== START entry-dynamic.exe wcstol ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcstol ==========
-========== START /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
+========== END entry-dynamic.exe wcstol ==========
+========== START entry-dynamic.exe daemon_failure ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
+========== END entry-dynamic.exe daemon_failure ==========
+========== START entry-dynamic.exe dn_expand_empty ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
+========== END entry-dynamic.exe dn_expand_empty ==========
+========== START entry-dynamic.exe dn_expand_ptr_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
+========== END entry-dynamic.exe dn_expand_ptr_0 ==========
+========== START entry-dynamic.exe fflush_exit ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
+========== END entry-dynamic.exe fflush_exit ==========
+========== START entry-dynamic.exe fgets_eof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
+========== END entry-dynamic.exe fgets_eof ==========
+========== START entry-dynamic.exe fgetwc_buffering ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
+========== END entry-dynamic.exe fgetwc_buffering ==========
+========== START entry-dynamic.exe fpclassify_invalid_ld80 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
+========== END entry-dynamic.exe fpclassify_invalid_ld80 ==========
+========== START entry-dynamic.exe ftello_unflushed_append ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
-========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
+========== END entry-dynamic.exe ftello_unflushed_append ==========
+========== START entry-dynamic.exe getpwnam_r_crash ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
-========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
+========== END entry-dynamic.exe getpwnam_r_crash ==========
+========== START entry-dynamic.exe getpwnam_r_errno ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
-========== START /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
+========== END entry-dynamic.exe getpwnam_r_errno ==========
+========== START entry-dynamic.exe iconv_roundtrips ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
-========== START /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
+========== END entry-dynamic.exe iconv_roundtrips ==========
+========== START entry-dynamic.exe inet_ntop_v4mapped ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
-========== START /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
+========== END entry-dynamic.exe inet_ntop_v4mapped ==========
+========== START entry-dynamic.exe inet_pton_empty_last_field ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
-========== START /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
+========== END entry-dynamic.exe inet_pton_empty_last_field ==========
+========== START entry-dynamic.exe iswspace_null ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
-========== START /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
+========== END entry-dynamic.exe iswspace_null ==========
+========== START entry-dynamic.exe lrand48_signextend ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
-========== START /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
+========== END entry-dynamic.exe lrand48_signextend ==========
+========== START entry-dynamic.exe lseek_large ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
-========== START /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
+========== END entry-dynamic.exe lseek_large ==========
+========== START entry-dynamic.exe malloc_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
+========== END entry-dynamic.exe malloc_0 ==========
+========== START entry-dynamic.exe mbsrtowcs_overflow ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
-========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
+========== END entry-dynamic.exe mbsrtowcs_overflow ==========
+========== START entry-dynamic.exe memmem_oob_read ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
-========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
+========== END entry-dynamic.exe memmem_oob_read ==========
+========== START entry-dynamic.exe memmem_oob ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
+========== END entry-dynamic.exe memmem_oob ==========
+========== START entry-dynamic.exe mkdtemp_failure ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
+========== END entry-dynamic.exe mkdtemp_failure ==========
+========== START entry-dynamic.exe mkstemp_failure ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
+========== END entry-dynamic.exe mkstemp_failure ==========
+========== START entry-dynamic.exe printf_1e9_oob ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
+========== END entry-dynamic.exe printf_1e9_oob ==========
+========== START entry-dynamic.exe printf_fmt_g_round ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
+========== END entry-dynamic.exe printf_fmt_g_round ==========
+========== START entry-dynamic.exe printf_fmt_g_zeros ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
+========== END entry-dynamic.exe printf_fmt_g_zeros ==========
+========== START entry-dynamic.exe printf_fmt_n ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
-[37m[ 43.670520 0:719 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
+========== END entry-dynamic.exe printf_fmt_n ==========
+========== START entry-dynamic.exe pthread_robust_detach ==========
+[37m[ 42.402978 0:713 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
 [mPass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
+========== END entry-dynamic.exe pthread_robust_detach ==========
+========== START entry-dynamic.exe pthread_cond_smasher ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
+========== END entry-dynamic.exe pthread_cond_smasher ==========
+========== START entry-dynamic.exe pthread_condattr_setclock ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
+========== END entry-dynamic.exe pthread_condattr_setclock ==========
+========== START entry-dynamic.exe pthread_exit_cancel ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
+========== END entry-dynamic.exe pthread_exit_cancel ==========
+========== START entry-dynamic.exe pthread_once_deadlock ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
+========== END entry-dynamic.exe pthread_once_deadlock ==========
+========== START entry-dynamic.exe pthread_rwlock_ebusy ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
-========== START /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
+========== END entry-dynamic.exe pthread_rwlock_ebusy ==========
+========== START entry-dynamic.exe putenv_doublefree ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
+========== END entry-dynamic.exe putenv_doublefree ==========
+========== START entry-dynamic.exe regex_backref_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
+========== END entry-dynamic.exe regex_backref_0 ==========
+========== START entry-dynamic.exe regex_bracket_icase ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
+========== END entry-dynamic.exe regex_bracket_icase ==========
+========== START entry-dynamic.exe regex_ere_backref ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
+========== END entry-dynamic.exe regex_ere_backref ==========
+========== START entry-dynamic.exe regex_escaped_high_byte ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
+========== END entry-dynamic.exe regex_escaped_high_byte ==========
+========== START entry-dynamic.exe regex_negated_range ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
+========== END entry-dynamic.exe regex_negated_range ==========
+========== START entry-dynamic.exe regexec_nosub ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
-========== START /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
+========== END entry-dynamic.exe regexec_nosub ==========
+========== START entry-dynamic.exe rewind_clear_error ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
-========== START /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
+========== END entry-dynamic.exe rewind_clear_error ==========
+========== START entry-dynamic.exe rlimit_open_files ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
-========== START /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
+========== END entry-dynamic.exe rlimit_open_files ==========
+========== START entry-dynamic.exe scanf_bytes_consumed ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
-========== START /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
+========== END entry-dynamic.exe scanf_bytes_consumed ==========
+========== START entry-dynamic.exe scanf_match_literal_eof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
+========== END entry-dynamic.exe scanf_match_literal_eof ==========
+========== START entry-dynamic.exe scanf_nullbyte_char ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
-========== START /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
+========== END entry-dynamic.exe scanf_nullbyte_char ==========
+========== START entry-dynamic.exe setvbuf_unget ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
+========== END entry-dynamic.exe setvbuf_unget ==========
+========== START entry-dynamic.exe sigprocmask_internal ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
+========== END entry-dynamic.exe sigprocmask_internal ==========
+========== START entry-dynamic.exe sscanf_eof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 statvfs ==========
+========== END entry-dynamic.exe sscanf_eof ==========
+========== START entry-dynamic.exe statvfs ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 statvfs ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
+========== END entry-dynamic.exe statvfs ==========
+========== START entry-dynamic.exe strverscmp ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
-========== START /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
+========== END entry-dynamic.exe strverscmp ==========
+========== START entry-dynamic.exe syscall_sign_extend ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
+========== END entry-dynamic.exe syscall_sign_extend ==========
+========== START entry-dynamic.exe tls_get_new_dtv ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
-========== START /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
+========== END entry-dynamic.exe tls_get_new_dtv ==========
+========== START entry-dynamic.exe uselocale_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
+========== END entry-dynamic.exe uselocale_0 ==========
+========== START entry-dynamic.exe wcsncpy_read_overflow ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
+========== END entry-dynamic.exe wcsncpy_read_overflow ==========
+========== START entry-dynamic.exe wcsstr_false_negative ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
+========== END entry-dynamic.exe wcsstr_false_negative ==========
 #### OS COMP TEST GROUP END libctest-musl ####
 [TEST] Exit code(0): /musl/libctest_testcode.sh
 
 [TEST] Running /glibc/libctest_testcode.sh
-[TEST][libctest] dynamic wrapper: /dev/shm/.starry-entry-dynamic.6 (loader=/glibc/lib/ld-linux-riscv64-lp64d.so.1)
-[TEST][libctest] dynamic patch applied (fallback-global)
-[TEST][libctest] run dynamic via: /dev/shm/.starry-run-dynamic.6
+[TEST][libctest] dynamic binary wrapper active: ./entry-dynamic.exe (loader=/glibc/lib/ld-linux-riscv64-lp64d.so.1)
 #### OS COMP TEST GROUP START libctest-glibc ####
 ========== START entry-static.exe argv ==========
 Pass!
@@ -1318,7 +1314,7 @@ FAIL wcstol [status 1]
 ========== END entry-static.exe wcstol ==========
 ========== START entry-static.exe daemon_failure ==========
 src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 9 [Bad file descriptor]
-src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 954, pid is 955, old pid is 954
+src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 944, pid is 945, old pid is 944
 src/regression/daemon-failure.c:73: child failed
 FAIL daemon_failure [status 1]
 ========== END entry-static.exe daemon_failure ==========
@@ -1491,13 +1487,13 @@ Pass!
 ========== START entry-static.exe wcsstr_false_negative ==========
 Pass!
 ========== END entry-static.exe wcsstr_false_negative ==========
-========== START /dev/shm/.starry-entry-dynamic.6 argv ==========
+========== START entry-dynamic.exe argv ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 argv ==========
-========== START /dev/shm/.starry-entry-dynamic.6 basename ==========
+========== END entry-dynamic.exe argv ==========
+========== START entry-dynamic.exe basename ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 basename ==========
-========== START /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
+========== END entry-dynamic.exe basename ==========
+========== START entry-dynamic.exe clocale_mbfuncs ==========
 src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 80 to wchar_t
 src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 80 to wchar_t
 src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 81 to wchar_t
@@ -1809,31 +1805,31 @@ src/functional/clocale_mbfuncs.c:60: wcsrtombs returned -1, expected 255
 src/functional/clocale_mbfuncs.c:62: mbsrtowcs returned 127, expected 255
 src/functional/clocale_mbfuncs.c:64: wcsrtombs/mbsrtowcs round trip failed
 FAIL clocale_mbfuncs [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
-========== START /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
+========== END entry-dynamic.exe clocale_mbfuncs ==========
+========== START entry-dynamic.exe clock_gettime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dirname ==========
+========== END entry-dynamic.exe clock_gettime ==========
+========== START entry-dynamic.exe dirname ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 dirname ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dlopen ==========
+========== END entry-dynamic.exe dirname ==========
+========== START entry-dynamic.exe dlopen ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 dlopen ==========
-========== START /dev/shm/.starry-entry-dynamic.6 env ==========
+========== END entry-dynamic.exe dlopen ==========
+========== START entry-dynamic.exe env ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 env ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fdopen ==========
+========== END entry-dynamic.exe env ==========
+========== START entry-dynamic.exe fdopen ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fdopen ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
+========== END entry-dynamic.exe fdopen ==========
+========== START entry-dynamic.exe fnmatch ==========
 src/functional/fnmatch.c:156: fnmatch("[[?*\]", "\", 0) failed, got 1 want 0
 src/functional/fnmatch.c:156: fnmatch("[]?*\]", "]", 0) failed, got 1 want 0
 src/functional/fnmatch.c:156: fnmatch("*[![:digit:]]*/[![:d-d]", "a/b", FNM_PATHNAME) failed, got 0 want -1
 src/functional/fnmatch.c:156: fnmatch("*[![:digit:]]*/[[:d-d]", "a/[", FNM_PATHNAME) failed, got 0 want -1
 src/functional/fnmatch.c:156: fnmatch("\", "\", 0) failed, got 1 want 0
 FAIL fnmatch [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fscanf ==========
+========== END entry-dynamic.exe fnmatch ==========
+========== START entry-dynamic.exe fscanf ==========
 src/functional/fscanf.c:52: fscanf(f, "ld %5i%2i", &x, &y) failed (got 2 fields, expected 1)
 src/functional/fscanf.c:88: fscanf(f, "%lf%n %d", &u, &x, &y) failed (2 != 0)
 src/functional/fscanf.c:89: u failed (1 != -1)
@@ -1846,8 +1842,8 @@ src/functional/fscanf.c:124: fscanf(f, "%x%n", &x, &y) failed (1 != 0)
 src/functional/fscanf.c:125: x failed (0 != -1)
 src/functional/fscanf.c:126: y failed (2 != -1)
 FAIL fscanf [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 fscanf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
+========== END entry-dynamic.exe fscanf ==========
+========== START entry-dynamic.exe fwscanf ==========
 src/functional/fwscanf.c:71: fwscanf(f, L"%lf%n %d", &u, &x, &y) failed (2 != 0)
 src/functional/fwscanf.c:72: u failed (1 != -1)
 src/functional/fwscanf.c:73: x failed (4 != -1)
@@ -1859,76 +1855,76 @@ src/functional/fwscanf.c:107: fwscanf(f, L"%x%n", &x, &y) failed (1 != 0)
 src/functional/fwscanf.c:108: x failed (0 != -1)
 src/functional/fwscanf.c:109: y failed (2 != -1)
 FAIL fwscanf [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
+========== END entry-dynamic.exe fwscanf ==========
+========== START entry-dynamic.exe iconv_open ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
-========== START /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
+========== END entry-dynamic.exe iconv_open ==========
+========== START entry-dynamic.exe inet_pton ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mbc ==========
+========== END entry-dynamic.exe inet_pton ==========
+========== START entry-dynamic.exe mbc ==========
 src/functional/mbc.c:44: cannot set UTF-8 locale for test (codeset=ANSI_X3.4-1968)
 FAIL mbc [status 83]
-========== END /dev/shm/.starry-entry-dynamic.6 mbc ==========
-========== START /dev/shm/.starry-entry-dynamic.6 memstream ==========
+========== END entry-dynamic.exe mbc ==========
+========== START entry-dynamic.exe memstream ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 memstream ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
+========== END entry-dynamic.exe memstream ==========
+========== START entry-dynamic.exe pthread_cancel_points ==========
 src/functional/pthread_cancel-points.c:141: res == PTHREAD_CANCELED failed (non-blocking pthread_join, canceled thread exit status)
 FAIL pthread_cancel_points [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
+========== END entry-dynamic.exe pthread_cancel_points ==========
+========== START entry-dynamic.exe pthread_cancel ==========
 FAIL pthread_cancel [signal Segmentation fault]
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
+========== END entry-dynamic.exe pthread_cancel ==========
+========== START entry-dynamic.exe pthread_cond ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
+========== END entry-dynamic.exe pthread_cond ==========
+========== START entry-dynamic.exe pthread_tsd ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
-========== START /dev/shm/.starry-entry-dynamic.6 qsort ==========
+========== END entry-dynamic.exe pthread_tsd ==========
+========== START entry-dynamic.exe qsort ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 qsort ==========
-========== START /dev/shm/.starry-entry-dynamic.6 random ==========
+========== END entry-dynamic.exe qsort ==========
+========== START entry-dynamic.exe random ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 random ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
+========== END entry-dynamic.exe random ==========
+========== START entry-dynamic.exe search_hsearch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_insque ==========
+========== END entry-dynamic.exe search_hsearch ==========
+========== START entry-dynamic.exe search_insque ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_insque ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
+========== END entry-dynamic.exe search_insque ==========
+========== START entry-dynamic.exe search_lsearch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
+========== END entry-dynamic.exe search_lsearch ==========
+========== START entry-dynamic.exe search_tsearch ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sem_init ==========
+========== END entry-dynamic.exe search_tsearch ==========
+========== START entry-dynamic.exe sem_init ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sem_init ==========
-========== START /dev/shm/.starry-entry-dynamic.6 setjmp ==========
+========== END entry-dynamic.exe sem_init ==========
+========== START entry-dynamic.exe setjmp ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 setjmp ==========
-========== START /dev/shm/.starry-entry-dynamic.6 snprintf ==========
+========== END entry-dynamic.exe setjmp ==========
+========== START entry-dynamic.exe snprintf ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 snprintf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 socket ==========
+========== END entry-dynamic.exe snprintf ==========
+========== START entry-dynamic.exe socket ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 socket ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sscanf ==========
+========== END entry-dynamic.exe socket ==========
+========== START entry-dynamic.exe sscanf ==========
 src/functional/sscanf.c:39: sscanf("hello, world\n", "%8c%8c", a, b) failed (2 fields, expected 1)
 src/functional/sscanf.c:66: sscanf(" 0x12 0x34", "%5i%2i", &x, &y) failed (got 2 fields, expected 1)
 src/functional/sscanf.c:83: sscanf("10e", "%lf", &d) failed (got 1 fields, expected no match (0))
 FAIL sscanf [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 sscanf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
+========== END entry-dynamic.exe sscanf ==========
+========== START entry-dynamic.exe sscanf_long ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
-========== START /dev/shm/.starry-entry-dynamic.6 stat ==========
+========== END entry-dynamic.exe sscanf_long ==========
+========== START entry-dynamic.exe stat ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 stat ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strftime ==========
+========== END entry-dynamic.exe stat ==========
+========== START entry-dynamic.exe strftime ==========
 src/functional/strftime.c:14: "%c": expected "Mon Jan  5 05:17:53 +10009", got "Mon Jan  5 05:17:53 10009"
 src/functional/strftime.c:14: "%c": expected "Wed Feb 23 12:00:00 0000", got "Wed Feb 23 12:00:00 0"
 src/functional/strftime.c:14: "%+3C": expected "+20", got "%+3C"
@@ -1949,48 +1945,48 @@ src/functional/strftime.c:14: "%+5Y": expected "-0123", got "%+5Y"
 src/functional/strftime.c:14: "%Y": expected "+2147485547", got "-2147481749"
 src/functional/strftime.c:14: "%011Y": expected "02147485547", got "-2147481749"
 FAIL strftime [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 strftime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string ==========
+========== END entry-dynamic.exe strftime ==========
+========== START entry-dynamic.exe string ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
+========== END entry-dynamic.exe string ==========
+========== START entry-dynamic.exe string_memcpy ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
+========== END entry-dynamic.exe string_memcpy ==========
+========== START entry-dynamic.exe string_memmem ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_memset ==========
+========== END entry-dynamic.exe string_memmem ==========
+========== START entry-dynamic.exe string_memset ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_memset ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
+========== END entry-dynamic.exe string_memset ==========
+========== START entry-dynamic.exe string_strchr ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
+========== END entry-dynamic.exe string_strchr ==========
+========== START entry-dynamic.exe string_strcspn ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
-========== START /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
+========== END entry-dynamic.exe string_strcspn ==========
+========== START entry-dynamic.exe string_strstr ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strptime ==========
+========== END entry-dynamic.exe string_strstr ==========
+========== START entry-dynamic.exe strptime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strptime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtod ==========
+========== END entry-dynamic.exe strptime ==========
+========== START entry-dynamic.exe strtod ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtod ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
+========== END entry-dynamic.exe strtod ==========
+========== START entry-dynamic.exe strtod_simple ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtof ==========
+========== END entry-dynamic.exe strtod_simple ==========
+========== START entry-dynamic.exe strtof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtol ==========
+========== END entry-dynamic.exe strtof ==========
+========== START entry-dynamic.exe strtol ==========
 src/functional/strtol.c:130: strtol(s="123", &c, 37) failed (wrong final position -349448 != 0)
 FAIL strtol [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 strtol ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strtold ==========
+========== END entry-dynamic.exe strtol ==========
+========== START entry-dynamic.exe strtold ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strtold ==========
-========== START /dev/shm/.starry-entry-dynamic.6 swprintf ==========
+========== END entry-dynamic.exe strtold ==========
+========== START entry-dynamic.exe swprintf ==========
 src/functional/swprintf.c:113: strcmp(nl_langinfo(CODESET), "UTF-8") failed (no UTF-8 locale; tests might fail)
 src/functional/swprintf.c:121: swprintf(b, 3, L"%s", "\xc3\x80!") failed (-1 != 2)
 src/functional/swprintf.c:122: b[0] failed (wrong character 0 != c0)
@@ -1998,214 +1994,214 @@ src/functional/swprintf.c:123: swprintf(b, 2, L"%.1s", "\xc3\x80!") failed (-1 !
 src/functional/swprintf.c:124: b[0] failed (wrong character 0 != c0)
 *** buffer overflow detected ***: terminated
 FAIL swprintf [signal Aborted]
-========== END /dev/shm/.starry-entry-dynamic.6 swprintf ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tgmath ==========
+========== END entry-dynamic.exe swprintf ==========
+========== START entry-dynamic.exe tgmath ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tgmath ==========
-========== START /dev/shm/.starry-entry-dynamic.6 time ==========
+========== END entry-dynamic.exe tgmath ==========
+========== START entry-dynamic.exe time ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 time ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tls_init ==========
+========== END entry-dynamic.exe time ==========
+========== START entry-dynamic.exe tls_init ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tls_init ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
+========== END entry-dynamic.exe tls_init ==========
+========== START entry-dynamic.exe tls_local_exec ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
-========== START /dev/shm/.starry-entry-dynamic.6 udiv ==========
+========== END entry-dynamic.exe tls_local_exec ==========
+========== START entry-dynamic.exe udiv ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 udiv ==========
-========== START /dev/shm/.starry-entry-dynamic.6 ungetc ==========
+========== END entry-dynamic.exe udiv ==========
+========== START entry-dynamic.exe ungetc ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 ungetc ==========
-========== START /dev/shm/.starry-entry-dynamic.6 utime ==========
+========== END entry-dynamic.exe ungetc ==========
+========== START entry-dynamic.exe utime ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 utime ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
+========== END entry-dynamic.exe utime ==========
+========== START entry-dynamic.exe wcsstr ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcstol ==========
+========== END entry-dynamic.exe wcsstr ==========
+========== START entry-dynamic.exe wcstol ==========
 src/functional/wcstol.c:86: wcstol(s=L"123", &c, 37) failed (wrong final position -108430 != 0)
 FAIL wcstol [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 wcstol ==========
-========== START /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
+========== END entry-dynamic.exe wcstol ==========
+========== START entry-dynamic.exe daemon_failure ==========
 src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 9 [Bad file descriptor]
-src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 1232, pid is 1233, old pid is 1232
+src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 1222, pid is 1223, old pid is 1222
 src/regression/daemon-failure.c:73: child failed
 FAIL daemon_failure [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
+========== END entry-dynamic.exe daemon_failure ==========
+========== START entry-dynamic.exe dn_expand_empty ==========
 src/regression/dn_expand-empty.c:16: dn_expand("", name, 1) returned -1, wanted 1
 src/regression/dn_expand-empty.c:18: dn_expand("", name, 1) failed: got ".X" name, wanted ""
 FAIL dn_expand_empty [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
-========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
+========== END entry-dynamic.exe dn_expand_empty ==========
+========== START entry-dynamic.exe dn_expand_ptr_0 ==========
 src/regression/dn_expand-ptr-0.c:26: dn_expand("\xc0\2", name, 1) returned -1, wanted 2
 src/regression/dn_expand-ptr-0.c:28: dn_expand("\xc0\2", name, 1) failed: got ".XXX" name, wanted ""
 FAIL dn_expand_ptr_0 [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
+========== END entry-dynamic.exe dn_expand_ptr_0 ==========
+========== START entry-dynamic.exe fflush_exit ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
+========== END entry-dynamic.exe fflush_exit ==========
+========== START entry-dynamic.exe fgets_eof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
+========== END entry-dynamic.exe fgets_eof ==========
+========== START entry-dynamic.exe fgetwc_buffering ==========
 src/common/utf8.c:18: cannot set UTF-8 locale for test (codeset=ANSI_X3.4-1968)
 src/regression/fgetwc-buffering.c:28: wanted 0x800, got 0xffffffff
 src/regression/fgetwc-buffering.c:35: wanted errno==0, got 84 (Invalid or incomplete multibyte or wide character)
 src/regression/fgetwc-buffering.c:36: feof(stdin)!=0 failed
 src/regression/fgetwc-buffering.c:37: ferror(stdin)==0 failed
 FAIL fgetwc_buffering [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
-========== START /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
+========== END entry-dynamic.exe fgetwc_buffering ==========
+========== START entry-dynamic.exe fpclassify_invalid_ld80 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
+========== END entry-dynamic.exe fpclassify_invalid_ld80 ==========
+========== START entry-dynamic.exe ftello_unflushed_append ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
-========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
+========== END entry-dynamic.exe ftello_unflushed_append ==========
+========== START entry-dynamic.exe getpwnam_r_crash ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
-========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
+========== END entry-dynamic.exe getpwnam_r_crash ==========
+========== START entry-dynamic.exe getpwnam_r_errno ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
-========== START /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
+========== END entry-dynamic.exe getpwnam_r_errno ==========
+========== START entry-dynamic.exe iconv_roundtrips ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
-========== START /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
+========== END entry-dynamic.exe iconv_roundtrips ==========
+========== START entry-dynamic.exe inet_ntop_v4mapped ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
-========== START /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
+========== END entry-dynamic.exe inet_ntop_v4mapped ==========
+========== START entry-dynamic.exe inet_pton_empty_last_field ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
-========== START /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
+========== END entry-dynamic.exe inet_pton_empty_last_field ==========
+========== START entry-dynamic.exe iswspace_null ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
-========== START /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
+========== END entry-dynamic.exe iswspace_null ==========
+========== START entry-dynamic.exe lrand48_signextend ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
-========== START /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
+========== END entry-dynamic.exe lrand48_signextend ==========
+========== START entry-dynamic.exe lseek_large ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
-========== START /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
+========== END entry-dynamic.exe lseek_large ==========
+========== START entry-dynamic.exe malloc_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
+========== END entry-dynamic.exe malloc_0 ==========
+========== START entry-dynamic.exe mbsrtowcs_overflow ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
-========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
+========== END entry-dynamic.exe mbsrtowcs_overflow ==========
+========== START entry-dynamic.exe memmem_oob_read ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
-========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
+========== END entry-dynamic.exe memmem_oob_read ==========
+========== START entry-dynamic.exe memmem_oob ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
+========== END entry-dynamic.exe memmem_oob ==========
+========== START entry-dynamic.exe mkdtemp_failure ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
-========== START /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
+========== END entry-dynamic.exe mkdtemp_failure ==========
+========== START entry-dynamic.exe mkstemp_failure ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
+========== END entry-dynamic.exe mkstemp_failure ==========
+========== START entry-dynamic.exe printf_1e9_oob ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
+========== END entry-dynamic.exe printf_1e9_oob ==========
+========== START entry-dynamic.exe printf_fmt_g_round ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
+========== END entry-dynamic.exe printf_fmt_g_round ==========
+========== START entry-dynamic.exe printf_fmt_g_zeros ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
-========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
+========== END entry-dynamic.exe printf_fmt_g_zeros ==========
+========== START entry-dynamic.exe printf_fmt_n ==========
 *** %n in writable segment detected ***
 FAIL printf_fmt_n [signal Aborted]
-========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
+========== END entry-dynamic.exe printf_fmt_n ==========
+========== START entry-dynamic.exe pthread_robust_detach ==========
 The futex facility returned an unexpected error code.
 FAIL pthread_robust_detach [signal Aborted]
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
+========== END entry-dynamic.exe pthread_robust_detach ==========
+========== START entry-dynamic.exe pthread_cond_smasher ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
+========== END entry-dynamic.exe pthread_cond_smasher ==========
+========== START entry-dynamic.exe pthread_condattr_setclock ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
+========== END entry-dynamic.exe pthread_condattr_setclock ==========
+========== START entry-dynamic.exe pthread_exit_cancel ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
+========== END entry-dynamic.exe pthread_exit_cancel ==========
+========== START entry-dynamic.exe pthread_once_deadlock ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
-========== START /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
+========== END entry-dynamic.exe pthread_once_deadlock ==========
+========== START entry-dynamic.exe pthread_rwlock_ebusy ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
-========== START /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
+========== END entry-dynamic.exe pthread_rwlock_ebusy ==========
+========== START entry-dynamic.exe putenv_doublefree ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
+========== END entry-dynamic.exe putenv_doublefree ==========
+========== START entry-dynamic.exe regex_backref_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
+========== END entry-dynamic.exe regex_backref_0 ==========
+========== START entry-dynamic.exe regex_bracket_icase ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
+========== END entry-dynamic.exe regex_bracket_icase ==========
+========== START entry-dynamic.exe regex_ere_backref ==========
 src/regression/regex-ere-backref.c:22: regexec(/(a)\1/ ~ "aa") returned 0 (Success), wanted REG_NOMATCH
 src/regression/regex-ere-backref.c:29: regexec(/(a)\1/ ~ "a1") returned 1 (No match), wanted 0
 FAIL regex_ere_backref [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
+========== END entry-dynamic.exe regex_ere_backref ==========
+========== START entry-dynamic.exe regex_escaped_high_byte ==========
 src/regression/regex-escaped-high-byte.c:19: regcomp(\\\xfc) returned 0 (Success) wanted REG_BADPAT
 FAIL regex_escaped_high_byte [status 1]
-========== END /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
+========== END entry-dynamic.exe regex_escaped_high_byte ==========
+========== START entry-dynamic.exe regex_negated_range ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
-========== START /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
+========== END entry-dynamic.exe regex_negated_range ==========
+========== START entry-dynamic.exe regexec_nosub ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
-========== START /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
+========== END entry-dynamic.exe regexec_nosub ==========
+========== START entry-dynamic.exe rewind_clear_error ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
-========== START /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
+========== END entry-dynamic.exe rewind_clear_error ==========
+========== START entry-dynamic.exe rlimit_open_files ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
-========== START /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
+========== END entry-dynamic.exe rlimit_open_files ==========
+========== START entry-dynamic.exe scanf_bytes_consumed ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
-========== START /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
+========== END entry-dynamic.exe scanf_bytes_consumed ==========
+========== START entry-dynamic.exe scanf_match_literal_eof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
+========== END entry-dynamic.exe scanf_match_literal_eof ==========
+========== START entry-dynamic.exe scanf_nullbyte_char ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
-========== START /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
+========== END entry-dynamic.exe scanf_nullbyte_char ==========
+========== START entry-dynamic.exe setvbuf_unget ==========
 FAIL setvbuf_unget [timed out]
-========== END /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
+========== END entry-dynamic.exe setvbuf_unget ==========
+========== START entry-dynamic.exe sigprocmask_internal ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
-========== START /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
+========== END entry-dynamic.exe sigprocmask_internal ==========
+========== START entry-dynamic.exe sscanf_eof ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
-========== START /dev/shm/.starry-entry-dynamic.6 statvfs ==========
+========== END entry-dynamic.exe sscanf_eof ==========
+========== START entry-dynamic.exe statvfs ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 statvfs ==========
-========== START /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
+========== END entry-dynamic.exe statvfs ==========
+========== START entry-dynamic.exe strverscmp ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
-========== START /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
+========== END entry-dynamic.exe strverscmp ==========
+========== START entry-dynamic.exe syscall_sign_extend ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
-========== START /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
+========== END entry-dynamic.exe syscall_sign_extend ==========
+========== START entry-dynamic.exe tls_get_new_dtv ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
-========== START /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
+========== END entry-dynamic.exe tls_get_new_dtv ==========
+========== START entry-dynamic.exe uselocale_0 ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
+========== END entry-dynamic.exe uselocale_0 ==========
+========== START entry-dynamic.exe wcsncpy_read_overflow ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
-========== START /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
+========== END entry-dynamic.exe wcsncpy_read_overflow ==========
+========== START entry-dynamic.exe wcsstr_false_negative ==========
 Pass!
-========== END /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
+========== END entry-dynamic.exe wcsstr_false_negative ==========
 #### OS COMP TEST GROUP END libctest-glibc ####
 [TEST] Exit code(0): /glibc/libctest_testcode.sh
 

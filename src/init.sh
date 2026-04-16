@@ -121,7 +121,6 @@ find_libgcc_from_runtime_disk() {
     do
       [ -f "$cand" ] || continue
       RUNTIME_DISK_LIBGCC_SRC="$cand"
-      append_extra_ld_library_path "${cand%/*}"
       echo "[TEST][runtime] libgcc source from runtime disk: $cand"
       return 0
     done
@@ -255,15 +254,16 @@ setup_libgcc_runtime() {
     return 0
   fi
 
-  append_extra_ld_library_path "${libgcc_src%/*}"
-  copy_if_missing "$libgcc_src" /musl/lib/libgcc_s.so.1
-  copy_if_missing "$libgcc_src" /lib/libgcc_s.so.1
-  copy_if_missing "$libgcc_src" /lib64/libgcc_s.so.1
-  copy_if_missing "$libgcc_src" /usr/lib/libgcc_s.so.1
-  copy_if_missing "$libgcc_src" /usr/lib64/libgcc_s.so.1
-  copy_if_missing "$libgcc_src" /glibc/lib/libgcc_s.so.1
-  copy_if_missing "$libgcc_src" /glibc/lib64/libgcc_s.so.1
-  echo "[TEST][runtime] libgcc bound: arch=$ARCH_NAME source=$libgcc_src target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib"
+  # Always copy into standard runtime library locations; do not rely on
+  # temporary mount paths (e.g. /dev/shm runtime-disk) at execution time.
+  copy_if_exists "$libgcc_src" /musl/lib/libgcc_s.so.1
+  copy_if_exists "$libgcc_src" /lib/libgcc_s.so.1
+  copy_if_exists "$libgcc_src" /lib64/libgcc_s.so.1
+  copy_if_exists "$libgcc_src" /usr/lib/libgcc_s.so.1
+  copy_if_exists "$libgcc_src" /usr/lib64/libgcc_s.so.1
+  copy_if_exists "$libgcc_src" /glibc/lib/libgcc_s.so.1
+  copy_if_exists "$libgcc_src" /glibc/lib64/libgcc_s.so.1
+  echo "[TEST][runtime] libgcc copied: arch=$ARCH_NAME source=$libgcc_src target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib"
 }
 
 setup_locale_runtime() {
@@ -514,78 +514,46 @@ cleanup_libctest_temp_files() {
   [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
 }
 
-prepare_libctest_dynamic_runner() {
+prepare_libctest_dynamic_binary_wrapper() {
   _test_sh="$1"
-  run_dynamic_cmd='sh ./run-dynamic.sh'
-  libctest_dynamic_temp=""
-  libctest_dynamic_wrapper=""
+  libctest_entry_dynamic_real=""
 
-  [ -f ./run-dynamic.sh ] || return 0
+  [ -f ./entry-dynamic.exe ] || return 0
 
-  libctest_dynamic_temp="$RUNTIME_TMP_BASE/.starry-run-dynamic.$$"
   _loader=$(libctest_loader_for_test "$_test_sh")
-  if [ -n "$_loader" ]; then
-    _loader_library_path=$(libctest_loader_library_path_for_test "$_test_sh")
-    libctest_dynamic_wrapper="$RUNTIME_TMP_BASE/.starry-entry-dynamic.$$"
-    _entry_dynamic_path="$PWD/entry-dynamic.exe"
-    if create_libctest_dynamic_wrapper "$_loader" "$_loader_library_path" "$_entry_dynamic_path" "$libctest_dynamic_wrapper"; then
-      echo "[TEST][libctest] dynamic wrapper: $libctest_dynamic_wrapper (loader=$_loader)"
-    else
-      libctest_dynamic_wrapper=""
-      echo "[TEST][libctest] WARN: failed to create dynamic wrapper under $RUNTIME_TMP_BASE"
-    fi
-  else
+  if [ -z "$_loader" ]; then
     case "$_test_sh" in
-      /musl/*) echo "[TEST][libctest] WARN: musl loader not found, keep original run-dynamic.sh" ;;
-      /glibc/*) echo "[TEST][libctest] WARN: glibc loader not found, keep original run-dynamic.sh" ;;
+      /musl/*) echo "[TEST][libctest] WARN: musl loader not found, keep original entry-dynamic.exe" ;;
+      /glibc/*) echo "[TEST][libctest] WARN: glibc loader not found, keep original entry-dynamic.exe" ;;
     esac
+    return 0
   fi
 
-  if [ -n "$libctest_dynamic_wrapper" ]; then
-    patch_mode="targeted"
-    "$BB" sed \
-      -e "s#runtest\\.exe[[:space:]][[:space:]]*\\./entry-dynamic\\.exe#runtest.exe $libctest_dynamic_wrapper#g" \
-      -e "s#runtest\\.exe[[:space:]][[:space:]]*entry-dynamic\\.exe#runtest.exe $libctest_dynamic_wrapper#g" \
-      ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
-    if [ -n "$libctest_dynamic_temp" ] && ! "$BB" grep -q "$libctest_dynamic_wrapper" "$libctest_dynamic_temp" >/dev/null 2>&1; then
-      patch_mode="fallback-global"
-      "$BB" sed -e "s#entry-dynamic\\.exe#$libctest_dynamic_wrapper#g" \
-        ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
-      if [ -n "$libctest_dynamic_temp" ]; then
-        patch_fix_temp="${libctest_dynamic_temp}.fix"
-        "$BB" sed \
-          -e "s#START $libctest_dynamic_wrapper #START entry-dynamic.exe #g" \
-          -e "s#END $libctest_dynamic_wrapper #END entry-dynamic.exe #g" \
-          "$libctest_dynamic_temp" > "$patch_fix_temp" || true
-        if [ -s "$patch_fix_temp" ]; then
-          "$BB" mv -f "$patch_fix_temp" "$libctest_dynamic_temp" >/dev/null 2>&1 || true
-        else
-          "$BB" rm -f "$patch_fix_temp" >/dev/null 2>&1 || true
-        fi
-      fi
-    fi
-  else
-    "$BB" cp -f ./run-dynamic.sh "$libctest_dynamic_temp" >/dev/null 2>&1 || libctest_dynamic_temp=""
+  _loader_library_path=$(libctest_loader_library_path_for_test "$_test_sh")
+  libctest_entry_dynamic_real="$PWD/.starry-entry-dynamic.real.$$"
+  if ! "$BB" mv -f ./entry-dynamic.exe "$libctest_entry_dynamic_real" >/dev/null 2>&1; then
+    libctest_entry_dynamic_real=""
+    echo "[TEST][libctest] WARN: failed to backup entry-dynamic.exe, keep original"
+    return 0
   fi
 
-  if [ -n "$libctest_dynamic_temp" ]; then
-    "$BB" chmod +x "$libctest_dynamic_temp" >/dev/null 2>&1 || true
-    if [ -n "$libctest_dynamic_wrapper" ]; then
-      if "$BB" grep -q "$libctest_dynamic_wrapper" "$libctest_dynamic_temp" >/dev/null 2>&1; then
-        if [ "$patch_mode" = "fallback-global" ]; then
-          echo "[TEST][libctest] dynamic patch applied (fallback-global)"
-        else
-          echo "[TEST][libctest] dynamic patch applied"
-        fi
-      else
-        echo "[TEST][libctest] WARN: dynamic patch not found in temp script"
-      fi
-    fi
-    run_dynamic_cmd="sh $libctest_dynamic_temp"
-    echo "[TEST][libctest] run dynamic via: $libctest_dynamic_temp"
-  else
-    echo "[TEST][libctest] WARN: failed to prepare patched run-dynamic script"
+  if create_libctest_dynamic_wrapper "$_loader" "$_loader_library_path" "$libctest_entry_dynamic_real" "$PWD/entry-dynamic.exe"; then
+    echo "[TEST][libctest] dynamic binary wrapper active: ./entry-dynamic.exe (loader=$_loader)"
+    return 0
   fi
+
+  "$BB" mv -f "$libctest_entry_dynamic_real" ./entry-dynamic.exe >/dev/null 2>&1 || true
+  libctest_entry_dynamic_real=""
+  echo "[TEST][libctest] WARN: failed to create wrapper entry-dynamic.exe, restored original"
+  return 0
+}
+
+restore_libctest_dynamic_binary_wrapper() {
+  [ -n "$libctest_entry_dynamic_real" ] || return 0
+  [ -f "$libctest_entry_dynamic_real" ] || return 0
+  "$BB" rm -f ./entry-dynamic.exe >/dev/null 2>&1 || true
+  "$BB" mv -f "$libctest_entry_dynamic_real" ./entry-dynamic.exe >/dev/null 2>&1 || true
+  libctest_entry_dynamic_real=""
 }
 
 ARCH_NAME=$(detect_arch) || exit 1
@@ -700,8 +668,12 @@ run_test() {
   run_dynamic_cmd='sh ./run-dynamic.sh'
   libctest_dynamic_temp=""
   libctest_dynamic_wrapper=""
+  libctest_entry_dynamic_real=""
+  # Do not rewrite libctest dynamic runner at runtime.
+  # After libgcc is copied into standard library locations, run the original
+  # dynamic script/binary path directly without /dev/shm wrapper indirection.
   if [ "$test_name" = "libctest_testcode.sh" ]; then
-    prepare_libctest_dynamic_runner "$test_sh"
+    prepare_libctest_dynamic_binary_wrapper "$test_sh"
   fi
 
   if [ "$test_name" = "lmbench_testcode.sh" ] && [ -x ./lmbench_all ]; then
@@ -798,6 +770,7 @@ run_test() {
     "./$test_name" > "$patched_script" || {
       ret=1
       cleanup_libctest_temp_files
+      restore_libctest_dynamic_binary_wrapper
       cd "$old_pwd" || true
       echo "[TEST] Exit code($ret): $test_sh"
       echo
@@ -823,6 +796,7 @@ run_test() {
   ret=$?
   "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
   cleanup_libctest_temp_files
+  restore_libctest_dynamic_binary_wrapper
   cd "$old_pwd" || true
   echo "[TEST] Exit code($ret): $test_sh"
   echo
