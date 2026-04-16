@@ -542,14 +542,45 @@ prepare_libctest_dynamic_runner() {
   fi
 
   if [ -n "$libctest_dynamic_wrapper" ]; then
-    "$BB" sed -e "s#entry-dynamic\\.exe#$libctest_dynamic_wrapper#g" \
+    patch_mode="targeted"
+    "$BB" sed \
+      -e "s#runtest\\.exe[[:space:]][[:space:]]*\\./entry-dynamic\\.exe#runtest.exe $libctest_dynamic_wrapper#g" \
+      -e "s#runtest\\.exe[[:space:]][[:space:]]*entry-dynamic\\.exe#runtest.exe $libctest_dynamic_wrapper#g" \
       ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
+    if [ -n "$libctest_dynamic_temp" ] && ! "$BB" grep -q "$libctest_dynamic_wrapper" "$libctest_dynamic_temp" >/dev/null 2>&1; then
+      patch_mode="fallback-global"
+      "$BB" sed -e "s#entry-dynamic\\.exe#$libctest_dynamic_wrapper#g" \
+        ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
+      if [ -n "$libctest_dynamic_temp" ]; then
+        patch_fix_temp="${libctest_dynamic_temp}.fix"
+        "$BB" sed \
+          -e "s#START $libctest_dynamic_wrapper #START entry-dynamic.exe #g" \
+          -e "s#END $libctest_dynamic_wrapper #END entry-dynamic.exe #g" \
+          "$libctest_dynamic_temp" > "$patch_fix_temp" || true
+        if [ -s "$patch_fix_temp" ]; then
+          "$BB" mv -f "$patch_fix_temp" "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+        else
+          "$BB" rm -f "$patch_fix_temp" >/dev/null 2>&1 || true
+        fi
+      fi
+    fi
   else
     "$BB" cp -f ./run-dynamic.sh "$libctest_dynamic_temp" >/dev/null 2>&1 || libctest_dynamic_temp=""
   fi
 
   if [ -n "$libctest_dynamic_temp" ]; then
     "$BB" chmod +x "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+    if [ -n "$libctest_dynamic_wrapper" ]; then
+      if "$BB" grep -q "$libctest_dynamic_wrapper" "$libctest_dynamic_temp" >/dev/null 2>&1; then
+        if [ "$patch_mode" = "fallback-global" ]; then
+          echo "[TEST][libctest] dynamic patch applied (fallback-global)"
+        else
+          echo "[TEST][libctest] dynamic patch applied"
+        fi
+      else
+        echo "[TEST][libctest] WARN: dynamic patch not found in temp script"
+      fi
+    fi
     run_dynamic_cmd="sh $libctest_dynamic_temp"
     echo "[TEST][libctest] run dynamic via: $libctest_dynamic_temp"
   else

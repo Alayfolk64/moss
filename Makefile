@@ -49,7 +49,8 @@ SDCARD_RV_IMG := $(A)/sdcard-rv.img
 SDCARD_RV_SRC := $(A)/.sdcard-rv.src.img
 SDCARD_LA_IMG := $(A)/sdcard-la.img
 SDCARD_LA_SRC := $(A)/.sdcard-la.src.img
-RUNTIME_DISK_IMG := $(A)/disk.img
+RUNTIME_DISK_RV_IMG := $(A)/disk.img
+RUNTIME_DISK_LA_IMG := $(A)/disk-la.img
 RUNTIME_DISK_ROOT := $(A)/.runtime-disk-root
 RV_LIBGCC_SRC := /opt/riscv64-linux-musl-cross/riscv64-linux-musl/lib/libgcc_s.so.1
 LA_LIBGCC_SRC := /opt/gcc-13.2.0-loongarch64-linux-gnu/loongarch64-linux-gnu/lib64/libgcc_s.so.1
@@ -120,7 +121,7 @@ clean: makeclean
 build run debug disasm: toolchain defconfig
 	@$(MAKE) -C make $@
 
-all: kernel-rv kernel-la disk.img
+all: kernel-rv kernel-la disk.img disk-la.img
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
@@ -164,10 +165,22 @@ disk.img:
 	@if [ -f "$(RV_LIBGCC_SRC)" ]; then cp -f "$(RV_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/riscv64/libgcc_s.so.1"; else echo "[disk.img] WARN: missing $(RV_LIBGCC_SRC)"; fi
 	@if [ -f "$(LA_LIBGCC_SRC)" ]; then cp -f "$(LA_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64/libgcc_s.so.1"; else echo "[disk.img] WARN: missing $(LA_LIBGCC_SRC)"; fi
 	@if ! command -v mke2fs >/dev/null 2>&1; then echo "[disk.img] ERROR: mke2fs not found"; exit 1; fi
-	@rm -f "$(RUNTIME_DISK_IMG)"
-	@mke2fs -q -t ext4 -d "$(RUNTIME_DISK_ROOT)" -L STARRYRT -F "$(RUNTIME_DISK_IMG)" 16M
+	@rm -f "$(RUNTIME_DISK_RV_IMG)"
+	@mke2fs -q -t ext4 -d "$(RUNTIME_DISK_ROOT)" -L STARRYRT -F "$(RUNTIME_DISK_RV_IMG)" 16M
 	@rm -rf "$(RUNTIME_DISK_ROOT)"
-	@echo "[disk.img] generated $(RUNTIME_DISK_IMG)"
+	@echo "[disk.img] generated $(RUNTIME_DISK_RV_IMG)"
+
+disk-la.img:
+	@rm -rf "$(RUNTIME_DISK_ROOT)"
+	@mkdir -p "$(RUNTIME_DISK_ROOT)/libgcc/riscv64" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64"
+	@echo "starry-runtime-disk" > "$(RUNTIME_DISK_ROOT)/.starry-runtime-disk"
+	@if [ -f "$(RV_LIBGCC_SRC)" ]; then cp -f "$(RV_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/riscv64/libgcc_s.so.1"; else echo "[disk-la.img] WARN: missing $(RV_LIBGCC_SRC)"; fi
+	@if [ -f "$(LA_LIBGCC_SRC)" ]; then cp -f "$(LA_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64/libgcc_s.so.1"; else echo "[disk-la.img] WARN: missing $(LA_LIBGCC_SRC)"; fi
+	@if ! command -v mke2fs >/dev/null 2>&1; then echo "[disk-la.img] ERROR: mke2fs not found"; exit 1; fi
+	@rm -f "$(RUNTIME_DISK_LA_IMG)"
+	@mke2fs -q -t ext4 -d "$(RUNTIME_DISK_ROOT)" -L STARRYRT -F "$(RUNTIME_DISK_LA_IMG)" 16M
+	@rm -rf "$(RUNTIME_DISK_ROOT)"
+	@echo "[disk-la.img] generated $(RUNTIME_DISK_LA_IMG)"
 
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
@@ -215,4 +228,4 @@ la-shell:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la disk.img contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la disk.img disk-la.img contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
