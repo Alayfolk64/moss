@@ -11,6 +11,7 @@ use crate::{mm::vm_load_string, pseudofs::MemoryFs};
 enum MountKind {
     Tmpfs,
     CompatVfat,
+    Ext4,
 }
 
 fn detect_mount_kind(fs_type: &str) -> Option<MountKind> {
@@ -20,8 +21,22 @@ fn detect_mount_kind(fs_type: &str) -> Option<MountKind> {
         // We currently don't provide a block-backed vfat driver via mount(2),
         // so keep syscall semantics (mount/umount succeed) with a memory fs.
         "vfat" | "fat" | "msdos" => Some(MountKind::CompatVfat),
+        "ext4" => Some(MountKind::Ext4),
         _ => None,
     }
+}
+
+fn parse_block_source_index(source: &str) -> Option<usize> {
+    let name = source.strip_prefix("/dev/")?;
+    let bytes = name.as_bytes();
+    if name.len() >= 3 && (name.starts_with("vd") || name.starts_with("sd")) {
+        let ch = bytes[2];
+        let suffix = &name[3..];
+        if ch.is_ascii_lowercase() && suffix.chars().all(|c| c.is_ascii_digit()) {
+            return Some((ch - b'a') as usize);
+        }
+    }
+    None
 }
 
 pub fn sys_mount(
@@ -40,17 +55,65 @@ pub fn sys_mount(
         return Err(AxError::NoSuchDevice);
     };
 
-    let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
-    if kind == MountKind::CompatVfat {
-        debug!(
-            "mount: use tmpfs-compatible backend for fs_type={fs_type:?}, source={source:?}, target={target:?}"
-        );
+    match kind {
+        MountKind::Tmpfs | MountKind::CompatVfat => {
+            let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
+            if kind == MountKind::CompatVfat {
+                debug!(
+                    "mount: use tmpfs-compatible backend for fs_type={fs_type:?}, source={source:?}, target={target:?}"
+                );
+            }
+            let target = FS_CONTEXT.lock().resolve(target)?;
+            target.mount(&fs)?;
+            Ok(0)
+        }
+        MountKind::Ext4 => {
+            let Some(source) = source.as_deref() else {
+                return Err(AxError::InvalidInput);
+            };
+            let Some(dev_idx) = parse_block_source_index(source) else {
+                warn!("mount ext4: unsupported source path: {source}");
+                return Err(AxError::NoSuchDevice);
+            };
+
+            let total_slots = axruntime::runtime_block_device_count();
+            if dev_idx >= total_slots {
+                warn!(
+                    "mount ext4: source={source} index={} out of range (runtime_block_slots={})",
+                    dev_idx,
+                    total_slots
+                );
+                return Err(AxError::NoSuchDevice);
+            }
+
+            let Some(dev) = axruntime::take_runtime_block_device(dev_idx) else {
+                warn!("mount ext4: source={source} index={} is unavailable", dev_idx);
+                return Err(AxError::NoSuchDevice);
+            };
+            let fs = match axfs::new_filesystem_from_block_device(dev) {
+                Ok(fs) => fs,
+                Err(err) => {
+                    warn!("mount ext4: source={source} index={} init fs failed: {err:?}", dev_idx);
+                    return Err(err.into());
+                }
+            };
+            let target = match FS_CONTEXT.lock().resolve(target) {
+                Ok(target) => target,
+                Err(err) => {
+                    warn!(
+                        "mount ext4: source={source} index={} resolve target failed: {err:?}",
+                        dev_idx
+                    );
+                    return Err(err.into());
+                }
+            };
+            if let Err(err) = target.mount(&fs) {
+                warn!("mount ext4: source={source} index={} mount target failed: {err:?}", dev_idx);
+                return Err(err.into());
+            }
+            Ok(0)
+        }
     }
-
-    let target = FS_CONTEXT.lock().resolve(target)?;
-    target.mount(&fs)?;
-
-    Ok(0)
 }
 
 pub fn sys_umount2(target: *const c_char, flags: i32) -> AxResult<isize> {

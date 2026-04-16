@@ -16,6 +16,10 @@ mod fs;
 mod highlevel;
 pub use highlevel::*;
 
+pub fn new_filesystem_from_block_device(dev: AxBlockDevice) -> axfs_ng_vfs::VfsResult<axfs_ng_vfs::Filesystem> {
+    fs::new_default(dev)
+}
+
 pub fn init_filesystems(mut block_devs: AxDeviceContainer<AxBlockDevice>) {
     info!("Initialize filesystem subsystem...");
 

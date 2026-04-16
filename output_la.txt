@@ -16,7 +16,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-16 04:26:34.004444870 UTC
+Boot at 2026-04-16 07:29:20.004942410 UTC
 
 Welcome to Starry OS
 
@@ -24,7 +24,13 @@ Welcome to Starry OS
 [TEST] detected arch: loongarch64
 [TEST] enabled suites: libctest
 [TEST][runtime] WARN: /etc is not writable; cannot prepare passwd/group
-[TEST][runtime] libgcc bound: arch=loongarch64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64
+[TEST][runtime] probing runtime disk for libgcc...
+[TEST][runtime] try mount /dev/vda -> /dev/shm
+[37m[  3.193179 0:46 starry_kernel::syscall::fs::mount:90] [33mmount ext4: source=/dev/vda index=0 is unavailable[m
+[m[TEST][runtime] try mount /dev/vdb -> /dev/shm
+[TEST][runtime] mounted /dev/vdb
+[TEST][runtime] libgcc source from runtime disk: /dev/shm/libgcc/loongarch64/libgcc_s.so.1
+[TEST][runtime] libgcc bound: arch=loongarch64 source=/dev/shm/libgcc/loongarch64/libgcc_s.so.1 target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib
 [TEST][runtime] locale bound: /usr/lib/locale/C.utf8,/usr/lib/locale/C.UTF-8 /usr/share/locale/locale.alias
 [TEST] scan roots: / /musl /glibc
 [TEST] scanning /
@@ -67,6 +73,8 @@ Welcome to Starry OS
 [TEST] SKIP script: /glibc/libcbench_testcode.sh (switch=0)
 #### OS COMP TEST GROUP END libcbench-glibc ####
 [TEST] Running /musl/libctest_testcode.sh
+[TEST][libctest] dynamic wrapper: /dev/shm/.starry-entry-dynamic.6 (loader=/musl/lib/libc.so)
+[TEST][libctest] run dynamic via: /dev/shm/.starry-run-dynamic.6
 #### OS COMP TEST GROUP START libctest-musl ####
 ========== START entry-static.exe argv ==========
 Pass!
@@ -306,7 +314,7 @@ Pass!
 Pass!
 ========== END entry-static.exe printf_fmt_n ==========
 ========== START entry-static.exe pthread_robust_detach ==========
-[37m[ 16.834155 0:416 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
+[37m[ 18.662702 0:432 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
 [mPass!
 ========== END entry-static.exe pthread_robust_detach ==========
 ========== START entry-static.exe pthread_cancel_sem_wait ==========
@@ -390,450 +398,343 @@ Pass!
 ========== START entry-static.exe wcsstr_false_negative ==========
 Pass!
 ========== END entry-static.exe wcsstr_false_negative ==========
-========== START entry-dynamic.exe argv ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL argv [status 1]
-========== END entry-dynamic.exe argv ==========
-========== START entry-dynamic.exe basename ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL basename [status 1]
-========== END entry-dynamic.exe basename ==========
-========== START entry-dynamic.exe clocale_mbfuncs ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL clocale_mbfuncs [status 1]
-========== END entry-dynamic.exe clocale_mbfuncs ==========
-========== START entry-dynamic.exe clock_gettime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL clock_gettime [status 1]
-========== END entry-dynamic.exe clock_gettime ==========
-========== START entry-dynamic.exe dirname ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL dirname [status 1]
-========== END entry-dynamic.exe dirname ==========
-========== START entry-dynamic.exe dlopen ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL dlopen [status 1]
-========== END entry-dynamic.exe dlopen ==========
-========== START entry-dynamic.exe env ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL env [status 1]
-========== END entry-dynamic.exe env ==========
-========== START entry-dynamic.exe fdopen ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fdopen [status 1]
-========== END entry-dynamic.exe fdopen ==========
-========== START entry-dynamic.exe fnmatch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fnmatch [status 1]
-========== END entry-dynamic.exe fnmatch ==========
-========== START entry-dynamic.exe fscanf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fscanf [status 1]
-========== END entry-dynamic.exe fscanf ==========
-========== START entry-dynamic.exe fwscanf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fwscanf [status 1]
-========== END entry-dynamic.exe fwscanf ==========
-========== START entry-dynamic.exe iconv_open ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL iconv_open [status 1]
-========== END entry-dynamic.exe iconv_open ==========
-========== START entry-dynamic.exe inet_pton ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL inet_pton [status 1]
-========== END entry-dynamic.exe inet_pton ==========
-========== START entry-dynamic.exe mbc ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mbc [status 1]
-========== END entry-dynamic.exe mbc ==========
-========== START entry-dynamic.exe memstream ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL memstream [status 1]
-========== END entry-dynamic.exe memstream ==========
-========== START echo [TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency) ==========
-src/common/runtest.c:29: echo exec failed: No such file or directory
-FAIL [TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency) [status 1]
-========== END echo [TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency) ==========
-========== START entry-dynamic.exe pthread_cancel ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_cancel [status 1]
-========== END entry-dynamic.exe pthread_cancel ==========
-========== START entry-dynamic.exe pthread_cond ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_cond [status 1]
-========== END entry-dynamic.exe pthread_cond ==========
-========== START entry-dynamic.exe pthread_tsd ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_tsd [status 1]
-========== END entry-dynamic.exe pthread_tsd ==========
-========== START entry-dynamic.exe qsort ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL qsort [status 1]
-========== END entry-dynamic.exe qsort ==========
-========== START entry-dynamic.exe random ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL random [status 1]
-========== END entry-dynamic.exe random ==========
-========== START entry-dynamic.exe search_hsearch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_hsearch [status 1]
-========== END entry-dynamic.exe search_hsearch ==========
-========== START entry-dynamic.exe search_insque ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_insque [status 1]
-========== END entry-dynamic.exe search_insque ==========
-========== START entry-dynamic.exe search_lsearch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_lsearch [status 1]
-========== END entry-dynamic.exe search_lsearch ==========
-========== START entry-dynamic.exe search_tsearch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_tsearch [status 1]
-========== END entry-dynamic.exe search_tsearch ==========
-========== START entry-dynamic.exe sem_init ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sem_init [status 1]
-========== END entry-dynamic.exe sem_init ==========
-========== START entry-dynamic.exe setjmp ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL setjmp [status 1]
-========== END entry-dynamic.exe setjmp ==========
-========== START entry-dynamic.exe snprintf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL snprintf [status 1]
-========== END entry-dynamic.exe snprintf ==========
-========== START entry-dynamic.exe socket ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL socket [status 1]
-========== END entry-dynamic.exe socket ==========
-========== START entry-dynamic.exe sscanf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sscanf [status 1]
-========== END entry-dynamic.exe sscanf ==========
-========== START entry-dynamic.exe sscanf_long ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sscanf_long [status 1]
-========== END entry-dynamic.exe sscanf_long ==========
-========== START entry-dynamic.exe stat ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL stat [status 1]
-========== END entry-dynamic.exe stat ==========
-========== START entry-dynamic.exe strftime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strftime [status 1]
-========== END entry-dynamic.exe strftime ==========
-========== START entry-dynamic.exe string ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string [status 1]
-========== END entry-dynamic.exe string ==========
-========== START entry-dynamic.exe string_memcpy ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_memcpy [status 1]
-========== END entry-dynamic.exe string_memcpy ==========
-========== START entry-dynamic.exe string_memmem ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_memmem [status 1]
-========== END entry-dynamic.exe string_memmem ==========
-========== START entry-dynamic.exe string_memset ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_memset [status 1]
-========== END entry-dynamic.exe string_memset ==========
-========== START entry-dynamic.exe string_strchr ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_strchr [status 1]
-========== END entry-dynamic.exe string_strchr ==========
-========== START entry-dynamic.exe string_strcspn ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_strcspn [status 1]
-========== END entry-dynamic.exe string_strcspn ==========
-========== START entry-dynamic.exe string_strstr ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_strstr [status 1]
-========== END entry-dynamic.exe string_strstr ==========
-========== START entry-dynamic.exe strptime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strptime [status 1]
-========== END entry-dynamic.exe strptime ==========
-========== START entry-dynamic.exe strtod ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtod [status 1]
-========== END entry-dynamic.exe strtod ==========
-========== START entry-dynamic.exe strtod_simple ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtod_simple [status 1]
-========== END entry-dynamic.exe strtod_simple ==========
-========== START entry-dynamic.exe strtof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtof [status 1]
-========== END entry-dynamic.exe strtof ==========
-========== START entry-dynamic.exe strtol ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtol [status 1]
-========== END entry-dynamic.exe strtol ==========
-========== START entry-dynamic.exe strtold ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtold [status 1]
-========== END entry-dynamic.exe strtold ==========
-========== START entry-dynamic.exe swprintf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL swprintf [status 1]
-========== END entry-dynamic.exe swprintf ==========
-========== START entry-dynamic.exe tgmath ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tgmath [status 1]
-========== END entry-dynamic.exe tgmath ==========
-========== START entry-dynamic.exe time ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL time [status 1]
-========== END entry-dynamic.exe time ==========
-========== START entry-dynamic.exe tls_init ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tls_init [status 1]
-========== END entry-dynamic.exe tls_init ==========
-========== START entry-dynamic.exe tls_local_exec ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tls_local_exec [status 1]
-========== END entry-dynamic.exe tls_local_exec ==========
-========== START entry-dynamic.exe udiv ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL udiv [status 1]
-========== END entry-dynamic.exe udiv ==========
-========== START entry-dynamic.exe ungetc ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL ungetc [status 1]
-========== END entry-dynamic.exe ungetc ==========
-========== START entry-dynamic.exe utime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL utime [status 1]
-========== END entry-dynamic.exe utime ==========
-========== START entry-dynamic.exe wcsstr ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcsstr [status 1]
-========== END entry-dynamic.exe wcsstr ==========
-========== START entry-dynamic.exe wcstol ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcstol [status 1]
-========== END entry-dynamic.exe wcstol ==========
-========== START entry-dynamic.exe daemon_failure ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL daemon_failure [status 1]
-========== END entry-dynamic.exe daemon_failure ==========
-========== START entry-dynamic.exe dn_expand_empty ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL dn_expand_empty [status 1]
-========== END entry-dynamic.exe dn_expand_empty ==========
-========== START entry-dynamic.exe dn_expand_ptr_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL dn_expand_ptr_0 [status 1]
-========== END entry-dynamic.exe dn_expand_ptr_0 ==========
-========== START entry-dynamic.exe fflush_exit ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fflush_exit [status 1]
-========== END entry-dynamic.exe fflush_exit ==========
-========== START entry-dynamic.exe fgets_eof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fgets_eof [status 1]
-========== END entry-dynamic.exe fgets_eof ==========
-========== START entry-dynamic.exe fgetwc_buffering ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fgetwc_buffering [status 1]
-========== END entry-dynamic.exe fgetwc_buffering ==========
-========== START entry-dynamic.exe fpclassify_invalid_ld80 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fpclassify_invalid_ld80 [status 1]
-========== END entry-dynamic.exe fpclassify_invalid_ld80 ==========
-========== START entry-dynamic.exe ftello_unflushed_append ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL ftello_unflushed_append [status 1]
-========== END entry-dynamic.exe ftello_unflushed_append ==========
-========== START entry-dynamic.exe getpwnam_r_crash ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL getpwnam_r_crash [status 1]
-========== END entry-dynamic.exe getpwnam_r_crash ==========
-========== START entry-dynamic.exe getpwnam_r_errno ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL getpwnam_r_errno [status 1]
-========== END entry-dynamic.exe getpwnam_r_errno ==========
-========== START entry-dynamic.exe iconv_roundtrips ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL iconv_roundtrips [status 1]
-========== END entry-dynamic.exe iconv_roundtrips ==========
-========== START entry-dynamic.exe inet_ntop_v4mapped ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL inet_ntop_v4mapped [status 1]
-========== END entry-dynamic.exe inet_ntop_v4mapped ==========
-========== START entry-dynamic.exe inet_pton_empty_last_field ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL inet_pton_empty_last_field [status 1]
-========== END entry-dynamic.exe inet_pton_empty_last_field ==========
-========== START entry-dynamic.exe iswspace_null ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL iswspace_null [status 1]
-========== END entry-dynamic.exe iswspace_null ==========
-========== START entry-dynamic.exe lrand48_signextend ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL lrand48_signextend [status 1]
-========== END entry-dynamic.exe lrand48_signextend ==========
-========== START entry-dynamic.exe lseek_large ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL lseek_large [status 1]
-========== END entry-dynamic.exe lseek_large ==========
-========== START entry-dynamic.exe malloc_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL malloc_0 [status 1]
-========== END entry-dynamic.exe malloc_0 ==========
-========== START entry-dynamic.exe mbsrtowcs_overflow ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mbsrtowcs_overflow [status 1]
-========== END entry-dynamic.exe mbsrtowcs_overflow ==========
-========== START entry-dynamic.exe memmem_oob_read ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL memmem_oob_read [status 1]
-========== END entry-dynamic.exe memmem_oob_read ==========
-========== START entry-dynamic.exe memmem_oob ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL memmem_oob [status 1]
-========== END entry-dynamic.exe memmem_oob ==========
-========== START entry-dynamic.exe mkdtemp_failure ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mkdtemp_failure [status 1]
-========== END entry-dynamic.exe mkdtemp_failure ==========
-========== START entry-dynamic.exe mkstemp_failure ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mkstemp_failure [status 1]
-========== END entry-dynamic.exe mkstemp_failure ==========
-========== START entry-dynamic.exe printf_1e9_oob ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_1e9_oob [status 1]
-========== END entry-dynamic.exe printf_1e9_oob ==========
-========== START entry-dynamic.exe printf_fmt_g_round ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_fmt_g_round [status 1]
-========== END entry-dynamic.exe printf_fmt_g_round ==========
-========== START entry-dynamic.exe printf_fmt_g_zeros ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_fmt_g_zeros [status 1]
-========== END entry-dynamic.exe printf_fmt_g_zeros ==========
-========== START entry-dynamic.exe printf_fmt_n ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_fmt_n [status 1]
-========== END entry-dynamic.exe printf_fmt_n ==========
-========== START entry-dynamic.exe pthread_robust_detach ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_robust_detach [status 1]
-========== END entry-dynamic.exe pthread_robust_detach ==========
-========== START entry-dynamic.exe pthread_cond_smasher ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_cond_smasher [status 1]
-========== END entry-dynamic.exe pthread_cond_smasher ==========
-========== START entry-dynamic.exe pthread_condattr_setclock ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_condattr_setclock [status 1]
-========== END entry-dynamic.exe pthread_condattr_setclock ==========
-========== START entry-dynamic.exe pthread_exit_cancel ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_exit_cancel [status 1]
-========== END entry-dynamic.exe pthread_exit_cancel ==========
-========== START entry-dynamic.exe pthread_once_deadlock ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_once_deadlock [status 1]
-========== END entry-dynamic.exe pthread_once_deadlock ==========
-========== START entry-dynamic.exe pthread_rwlock_ebusy ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_rwlock_ebusy [status 1]
-========== END entry-dynamic.exe pthread_rwlock_ebusy ==========
-========== START entry-dynamic.exe putenv_doublefree ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL putenv_doublefree [status 1]
-========== END entry-dynamic.exe putenv_doublefree ==========
-========== START entry-dynamic.exe regex_backref_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_backref_0 [status 1]
-========== END entry-dynamic.exe regex_backref_0 ==========
-========== START entry-dynamic.exe regex_bracket_icase ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_bracket_icase [status 1]
-========== END entry-dynamic.exe regex_bracket_icase ==========
-========== START entry-dynamic.exe regex_ere_backref ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_ere_backref [status 1]
-========== END entry-dynamic.exe regex_ere_backref ==========
-========== START entry-dynamic.exe regex_escaped_high_byte ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_escaped_high_byte [status 1]
-========== END entry-dynamic.exe regex_escaped_high_byte ==========
-========== START entry-dynamic.exe regex_negated_range ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_negated_range [status 1]
-========== END entry-dynamic.exe regex_negated_range ==========
-========== START entry-dynamic.exe regexec_nosub ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regexec_nosub [status 1]
-========== END entry-dynamic.exe regexec_nosub ==========
-========== START entry-dynamic.exe rewind_clear_error ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL rewind_clear_error [status 1]
-========== END entry-dynamic.exe rewind_clear_error ==========
-========== START entry-dynamic.exe rlimit_open_files ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL rlimit_open_files [status 1]
-========== END entry-dynamic.exe rlimit_open_files ==========
-========== START entry-dynamic.exe scanf_bytes_consumed ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL scanf_bytes_consumed [status 1]
-========== END entry-dynamic.exe scanf_bytes_consumed ==========
-========== START entry-dynamic.exe scanf_match_literal_eof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL scanf_match_literal_eof [status 1]
-========== END entry-dynamic.exe scanf_match_literal_eof ==========
-========== START entry-dynamic.exe scanf_nullbyte_char ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL scanf_nullbyte_char [status 1]
-========== END entry-dynamic.exe scanf_nullbyte_char ==========
-========== START entry-dynamic.exe setvbuf_unget ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL setvbuf_unget [status 1]
-========== END entry-dynamic.exe setvbuf_unget ==========
-========== START entry-dynamic.exe sigprocmask_internal ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sigprocmask_internal [status 1]
-========== END entry-dynamic.exe sigprocmask_internal ==========
-========== START entry-dynamic.exe sscanf_eof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sscanf_eof [status 1]
-========== END entry-dynamic.exe sscanf_eof ==========
-========== START entry-dynamic.exe statvfs ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL statvfs [status 1]
-========== END entry-dynamic.exe statvfs ==========
-========== START entry-dynamic.exe strverscmp ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strverscmp [status 1]
-========== END entry-dynamic.exe strverscmp ==========
-========== START entry-dynamic.exe syscall_sign_extend ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL syscall_sign_extend [status 1]
-========== END entry-dynamic.exe syscall_sign_extend ==========
-========== START entry-dynamic.exe tls_get_new_dtv ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tls_get_new_dtv [status 1]
-========== END entry-dynamic.exe tls_get_new_dtv ==========
-========== START entry-dynamic.exe uselocale_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL uselocale_0 [status 1]
-========== END entry-dynamic.exe uselocale_0 ==========
-========== START entry-dynamic.exe wcsncpy_read_overflow ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcsncpy_read_overflow [status 1]
-========== END entry-dynamic.exe wcsncpy_read_overflow ==========
-========== START entry-dynamic.exe wcsstr_false_negative ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcsstr_false_negative [status 1]
-========== END entry-dynamic.exe wcsstr_false_negative ==========
+========== START /dev/shm/.starry-entry-dynamic.6 argv ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 argv ==========
+========== START /dev/shm/.starry-entry-dynamic.6 basename ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 basename ==========
+========== START /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
+========== START /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dirname ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 dirname ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dlopen ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 dlopen ==========
+========== START /dev/shm/.starry-entry-dynamic.6 env ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 env ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fdopen ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fdopen ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fscanf ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fscanf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
+========== START /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mbc ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mbc ==========
+========== START /dev/shm/.starry-entry-dynamic.6 memstream ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 memstream ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
+========== START /dev/shm/.starry-entry-dynamic.6 qsort ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 qsort ==========
+========== START /dev/shm/.starry-entry-dynamic.6 random ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 random ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_insque ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_insque ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sem_init ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sem_init ==========
+========== START /dev/shm/.starry-entry-dynamic.6 setjmp ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 setjmp ==========
+========== START /dev/shm/.starry-entry-dynamic.6 snprintf ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 snprintf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 socket ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 socket ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sscanf ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sscanf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
+========== START /dev/shm/.starry-entry-dynamic.6 stat ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 stat ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strftime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strftime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_memset ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_memset ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strptime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strptime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtod ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtod ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtol ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtol ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtold ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtold ==========
+========== START /dev/shm/.starry-entry-dynamic.6 swprintf ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 swprintf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tgmath ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tgmath ==========
+========== START /dev/shm/.starry-entry-dynamic.6 time ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 time ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tls_init ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tls_init ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
+========== START /dev/shm/.starry-entry-dynamic.6 udiv ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 udiv ==========
+========== START /dev/shm/.starry-entry-dynamic.6 ungetc ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 ungetc ==========
+========== START /dev/shm/.starry-entry-dynamic.6 utime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 utime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcstol ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcstol ==========
+========== START /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
+========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
+========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
+========== START /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
+========== START /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
+========== START /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
+========== START /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
+========== START /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
+========== START /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
+========== START /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
+========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
+========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
+[37m[ 42.069381 0:711 starry_kernel::task::ops:220] [33mexit robust list failed: AxErrorKind::BadAddress[m
+[mPass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
+========== START /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
+========== START /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
+========== START /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
+========== START /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
+========== START /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
+========== START /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 statvfs ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 statvfs ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
+========== START /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
+========== START /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
 #### OS COMP TEST GROUP END libctest-musl ####
 [TEST] Exit code(0): /musl/libctest_testcode.sh
 
 [TEST] Running /glibc/libctest_testcode.sh
+[TEST][libctest] dynamic wrapper: /dev/shm/.starry-entry-dynamic.6 (loader=/glibc/lib/ld-linux-loongarch-lp64d.so.1)
+[TEST][libctest] run dynamic via: /dev/shm/.starry-run-dynamic.6
 #### OS COMP TEST GROUP START libctest-glibc ####
 ========== START entry-static.exe argv ==========
 Pass!
@@ -1353,7 +1254,7 @@ FAIL wcstol [status 1]
 ========== END entry-static.exe wcstol ==========
 ========== START entry-static.exe daemon_failure ==========
 src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 9 [Bad file descriptor]
-src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 855, pid is 856, old pid is 855
+src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 941, pid is 942, old pid is 941
 src/regression/daemon-failure.c:73: child failed
 FAIL daemon_failure [status 1]
 ========== END entry-static.exe daemon_failure ==========
@@ -1499,7 +1400,8 @@ Pass!
 Pass!
 ========== END entry-static.exe scanf_nullbyte_char ==========
 ========== START entry-static.exe setvbuf_unget ==========
-FAIL setvbuf_unget [timed out]
+[37m[ 84.479485 0:1054 starry_kernel::mm::aspace:334] [33mFailed to populate pages for VA:0x1f4a8000 (READ | WRITE | USER): Out of memory[m
+[mFAIL setvbuf_unget [signal Segmentation fault]
 ========== END entry-static.exe setvbuf_unget ==========
 ========== START entry-static.exe sigprocmask_internal ==========
 Pass!
@@ -1525,446 +1427,720 @@ Pass!
 ========== START entry-static.exe wcsstr_false_negative ==========
 Pass!
 ========== END entry-static.exe wcsstr_false_negative ==========
-========== START entry-dynamic.exe argv ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL argv [status 1]
-========== END entry-dynamic.exe argv ==========
-========== START entry-dynamic.exe basename ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL basename [status 1]
-========== END entry-dynamic.exe basename ==========
-========== START entry-dynamic.exe clocale_mbfuncs ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== START /dev/shm/.starry-entry-dynamic.6 argv ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 argv ==========
+========== START /dev/shm/.starry-entry-dynamic.6 basename ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 basename ==========
+========== START /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 80 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 80 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 81 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 81 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 82 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 82 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 83 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 83 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 84 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 84 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 85 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 85 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 86 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 86 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 87 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 87 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 88 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 88 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 89 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 89 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 8a to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 8a to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 8b to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 8b to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 8c to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 8c to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 8d to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 8d to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 8e to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 8e to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 8f to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 8f to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 90 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 90 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 91 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 91 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 92 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 92 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 93 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 93 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 94 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 94 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 95 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 95 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 96 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 96 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 97 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 97 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 98 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 98 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 99 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 99 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 9a to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 9a to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 9b to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 9b to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 9c to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 9c to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 9d to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 9d to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 9e to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 9e to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte 9f to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte 9f to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a0 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a0 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a1 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a1 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a2 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a2 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a3 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a3 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a4 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a4 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a5 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a5 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a6 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a6 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a7 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a7 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a8 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a8 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte a9 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte a9 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte aa to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte aa to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ab to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ab to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ac to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ac to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ad to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ad to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ae to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ae to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte af to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte af to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b0 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b0 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b1 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b1 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b2 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b2 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b3 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b3 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b4 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b4 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b5 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b5 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b6 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b6 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b7 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b7 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b8 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b8 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte b9 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte b9 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ba to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ba to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte bb to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte bb to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte bc to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte bc to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte bd to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte bd to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte be to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte be to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte bf to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte bf to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c0 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c0 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c1 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c1 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c2 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c2 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c3 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c3 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c4 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c4 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c5 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c5 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c6 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c6 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c7 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c7 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c8 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c8 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte c9 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte c9 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ca to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ca to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte cb to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte cb to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte cc to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte cc to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte cd to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte cd to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ce to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ce to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte cf to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte cf to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d0 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d0 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d1 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d1 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d2 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d2 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d3 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d3 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d4 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d4 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d5 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d5 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d6 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d6 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d7 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d7 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d8 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d8 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte d9 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte d9 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte da to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte da to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte db to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte db to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte dc to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte dc to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte dd to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte dd to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte de to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte de to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte df to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte df to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e0 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e0 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e1 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e1 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e2 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e2 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e3 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e3 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e4 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e4 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e5 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e5 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e6 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e6 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e7 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e7 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e8 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e8 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte e9 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte e9 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ea to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ea to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte eb to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte eb to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ec to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ec to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ed to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ed to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ee to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ee to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ef to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ef to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f0 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f0 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f1 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f1 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f2 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f2 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f3 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f3 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f4 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f4 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f5 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f5 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f6 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f6 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f7 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f7 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f8 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f8 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte f9 to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte f9 to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte fa to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte fa to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte fb to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte fb to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte fc to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte fc to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte fd to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte fd to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte fe to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte fe to wchar_t
+src/functional/clocale_mbfuncs.c:28: mbrtowc failed to convert byte ff to wchar_t
+src/functional/clocale_mbfuncs.c:30: btowc failed to convert byte ff to wchar_t
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0000
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0001
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0002
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0003
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0004
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0005
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0006
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0007
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0008
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0009
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e000a
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e000b
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e000c
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e000d
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e000e
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e000f
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0010
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0011
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0012
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0013
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0014
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0015
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0016
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0017
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0018
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0019
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e001a
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e001b
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e001c
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e001d
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e001e
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e001f
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0020
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0021
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0022
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0023
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0024
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0025
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0026
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0027
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0028
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0029
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e002a
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e002b
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e002c
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e002d
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e002e
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e002f
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0030
+src/functional/clocale_mbfuncs.c:52: wcrtomb accepted non-image wchar_t e0031
+src/functional/clocale_mbfuncs.c:55: additional 128 non-image errors (not printed)
+src/functional/clocale_mbfuncs.c:60: wcsrtombs returned -1, expected 255
+src/functional/clocale_mbfuncs.c:62: mbsrtowcs returned 127, expected 255
+src/functional/clocale_mbfuncs.c:64: wcsrtombs/mbsrtowcs round trip failed
 FAIL clocale_mbfuncs [status 1]
-========== END entry-dynamic.exe clocale_mbfuncs ==========
-========== START entry-dynamic.exe clock_gettime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL clock_gettime [status 1]
-========== END entry-dynamic.exe clock_gettime ==========
-========== START entry-dynamic.exe dirname ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL dirname [status 1]
-========== END entry-dynamic.exe dirname ==========
-========== START entry-dynamic.exe dlopen ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL dlopen [status 1]
-========== END entry-dynamic.exe dlopen ==========
-========== START entry-dynamic.exe env ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL env [status 1]
-========== END entry-dynamic.exe env ==========
-========== START entry-dynamic.exe fdopen ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fdopen [status 1]
-========== END entry-dynamic.exe fdopen ==========
-========== START entry-dynamic.exe fnmatch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 clocale_mbfuncs ==========
+========== START /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 clock_gettime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dirname ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 dirname ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dlopen ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 dlopen ==========
+========== START /dev/shm/.starry-entry-dynamic.6 env ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 env ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fdopen ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fdopen ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
+src/functional/fnmatch.c:156: fnmatch("[[?*\]", "\", 0) failed, got 1 want 0
+src/functional/fnmatch.c:156: fnmatch("[]?*\]", "]", 0) failed, got 1 want 0
+src/functional/fnmatch.c:156: fnmatch("*[![:digit:]]*/[![:d-d]", "a/b", FNM_PATHNAME) failed, got 0 want -1
+src/functional/fnmatch.c:156: fnmatch("*[![:digit:]]*/[[:d-d]", "a/[", FNM_PATHNAME) failed, got 0 want -1
+src/functional/fnmatch.c:156: fnmatch("\", "\", 0) failed, got 1 want 0
 FAIL fnmatch [status 1]
-========== END entry-dynamic.exe fnmatch ==========
-========== START entry-dynamic.exe fscanf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 fnmatch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fscanf ==========
+src/functional/fscanf.c:52: fscanf(f, "ld %5i%2i", &x, &y) failed (got 2 fields, expected 1)
+src/functional/fscanf.c:88: fscanf(f, "%lf%n %d", &u, &x, &y) failed (2 != 0)
+src/functional/fscanf.c:89: u failed (1 != -1)
+src/functional/fscanf.c:90: x failed (4 != -1)
+src/functional/fscanf.c:91: y failed (12 != -1)
+src/functional/fscanf.c:92: ftell(f) failed (7 != 4)
+src/functional/fscanf.c:93: feof(f) failed (1 != 0)
+src/functional/fscanf.c:94: fgetc(f) failed (-1 != 32)
+src/functional/fscanf.c:124: fscanf(f, "%x%n", &x, &y) failed (1 != 0)
+src/functional/fscanf.c:125: x failed (0 != -1)
+src/functional/fscanf.c:126: y failed (2 != -1)
 FAIL fscanf [status 1]
-========== END entry-dynamic.exe fscanf ==========
-========== START entry-dynamic.exe fwscanf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 fscanf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
+src/functional/fwscanf.c:71: fwscanf(f, L"%lf%n %d", &u, &x, &y) failed (2 != 0)
+src/functional/fwscanf.c:72: u failed (1 != -1)
+src/functional/fwscanf.c:73: x failed (4 != -1)
+src/functional/fwscanf.c:74: y failed (12 != -1)
+src/functional/fwscanf.c:75: ftell(f) failed (7 != 4)
+src/functional/fwscanf.c:76: feof(f) failed (1 != 0)
+src/functional/fwscanf.c:77: fgetwc(f) failed (-1 != 32)
+src/functional/fwscanf.c:107: fwscanf(f, L"%x%n", &x, &y) failed (1 != 0)
+src/functional/fwscanf.c:108: x failed (0 != -1)
+src/functional/fwscanf.c:109: y failed (2 != -1)
 FAIL fwscanf [status 1]
-========== END entry-dynamic.exe fwscanf ==========
-========== START entry-dynamic.exe iconv_open ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL iconv_open [status 1]
-========== END entry-dynamic.exe iconv_open ==========
-========== START entry-dynamic.exe inet_pton ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL inet_pton [status 1]
-========== END entry-dynamic.exe inet_pton ==========
-========== START entry-dynamic.exe mbc ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mbc [status 1]
-========== END entry-dynamic.exe mbc ==========
-========== START entry-dynamic.exe memstream ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL memstream [status 1]
-========== END entry-dynamic.exe memstream ==========
-========== START echo [TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency) ==========
-src/common/runtest.c:29: echo exec failed: No such file or directory
-FAIL [TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency) [status 1]
-========== END echo [TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency) ==========
-========== START entry-dynamic.exe pthread_cancel ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_cancel [status 1]
-========== END entry-dynamic.exe pthread_cancel ==========
-========== START entry-dynamic.exe pthread_cond ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_cond [status 1]
-========== END entry-dynamic.exe pthread_cond ==========
-========== START entry-dynamic.exe pthread_tsd ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_tsd [status 1]
-========== END entry-dynamic.exe pthread_tsd ==========
-========== START entry-dynamic.exe qsort ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL qsort [status 1]
-========== END entry-dynamic.exe qsort ==========
-========== START entry-dynamic.exe random ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL random [status 1]
-========== END entry-dynamic.exe random ==========
-========== START entry-dynamic.exe search_hsearch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_hsearch [status 1]
-========== END entry-dynamic.exe search_hsearch ==========
-========== START entry-dynamic.exe search_insque ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_insque [status 1]
-========== END entry-dynamic.exe search_insque ==========
-========== START entry-dynamic.exe search_lsearch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_lsearch [status 1]
-========== END entry-dynamic.exe search_lsearch ==========
-========== START entry-dynamic.exe search_tsearch ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL search_tsearch [status 1]
-========== END entry-dynamic.exe search_tsearch ==========
-========== START entry-dynamic.exe sem_init ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sem_init [status 1]
-========== END entry-dynamic.exe sem_init ==========
-========== START entry-dynamic.exe setjmp ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL setjmp [status 1]
-========== END entry-dynamic.exe setjmp ==========
-========== START entry-dynamic.exe snprintf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL snprintf [status 1]
-========== END entry-dynamic.exe snprintf ==========
-========== START entry-dynamic.exe socket ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL socket [status 1]
-========== END entry-dynamic.exe socket ==========
-========== START entry-dynamic.exe sscanf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 fwscanf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 iconv_open ==========
+========== START /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 inet_pton ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mbc ==========
+src/functional/mbc.c:44: cannot set UTF-8 locale for test (codeset=ANSI_X3.4-1968)
+FAIL mbc [status 83]
+========== END /dev/shm/.starry-entry-dynamic.6 mbc ==========
+========== START /dev/shm/.starry-entry-dynamic.6 memstream ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 memstream ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
+src/functional/pthread_cancel-points.c:141: res == PTHREAD_CANCELED failed (non-blocking pthread_join, canceled thread exit status)
+FAIL pthread_cancel_points [status 1]
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel_points ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cancel ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_tsd ==========
+========== START /dev/shm/.starry-entry-dynamic.6 qsort ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 qsort ==========
+========== START /dev/shm/.starry-entry-dynamic.6 random ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 random ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_hsearch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_insque ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_insque ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_lsearch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 search_tsearch ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sem_init ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sem_init ==========
+========== START /dev/shm/.starry-entry-dynamic.6 setjmp ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 setjmp ==========
+========== START /dev/shm/.starry-entry-dynamic.6 snprintf ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 snprintf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 socket ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 socket ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sscanf ==========
+src/functional/sscanf.c:39: sscanf("hello, world\n", "%8c%8c", a, b) failed (2 fields, expected 1)
+src/functional/sscanf.c:66: sscanf(" 0x12 0x34", "%5i%2i", &x, &y) failed (got 2 fields, expected 1)
+src/functional/sscanf.c:83: sscanf("10e", "%lf", &d) failed (got 1 fields, expected no match (0))
 FAIL sscanf [status 1]
-========== END entry-dynamic.exe sscanf ==========
-========== START entry-dynamic.exe sscanf_long ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sscanf_long [status 1]
-========== END entry-dynamic.exe sscanf_long ==========
-========== START entry-dynamic.exe stat ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL stat [status 1]
-========== END entry-dynamic.exe stat ==========
-========== START entry-dynamic.exe strftime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 sscanf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sscanf_long ==========
+========== START /dev/shm/.starry-entry-dynamic.6 stat ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 stat ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strftime ==========
+src/functional/strftime.c:14: "%c": expected "Mon Jan  5 05:17:53 +10009", got "Mon Jan  5 05:17:53 10009"
+src/functional/strftime.c:14: "%c": expected "Wed Feb 23 12:00:00 0000", got "Wed Feb 23 12:00:00 0"
+src/functional/strftime.c:14: "%+3C": expected "+20", got "%+3C"
+src/functional/strftime.c:14: "%C": expected "00", got "0"
+src/functional/strftime.c:14: "%+10F": expected "2016-01-03", got "%+10F"
+src/functional/strftime.c:14: "%+11F": expected "+2016-01-03", got "%+11F"
+src/functional/strftime.c:14: "%F": expected "+10009-01-05", got "10009-01-05"
+src/functional/strftime.c:14: "%F": expected "0000-02-23", got "0-02-23"
+src/functional/strftime.c:14: "%011F": expected "-0123-01-01", got "0-123-01-01"
+src/functional/strftime.c:14: "%+5G": expected "+2015", got "%+5G"
+src/functional/strftime.c:14: "%+4Y": expected "2016", got "%+4Y"
+src/functional/strftime.c:14: "%+5Y": expected "+2016", got "%+5Y"
+src/functional/strftime.c:14: "%Y": expected "+10009", got "10009"
+src/functional/strftime.c:14: "%Y": expected "0000", got "0"
+src/functional/strftime.c:14: "%+5Y": expected "+0000", got "%+5Y"
+src/functional/strftime.c:14: "%+4Y": expected "-123", got "%+4Y"
+src/functional/strftime.c:14: "%+5Y": expected "-0123", got "%+5Y"
+src/functional/strftime.c:14: "%Y": expected "+2147485547", got "-2147481749"
+src/functional/strftime.c:14: "%011Y": expected "02147485547", got "-2147481749"
 FAIL strftime [status 1]
-========== END entry-dynamic.exe strftime ==========
-========== START entry-dynamic.exe string ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string [status 1]
-========== END entry-dynamic.exe string ==========
-========== START entry-dynamic.exe string_memcpy ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_memcpy [status 1]
-========== END entry-dynamic.exe string_memcpy ==========
-========== START entry-dynamic.exe string_memmem ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_memmem [status 1]
-========== END entry-dynamic.exe string_memmem ==========
-========== START entry-dynamic.exe string_memset ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_memset [status 1]
-========== END entry-dynamic.exe string_memset ==========
-========== START entry-dynamic.exe string_strchr ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_strchr [status 1]
-========== END entry-dynamic.exe string_strchr ==========
-========== START entry-dynamic.exe string_strcspn ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_strcspn [status 1]
-========== END entry-dynamic.exe string_strcspn ==========
-========== START entry-dynamic.exe string_strstr ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL string_strstr [status 1]
-========== END entry-dynamic.exe string_strstr ==========
-========== START entry-dynamic.exe strptime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strptime [status 1]
-========== END entry-dynamic.exe strptime ==========
-========== START entry-dynamic.exe strtod ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtod [status 1]
-========== END entry-dynamic.exe strtod ==========
-========== START entry-dynamic.exe strtod_simple ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtod_simple [status 1]
-========== END entry-dynamic.exe strtod_simple ==========
-========== START entry-dynamic.exe strtof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtof [status 1]
-========== END entry-dynamic.exe strtof ==========
-========== START entry-dynamic.exe strtol ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 strftime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_memcpy ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_memmem ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_memset ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_memset ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_strchr ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_strcspn ==========
+========== START /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 string_strstr ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strptime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strptime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtod ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtod ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtod_simple ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtol ==========
+src/functional/strtol.c:130: strtol(s="123", &c, 37) failed (wrong final position -404664 != 0)
 FAIL strtol [status 1]
-========== END entry-dynamic.exe strtol ==========
-========== START entry-dynamic.exe strtold ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strtold [status 1]
-========== END entry-dynamic.exe strtold ==========
-========== START entry-dynamic.exe swprintf ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 strtol ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strtold ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strtold ==========
+========== START /dev/shm/.starry-entry-dynamic.6 swprintf ==========
+src/functional/swprintf.c:113: strcmp(nl_langinfo(CODESET), "UTF-8") failed (no UTF-8 locale; tests might fail)
+src/functional/swprintf.c:121: swprintf(b, 3, L"%s", "\xc3\x80!") failed (-1 != 2)
+src/functional/swprintf.c:122: b[0] failed (wrong character 0 != c0)
+src/functional/swprintf.c:123: swprintf(b, 2, L"%.1s", "\xc3\x80!") failed (-1 != 1)
+src/functional/swprintf.c:124: b[0] failed (wrong character 0 != c0)
 FAIL swprintf [status 1]
-========== END entry-dynamic.exe swprintf ==========
-========== START entry-dynamic.exe tgmath ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tgmath [status 1]
-========== END entry-dynamic.exe tgmath ==========
-========== START entry-dynamic.exe time ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL time [status 1]
-========== END entry-dynamic.exe time ==========
-========== START entry-dynamic.exe tls_init ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tls_init [status 1]
-========== END entry-dynamic.exe tls_init ==========
-========== START entry-dynamic.exe tls_local_exec ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tls_local_exec [status 1]
-========== END entry-dynamic.exe tls_local_exec ==========
-========== START entry-dynamic.exe udiv ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL udiv [status 1]
-========== END entry-dynamic.exe udiv ==========
-========== START entry-dynamic.exe ungetc ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL ungetc [status 1]
-========== END entry-dynamic.exe ungetc ==========
-========== START entry-dynamic.exe utime ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL utime [status 1]
-========== END entry-dynamic.exe utime ==========
-========== START entry-dynamic.exe wcsstr ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcsstr [status 1]
-========== END entry-dynamic.exe wcsstr ==========
-========== START entry-dynamic.exe wcstol ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 swprintf ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tgmath ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tgmath ==========
+========== START /dev/shm/.starry-entry-dynamic.6 time ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 time ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tls_init ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tls_init ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tls_local_exec ==========
+========== START /dev/shm/.starry-entry-dynamic.6 udiv ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 udiv ==========
+========== START /dev/shm/.starry-entry-dynamic.6 ungetc ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 ungetc ==========
+========== START /dev/shm/.starry-entry-dynamic.6 utime ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 utime ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcsstr ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcstol ==========
+src/functional/wcstol.c:86: wcstol(s=L"123", &c, 37) failed (wrong final position -122496 != 0)
 FAIL wcstol [status 1]
-========== END entry-dynamic.exe wcstol ==========
-========== START entry-dynamic.exe daemon_failure ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 wcstol ==========
+========== START /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
+src/regression/daemon-failure.c:52: daemon should have failed with 24 [EMFILE] got 9 [Bad file descriptor]
+src/regression/daemon-failure.c:54: daemon forked despite failure: ppid is 1220, pid is 1221, old pid is 1220
+src/regression/daemon-failure.c:73: child failed
 FAIL daemon_failure [status 1]
-========== END entry-dynamic.exe daemon_failure ==========
-========== START entry-dynamic.exe dn_expand_empty ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 daemon_failure ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
+src/regression/dn_expand-empty.c:16: dn_expand("", name, 1) returned -1, wanted 1
+src/regression/dn_expand-empty.c:18: dn_expand("", name, 1) failed: got ".X" name, wanted ""
 FAIL dn_expand_empty [status 1]
-========== END entry-dynamic.exe dn_expand_empty ==========
-========== START entry-dynamic.exe dn_expand_ptr_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_empty ==========
+========== START /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
+src/regression/dn_expand-ptr-0.c:26: dn_expand("\xc0\2", name, 1) returned -1, wanted 2
+src/regression/dn_expand-ptr-0.c:28: dn_expand("\xc0\2", name, 1) failed: got ".XXX" name, wanted ""
 FAIL dn_expand_ptr_0 [status 1]
-========== END entry-dynamic.exe dn_expand_ptr_0 ==========
-========== START entry-dynamic.exe fflush_exit ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fflush_exit [status 1]
-========== END entry-dynamic.exe fflush_exit ==========
-========== START entry-dynamic.exe fgets_eof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fgets_eof [status 1]
-========== END entry-dynamic.exe fgets_eof ==========
-========== START entry-dynamic.exe fgetwc_buffering ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 dn_expand_ptr_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fflush_exit ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fgets_eof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
+src/common/utf8.c:18: cannot set UTF-8 locale for test (codeset=ANSI_X3.4-1968)
+src/regression/fgetwc-buffering.c:28: wanted 0x800, got 0xffffffff
+src/regression/fgetwc-buffering.c:35: wanted errno==0, got 84 (Invalid or incomplete multibyte or wide character)
+src/regression/fgetwc-buffering.c:36: feof(stdin)!=0 failed
+src/regression/fgetwc-buffering.c:37: ferror(stdin)==0 failed
 FAIL fgetwc_buffering [status 1]
-========== END entry-dynamic.exe fgetwc_buffering ==========
-========== START entry-dynamic.exe fpclassify_invalid_ld80 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL fpclassify_invalid_ld80 [status 1]
-========== END entry-dynamic.exe fpclassify_invalid_ld80 ==========
-========== START entry-dynamic.exe ftello_unflushed_append ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL ftello_unflushed_append [status 1]
-========== END entry-dynamic.exe ftello_unflushed_append ==========
-========== START entry-dynamic.exe getpwnam_r_crash ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL getpwnam_r_crash [status 1]
-========== END entry-dynamic.exe getpwnam_r_crash ==========
-========== START entry-dynamic.exe getpwnam_r_errno ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL getpwnam_r_errno [status 1]
-========== END entry-dynamic.exe getpwnam_r_errno ==========
-========== START entry-dynamic.exe iconv_roundtrips ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL iconv_roundtrips [status 1]
-========== END entry-dynamic.exe iconv_roundtrips ==========
-========== START entry-dynamic.exe inet_ntop_v4mapped ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL inet_ntop_v4mapped [status 1]
-========== END entry-dynamic.exe inet_ntop_v4mapped ==========
-========== START entry-dynamic.exe inet_pton_empty_last_field ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL inet_pton_empty_last_field [status 1]
-========== END entry-dynamic.exe inet_pton_empty_last_field ==========
-========== START entry-dynamic.exe iswspace_null ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL iswspace_null [status 1]
-========== END entry-dynamic.exe iswspace_null ==========
-========== START entry-dynamic.exe lrand48_signextend ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL lrand48_signextend [status 1]
-========== END entry-dynamic.exe lrand48_signextend ==========
-========== START entry-dynamic.exe lseek_large ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL lseek_large [status 1]
-========== END entry-dynamic.exe lseek_large ==========
-========== START entry-dynamic.exe malloc_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL malloc_0 [status 1]
-========== END entry-dynamic.exe malloc_0 ==========
-========== START entry-dynamic.exe mbsrtowcs_overflow ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mbsrtowcs_overflow [status 1]
-========== END entry-dynamic.exe mbsrtowcs_overflow ==========
-========== START entry-dynamic.exe memmem_oob_read ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL memmem_oob_read [status 1]
-========== END entry-dynamic.exe memmem_oob_read ==========
-========== START entry-dynamic.exe memmem_oob ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL memmem_oob [status 1]
-========== END entry-dynamic.exe memmem_oob ==========
-========== START entry-dynamic.exe mkdtemp_failure ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mkdtemp_failure [status 1]
-========== END entry-dynamic.exe mkdtemp_failure ==========
-========== START entry-dynamic.exe mkstemp_failure ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL mkstemp_failure [status 1]
-========== END entry-dynamic.exe mkstemp_failure ==========
-========== START entry-dynamic.exe printf_1e9_oob ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_1e9_oob [status 1]
-========== END entry-dynamic.exe printf_1e9_oob ==========
-========== START entry-dynamic.exe printf_fmt_g_round ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_fmt_g_round [status 1]
-========== END entry-dynamic.exe printf_fmt_g_round ==========
-========== START entry-dynamic.exe printf_fmt_g_zeros ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_fmt_g_zeros [status 1]
-========== END entry-dynamic.exe printf_fmt_g_zeros ==========
-========== START entry-dynamic.exe printf_fmt_n ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL printf_fmt_n [status 1]
-========== END entry-dynamic.exe printf_fmt_n ==========
-========== START entry-dynamic.exe pthread_robust_detach ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_robust_detach [status 1]
-========== END entry-dynamic.exe pthread_robust_detach ==========
-========== START entry-dynamic.exe pthread_cond_smasher ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_cond_smasher [status 1]
-========== END entry-dynamic.exe pthread_cond_smasher ==========
-========== START entry-dynamic.exe pthread_condattr_setclock ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_condattr_setclock [status 1]
-========== END entry-dynamic.exe pthread_condattr_setclock ==========
-========== START entry-dynamic.exe pthread_exit_cancel ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_exit_cancel [status 1]
-========== END entry-dynamic.exe pthread_exit_cancel ==========
-========== START entry-dynamic.exe pthread_once_deadlock ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_once_deadlock [status 1]
-========== END entry-dynamic.exe pthread_once_deadlock ==========
-========== START entry-dynamic.exe pthread_rwlock_ebusy ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL pthread_rwlock_ebusy [status 1]
-========== END entry-dynamic.exe pthread_rwlock_ebusy ==========
-========== START entry-dynamic.exe putenv_doublefree ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL putenv_doublefree [status 1]
-========== END entry-dynamic.exe putenv_doublefree ==========
-========== START entry-dynamic.exe regex_backref_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_backref_0 [status 1]
-========== END entry-dynamic.exe regex_backref_0 ==========
-========== START entry-dynamic.exe regex_bracket_icase ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_bracket_icase [status 1]
-========== END entry-dynamic.exe regex_bracket_icase ==========
-========== START entry-dynamic.exe regex_ere_backref ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 fgetwc_buffering ==========
+========== START /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 fpclassify_invalid_ld80 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 ftello_unflushed_append ==========
+========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_crash ==========
+========== START /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 getpwnam_r_errno ==========
+========== START /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 iconv_roundtrips ==========
+========== START /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 inet_ntop_v4mapped ==========
+========== START /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 inet_pton_empty_last_field ==========
+========== START /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 iswspace_null ==========
+========== START /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 lrand48_signextend ==========
+========== START /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 lseek_large ==========
+========== START /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 malloc_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mbsrtowcs_overflow ==========
+========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob_read ==========
+========== START /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 memmem_oob ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mkdtemp_failure ==========
+========== START /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 mkstemp_failure ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_1e9_oob ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_round ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_g_zeros ==========
+========== START /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 printf_fmt_n ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
+The futex facility returned an unexpected error code.
+FAIL pthread_robust_detach [signal Aborted]
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_robust_detach ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_cond_smasher ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_condattr_setclock ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_exit_cancel ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_once_deadlock ==========
+========== START /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 pthread_rwlock_ebusy ==========
+========== START /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 putenv_doublefree ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_backref_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_bracket_icase ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
+src/regression/regex-ere-backref.c:22: regexec(/(a)\1/ ~ "aa") returned 0 (Success), wanted REG_NOMATCH
+src/regression/regex-ere-backref.c:29: regexec(/(a)\1/ ~ "a1") returned 1 (No match), wanted 0
 FAIL regex_ere_backref [status 1]
-========== END entry-dynamic.exe regex_ere_backref ==========
-========== START entry-dynamic.exe regex_escaped_high_byte ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
+========== END /dev/shm/.starry-entry-dynamic.6 regex_ere_backref ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
+src/regression/regex-escaped-high-byte.c:19: regcomp(\\\xfc) returned 0 (Success) wanted REG_BADPAT
 FAIL regex_escaped_high_byte [status 1]
-========== END entry-dynamic.exe regex_escaped_high_byte ==========
-========== START entry-dynamic.exe regex_negated_range ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regex_negated_range [status 1]
-========== END entry-dynamic.exe regex_negated_range ==========
-========== START entry-dynamic.exe regexec_nosub ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL regexec_nosub [status 1]
-========== END entry-dynamic.exe regexec_nosub ==========
-========== START entry-dynamic.exe rewind_clear_error ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL rewind_clear_error [status 1]
-========== END entry-dynamic.exe rewind_clear_error ==========
-========== START entry-dynamic.exe rlimit_open_files ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL rlimit_open_files [status 1]
-========== END entry-dynamic.exe rlimit_open_files ==========
-========== START entry-dynamic.exe scanf_bytes_consumed ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL scanf_bytes_consumed [status 1]
-========== END entry-dynamic.exe scanf_bytes_consumed ==========
-========== START entry-dynamic.exe scanf_match_literal_eof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL scanf_match_literal_eof [status 1]
-========== END entry-dynamic.exe scanf_match_literal_eof ==========
-========== START entry-dynamic.exe scanf_nullbyte_char ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL scanf_nullbyte_char [status 1]
-========== END entry-dynamic.exe scanf_nullbyte_char ==========
-========== START entry-dynamic.exe setvbuf_unget ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL setvbuf_unget [status 1]
-========== END entry-dynamic.exe setvbuf_unget ==========
-========== START entry-dynamic.exe sigprocmask_internal ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sigprocmask_internal [status 1]
-========== END entry-dynamic.exe sigprocmask_internal ==========
-========== START entry-dynamic.exe sscanf_eof ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL sscanf_eof [status 1]
-========== END entry-dynamic.exe sscanf_eof ==========
-========== START entry-dynamic.exe statvfs ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL statvfs [status 1]
-========== END entry-dynamic.exe statvfs ==========
-========== START entry-dynamic.exe strverscmp ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL strverscmp [status 1]
-========== END entry-dynamic.exe strverscmp ==========
-========== START entry-dynamic.exe syscall_sign_extend ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL syscall_sign_extend [status 1]
-========== END entry-dynamic.exe syscall_sign_extend ==========
-========== START entry-dynamic.exe tls_get_new_dtv ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL tls_get_new_dtv [status 1]
-========== END entry-dynamic.exe tls_get_new_dtv ==========
-========== START entry-dynamic.exe uselocale_0 ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL uselocale_0 [status 1]
-========== END entry-dynamic.exe uselocale_0 ==========
-========== START entry-dynamic.exe wcsncpy_read_overflow ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcsncpy_read_overflow [status 1]
-========== END entry-dynamic.exe wcsncpy_read_overflow ==========
-========== START entry-dynamic.exe wcsstr_false_negative ==========
-src/common/runtest.c:29: entry-dynamic.exe exec failed: No such file or directory
-FAIL wcsstr_false_negative [status 1]
-========== END entry-dynamic.exe wcsstr_false_negative ==========
+========== END /dev/shm/.starry-entry-dynamic.6 regex_escaped_high_byte ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regex_negated_range ==========
+========== START /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 regexec_nosub ==========
+========== START /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 rewind_clear_error ==========
+========== START /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 rlimit_open_files ==========
+========== START /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 scanf_bytes_consumed ==========
+========== START /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 scanf_match_literal_eof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 scanf_nullbyte_char ==========
+========== START /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
+[37m[142.328139 0:1327 starry_kernel::mm::aspace:334] [33mFailed to populate pages for VA:0x1f6ed000 (READ | WRITE | USER): Out of memory[m
+[mFAIL setvbuf_unget [signal Segmentation fault]
+========== END /dev/shm/.starry-entry-dynamic.6 setvbuf_unget ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sigprocmask_internal ==========
+========== START /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 sscanf_eof ==========
+========== START /dev/shm/.starry-entry-dynamic.6 statvfs ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 statvfs ==========
+========== START /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 strverscmp ==========
+========== START /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 syscall_sign_extend ==========
+========== START /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 tls_get_new_dtv ==========
+========== START /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 uselocale_0 ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcsncpy_read_overflow ==========
+========== START /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
+Pass!
+========== END /dev/shm/.starry-entry-dynamic.6 wcsstr_false_negative ==========
 #### OS COMP TEST GROUP END libctest-glibc ####
 [TEST] Exit code(0): /glibc/libctest_testcode.sh
 

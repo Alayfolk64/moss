@@ -1,1 +1,10 @@
-{"files":{"Cargo.lock":"ae899b8bede1ed8f61bffd891ff65499d8cc58004d1ff088375f096d5b65bf0c","Cargo.toml":"79a5baf19388bfacec5dcfed5ab5af762405f78c961482418fae73e0ee221daa","src/lang_items.rs":"1fd845f1c8db997f96349d563bbb212c20c1d66acc1ea325c8180dcfc0c199f7","src/lib.rs":"8bf5887722bebbe30db31eebc01478be6fb70fba15d30d34933fd49f5d5ca654","src/mp.rs":"b1e6c5680d32da8dc56194abe736497e6aaa943b6d0b8070087ffda569a9d2b5"},"package":"b1d457ccb4246b5c447d2b89bac387978c22e85805191e171d660fad70128422"}
+{
+  "files": {
+    "Cargo.lock": "ae899b8bede1ed8f61bffd891ff65499d8cc58004d1ff088375f096d5b65bf0c",
+    "Cargo.toml": "79a5baf19388bfacec5dcfed5ab5af762405f78c961482418fae73e0ee221daa",
+    "src/lang_items.rs": "1fd845f1c8db997f96349d563bbb212c20c1d66acc1ea325c8180dcfc0c199f7",
+    "src/lib.rs": "57f44affdc9c7138694ac1e73a2512ff764f853d9e351347875c13760a4d9bd0",
+    "src/mp.rs": "b1e6c5680d32da8dc56194abe736497e6aaa943b6d0b8070087ffda569a9d2b5"
+  },
+  "package": "b1d457ccb4246b5c447d2b89bac387978c22e85805191e171d660fad70128422"
+}

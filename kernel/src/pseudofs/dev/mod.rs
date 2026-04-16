@@ -142,6 +142,26 @@ impl DeviceOps for CpuDmaLatency {
     }
 }
 
+struct BlockDiskStub;
+
+impl DeviceOps for BlockDiskStub {
+    fn read_at(&self, _buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        Err(AxError::NoSuchDevice)
+    }
+
+    fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Err(AxError::NoSuchDevice)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn flags(&self) -> NodeFlags {
+        NodeFlags::NON_CACHEABLE
+    }
+}
+
 fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     let mut root = DirMapping::new();
     root.add(
@@ -268,6 +288,19 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             Arc::new(CpuDmaLatency),
         ),
     );
+
+    // Minimal block-node exposure for mount sources like /dev/vda, /dev/vdb.
+    for (name, minor) in [("vda", 0), ("vdb", 1), ("vdc", 2), ("vdd", 3)] {
+        root.add(
+            name,
+            Device::new(
+                fs.clone(),
+                NodeType::BlockDevice,
+                DeviceId::new(8, minor),
+                Arc::new(BlockDiskStub),
+            ),
+        );
+    }
 
     // This is mounted to a tmpfs in `new_procfs`
     root.add(

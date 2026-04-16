@@ -40,6 +40,100 @@ copy_if_missing() {
   copy_if_exists "$src" "$dst"
 }
 
+RUNTIME_EXTRA_LD_LIBRARY_PATH=""
+RUNTIME_DISK_MOUNT_DIR=/dev/shm/.starry-runtime-disk
+RUNTIME_DISK_LIBGCC_SRC=""
+RUNTIME_TMP_BASE=/tmp
+
+append_extra_ld_library_path() {
+  d="$1"
+  [ -n "$d" ] || return 0
+  case ":$RUNTIME_EXTRA_LD_LIBRARY_PATH:" in
+    *":$d:"*) ;;
+    "")
+      RUNTIME_EXTRA_LD_LIBRARY_PATH="$d"
+      ;;
+    *)
+      RUNTIME_EXTRA_LD_LIBRARY_PATH="$RUNTIME_EXTRA_LD_LIBRARY_PATH:$d"
+      ;;
+  esac
+}
+
+detect_runtime_tmp_base() {
+  for d in /dev/shm /tmp /var/tmp /root; do
+    [ -d "$d" ] || continue
+    probe="$d/.starry-writable.$$"
+    "$BB" touch "$probe" >/dev/null 2>&1 || continue
+    "$BB" rm -f "$probe" >/dev/null 2>&1 || true
+    RUNTIME_TMP_BASE="$d"
+    break
+  done
+}
+
+find_libgcc_from_runtime_disk() {
+  [ -n "$ARCH_NAME" ] || return 1
+  [ -n "$RUNTIME_DISK_LIBGCC_SRC" ] && return 0
+
+  echo "[TEST][runtime] probing runtime disk for libgcc..."
+  for mp in \
+    /dev/shm/.starry-runtime-disk \
+    /tmp/.starry-runtime-disk \
+    /var/tmp/.starry-runtime-disk \
+    /dev/shm \
+    /tmp \
+    /var/tmp \
+    /root \
+    /mnt
+  do
+    case "$mp" in
+      */.starry-runtime-disk)
+        bb_try mkdir -p "$mp"
+        ;;
+    esac
+    [ -d "$mp" ] || continue
+    RUNTIME_DISK_MOUNT_DIR="$mp"
+    break
+  done
+  if [ ! -d "$RUNTIME_DISK_MOUNT_DIR" ]; then
+    echo "[TEST][runtime] WARN: no usable mount dir for runtime disk"
+    return 1
+  fi
+
+  found_dev=0
+  for dev in /dev/vd[a-z] /dev/xvd[a-z] /dev/sd[a-z] /dev/nvme*n1; do
+    [ -b "$dev" ] || continue
+    found_dev=1
+    echo "[TEST][runtime] try mount $dev -> $RUNTIME_DISK_MOUNT_DIR"
+    # Use `-n` to avoid /etc/mtab writes on read-only /etc images.
+    mounted_ok=0
+    "$BB" mount -n -t ext4 -o ro "$dev" "$RUNTIME_DISK_MOUNT_DIR" >/dev/null 2>&1 && mounted_ok=1
+    if [ "$mounted_ok" -ne 1 ] && [ -f "$RUNTIME_DISK_MOUNT_DIR/.starry-runtime-disk" ]; then
+      # Some busybox builds may return non-zero even when mount(2) succeeded.
+      mounted_ok=1
+    fi
+    [ "$mounted_ok" -eq 1 ] || continue
+    echo "[TEST][runtime] mounted $dev"
+
+    for cand in \
+      "$RUNTIME_DISK_MOUNT_DIR/libgcc/$ARCH_NAME/libgcc_s.so.1" \
+      "$RUNTIME_DISK_MOUNT_DIR/$ARCH_NAME/libgcc_s.so.1" \
+      "$RUNTIME_DISK_MOUNT_DIR/libgcc_s.so.1"
+    do
+      [ -f "$cand" ] || continue
+      RUNTIME_DISK_LIBGCC_SRC="$cand"
+      append_extra_ld_library_path "${cand%/*}"
+      echo "[TEST][runtime] libgcc source from runtime disk: $cand"
+      return 0
+    done
+
+    echo "[TEST][runtime] libgcc not found under mounted $dev"
+    "$BB" umount -n "$RUNTIME_DISK_MOUNT_DIR" >/dev/null 2>&1 || true
+  done
+
+  [ "$found_dev" -eq 1 ] || echo "[TEST][runtime] no block node matched: /dev/vd[a-z] /dev/xvd[a-z] /dev/sd[a-z] /dev/nvme*n1"
+  return 1
+}
+
 ensure_bb_cmd() {
   cmd="$1"
   [ -n "$cmd" ] || return 0
@@ -142,26 +236,34 @@ setup_musl_runtime() {
 }
 
 setup_libgcc_runtime() {
-  case "$ARCH_NAME" in
-    riscv64)
-      bb_try mkdir -p /lib /lib64 /usr/lib /usr/lib64 /glibc/lib64 /musl/lib
-      copy_if_missing /musl/lib/libgcc_s.so.1 /lib/libgcc_s.so.1
-      copy_if_missing /musl/lib/libgcc_s.so.1 /lib64/libgcc_s.so.1
-      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
-      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib64/libgcc_s.so.1
-      copy_if_missing /glibc/lib/libgcc_s.so.1 /glibc/lib64/libgcc_s.so.1
-      echo "[TEST][runtime] libgcc bound: arch=riscv64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64"
-      ;;
-    loongarch64)
-      bb_try mkdir -p /lib /lib64 /usr/lib /usr/lib64 /glibc/lib64 /musl/lib
-      copy_if_missing /musl/lib/libgcc_s.so.1 /lib/libgcc_s.so.1
-      copy_if_missing /musl/lib/libgcc_s.so.1 /lib64/libgcc_s.so.1
-      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
-      copy_if_missing /musl/lib/libgcc_s.so.1 /usr/lib64/libgcc_s.so.1
-      copy_if_missing /glibc/lib/libgcc_s.so.1 /glibc/lib64/libgcc_s.so.1
-      echo "[TEST][runtime] libgcc bound: arch=loongarch64 source=/musl/lib/libgcc_s.so.1 target=/lib,/lib64,/usr/lib,/usr/lib64"
-      ;;
-  esac
+  bb_try mkdir -p /lib /lib64 /usr/lib /usr/lib64 /glibc/lib64 /musl/lib
+
+  libgcc_src=""
+  for cand in /musl/lib/libgcc_s.so.1 /glibc/lib/libgcc_s.so.1; do
+    [ -f "$cand" ] || continue
+    libgcc_src="$cand"
+    break
+  done
+
+  if [ -z "$libgcc_src" ]; then
+    find_libgcc_from_runtime_disk || true
+    [ -n "$RUNTIME_DISK_LIBGCC_SRC" ] && libgcc_src="$RUNTIME_DISK_LIBGCC_SRC"
+  fi
+
+  if [ -z "$libgcc_src" ]; then
+    echo "[TEST][runtime] WARN: libgcc_s.so.1 not found in rootfs/runtime disk"
+    return 0
+  fi
+
+  append_extra_ld_library_path "${libgcc_src%/*}"
+  copy_if_missing "$libgcc_src" /musl/lib/libgcc_s.so.1
+  copy_if_missing "$libgcc_src" /lib/libgcc_s.so.1
+  copy_if_missing "$libgcc_src" /lib64/libgcc_s.so.1
+  copy_if_missing "$libgcc_src" /usr/lib/libgcc_s.so.1
+  copy_if_missing "$libgcc_src" /usr/lib64/libgcc_s.so.1
+  copy_if_missing "$libgcc_src" /glibc/lib/libgcc_s.so.1
+  copy_if_missing "$libgcc_src" /glibc/lib64/libgcc_s.so.1
+  echo "[TEST][runtime] libgcc bound: arch=$ARCH_NAME source=$libgcc_src target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib"
 }
 
 setup_locale_runtime() {
@@ -277,15 +379,34 @@ detect_arch() {
 
 runtime_ld_library_path_for_test() {
   test_sh="$1"
+  base=""
   case "$test_sh" in
     /musl/*)
-      echo "/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
+      base="/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
       ;;
     /glibc/*)
-      echo "/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
+      base="/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
       ;;
     *)
-      echo "$RUNTIME_LD_LIBRARY_PATH"
+      base="$RUNTIME_LD_LIBRARY_PATH"
+      ;;
+  esac
+  if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
+    echo "$base:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
+  else
+    echo "$base"
+  fi
+}
+
+runtime_locale_for_test() {
+  _test_name="$1"
+  case "$_test_name" in
+    libctest_testcode.sh)
+      # libc-test clocale_mbfuncs expects plain C locale semantics.
+      echo "C"
+      ;;
+    *)
+      echo "$RUNTIME_LOCALE"
       ;;
   esac
 }
@@ -344,6 +465,7 @@ setup_runtime_tools() {
   [ "$SETUP_RUNTIME_DONE" = "1" ] && return 0
 
   bb_try mkdir -p /bin /usr/bin
+  detect_runtime_tmp_base
   setup_runtime_users
   setup_glibc_runtime
   setup_musl_runtime
@@ -395,17 +517,132 @@ run_test() {
   setup_runtime_tools
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: setup_runtime_tools end"
 
+  # Keep libctest in-place: recursive copy to temp dir can trigger severe memory
+  # pressure on constrained images and causes unrelated failures.
+
   run_dynamic_cmd='sh ./run-dynamic.sh'
   libctest_dynamic_temp=""
+  libctest_dynamic_wrapper=""
   if [ "$test_name" = "libctest_testcode.sh" ] && [ -f ./run-dynamic.sh ]; then
-    libctest_dynamic_temp=".starry-run-dynamic.$$"
-    "$BB" sed \
-      -e 's#\./entry-dynamic\.exe pthread_cancel_points#echo "[TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency)"#g' \
-      -e 's#entry-dynamic\.exe pthread_cancel_points#echo "[TEST] SKIP entry-dynamic.exe pthread_cancel_points (known libgcc dependency)"#g' \
-      ./run-dynamic.sh > "./$libctest_dynamic_temp" || libctest_dynamic_temp=""
+    libctest_dynamic_temp="$RUNTIME_TMP_BASE/.starry-run-dynamic.$$"
+    case "$test_sh" in
+      /musl/*)
+        musl_loader=""
+        case "$ARCH_NAME" in
+          riscv64)
+            for cand in \
+              /musl/lib/ld-musl-riscv64-sf.so.1 \
+              /musl/lib/ld-musl-riscv64.so.1 \
+              /musl/lib/libc.so \
+              /lib/ld-musl-riscv64-sf.so.1 \
+              /lib/ld-musl-riscv64.so.1
+            do
+              [ -e "$cand" ] || continue
+              musl_loader="$cand"
+              break
+            done
+            ;;
+          loongarch64)
+            for cand in \
+              /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+              /musl/lib/ld-musl-loongarch64.so.1 \
+              /musl/lib/libc.so \
+              /lib/ld-musl-loongarch-lp64d.so.1 \
+              /lib/ld-musl-loongarch64.so.1
+            do
+              [ -e "$cand" ] || continue
+              musl_loader="$cand"
+              break
+            done
+            ;;
+        esac
+
+        if [ -n "$musl_loader" ]; then
+          loader_library_path="/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
+          if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
+            loader_library_path="$loader_library_path:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
+          fi
+          libctest_dynamic_wrapper="$RUNTIME_TMP_BASE/.starry-entry-dynamic.$$"
+          entry_dynamic_path="$PWD/entry-dynamic.exe"
+          {
+            printf '%s\n' '#!/bin/sh'
+            printf 'exec "%s" --library-path "%s" "%s" "$@"\n' \
+              "$musl_loader" "$loader_library_path" "$entry_dynamic_path"
+          } >"$libctest_dynamic_wrapper" 2>/dev/null || libctest_dynamic_wrapper=""
+          [ -n "$libctest_dynamic_wrapper" ] && "$BB" chmod +x "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
+          if [ -n "$libctest_dynamic_wrapper" ]; then
+            echo "[TEST][libctest] dynamic wrapper: $libctest_dynamic_wrapper (loader=$musl_loader)"
+          else
+            echo "[TEST][libctest] WARN: failed to create dynamic wrapper under $RUNTIME_TMP_BASE"
+          fi
+        else
+          echo "[TEST][libctest] WARN: musl loader not found, keep original run-dynamic.sh"
+        fi
+        ;;
+      /glibc/*)
+        glibc_loader=""
+        case "$ARCH_NAME" in
+          riscv64)
+            for cand in \
+              /glibc/lib/ld-linux-riscv64-lp64d.so.1 \
+              /lib/ld-linux-riscv64-lp64d.so.1 \
+              /lib64/ld-linux-riscv64-lp64d.so.1
+            do
+              [ -e "$cand" ] || continue
+              glibc_loader="$cand"
+              break
+            done
+            ;;
+          loongarch64)
+            for cand in \
+              /glibc/lib/ld-linux-loongarch-lp64d.so.1 \
+              /lib/ld-linux-loongarch-lp64d.so.1 \
+              /lib64/ld-linux-loongarch-lp64d.so.1
+            do
+              [ -e "$cand" ] || continue
+              glibc_loader="$cand"
+              break
+            done
+            ;;
+        esac
+
+        if [ -n "$glibc_loader" ]; then
+          loader_library_path="/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
+          if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
+            loader_library_path="$loader_library_path:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
+          fi
+          libctest_dynamic_wrapper="$RUNTIME_TMP_BASE/.starry-entry-dynamic.$$"
+          entry_dynamic_path="$PWD/entry-dynamic.exe"
+          {
+            printf '%s\n' '#!/bin/sh'
+            printf 'exec "%s" --library-path "%s" "%s" "$@"\n' \
+              "$glibc_loader" "$loader_library_path" "$entry_dynamic_path"
+          } >"$libctest_dynamic_wrapper" 2>/dev/null || libctest_dynamic_wrapper=""
+          [ -n "$libctest_dynamic_wrapper" ] && "$BB" chmod +x "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
+          if [ -n "$libctest_dynamic_wrapper" ]; then
+            echo "[TEST][libctest] dynamic wrapper: $libctest_dynamic_wrapper (loader=$glibc_loader)"
+          else
+            echo "[TEST][libctest] WARN: failed to create dynamic wrapper under $RUNTIME_TMP_BASE"
+          fi
+        else
+          echo "[TEST][libctest] WARN: glibc loader not found, keep original run-dynamic.sh"
+        fi
+        ;;
+    esac
+
+    if [ -n "$libctest_dynamic_wrapper" ]; then
+      "$BB" sed -e "s#entry-dynamic\\.exe#$libctest_dynamic_wrapper#g" \
+        ./run-dynamic.sh > "$libctest_dynamic_temp" || libctest_dynamic_temp=""
+    else
+      "$BB" cp -f ./run-dynamic.sh "$libctest_dynamic_temp" >/dev/null 2>&1 || libctest_dynamic_temp=""
+    fi
+
     if [ -n "$libctest_dynamic_temp" ]; then
-      "$BB" chmod +x "./$libctest_dynamic_temp" >/dev/null 2>&1 || true
-      run_dynamic_cmd="sh ./$libctest_dynamic_temp"
+      "$BB" chmod +x "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+      run_dynamic_cmd="sh $libctest_dynamic_temp"
+      echo "[TEST][libctest] run dynamic via: $libctest_dynamic_temp"
+    else
+      echo "[TEST][libctest] WARN: failed to prepare patched run-dynamic script"
     fi
   fi
 
@@ -502,20 +739,25 @@ run_test() {
     -e 's#\./lmbench_all lat_fs /var/tmp#echo "[TEST] SKIP lmbench lat_fs /var/tmp (known hang)"#g' \
     "./$test_name" > "$patched_script" || {
       ret=1
-      [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "./$libctest_dynamic_temp" >/dev/null 2>&1 || true
+      [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+      [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
+      [ -n "$libctest_work_dir" ] && "$BB" rm -rf "$libctest_work_dir" >/dev/null 2>&1 || true
       cd "$old_pwd" || true
       echo "[TEST] Exit code($ret): $test_sh"
       echo
       return "$ret"
     }
   [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: patched script ready $patched_script"
+  test_locale=$(runtime_locale_for_test "$test_name")
+  test_locpath="$RUNTIME_LOCPATH"
+  [ "$test_locale" = "C" ] && test_locpath=""
   HOME=/root
   PATH=$RUNTIME_PATH
   LD_LIBRARY_PATH=$(runtime_ld_library_path_for_test "$test_sh")
-  LANG=$RUNTIME_LOCALE
-  LC_ALL=$RUNTIME_LOCALE
-  LC_CTYPE=$RUNTIME_LOCALE
-  LOCPATH=$RUNTIME_LOCPATH
+  LANG=$test_locale
+  LC_ALL=$test_locale
+  LC_CTYPE=$test_locale
+  LOCPATH=$test_locpath
   export HOME PATH LD_LIBRARY_PATH LANG LC_ALL LC_CTYPE LOCPATH
   for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock ar locale timeout; do
     eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
@@ -524,7 +766,9 @@ run_test() {
   . "$patched_script"
   ret=$?
   "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
-  [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "./$libctest_dynamic_temp" >/dev/null 2>&1 || true
+  [ -n "$libctest_dynamic_temp" ] && "$BB" rm -f "$libctest_dynamic_temp" >/dev/null 2>&1 || true
+  [ -n "$libctest_dynamic_wrapper" ] && "$BB" rm -f "$libctest_dynamic_wrapper" >/dev/null 2>&1 || true
+  [ -n "$libctest_work_dir" ] && "$BB" rm -rf "$libctest_work_dir" >/dev/null 2>&1 || true
   cd "$old_pwd" || true
   echo "[TEST] Exit code($ret): $test_sh"
   echo

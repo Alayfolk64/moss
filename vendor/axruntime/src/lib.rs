@@ -21,6 +21,8 @@
 
 #[macro_use]
 extern crate axlog;
+#[cfg(feature = "fs")]
+extern crate alloc;
 
 #[cfg(all(target_os = "none", not(test)))]
 mod lang_items;
@@ -115,9 +117,64 @@ impl axdriver::dyn_drivers::klib::IoMapIf for IoMapIfImpl {
     }
 }
 
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 static INITED_CPUS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(feature = "fs")]
+use axdriver::prelude::{BaseDriverOps, BlockDriverOps};
+#[cfg(feature = "fs")]
+use alloc::vec::Vec;
+
+#[cfg(feature = "fs")]
+static RUNTIME_BLOCK_DEVS_LOCK: AtomicBool = AtomicBool::new(false);
+#[cfg(feature = "fs")]
+static mut RUNTIME_BLOCK_DEVS: Option<Vec<Option<axdriver::AxBlockDevice>>> = None;
+
+#[cfg(feature = "fs")]
+fn lock_runtime_block_devs() {
+    while RUNTIME_BLOCK_DEVS_LOCK
+        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        .is_err()
+    {
+        core::hint::spin_loop();
+    }
+}
+
+#[cfg(feature = "fs")]
+fn unlock_runtime_block_devs() {
+    RUNTIME_BLOCK_DEVS_LOCK.store(false, Ordering::Release);
+}
+
+#[cfg(feature = "fs")]
+fn set_runtime_block_devices(slots: Vec<Option<axdriver::AxBlockDevice>>) {
+    lock_runtime_block_devs();
+    unsafe {
+        RUNTIME_BLOCK_DEVS = Some(slots);
+    }
+    unlock_runtime_block_devs();
+}
+
+#[cfg(feature = "fs")]
+pub fn runtime_block_device_count() -> usize {
+    lock_runtime_block_devs();
+    let count = unsafe { RUNTIME_BLOCK_DEVS.as_ref().map_or(0, |it| it.len()) };
+    unlock_runtime_block_devs();
+    count
+}
+
+#[cfg(feature = "fs")]
+pub fn take_runtime_block_device(slot_idx: usize) -> Option<axdriver::AxBlockDevice> {
+    lock_runtime_block_devs();
+    let dev = unsafe {
+        RUNTIME_BLOCK_DEVS
+            .as_mut()
+            .and_then(|slots| slots.get_mut(slot_idx))
+            .and_then(Option::take)
+    };
+    unlock_runtime_block_devs();
+    dev
+}
 
 fn is_init_ok() -> bool {
     INITED_CPUS.load(Ordering::Acquire) == axconfig::plat::CPU_NUM
@@ -221,10 +278,53 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     #[cfg(any(feature = "fs", feature = "net", feature = "display"))]
     {
         #[allow(unused_variables)]
-        let all_devices = axdriver::init_drivers();
+        let mut all_devices = axdriver::init_drivers();
 
         #[cfg(feature = "fs")]
-        axfs::init_filesystems(all_devices.block);
+        {
+            // In multi-disk contest setups (sdcard + runtime disk), make sure
+            // rootfs chooses the main test image instead of the tiny helper disk.
+            let mut block_slots: Vec<Option<axdriver::AxBlockDevice>> =
+                all_devices.block.drain(..).map(Some).collect();
+            assert!(!block_slots.is_empty(), "No block device found!");
+
+            let mut root_idx = 0usize;
+            let mut root_bytes = 0u128;
+            if block_slots.len() > 1 {
+                for (idx, dev_slot) in block_slots.iter().enumerate() {
+                    let dev = dev_slot
+                        .as_ref()
+                        .expect("all block device slots should be occupied");
+                    let bytes = dev.num_blocks() as u128 * dev.block_size() as u128;
+                    let better_size = bytes > root_bytes;
+                    let tie_but_better_name =
+                        bytes == root_bytes && {
+                            let current = block_slots[root_idx]
+                                .as_ref()
+                                .expect("root index should point to a valid block device");
+                            dev.device_name() < current.device_name()
+                        };
+                    if better_size || tie_but_better_name {
+                        root_bytes = bytes;
+                        root_idx = idx;
+                    }
+                }
+                info!(
+                    "Select root block device by size: idx={} name={} bytes={}",
+                    root_idx,
+                    block_slots[root_idx]
+                        .as_ref()
+                        .expect("root index should point to a valid block device")
+                        .device_name(),
+                    root_bytes
+                );
+            }
+            let root_dev = block_slots[root_idx]
+                .take()
+                .expect("root block device slot must exist");
+            axfs::init_filesystems(axdriver::AxDeviceContainer::from_one(root_dev));
+            set_runtime_block_devices(block_slots);
+        }
 
         #[cfg(feature = "net")]
         axnet::init_network(all_devices.net);

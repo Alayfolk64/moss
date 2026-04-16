@@ -1,6 +1,16 @@
 #!/bin/sh
-make kernel-la
+
+rm -rf sdcard-la.img
+xz -dk sdcard-la.img.xz
 
 sleep 1
 
-qemu-system-loongarch64 -kernel kernel-la -m 1G -nographic -smp 1 -drive file=sdcard-la.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee output_la.txt
+make kernel-la disk.img
+
+sleep 1
+
+if [ -f disk.img ]; then
+  qemu-system-loongarch64 -kernel kernel-la -m 1G -nographic -smp 1 -drive file=sdcard-la.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc -drive file=disk.img,if=none,format=raw,id=x1 -device virtio-blk-pci,drive=x1 2>&1 | tee output_la.txt
+else
+  qemu-system-loongarch64 -kernel kernel-la -m 1G -nographic -smp 1 -drive file=sdcard-la.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee output_la.txt
+fi
