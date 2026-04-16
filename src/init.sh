@@ -241,6 +241,10 @@ setup_musl_runtime() {
   # Do not rely on arch detection here; populate known loader names.
   # Existing files are kept and copy_if_missing suppresses failures.
   for musl_ldso in \
+    /musl/lib/ld-musl-loongarch64.so.1 \
+    /musl/lib/ld-musl-loongarch-lp64d.so.1 \
+    /musl/lib/ld-musl-riscv64.so.1 \
+    /musl/lib/ld-musl-riscv64-sf.so.1 \
     /lib/ld-musl-loongarch64.so.1 \
     /lib/ld-musl-loongarch-lp64d.so.1 \
     /lib64/ld-musl-loongarch-lp64d.so.1 \
@@ -439,10 +443,11 @@ libctest_loader_for_test() {
         riscv64)
           for cand in \
             /musl/lib/ld-musl-riscv64.so.1 \
-            /lib/ld-musl-riscv64.so.1 \
             /musl/lib/ld-musl-riscv64-sf.so.1 \
+            /lib/ld-musl-riscv64.so.1 \
             /lib/ld-musl-riscv64-sf.so.1 \
-            /musl/lib/libc.so
+            /lib64/ld-musl-riscv64.so.1 \
+            /lib64/ld-musl-riscv64-sf.so.1
           do
             [ -e "$cand" ] || continue
             _loader="$cand"
@@ -455,7 +460,7 @@ libctest_loader_for_test() {
             /musl/lib/ld-musl-loongarch64.so.1 \
             /lib/ld-musl-loongarch-lp64d.so.1 \
             /lib/ld-musl-loongarch64.so.1 \
-            /musl/lib/libc.so
+            /lib64/ld-musl-loongarch-lp64d.so.1
           do
             [ -e "$cand" ] || continue
             _loader="$cand"
@@ -591,7 +596,6 @@ prepare_libctest_dynamic_binary_wrapper() {
     esac
     return 0
   fi
-  [ "$_loader" = "/musl/lib/libc.so" ] && echo "[TEST][libctest] WARN: fallback loader /musl/lib/libc.so in use"
 
   _loader_library_path=$(libctest_loader_library_path_for_test "$_test_sh")
   libctest_entry_dynamic_real="$PWD/.starry-entry-dynamic.real.$$"
