@@ -125,7 +125,7 @@ clean: makeclean
 build run debug disasm: toolchain defconfig
 	@$(MAKE) -C make $@
 
-all: kernel-rv kernel-la disk.img disk-la.img
+all: kernel-rv kernel-la
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
