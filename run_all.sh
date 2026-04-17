@@ -3,8 +3,8 @@ set -e
 
 rm -rf sdcard-la.img
 rm -rf sdcard-rv.img
-xz -dk sdcard-la.img.xz
-xz -dk sdcard-rv.img.xz
+cp ./imgs/sdcard-rv.img ./
+cp ./imgs/sdcard-la.img ./
 
 sleep 1
 

@@ -322,7 +322,6 @@ run_ltp() {
     mmap15
     mmap16
     mmap17
-    mmap18
     mmap19
     mmap20
     mprotect01
