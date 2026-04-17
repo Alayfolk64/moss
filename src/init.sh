@@ -1,1131 +1,655 @@
-#!/bin/sh
+if ! /musl/busybox test -d /bin; then
+    echo @@@@@@@@@@ setup @@@@@@@@@@
 
-export HOME=/root
+    /musl/busybox mkdir -v /bin
+    /musl/busybox --install -s /bin
+    export PATH=/bin
 
-echo "Welcome to Starry OS"
+    mkdir -v /lib
+    if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+        ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+        ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+    elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
+        ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+        ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+        ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+    fi
+    ln -v -s /lib /lib64
+
+    mkdir -v /usr
+    ln -v -s /lib /usr/lib64
+
+    mkdir -v -p /var/tmp
+    mkdir -v -p /var/log
+
+    mkdir -v /etc
+    echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
+    echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
+    echo "nameserver 8.8.8.8" >/etc/resolv.conf
+
+    mkdir -vp /lib/modules/10.0.0/build
+    echo "CONFIG_EVENTFD=y" >>/lib/modules/10.0.0/build/.config
+fi
+
+musl_runtime() {
+    echo "prepare musl runtime"
+    rm -rf /lib/libc.so
+    rm -rf /lib/libm.so
+    rm -rf /lib/libc.so.6
+    rm -rf /lib/libm.so.6
+    ln -v -s /musl/lib/libc.so /lib/libc.so
+}
+
+glibc_runtime() {
+    echo "prepare musl runtime"
+    rm -rf /lib/libc.so
+    ln -v -s /glibc/lib/libc.so.6 /lib/libc.so.6
+    ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
+    ln -v -s /lib/libc.so.6 /lib/libc.so
+    ln -v -s /lib/libm.so.6 /lib/libm.so
+}
+
+echo @@@@@@@@@@ files @@@@@@@@@@
+ls -lhAR /lib
+echo @@@@@@@@@@ env @@@@@@@@@@
+env
 echo
 
-BB=""
-if [ -x /musl/busybox ]; then
-  BB=/musl/busybox
-elif [ -x /glibc/busybox ]; then
-  BB=/glibc/busybox
-fi
+run_ltp() {
+    echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
-if [ -z "$BB" ]; then
-  echo "[TEST] busybox not found under /musl or /glibc"
-  echo "[TEST] fallback to interactive shell"
-  cd / || true
-  sh
-  exit 0
-fi
+    export LTP_TIMEOUT_MUL=0.5
+    export LTP_DEV_FS_TYPE=tmpfs
+    export LTP_SINGLE_FS_TYPE=tmpfs
 
-echo "[TEST] using busybox: $BB"
-
-bb_try() {
-  "$BB" "$@" >/dev/null 2>&1 || true
-}
-
-copy_if_exists() {
-  src="$1"
-  dst="$2"
-  [ -e "$src" ] || return 0
-  bb_try cp -f "$src" "$dst"
-}
-
-copy_if_missing() {
-  src="$1"
-  dst="$2"
-  [ -e "$dst" ] && return 0
-  copy_if_exists "$src" "$dst"
-}
-
-first_existing_path() {
-  for p in "$@"; do
-    [ -e "$p" ] || continue
-    echo "$p"
-    return 0
-  done
-  return 1
-}
-
-RUNTIME_EXTRA_LD_LIBRARY_PATH=""
-RUNTIME_DISK_MOUNT_DIR=/dev/shm/.starry-runtime-disk
-RUNTIME_DISK_LIBGCC_SRC=""
-RUNTIME_TMP_BASE=/tmp
-SHELL_ENV_RC=""
-
-append_extra_ld_library_path() {
-  d="$1"
-  [ -n "$d" ] || return 0
-  case ":$RUNTIME_EXTRA_LD_LIBRARY_PATH:" in
-    *":$d:"*) ;;
-    "")
-      RUNTIME_EXTRA_LD_LIBRARY_PATH="$d"
-      ;;
-    *)
-      RUNTIME_EXTRA_LD_LIBRARY_PATH="$RUNTIME_EXTRA_LD_LIBRARY_PATH:$d"
-      ;;
-  esac
-}
-
-detect_runtime_tmp_base() {
-  found_writable=""
-  for d in /tmp /var/tmp /root /dev/shm; do
-    [ -d "$d" ] || continue
-    probe="$d/.starry-writable.$$"
-    "$BB" touch "$probe" >/dev/null 2>&1 || continue
-    "$BB" rm -f "$probe" >/dev/null 2>&1 || true
-    [ -n "$found_writable" ] || found_writable="$d"
-
-    # Prefer dirs that are executable for binaries; /dev/shm is often noexec.
-    probe_bb="$d/.starry-bb.$$"
-    "$BB" cp -f "$BB" "$probe_bb" >/dev/null 2>&1 || continue
-    "$BB" chmod +x "$probe_bb" >/dev/null 2>&1 || {
-      "$BB" rm -f "$probe_bb" >/dev/null 2>&1 || true
-      continue
-    }
-    "$probe_bb" true >/dev/null 2>&1
-    probe_ok=$?
-    "$BB" rm -f "$probe_bb" >/dev/null 2>&1 || true
-    [ "$probe_ok" -eq 0 ] || continue
-
-    RUNTIME_TMP_BASE="$d"
-    return 0
-  done
-  [ -n "$found_writable" ] && RUNTIME_TMP_BASE="$found_writable"
-}
-
-find_libgcc_from_runtime_disk() {
-  [ -n "$ARCH_NAME" ] || return 1
-  [ -n "$RUNTIME_DISK_LIBGCC_SRC" ] && return 0
-
-  echo "[TEST][runtime] probing runtime disk for libgcc..."
-  for mp in \
-    /dev/shm/.starry-runtime-disk \
-    /tmp/.starry-runtime-disk \
-    /var/tmp/.starry-runtime-disk \
-    /dev/shm \
-    /tmp \
-    /var/tmp \
-    /root \
-    /mnt
-  do
-    case "$mp" in
-      */.starry-runtime-disk)
-        bb_try mkdir -p "$mp"
-        ;;
-    esac
-    [ -d "$mp" ] || continue
-    RUNTIME_DISK_MOUNT_DIR="$mp"
-    break
-  done
-  if [ ! -d "$RUNTIME_DISK_MOUNT_DIR" ]; then
-    echo "[TEST][runtime] WARN: no usable mount dir for runtime disk"
-    return 1
-  fi
-
-  found_dev=0
-  for dev in /dev/vd[a-z] /dev/xvd[a-z] /dev/sd[a-z] /dev/nvme*n1; do
-    [ -b "$dev" ] || continue
-    found_dev=1
-    echo "[TEST][runtime] try mount $dev -> $RUNTIME_DISK_MOUNT_DIR"
-    # Use `-n` to avoid /etc/mtab writes on read-only /etc images.
-    mounted_ok=0
-    "$BB" mount -n -t ext4 -o ro "$dev" "$RUNTIME_DISK_MOUNT_DIR" >/dev/null 2>&1 && mounted_ok=1
-    if [ "$mounted_ok" -ne 1 ] && [ -f "$RUNTIME_DISK_MOUNT_DIR/.starry-runtime-disk" ]; then
-      # Some busybox builds may return non-zero even when mount(2) succeeded.
-      mounted_ok=1
+    all_testcases="
+    rt_sigsuspend01
+    abort01
+    accept01
+    accept03
+    accept4_01
+    access01
+    access02
+    access03
+    alarm02
+    alarm03
+    alarm05
+    alarm06
+    alarm07
+    bind01
+    bind03
+    bind05
+    brk01
+    brk02
+    chdir01
+    chdir04
+    chmod01
+    chmod03
+    chown01
+    chown02
+    chown03
+    chown05
+    chroot01
+    chroot02
+    chroot03
+    clock_getres01
+    clock_gettime02
+    clock_nanosleep01
+    clock_nanosleep04
+    clone01
+    clone02
+    clone03
+    clone06
+    clone07
+    close01
+    close02
+    confstr01
+    copy_file_range01
+    creat01
+    creat03
+    creat05
+    creat08
+    dirtypipe
+    dup01
+    dup02
+    dup03
+    dup04
+    dup06
+    dup07
+    dup201
+    dup202
+    dup203
+    dup204
+    dup205
+    dup206
+    dup207
+    dup3_01
+    dup3_02
+    epoll_create01
+    epoll_create02
+    epoll_create1_01
+    epoll_create1_02
+    epoll_ctl01
+    epoll_ctl02
+    epoll_ctl03
+    epoll_ctl04
+    epoll_ctl05
+    epoll_pwait01
+    epoll_pwait02
+    epoll_pwait03
+    epoll_pwait04
+    epoll_pwait05
+    epoll_wait01
+    epoll_wait02
+    epoll_wait03
+    epoll_wait04
+    epoll_wait05
+    epoll_wait06
+    epoll_wait07
+    eventfd01
+    eventfd02
+    eventfd03
+    eventfd04
+    eventfd05
+    eventfd2_01
+    eventfd2_02
+    eventfd2_03
+    execl01
+    execle01
+    execlp01
+    execv01
+    execve01
+    execve03
+    execve05
+    execvp01
+    exit_group01
+    exit02
+    faccessat01
+    faccessat02
+    faccessat201
+    faccessat202
+    fallocate03
+    fchdir01
+    fchdir02
+    fchmod01
+    fchmod02
+    fchmod03
+    fchmod04
+    fchmod05
+    fchmod06
+    fchmodat01
+    fchmodat02
+    fchown01
+    fchown02
+    fchown03
+    fchown04
+    fchown05
+    fcntl02
+    fcntl02_64
+    fcntl03
+    fcntl03_64
+    fcntl04
+    fcntl04_64
+    fcntl05
+    fcntl05_64
+    fcntl08
+    fcntl08_64
+    fcntl27
+    fcntl27_64
+    fcntl29
+    fcntl29_64
+    fdatasync01
+    fdatasync02
+    flock06
+    fork_procs
+    fork01
+    fork03
+    fork04
+    fork07
+    fork08
+    fork10
+    fpathconf01
+    fstat02
+    fstat02_64
+    fstat03
+    fstat03_64
+    fstatfs01
+    fstatfs01_64
+    fstatfs02
+    fstatfs02_64
+    fsync01
+    ftruncate01
+    ftruncate01_64
+    getcwd01
+    getcwd03
+    getdents01
+    getdents02
+    getdomainname01
+    getegid01
+    getegid01_16
+    getegid02
+    getegid02_16
+    geteuid01
+    geteuid02
+    getgid03
+    gethostname01
+    getitimer01
+    getitimer02
+    getpagesize01
+    getpeername01
+    getpgid01
+    getpgid02
+    getpgrp01
+    getpid01
+    getpid02
+    getppid01
+    getppid02
+    getpriority01
+    getpriority02
+    getrandom01
+    getrandom02
+    getrandom03
+    getrandom04
+    getrlimit01
+    getrlimit02
+    getrusage01
+    getrusage02
+    getsid01
+    getsid02
+    getsockname01
+    getsockopt01
+    getsockopt02
+    gettid01
+    gettid02
+    gettimeofday01
+    getuid01
+    getuid03
+    in6_01
+    ioctl_ns07
+    ioctl04
+    ioctl05
+    ioctl06
+    kill03
+    kill06
+    kill08
+    kill09
+    kill11
+    link02
+    link04
+    link05
+    link08
+    listen01
+    llseek01
+    llseek02
+    llseek03
+    lseek01
+    lseek02
+    lseek07
+    lseek11
+    lstat01
+    lstat01_64
+    lstat02
+    lstat02_64
+    madvise01
+    madvise02
+    madvise03
+    madvise05
+    madvise08
+    madvise10
+    madvise11
+    memcmp01
+    memcpy01
+    memset01
+    mkdir02
+    mkdir04
+    mkdir05
+    mkdir09
+    mkdirat02
+    mlock01
+    mlock03
+    mlock04
+    mmap01
+    mmap02
+    mmap03
+    mmap05
+    mmap06
+    mmap07
+    mmap09
+    mmap10
+    mmap11
+    mmap12
+    mmap13
+    mmap15
+    mmap16
+    mmap17
+    mmap18
+    mmap19
+    mmap20
+    mprotect01
+    mprotect03
+    mprotect04
+    mprotect05
+    nanosleep02
+    nanosleep04
+    open01
+    open02
+    open03
+    open04
+    open06
+    open07
+    open08
+    open09
+    open10
+    open11
+    openat01
+    pathconf01
+    pathconf02
+    pipe01
+    pipe02
+    pipe03
+    pipe04
+    pipe05
+    pipe06
+    pipe08
+    pipe09
+    pipe10
+    pipe11
+    pipe12
+    pipe13
+    pipe14
+    pipe2_01
+    pipe2_02
+    pipe2_02_child
+    pipe2_04
+    poll01
+    posix_fadvise01
+    posix_fadvise01_64
+    posix_fadvise02
+    posix_fadvise02_64
+    posix_fadvise03
+    posix_fadvise03_64
+    posix_fadvise04
+    posix_fadvise04_64
+    ppoll01
+    pread01
+    pread01_64
+    pread02
+    pread02_64
+    preadv01
+    preadv01_64
+    preadv02
+    preadv02_64
+    preadv201
+    preadv201_64
+    preadv202
+    preadv202_64
+    pselect02
+    pselect02_64
+    pselect03
+    pselect03_64
+    pwrite01
+    pwrite01_64
+    pwrite02
+    pwrite02_64
+    pwrite03
+    pwrite03_64
+    pwrite04
+    pwrite04_64
+    pwritev01
+    pwritev01_64
+    pwritev201
+    pwritev201_64
+    read01
+    read02
+    read03
+    read04
+    readdir01
+    readlink01
+    readlink03
+    readlinkat01
+    readlinkat02
+    readv01
+    readv02
+    realpath01
+    recvmsg01
+    rename01
+    rename03
+    rename08
+    rename09
+    rename10
+    rmdir01
+    rmdir02
+    rmdir03
+    rt_sigaction03
+    rt_sigprocmask01
+    rt_sigprocmask02
+    sbrk01
+    sbrk02
+    sched_getaffinity01
+    sched_getscheduler01
+    select03
+    select04
+    sendfile02
+    sendfile02_64
+    sendfile04
+    sendfile04_64
+    sendfile05
+    sendfile05_64
+    sendfile06
+    sendfile06_64
+    sendfile08
+    sendfile08_64
+    sendmmsg02
+    sendto02
+    setgid01
+    setgid03
+    setitimer01
+    setitimer02
+    setpgid02
+    setpgrp02
+    setresuid04
+    setresuid05
+    setreuid01
+    setreuid03
+    setreuid04
+    setreuid05
+    setreuid07
+    setrlimit02
+    setrlimit03
+    setrlimit04
+    setrlimit05
+    setsockopt01
+    setsockopt03
+    setsockopt04
+    setuid01
+    shmat01
+    shmat02
+    shmat03
+    shmat04
+    shmctl01
+    shmctl03
+    shmctl07
+    shmctl08
+    shmdt01
+    shmdt02
+    shmem_2nstest
+    shmget02
+    shmget03
+    shmget04
+    shmget05
+    shmget06
+    shmnstest
+    sigaltstack02
+    signal01
+    signal02
+    signal03
+    signal04
+    signal05
+    sigpending02
+    sigprocmask01
+    sigwait01
+    socket01
+    socket02
+    socketpair01
+    socketpair02
+    splice01
+    splice02
+    splice03
+    splice05
+    splice06
+    splice07
+    splice08
+    splice09
+    stat01
+    stat01_64
+    stat02
+    stat02_64
+    stat03
+    stat03_64
+    statfs01
+    statfs01_64
+    statfs02
+    statfs02_64
+    statvfs01
+    statvfs02
+    statx01
+    statx02
+    statx03
+    symlink02
+    symlink04
+    syscall01
+    tgkill03
+    time01
+    times01
+    times03
+    tkill01
+    tkill02
+    truncate02
+    truncate02_64
+    truncate03
+    truncate03_64
+    ulimit01
+    umask01
+    uname01
+    uname02
+    uname04
+    unlink05
+    unlink07
+    unlink08
+    unlink09
+    unlinkat01
+    utime01
+    utime02
+    utime03
+    utime04
+    utime05
+    utime06
+    utime07
+    utimes01
+    utsname01
+    utsname04
+    wait01
+    wait02
+    wait401
+    wait402
+    wait403
+    waitid04
+    waitid05
+    waitid06
+    waitpid01
+    waitpid03
+    waitpid04
+    waitpid06
+    waitpid07
+    waitpid08
+    waitpid09
+    waitpid10
+    waitpid11
+    waitpid12
+    waitpid13
+    write01
+    write02
+    write03
+    write04
+    write05
+    write06
+    writev01
+    writev02
+    writev05
+    writev06
+    writev07
+    "
+    if [ "$1" = "glibc" ]; then
+        all_testcases="$all_testcases sigtimedwait01 sigwaitinfo01"
     fi
-    [ "$mounted_ok" -eq 1 ] || continue
-    echo "[TEST][runtime] mounted $dev"
 
-    for cand in \
-      "$RUNTIME_DISK_MOUNT_DIR/libgcc/$ARCH_NAME/libgcc_s.so.1" \
-      "$RUNTIME_DISK_MOUNT_DIR/$ARCH_NAME/libgcc_s.so.1" \
-      "$RUNTIME_DISK_MOUNT_DIR/libgcc_s.so.1"
-    do
-      [ -f "$cand" ] || continue
-      RUNTIME_DISK_LIBGCC_SRC="$cand"
-      echo "[TEST][runtime] libgcc source from runtime disk: $cand"
-      return 0
+    cd ltp/testcases/bin
+    for f in $all_testcases; do
+        echo "RUN LTP CASE $f"
+        ./$f
+        echo "FAIL LTP CASE $f : 0"
     done
+    cd ../../..
 
-    echo "[TEST][runtime] libgcc not found under mounted $dev"
-    "$BB" umount -n "$RUNTIME_DISK_MOUNT_DIR" >/dev/null 2>&1 || true
-  done
-
-  [ "$found_dev" -eq 1 ] || echo "[TEST][runtime] no block node matched: /dev/vd[a-z] /dev/xvd[a-z] /dev/sd[a-z] /dev/nvme*n1"
-  return 1
+    echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
-ensure_bb_cmd() {
-  cmd="$1"
-  [ -n "$cmd" ] || return 0
-  [ -x "/bin/$cmd" ] && return 0
-  bb_try cp -f "$BB" "/bin/$cmd"
-  bb_try chmod +x "/bin/$cmd"
-}
-
-ensure_runtime_dirs() {
-  bb_try mkdir -p /tmp /var /var/tmp /var/tmp/lmbench
-  bb_try chmod 1777 /tmp /var/tmp
-}
-
-etc_is_writable() {
-  "$BB" sh -c 'printf "x\n" > /etc/.starry-rw-test' >/dev/null 2>&1 || return 1
-  "$BB" rm -f /etc/.starry-rw-test >/dev/null 2>&1 || true
-  return 0
-}
-
-ensure_writable_etc() {
-  bb_try mkdir -p /etc
-  etc_is_writable && return 0
-
-  # Some images mount root read-only. Try remounting root first.
-  "$BB" mount -o remount,rw / >/dev/null 2>&1 || true
-  "$BB" mount -o remount,rw rootfs / >/dev/null 2>&1 || true
-  bb_try mkdir -p /etc
-  etc_is_writable && return 0
-
-  # Fallback: mount tmpfs on /etc if mountpoint exists.
-  if [ -d /etc ] || "$BB" mkdir -p /etc >/dev/null 2>&1; then
-    "$BB" mount -t tmpfs -o mode=755,size=1m tmpfs /etc >/dev/null 2>&1 || true
-  fi
-  etc_is_writable && return 0
-
-  return 1
-}
-
-setup_runtime_users() {
-  bb_try mkdir -p /home/nobody
-  if ! ensure_writable_etc; then
-    echo "[TEST][runtime] WARN: /etc is not writable; cannot prepare passwd/group"
-    return 0
-  fi
-
-  if [ ! -f /etc/passwd ]; then
-    "$BB" sh -c 'printf "%s\n" "root:x:0:0:root:/root:/bin/sh" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" > /etc/passwd' >/dev/null 2>&1 || true
-  elif ! "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
-    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:65534:nobody:/home/nobody:/bin/sh" >> /etc/passwd' >/dev/null 2>&1 || true
-  fi
-
-  if [ ! -f /etc/group ]; then
-    "$BB" sh -c 'printf "%s\n" "root:x:0:" "nobody:x:65534:" > /etc/group' >/dev/null 2>&1 || true
-  elif ! "$BB" grep -q '^nobody:' /etc/group >/dev/null 2>&1; then
-    "$BB" sh -c 'printf "%s\n" "nobody:x:65534:" >> /etc/group' >/dev/null 2>&1 || true
-  fi
-
-  if [ ! -f /etc/nsswitch.conf ]; then
-    "$BB" sh -c 'printf "%s\n" "passwd: files" "group: files" "shadow: files" "hosts: files dns" > /etc/nsswitch.conf' >/dev/null 2>&1 || true
-  fi
-
-}
-
-setup_glibc_runtime() {
-  [ -d /glibc/lib ] || return 0
-
-  bb_try mkdir -p /lib /lib64
-  for so in libc.so libc.so.6 libm.so libm.so.6 libnss_files.so.2 libresolv.so.2 libnss_dns.so.2; do
-    copy_if_exists "/glibc/lib/$so" "/lib/$so"
-    copy_if_exists "/glibc/lib/$so" "/lib64/$so"
-  done
-
-  # Do not rely on arch detection here; just populate all known loaders.
-  # Missing files are ignored by copy_if_exists.
-  for ldso in \
-    ld-linux-loongarch-lp64d.so.1 \
-    ld-linux-riscv64-lp64d.so.1
-  do
-    copy_if_exists "/glibc/lib/$ldso" "/lib/$ldso"
-    copy_if_exists "/glibc/lib/$ldso" "/lib64/$ldso"
-  done
-}
-
-setup_musl_runtime() {
-  # Sync musl loader names only from existing ldso files.
-  # Do not fabricate ldso from libc.so; that can cause
-  # "Not a valid dynamic program" on some judge images.
-  [ -e /musl/lib/libc.so ] || return 0
-
-  bb_try mkdir -p /lib /lib64 /musl/lib
-
-  rv_loader_src=$(first_existing_path \
-    /musl/lib/ld-musl-riscv64.so.1 \
-    /musl/lib/ld-musl-riscv64-sf.so.1 \
-    /lib/ld-musl-riscv64.so.1 \
-    /lib/ld-musl-riscv64-sf.so.1 \
-    /lib64/ld-musl-riscv64.so.1 \
-    /lib64/ld-musl-riscv64-sf.so.1)
-  if [ -z "$rv_loader_src" ] && [ -e /musl/lib/libc.so ]; then
-    rv_loader_src=/musl/lib/libc.so
-  fi
-  if [ -n "$rv_loader_src" ]; then
-    for musl_ldso in \
-      /musl/lib/ld-musl-riscv64.so.1 \
-      /musl/lib/ld-musl-riscv64-sf.so.1 \
-      /lib/ld-musl-riscv64.so.1 \
-      /lib/ld-musl-riscv64-sf.so.1 \
-      /lib64/ld-musl-riscv64.so.1 \
-      /lib64/ld-musl-riscv64-sf.so.1
-    do
-      copy_if_missing "$rv_loader_src" "$musl_ldso"
-    done
-  fi
-
-  la_loader_src=$(first_existing_path \
-    /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-    /musl/lib/ld-musl-loongarch64.so.1 \
-    /lib/ld-musl-loongarch-lp64d.so.1 \
-    /lib/ld-musl-loongarch64.so.1 \
-    /lib64/ld-musl-loongarch-lp64d.so.1)
-  if [ -z "$la_loader_src" ] && [ -e /musl/lib/libc.so ]; then
-    la_loader_src=/musl/lib/libc.so
-  fi
-  if [ -n "$la_loader_src" ]; then
-    for musl_ldso in \
-      /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-      /musl/lib/ld-musl-loongarch64.so.1 \
-      /lib/ld-musl-loongarch-lp64d.so.1 \
-      /lib/ld-musl-loongarch64.so.1 \
-      /lib64/ld-musl-loongarch-lp64d.so.1
-    do
-      copy_if_missing "$la_loader_src" "$musl_ldso"
-    done
-  fi
-}
-
-setup_libgcc_runtime() {
-  bb_try mkdir -p /lib /lib64 /usr/lib /usr/lib64 /glibc/lib64 /musl/lib
-
-  libgcc_src=""
-  for cand in /musl/lib/libgcc_s.so.1 /glibc/lib/libgcc_s.so.1; do
-    [ -f "$cand" ] || continue
-    libgcc_src="$cand"
-    break
-  done
-
-  if [ -z "$libgcc_src" ]; then
-    find_libgcc_from_runtime_disk || true
-    [ -n "$RUNTIME_DISK_LIBGCC_SRC" ] && libgcc_src="$RUNTIME_DISK_LIBGCC_SRC"
-  fi
-
-  if [ -z "$libgcc_src" ]; then
-    echo "[TEST][runtime] WARN: libgcc_s.so.1 not found in rootfs/runtime disk"
-    return 0
-  fi
-
-  # Always copy into standard runtime library locations; do not rely on
-  # temporary mount paths (e.g. /dev/shm runtime-disk) at execution time.
-  copy_if_exists "$libgcc_src" /musl/lib/libgcc_s.so.1
-  copy_if_exists "$libgcc_src" /lib/libgcc_s.so.1
-  copy_if_exists "$libgcc_src" /lib64/libgcc_s.so.1
-  copy_if_exists "$libgcc_src" /usr/lib/libgcc_s.so.1
-  copy_if_exists "$libgcc_src" /usr/lib64/libgcc_s.so.1
-  copy_if_exists "$libgcc_src" /glibc/lib/libgcc_s.so.1
-  copy_if_exists "$libgcc_src" /glibc/lib64/libgcc_s.so.1
-  echo "[TEST][runtime] libgcc copied: arch=$ARCH_NAME source=$libgcc_src target=/musl/lib,/lib,/lib64,/usr/lib,/usr/lib64,/glibc/lib"
-}
-
-setup_locale_runtime() {
-  bb_try mkdir -p /usr/lib/locale /usr/share/locale
-
-  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /glibc/usr/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
-  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /glibc/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
-  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /musl/usr/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
-  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /musl/lib/locale/C.utf8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
-  [ -d /usr/lib/locale/C.utf8 ] || "$BB" cp -a /usr/lib/locale/C.UTF-8 /usr/lib/locale/C.utf8 >/dev/null 2>&1 || true
-  [ -d /usr/lib/locale/C.UTF-8 ] || "$BB" cp -a /usr/lib/locale/C.utf8 /usr/lib/locale/C.UTF-8 >/dev/null 2>&1 || true
-  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /glibc/usr/share/locale/locale.alias /usr/share/locale/locale.alias
-  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /glibc/lib/locale/locale.alias /usr/share/locale/locale.alias
-  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /musl/usr/share/locale/locale.alias /usr/share/locale/locale.alias
-  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /musl/lib/locale/locale.alias /usr/share/locale/locale.alias
-  [ -f /usr/share/locale/locale.alias ] || copy_if_exists /usr/lib/locale/locale.alias /usr/share/locale/locale.alias
-  echo "[TEST][runtime] locale bound: /usr/lib/locale/C.utf8,/usr/lib/locale/C.UTF-8 /usr/share/locale/locale.alias"
-}
-
-install_busybox_commands() {
-  bb_try --install /bin
-  bb_try --install -s /bin
-  bb_try --install /usr/bin
-  bb_try --install -s /usr/bin
-
-  copy_if_missing "$BB" /bin/sh
-  copy_if_missing "$BB" /bin/bash
-  copy_if_missing "$BB" /usr/bin/env
-  bb_try chmod +x /bin/sh
-  bb_try chmod +x /bin/bash
-  bb_try chmod +x /usr/bin/env
-
-  for cmd in sh bash env basename dirname rm mv grep cat mkdir rmdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout; do
-    ensure_bb_cmd "$cmd"
-  done
-}
-
-is_gnu_ar() {
-  tool="$1"
-  [ -x "$tool" ] || return 1
-  "$tool" --version 2>/dev/null | grep -qi "GNU ar"
-}
-
-prefer_gnu_ar() {
-  if command -v ar >/dev/null 2>&1; then
-    current_ar=$(command -v ar 2>/dev/null)
-    if [ -n "$current_ar" ] && is_gnu_ar "$current_ar"; then
-      return 0
-    fi
-  fi
-
-  for tool in /musl/bin/ar /glibc/bin/ar /usr/local/bin/ar /musl/ar /glibc/ar; do
-    if is_gnu_ar "$tool"; then
-      copy_if_exists "$tool" /usr/bin/ar
-      copy_if_exists "$tool" /bin/ar
-      bb_try chmod +x /usr/bin/ar /bin/ar
-      return 0
-    fi
-  done
-
-  # Fallback: keep busybox ar if GNU ar is unavailable in this rootfs.
-  ensure_bb_cmd ar
-}
-
-ensure_locale_fallback() {
-  # Some LTP scripts shell out to `locale`; provide a tiny fallback when the
-  # command is unavailable in busybox/rootfs.
-  if ! command -v locale >/dev/null 2>&1; then
-    bb_try mkdir -p /bin
-    "$BB" sh -c 'printf "%s\n" "#!/bin/sh" "echo LANG=C" > /bin/locale' >/dev/null 2>&1 || true
-    bb_try chmod +x /bin/locale
-  fi
-}
-
-# Ensure shebang scripts like `./run-all.sh` can find `/bin/sh`.
-bb_try mkdir -p /bin
-bb_try cp -f "$BB" /bin/busybox
-bb_try chmod +x /bin/busybox
-copy_if_missing "$BB" /bin/sh
-bb_try chmod +x /bin/sh
-
-RUNTIME_PATH=/musl:/glibc:/bin:/usr/bin
-RUNTIME_LD_LIBRARY_PATH=/glibc/lib:/glibc/lib64:/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64
-RUNTIME_LOCALE=C.UTF-8
-RUNTIME_LOCPATH=/usr/lib/locale:/glibc/usr/lib/locale:/glibc/lib/locale:/musl/usr/lib/locale:/musl/lib/locale
-PATH=$RUNTIME_PATH
-LD_LIBRARY_PATH=$RUNTIME_LD_LIBRARY_PATH
-LANG=$RUNTIME_LOCALE
-LC_ALL=$RUNTIME_LOCALE
-LC_CTYPE=$RUNTIME_LOCALE
-LOCPATH=$RUNTIME_LOCPATH
-export PATH LD_LIBRARY_PATH LANG LC_ALL LC_CTYPE LOCPATH
-
-detect_arch() {
-  detected=$("$BB" uname -m 2>/dev/null)
-  [ -n "$detected" ] || detected=$(uname -m 2>/dev/null)
-  case "$detected" in
-    loongarch64|riscv64)
-      echo "$detected"
-      return 0
-      ;;
-  esac
-  if [ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]; then
-    echo "loongarch64"
-    return 0
-  elif [ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]; then
-    echo "riscv64"
-    return 0
-  fi
-  echo "[TEST] unsupported arch: ${detected:-unknown} (only riscv64/loongarch64 supported)" >&2
-  return 1
-}
-
-runtime_ld_library_path_for_test() {
-  test_sh="$1"
-  base=""
-  case "$test_sh" in
-    /musl/*)
-      base="/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
-      ;;
-    /glibc/*)
-      base="/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
-      ;;
-    *)
-      base="$RUNTIME_LD_LIBRARY_PATH"
-      ;;
-  esac
-  if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
-    echo "$base:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
-  else
-    echo "$base"
-  fi
-}
-
-runtime_locale_for_test() {
-  _test_name="$1"
-  case "$_test_name" in
-    libctest_testcode.sh)
-      # libc-test clocale_mbfuncs expects plain C locale semantics.
-      echo "C"
-      ;;
-    *)
-      echo "$RUNTIME_LOCALE"
-      ;;
-  esac
-}
-
-libctest_loader_for_test() {
-  _test_sh="$1"
-  _loader=""
-  case "$_test_sh" in
-    /musl/*)
-      case "$ARCH_NAME" in
-        riscv64)
-          riscv_interp_sf=0
-          riscv_interp_prefix=lib
-          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/ld-musl-riscv64-sf.so.1' ./entry-dynamic.exe 2>/dev/null; then
-            riscv_interp_sf=1
-          fi
-          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/musl/lib/ld-musl-riscv64' ./entry-dynamic.exe 2>/dev/null; then
-            riscv_interp_prefix=musl
-          fi
-          echo "[TEST][libctest] riscv musl interp hint: $( [ \"$riscv_interp_sf\" = \"1\" ] && echo sf || echo default ) prefix=$riscv_interp_prefix" >&2
-          if [ "$riscv_interp_prefix" = "musl" ]; then
-            if [ "$riscv_interp_sf" = "1" ]; then
-              for cand in \
-                /musl/lib/ld-musl-riscv64-sf.so.1 \
-                /musl/lib/ld-musl-riscv64.so.1 \
-                /lib/ld-musl-riscv64-sf.so.1 \
-                /lib64/ld-musl-riscv64-sf.so.1 \
-                /lib/ld-musl-riscv64.so.1 \
-                /lib64/ld-musl-riscv64.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            else
-              for cand in \
-                /musl/lib/ld-musl-riscv64.so.1 \
-                /musl/lib/ld-musl-riscv64-sf.so.1 \
-                /lib/ld-musl-riscv64.so.1 \
-                /lib64/ld-musl-riscv64.so.1 \
-                /lib/ld-musl-riscv64-sf.so.1 \
-                /lib64/ld-musl-riscv64-sf.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            fi
-          else
-            if [ "$riscv_interp_sf" = "1" ]; then
-              for cand in \
-                /lib/ld-musl-riscv64-sf.so.1 \
-                /lib64/ld-musl-riscv64-sf.so.1 \
-                /lib/ld-musl-riscv64.so.1 \
-                /lib64/ld-musl-riscv64.so.1 \
-                /musl/lib/ld-musl-riscv64-sf.so.1 \
-                /musl/lib/ld-musl-riscv64.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            else
-              for cand in \
-                /lib/ld-musl-riscv64.so.1 \
-                /lib64/ld-musl-riscv64.so.1 \
-                /lib/ld-musl-riscv64-sf.so.1 \
-                /lib64/ld-musl-riscv64-sf.so.1 \
-                /musl/lib/ld-musl-riscv64.so.1 \
-                /musl/lib/ld-musl-riscv64-sf.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            fi
-          fi
-          ;;
-        loongarch64)
-          loong_interp_lp64d=0
-          loong_interp_prefix=lib
-          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/ld-musl-loongarch-lp64d.so.1' ./entry-dynamic.exe 2>/dev/null; then
-            loong_interp_lp64d=1
-          fi
-          if [ -f ./entry-dynamic.exe ] && "$BB" grep -aq '/musl/lib/ld-musl-loongarch' ./entry-dynamic.exe 2>/dev/null; then
-            loong_interp_prefix=musl
-          fi
-          echo "[TEST][libctest] loong musl interp hint: $( [ \"$loong_interp_lp64d\" = \"1\" ] && echo lp64d || echo loongarch64 ) prefix=$loong_interp_prefix" >&2
-          if [ "$loong_interp_prefix" = "musl" ]; then
-            if [ "$loong_interp_lp64d" = "1" ]; then
-              for cand in \
-                /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-                /musl/lib/ld-musl-loongarch64.so.1 \
-                /lib/ld-musl-loongarch-lp64d.so.1 \
-                /lib64/ld-musl-loongarch-lp64d.so.1 \
-                /lib/ld-musl-loongarch64.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            else
-              for cand in \
-                /musl/lib/ld-musl-loongarch64.so.1 \
-                /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-                /lib/ld-musl-loongarch64.so.1 \
-                /lib/ld-musl-loongarch-lp64d.so.1 \
-                /lib64/ld-musl-loongarch-lp64d.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            fi
-          else
-            if [ "$loong_interp_lp64d" = "1" ]; then
-              for cand in \
-                /lib/ld-musl-loongarch-lp64d.so.1 \
-                /lib64/ld-musl-loongarch-lp64d.so.1 \
-                /lib/ld-musl-loongarch64.so.1 \
-                /musl/lib/ld-musl-loongarch-lp64d.so.1 \
-                /musl/lib/ld-musl-loongarch64.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            else
-              for cand in \
-                /lib/ld-musl-loongarch64.so.1 \
-                /lib/ld-musl-loongarch-lp64d.so.1 \
-                /lib64/ld-musl-loongarch-lp64d.so.1 \
-                /musl/lib/ld-musl-loongarch64.so.1 \
-                /musl/lib/ld-musl-loongarch-lp64d.so.1
-              do
-                [ -e "$cand" ] || continue
-                _loader="$cand"
-                break
-              done
-            fi
-          fi
-          ;;
-      esac
-      ;;
-    /glibc/*)
-      case "$ARCH_NAME" in
-        riscv64)
-          for cand in \
-            /glibc/lib/ld-linux-riscv64-lp64d.so.1 \
-            /lib/ld-linux-riscv64-lp64d.so.1 \
-            /lib64/ld-linux-riscv64-lp64d.so.1
-          do
-            [ -e "$cand" ] || continue
-            _loader="$cand"
-            break
-          done
-          ;;
-        loongarch64)
-          for cand in \
-            /glibc/lib/ld-linux-loongarch-lp64d.so.1 \
-            /lib/ld-linux-loongarch-lp64d.so.1 \
-            /lib64/ld-linux-loongarch-lp64d.so.1
-          do
-            [ -e "$cand" ] || continue
-            _loader="$cand"
-            break
-          done
-          ;;
-      esac
-      ;;
-  esac
-  echo "$_loader"
-}
-
-setup_interactive_shell_env() {
-  PATH=/bin:/usr/bin:/musl:/glibc
-  LD_LIBRARY_PATH=/glibc/lib:/glibc/lib64:/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64
-  export PATH LD_LIBRARY_PATH
-
-  # Root cause of "ls: not found" in shell mode:
-  # some images cannot reliably provide executable PATH applet shims.
-  # For interactive shell, dispatch common commands directly via busybox.
-  SHELL_ENV_RC="$RUNTIME_TMP_BASE/.starry-shell.env"
-  {
-    printf 'BB="%s"\n' "$BB"
-    for cmd in ls cp mv rm cat mkdir rmdir ln chmod chown chgrp grep sed awk cut tr sort uniq head tail wc xargs printf sleep kill ps touch dd readlink find which stat free df cal clear date od hexdump md5sum more false true expr uname uptime hwclock ar locale timeout sync mount umount; do
-      printf '%s\n' "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
-    done
-  } >"$SHELL_ENV_RC" 2>/dev/null || SHELL_ENV_RC=""
-}
-
-libctest_loader_library_path_for_test() {
-  _test_sh="$1"
-  case "$_test_sh" in
-    /musl/*)
-      _path="/musl/lib:/lib:/lib64:/usr/lib:/usr/lib64"
-      ;;
-    /glibc/*)
-      _path="/glibc/lib:/glibc/lib64:/lib:/lib64:/usr/lib:/usr/lib64"
-      ;;
-    *)
-      _path="$RUNTIME_LD_LIBRARY_PATH"
-      ;;
-  esac
-  if [ -n "$RUNTIME_EXTRA_LD_LIBRARY_PATH" ]; then
-    echo "$_path:$RUNTIME_EXTRA_LD_LIBRARY_PATH"
-  else
-    echo "$_path"
-  fi
-}
-
-create_libctest_dynamic_wrapper() {
-  _loader="$1"
-  _lib_path="$2"
-  _entry="$3"
-  _wrapper="$4"
-  {
-    printf '%s\n' '#!/bin/sh'
-    printf 'exec "%s" --library-path "%s" "%s" "$@"\n' \
-      "$_loader" "$_lib_path" "$_entry"
-  } >"$_wrapper" 2>/dev/null || return 1
-  "$BB" chmod +x "$_wrapper" >/dev/null 2>&1 || true
-  return 0
-}
-
-is_elf_binary() {
-  _f="$1"
-  [ -f "$_f" ] || return 1
-  _magic=$("$BB" od -An -tx1 -N4 "$_f" 2>/dev/null | "$BB" tr -s ' ' | "$BB" sed 's/^ //')
-  [ "$_magic" = "7f 45 4c 46" ]
-}
-
-recover_libctest_entry_dynamic_if_needed() {
-  # If previous run crashed before restore, entry-dynamic.exe might still be
-  # our wrapper script; recover an ELF backup first.
-  [ -f ./entry-dynamic.exe ] || return 0
-  if is_elf_binary ./entry-dynamic.exe; then
-    return 0
-  fi
-
-  for cand in ./.starry-entry-dynamic.real.*; do
-    [ -f "$cand" ] || continue
-    if is_elf_binary "$cand"; then
-      "$BB" mv -f "$cand" ./entry-dynamic.exe >/dev/null 2>&1 || true
-      if is_elf_binary ./entry-dynamic.exe; then
-        echo "[TEST][libctest] recovered entry-dynamic.exe from stale wrapper backup"
-        return 0
-      fi
-    fi
-  done
-}
-
-prepare_libctest_dynamic_binary_wrapper() {
-  _test_sh="$1"
-  libctest_entry_dynamic_real=""
-
-  recover_libctest_entry_dynamic_if_needed
-  [ -f ./entry-dynamic.exe ] || return 0
-  if ! is_elf_binary ./entry-dynamic.exe; then
-    echo "[TEST][libctest] WARN: entry-dynamic.exe is not ELF, skip wrapper"
-    return 0
-  fi
-
-  _loader=$(libctest_loader_for_test "$_test_sh")
-  if [ -z "$_loader" ]; then
-    case "$_test_sh" in
-      /musl/*) echo "[TEST][libctest] WARN: musl loader not found, keep original entry-dynamic.exe" ;;
-      /glibc/*) echo "[TEST][libctest] WARN: glibc loader not found, keep original entry-dynamic.exe" ;;
-    esac
-    return 0
-  fi
-
-  _loader_library_path=$(libctest_loader_library_path_for_test "$_test_sh")
-  libctest_entry_dynamic_real="$PWD/.starry-entry-dynamic.real.$$"
-  if ! "$BB" mv -f ./entry-dynamic.exe "$libctest_entry_dynamic_real" >/dev/null 2>&1; then
-    libctest_entry_dynamic_real=""
-    echo "[TEST][libctest] WARN: failed to backup entry-dynamic.exe, keep original"
-    return 0
-  fi
-
-  if create_libctest_dynamic_wrapper "$_loader" "$_loader_library_path" "$libctest_entry_dynamic_real" "$PWD/entry-dynamic.exe"; then
-    echo "[TEST][libctest] dynamic binary wrapper active: ./entry-dynamic.exe (loader=$_loader)"
-    return 0
-  fi
-
-  "$BB" mv -f "$libctest_entry_dynamic_real" ./entry-dynamic.exe >/dev/null 2>&1 || true
-  libctest_entry_dynamic_real=""
-  echo "[TEST][libctest] WARN: failed to create wrapper entry-dynamic.exe, restored original"
-  return 0
-}
-
-restore_libctest_dynamic_binary_wrapper() {
-  [ -n "$libctest_entry_dynamic_real" ] || return 0
-  [ -f "$libctest_entry_dynamic_real" ] || return 0
-  "$BB" rm -f ./entry-dynamic.exe >/dev/null 2>&1 || true
-  "$BB" mv -f "$libctest_entry_dynamic_real" ./entry-dynamic.exe >/dev/null 2>&1 || true
-  libctest_entry_dynamic_real=""
-}
-
-ARCH_NAME=$(detect_arch) || exit 1
-echo "[TEST] detected arch: $ARCH_NAME"
-
-# =========================
-# Test switches (1=run, 0=skip)
-# 12 suites; defaults can be overridden by environment variables.
-# =========================
-: "${RUN_BASIC:=0}"
-: "${RUN_BUSYBOX:=0}"
-: "${RUN_CYCLICTEST:=0}"
-: "${RUN_IOZONE:=0}"
-: "${RUN_IPERF:=0}"
-: "${RUN_LIBCBENCH:=0}"
-: "${RUN_LIBCTEST:=1}"
-: "${RUN_LMBENCH:=0}"
-: "${RUN_LTP:=0}"
-: "${RUN_LUA:=0}"
-: "${RUN_NETPERF:=0}"
-: "${RUN_UNIXBENCH:=0}"
-
-suite_enabled() {
-  case "$1" in
-    basic) [ "${RUN_BASIC:-1}" = "1" ] ;;
-    busybox) [ "${RUN_BUSYBOX:-1}" = "1" ] ;;
-    cyclictest) [ "${RUN_CYCLICTEST:-1}" = "1" ] ;;
-    iozone) [ "${RUN_IOZONE:-1}" = "1" ] ;;
-    iperf) [ "${RUN_IPERF:-1}" = "1" ] ;;
-    libcbench) [ "${RUN_LIBCBENCH:-1}" = "1" ] ;;
-    libctest) [ "${RUN_LIBCTEST:-1}" = "1" ] ;;
-    lmbench) [ "${RUN_LMBENCH:-1}" = "1" ] ;;
-    ltp) [ "${RUN_LTP:-1}" = "1" ] ;;
-    lua) [ "${RUN_LUA:-1}" = "1" ] ;;
-    netperf) [ "${RUN_NETPERF:-1}" = "1" ] ;;
-    unixbench) [ "${RUN_UNIXBENCH:-1}" = "1" ] ;;
-    *) return 1 ;;
-  esac
-}
-
-ALL_SUITES="basic busybox cyclictest iozone iperf libcbench libctest lmbench ltp lua netperf unixbench"
-TEST_SUITES=""
-for suite in $ALL_SUITES; do
-  if suite_enabled "$suite"; then
-    TEST_SUITES="$TEST_SUITES $suite"
-  fi
-done
-echo "[TEST] enabled suites:$TEST_SUITES"
-
-SETUP_RUNTIME_DONE=0
-
-setup_runtime_tools() {
-  ensure_runtime_dirs
-  [ "$SETUP_RUNTIME_DONE" = "1" ] && return 0
-
-  bb_try mkdir -p /bin /usr/bin
-  detect_runtime_tmp_base
-  setup_runtime_users
-  setup_glibc_runtime
-  setup_musl_runtime
-  setup_libgcc_runtime
-  setup_locale_runtime
-  install_busybox_commands
-  prefer_gnu_ar
-  ensure_locale_fallback
-  SETUP_RUNTIME_DONE=1
-}
-
-suite_group_name() {
-  test_sh="$1"
-  suite="$2"
-  case "$test_sh" in
-    /musl/*) echo "$suite-musl" ;;
-    /glibc/*) echo "$suite-glibc" ;;
-    *) echo "$suite" ;;
-  esac
-}
-
-group_marker_line() {
-  kind="$1"
-  test_sh="$2"
-  suite="$3"
-  echo "#### OS COMP TEST GROUP $kind $(suite_group_name "$test_sh" "$suite") ####"
-}
-
-run_test() {
-  test_sh="$1"
-  test_dir=${test_sh%/*}
-  test_name=${test_sh##*/}
-  is_ltp_script=0
-  [ "$test_name" = "ltp_testcode.sh" ] && is_ltp_script=1
-  old_pwd=$PWD
-  [ "$test_dir" = "$test_sh" ] && test_dir=.
-  [ "$is_ltp_script" -eq 1 ] || echo "[TEST] Running $test_sh"
-  cd "$test_dir" || {
-    ret=127
-    if [ "$is_ltp_script" -ne 1 ]; then
-      echo "[TEST] Exit code($ret): $test_sh"
-      echo
-    fi
-    return "$ret"
-  }
-  [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: entered test dir $test_dir"
-  # Re-create runtime dirs in case previous suites removed /tmp or /var/tmp.
-  [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: setup_runtime_tools begin"
-  setup_runtime_tools
-  [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: setup_runtime_tools end"
-
-  # Keep libctest in-place: recursive copy to temp dir can trigger severe memory
-  # pressure on constrained images and causes unrelated failures.
-
-  libctest_dynamic_enabled=0
-  libctest_entry_dynamic_real=""
-  # Keep run-dynamic.sh unchanged; only wrap entry-dynamic.exe in place.
-  if [ "$test_name" = "libctest_testcode.sh" ]; then
-    libctest_dynamic_enabled=1
-    prepare_libctest_dynamic_binary_wrapper "$test_sh"
-  fi
-
-  if [ "$test_name" = "lmbench_testcode.sh" ] && [ -x ./lmbench_all ]; then
-    # Keep compatibility for wrappers that hardcode this path,
-    # without scanning/rewriting all files in the test directory.
-    "$BB" mkdir -p /code/lmbench_src/bin/build >/dev/null 2>&1 || true
-    "$BB" cp -f ./lmbench_all /code/lmbench_src/bin/build/lmbench_all >/dev/null 2>&1 || true
-    "$BB" chmod +x /code/lmbench_src/bin/build/lmbench_all >/dev/null 2>&1 || true
-  fi
-
-  if [ "$test_name" = "ltp_testcode.sh" ]; then
-    ltp_root="$PWD/ltp"
-    target_dir="$ltp_root/testcases/bin"
-    ltp_lib_dir="$ltp_root/testcases/lib"
-    ltp_testscripts_dir="$ltp_root/testscripts"
-    ltp_group_name=$(suite_group_name "$test_sh" "ltp")
-    # Hardcode to embedded src/ltp.txt content only (via LTP_CASES from main.rs).
-    # Do not consume in-image /ltp.txt to avoid stale case lists.
-    ltp_case_list=/tmp/.ltp_cases_from_src.txt
-
-    # LTP shell tests often source helper scripts with `. helper.sh` and run
-    # helper commands (e.g. tst_brk) that are resolved via PATH.
-    # Export LTP paths here to avoid "not found" in those cases.
-    PATH="$target_dir:$ltp_lib_dir:$ltp_testscripts_dir:$PATH"
-    LTPROOT="$ltp_root"
-    export PATH LTPROOT
-
-    if [ -n "${LTP_CASES:-}" ] && : > "$ltp_case_list" 2>/dev/null; then
-      for ltp_case in $LTP_CASES; do
-        printf "%s\n" "$ltp_case" >> "$ltp_case_list"
-      done
-      echo "[TEST][ltp] loaded case list from embedded src/ltp.txt: $ltp_case_list"
-    else
-      echo "[TEST][ltp] missing embedded case list (LTP_CASES) or cannot write: $ltp_case_list"
-    fi
-    echo "#### OS COMP TEST GROUP START $ltp_group_name ####"
-    ret=0
-    if cd "$target_dir" 2>/dev/null; then
-      if [ -f /etc/passwd ]; then
-        echo "[TEST][ltp] /etc/passwd present"
-        if "$BB" grep -q '^nobody:' /etc/passwd >/dev/null 2>&1; then
-          echo "[TEST][ltp] /etc/passwd has nobody"
-        else
-          echo "[TEST][ltp] /etc/passwd missing nobody"
-        fi
-      else
-        echo "[TEST][ltp] /etc/passwd absent"
-      fi
-      if [ -r "$ltp_case_list" ]; then
-        # Avoid depending on external `tr` on minimal judge images.
-        # Strip one trailing CR (Windows line ending) with POSIX shell expansion.
-        ltp_cr=$(printf '\r')
-        while IFS= read -r ltp_case_raw || [ -n "$ltp_case_raw" ]; do
-          ltp_case=${ltp_case_raw%"$ltp_cr"}
-          [ -n "$ltp_case" ] || continue
-          case "$ltp_case" in
-            \#*) continue ;;
-          esac
-
-          echo "RUN LTP CASE $ltp_case"
-          if [ -x "./$ltp_case" ]; then
-            "./$ltp_case"
-            case_ret=$?
-          elif [ -f "./$ltp_case" ]; then
-            sh "./$ltp_case"
-            case_ret=$?
-          else
-            case_ret=127
-            echo "[TEST][ltp] missing case: $target_dir/$ltp_case"
-          fi
-          echo "FAIL LTP CASE $ltp_case : $case_ret"
-        done < "$ltp_case_list"
-      else
-        ret=127
-        echo "[TEST][ltp] case list not readable: $ltp_case_list"
-      fi
-    else
-      ret=127
-      echo "[TEST][ltp] missing target dir: $target_dir"
-    fi
-    echo "#### OS COMP TEST GROUP END $ltp_group_name ####"
-
-    cd "$old_pwd" || true
-    return "$ret"
-  fi
-
-  patched_script="./.starry-${test_name}.$$"
-  "$BB" sed \
-    -e 's#\./run-all\.sh#sh ./run-all.sh#g' \
-    -e 's#\./run-static\.sh#sh ./run-static.sh#g' \
-    -e 's#\./run-dynamic\.sh#sh ./run-dynamic.sh#g' \
-    -e 's#\./busybox mkdir -p /var/tmp#true#g' \
-    -e 's#\./lmbench_all lat_fs /var/tmp#echo "[TEST] SKIP lmbench lat_fs /var/tmp (known hang)"#g' \
-    "./$test_name" > "$patched_script" || {
-      ret=1
-      [ "$libctest_dynamic_enabled" = "1" ] && restore_libctest_dynamic_binary_wrapper
-      cd "$old_pwd" || true
-      echo "[TEST] Exit code($ret): $test_sh"
-      echo
-      return "$ret"
-    }
-  [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: patched script ready $patched_script"
-  test_locale=$(runtime_locale_for_test "$test_name")
-  test_locpath="$RUNTIME_LOCPATH"
-  [ "$test_locale" = "C" ] && test_locpath=""
-  HOME=/root
-  PATH=$RUNTIME_PATH
-  LD_LIBRARY_PATH=$(runtime_ld_library_path_for_test "$test_sh")
-  LANG=$test_locale
-  LC_ALL=$test_locale
-  LC_CTYPE=$test_locale
-  LOCPATH=$test_locpath
-  export HOME PATH LD_LIBRARY_PATH LANG LC_ALL LC_CTYPE LOCPATH
-  for cmd in sh bash basename dirname rm mv grep cat mkdir cp ln chmod sed awk mount umount sync ls pwd cut tr sort uniq head tail wc xargs printf sleep kill ps env touch dd readlink find which stat free df cal clear date od hexdump md5sum more rmdir false true expr uname uptime hwclock ar locale timeout; do
-    eval "$cmd() { \"\$BB\" $cmd \"\$@\"; }"
-  done
-  [ "$test_name" = "lmbench_testcode.sh" ] && echo "[TEST][lmbench] stage: run patched script begin"
-  . "$patched_script"
-  ret=$?
-  "$BB" rm -f "$patched_script" >/dev/null 2>&1 || true
-  [ "$libctest_dynamic_enabled" = "1" ] && restore_libctest_dynamic_binary_wrapper
-  cd "$old_pwd" || true
-  echo "[TEST] Exit code($ret): $test_sh"
-  echo
-  return "$ret"
-}
-
-append_root() {
-  d="$1"
-  [ -n "$d" ] || return 0
-  [ -d "$d" ] || return 0
-  case " $SEARCH_ROOTS " in
-    *" $d "*) ;;
-    *) SEARCH_ROOTS="$SEARCH_ROOTS $d" ;;
-  esac
-}
-
-SEARCH_ROOTS=""
-append_root "/"
-append_root "/musl"
-append_root "/glibc"
-
-setup_runtime_tools
-if [ "${STARRY_SHELL_MODE:-0}" = "1" ] && [ "${STARRY_FORCE_AUTOTEST:-0}" != "1" ]; then
-  setup_interactive_shell_env
-  echo "[TEST][shell] BB=$BB"
-  echo "[TEST][shell] RUNTIME_TMP_BASE=$RUNTIME_TMP_BASE"
-  echo "[TEST][shell] PATH=$PATH"
-  echo "[TEST][shell] LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-  echo "[TEST][shell] ENV=${SHELL_ENV_RC:-<none>}"
-  echo "[TEST] interactive shell is ready"
-  echo
-  cd / || true
-  if [ -n "$SHELL_ENV_RC" ] && [ -r "$SHELL_ENV_RC" ]; then
-    exec "$BB" env -i HOME=/root PATH="$PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" ENV="$SHELL_ENV_RC" "$BB" sh
-  fi
-  exec "$BB" env -i HOME=/root PATH="$PATH" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" "$BB" sh
-fi
-echo "[TEST] scan roots:$SEARCH_ROOTS"
-for d in $SEARCH_ROOTS; do
-  [ -d "$d" ] || continue
-  echo "[TEST] scanning $d"
-done
-
-find_suite_scripts() {
-  suite="$1"
-  SUITE_SCRIPT_LIST=""
-
-  for root in $SEARCH_ROOTS; do
-    [ -d "$root" ] || continue
-    p="$root/${suite}_testcode.sh"
-    [ -f "$p" ] || continue
-    SUITE_SCRIPT_LIST="${SUITE_SCRIPT_LIST}$p
-"
-  done
-}
-
-emit_skip_markers() {
-  test_sh="$1"
-  suite="$2"
-  start_line=$(group_marker_line START "$test_sh" "$suite")
-  end_line=$(group_marker_line END "$test_sh" "$suite")
-  echo "$start_line"
-  echo "[TEST] SKIP script: $test_sh (switch=0)"
-  echo "$end_line"
-}
-
-group_total=0
-group_skipped=0
-group_passed=0
-group_failed=0
-script_total=0
-script_passed=0
-script_failed=0
-
-for suite in $ALL_SUITES; do
-  group_total=$((group_total + 1))
-  find_suite_scripts "$suite"
-
-  if ! suite_enabled "$suite"; then
-    group_skipped=$((group_skipped + 1))
-    if [ -z "$SUITE_SCRIPT_LIST" ]; then
-      emit_skip_markers "/dev/null" "$suite"
-    else
-      while IFS= read -r t; do
-        [ -n "$t" ] || continue
-        emit_skip_markers "$t" "$suite"
-      done <<EOF_SKIP
-$SUITE_SCRIPT_LIST
-EOF_SKIP
-    fi
-    continue
-  fi
-
-  if [ -z "$SUITE_SCRIPT_LIST" ]; then
-    echo "[TEST] no script found for group $suite"
-    group_failed=$((group_failed + 1))
-    continue
-  fi
-
-  suite_failed=0
-  while IFS= read -r t; do
-    [ -n "$t" ] || continue
-    script_total=$((script_total + 1))
-    if run_test "$t"; then
-      script_passed=$((script_passed + 1))
-    else
-      script_failed=$((script_failed + 1))
-      suite_failed=1
-    fi
-  done <<EOF_RUN
-$SUITE_SCRIPT_LIST
-EOF_RUN
-
-  if [ "$suite_failed" -eq 0 ]; then
-    group_passed=$((group_passed + 1))
-  else
-    group_failed=$((group_failed + 1))
-  fi
-done
-
-echo "[TEST] group summary: total=$group_total passed=$group_passed failed=$group_failed skipped=$group_skipped"
-echo "[TEST] script summary: total=$script_total passed=$script_passed failed=$script_failed"
-
-echo "[TEST] all discovered scripts completed"
-"$BB" sync >/dev/null 2>&1 || true
-"$BB" poweroff -f >/dev/null 2>&1 || "$BB" reboot -f >/dev/null 2>&1 || exit 0
+cd /musl
+musl_runtime
+run_ltp musl
+
+cd /glibc
+glibc_runtime
+run_ltp glibc
+
+cd /musl
+musl_runtime
+timeout 60 ./basic_testcode.sh
+timeout 60 ./lua_testcode.sh
+timeout 60 ./busybox_testcode.sh
+
+cd /glibc
+glibc_runtime
+timeout 60 ./basic_testcode.sh
+timeout 60 ./lua_testcode.sh
+timeout 60 ./busybox_testcode.sh
+
+cd /musl
+musl_runtime
+timeout 60 ./libctest_testcode.sh
+timeout 60 ./libcbench_testcode.sh
+
+cd /glibc
+glibc_runtime
+timeout 60 ./libcbench_testcode.sh
+
+cd /musl
+musl_runtime
+timeout 60 ./iperf_testcode.sh
+cd /glibc
+glibc_runtime
+timeout 60 ./iperf_testcode.sh
+
+cd /musl
+musl_runtime
+timeout 60 ./netperf_testcode.sh
+cd /glibc
+glibc_runtime
+timeout 60 ./netperf_testcode.sh
+
+cd /tmp
+ln -v -s /musl/busybox busybox
+ln -v -s /musl/iozone iozone
+musl_runtime
+timeout 300 /musl/iozone_testcode.sh
+ln -v -s -f /glibc/iozone iozone
+glibc_runtime
+timeout 300 /glibc/iozone_testcode.sh
+
+export ENOUGH=1000
+cd /musl
+musl_runtime
+timeout 600 ./lmbench_testcode.sh
+cd /glibc
+glibc_runtime
+timeout 600 ./lmbench_testcode.sh

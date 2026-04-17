@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
-rm -rf sdcard-la.img
-xz -dk sdcard-la.img.xz
+rm -rf sdcard-la.img disk-la.img
+cp ./imgs/sdcard-la.img ./
 
 sleep 1
 
-make kernel-la disk-la.img
+make kernel-la
 
 sleep 1
 

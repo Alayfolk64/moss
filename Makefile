@@ -54,6 +54,10 @@ RUNTIME_DISK_LA_IMG := $(A)/disk-la.img
 RUNTIME_DISK_ROOT := $(A)/.runtime-disk-root
 RV_LIBGCC_SRC := /opt/riscv64-linux-musl-cross/riscv64-linux-musl/lib/libgcc_s.so.1
 LA_LIBGCC_SRC := /opt/gcc-13.2.0-loongarch64-linux-gnu/loongarch64-linux-gnu/lib64/libgcc_s.so.1
+RV_MUSL_LIB_DIR := /opt/riscv64-linux-musl-cross/riscv64-linux-musl/lib
+LA_MUSL_LIB_DIR := /opt/loongarch64-linux-musl-cross/loongarch64-linux-musl/lib
+RV_MUSL_LIBC_SRC := $(RV_MUSL_LIB_DIR)/libc.so
+LA_MUSL_LIBC_SRC := $(LA_MUSL_LIB_DIR)/libc.so
 
 ROOTFS_URL = https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG = rootfs-$(ARCH).img
@@ -158,24 +162,36 @@ kernel-la: toolchain
 	$(RUST_LLD) -flavor gnu -m elf64loongarch -T $(A)/make/kernel-la-wrap.ld -o $(A)/kernel-la $(A)/kernel-la.bin.o
 	rm -f $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
 
-disk.img:
-	@rm -rf "$(RUNTIME_DISK_ROOT)"
-	@mkdir -p "$(RUNTIME_DISK_ROOT)/libgcc/riscv64" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64"
-	@echo "starry-runtime-disk" > "$(RUNTIME_DISK_ROOT)/.starry-runtime-disk"
-	@if [ -f "$(RV_LIBGCC_SRC)" ]; then cp -f "$(RV_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/riscv64/libgcc_s.so.1"; else echo "[disk.img] WARN: missing $(RV_LIBGCC_SRC)"; fi
-	@if [ -f "$(LA_LIBGCC_SRC)" ]; then cp -f "$(LA_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64/libgcc_s.so.1"; else echo "[disk.img] WARN: missing $(LA_LIBGCC_SRC)"; fi
+prepare-runtime-disk-root:
+		@echo "[runtime-disk] prepare begin: root=$(RUNTIME_DISK_ROOT)"
+		@rm -rf "$(RUNTIME_DISK_ROOT)"
+		@mkdir -p "$(RUNTIME_DISK_ROOT)/runtime/riscv64" "$(RUNTIME_DISK_ROOT)/runtime/loongarch64"
+		@echo "starry-runtime-disk" > "$(RUNTIME_DISK_ROOT)/.starry-runtime-disk"
+		@echo "v1" > "$(RUNTIME_DISK_ROOT)/.starry-runtime-layout"
+		@if [ -f "$(RV_LIBGCC_SRC)" ]; then cp -f "$(RV_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/runtime/riscv64/libgcc_s.so.1"; echo "[runtime-disk] OK: $(RV_LIBGCC_SRC) -> runtime/riscv64/libgcc_s.so.1"; else echo "[runtime-disk] WARN: missing $(RV_LIBGCC_SRC)"; fi
+		@if [ -f "$(LA_LIBGCC_SRC)" ]; then cp -f "$(LA_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/runtime/loongarch64/libgcc_s.so.1"; echo "[runtime-disk] OK: $(LA_LIBGCC_SRC) -> runtime/loongarch64/libgcc_s.so.1"; else echo "[runtime-disk] WARN: missing $(LA_LIBGCC_SRC)"; fi
+		@if [ -f "$(RV_MUSL_LIBC_SRC)" ]; then \
+			cp -f "$(RV_MUSL_LIBC_SRC)" "$(RUNTIME_DISK_ROOT)/runtime/riscv64/ld-musl-riscv64.so.1"; \
+			echo "[runtime-disk] OK: $(RV_MUSL_LIBC_SRC) -> runtime/riscv64/ld-musl-riscv64.so.1"; \
+		else \
+			echo "[runtime-disk] WARN: missing $(RV_MUSL_LIBC_SRC)"; \
+		fi
+		@if [ -f "$(LA_MUSL_LIBC_SRC)" ]; then \
+			cp -f "$(LA_MUSL_LIBC_SRC)" "$(RUNTIME_DISK_ROOT)/runtime/loongarch64/ld-musl-loongarch64.so.1"; \
+			echo "[runtime-disk] OK: $(LA_MUSL_LIBC_SRC) -> runtime/loongarch64/ld-musl-loongarch64.so.1"; \
+		else \
+			echo "[runtime-disk] WARN: missing $(LA_MUSL_LIBC_SRC)"; \
+		fi
+		@echo "[runtime-disk] prepare end"
+
+disk.img: prepare-runtime-disk-root
 	@if ! command -v mke2fs >/dev/null 2>&1; then echo "[disk.img] ERROR: mke2fs not found"; exit 1; fi
 	@rm -f "$(RUNTIME_DISK_RV_IMG)"
 	@mke2fs -q -t ext4 -d "$(RUNTIME_DISK_ROOT)" -L STARRYRT -F "$(RUNTIME_DISK_RV_IMG)" 16M
 	@rm -rf "$(RUNTIME_DISK_ROOT)"
 	@echo "[disk.img] generated $(RUNTIME_DISK_RV_IMG)"
 
-disk-la.img:
-	@rm -rf "$(RUNTIME_DISK_ROOT)"
-	@mkdir -p "$(RUNTIME_DISK_ROOT)/libgcc/riscv64" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64"
-	@echo "starry-runtime-disk" > "$(RUNTIME_DISK_ROOT)/.starry-runtime-disk"
-	@if [ -f "$(RV_LIBGCC_SRC)" ]; then cp -f "$(RV_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/riscv64/libgcc_s.so.1"; else echo "[disk-la.img] WARN: missing $(RV_LIBGCC_SRC)"; fi
-	@if [ -f "$(LA_LIBGCC_SRC)" ]; then cp -f "$(LA_LIBGCC_SRC)" "$(RUNTIME_DISK_ROOT)/libgcc/loongarch64/libgcc_s.so.1"; else echo "[disk-la.img] WARN: missing $(LA_LIBGCC_SRC)"; fi
+disk-la.img: prepare-runtime-disk-root
 	@if ! command -v mke2fs >/dev/null 2>&1; then echo "[disk-la.img] ERROR: mke2fs not found"; exit 1; fi
 	@rm -f "$(RUNTIME_DISK_LA_IMG)"
 	@mke2fs -q -t ext4 -d "$(RUNTIME_DISK_ROOT)" -L STARRYRT -F "$(RUNTIME_DISK_LA_IMG)" 16M
@@ -228,4 +244,4 @@ la-shell:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la disk.img disk-la.img contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la disk.img disk-la.img prepare-runtime-disk-root contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
