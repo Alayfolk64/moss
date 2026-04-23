@@ -14,6 +14,8 @@ use crate::{
     task::AsThread,
 };
 
+use super::ptrace_on_exec;
+
 pub fn sys_execve(
     uctx: &mut UserContext,
     path: *const c_char,
@@ -83,6 +85,8 @@ pub fn sys_execve(
         fd_table.remove(fd);
     }
     drop(fd_table);
+
+    ptrace_on_exec(proc_data.proc.pid());
 
     uctx.set_ip(entry_point.as_usize());
     uctx.set_sp(user_stack_base.as_usize());

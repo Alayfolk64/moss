@@ -244,4 +244,12 @@ la-shell:
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la disk.img disk-la.img prepare-runtime-disk-root contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell
+docker:
+	docker run -it --rm --privileged \
+	  --platform linux/amd64 \
+	  -w /work \
+	  -v $(CURDIR):/work \
+	  docker.io/zhouzhouyi/os-contest:20260104 \
+	  /bin/bash
+
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la disk.img disk-la.img prepare-runtime-disk-root contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell docker

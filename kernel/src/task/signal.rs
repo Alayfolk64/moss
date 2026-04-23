@@ -13,6 +13,20 @@ pub fn check_signals(
     uctx: &mut UserContext,
     restore_blocked: Option<SignalSet>,
 ) -> bool {
+    crate::syscall::ptrace_wait_if_stopped(thr);
+
+    let pid = thr.proc_data.proc.pid();
+    if crate::syscall::ptrace_is_traced(pid) {
+        let mask = !thr.signal.blocked();
+        if let Some(sig) = thr.signal.dequeue_signal(&mask) {
+            let signo = sig.signo();
+            if crate::syscall::ptrace_intercept_signal(thr, signo) {
+                return true;
+            }
+            do_exit(signo as i32, true);
+        }
+    }
+
     let Some((sig, os_action)) = thr.signal.check_signals(uctx, restore_blocked) else {
         return false;
     };
@@ -80,7 +94,14 @@ pub fn send_signal_to_thread(tgid: Option<Pid>, tid: Pid, sig: Option<SignalInfo
     }
 
     if let Some(sig) = sig {
-        info!("Send signal {:?} to thread {}", sig.signo(), tid);
+        let signo = sig.signo();
+        info!("Send signal {signo:?} to thread {tid}");
+        let pid = thread.proc_data.proc.pid();
+        if thread.signal.process().signal_ignored(signo)
+            && crate::syscall::ptrace_mark_signal_stop(pid, signo)
+        {
+            return Ok(());
+        }
         send_signal_thread_inner(&task, thread, sig);
     }
 
@@ -94,6 +115,11 @@ pub fn send_signal_to_process(pid: Pid, sig: Option<SignalInfo>) -> AxResult<()>
     if let Some(sig) = sig {
         let signo = sig.signo();
         info!("Send signal {signo:?} to process {pid}");
+        if proc_data.signal.signal_ignored(signo)
+            && crate::syscall::ptrace_mark_signal_stop(pid, signo)
+        {
+            return Ok(());
+        }
         if let Some(tid) = proc_data.signal.send_signal(sig)
             && let Ok(task) = get_task(tid)
         {

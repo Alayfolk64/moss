@@ -14,6 +14,7 @@ use starry_process::{Pid, Process};
 use starry_signal::Signo;
 use starry_vm::{VmMutPtr, VmPtr};
 
+use super::{ptrace_has_wait_target, ptrace_take_wait_event};
 use crate::task::AsThread;
 
 bitflags! {
@@ -64,6 +65,7 @@ impl WaitPid {
 pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isize> {
     let options = WaitOptions::from_bits_truncate(options);
     info!("sys_waitpid <= pid: {pid:?}, options: {options:?}");
+    let raw_pid = pid;
 
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
@@ -86,7 +88,7 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
         .into_iter()
         .filter(|child| pid.apply(child))
         .collect::<Vec<_>>();
-    if children.is_empty() {
+    if children.is_empty() && !ptrace_has_wait_target(proc.pid(), raw_pid) {
         return Err(AxError::from(LinuxError::ECHILD));
     }
 
@@ -106,18 +108,36 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
         }
     };
 
+    let check_ptrace = || -> AxResult<Option<isize>> {
+        if let Some(event) = ptrace_take_wait_event(proc.pid(), raw_pid) {
+            if let Some(exit_code) = exit_code.nullable() {
+                exit_code.vm_write(event.status)?;
+            }
+            Ok(Some(event.pid as _))
+        } else {
+            Ok(None)
+        }
+    };
+
     loop {
         match block_on(interruptible(poll_fn(|cx| {
-            match check_children().transpose() {
+            match check_ptrace().transpose() {
                 Some(res) => Poll::Ready(res),
-                None => {
-                    proc_data.child_exit_event.register(cx.waker());
-                    Poll::Pending
-                }
+                None => match check_children().transpose() {
+                    Some(res) => Poll::Ready(res),
+                    None => {
+                        proc_data.child_exit_event.register(cx.waker());
+                        Poll::Pending
+                    }
+                },
             }
         }))) {
             Ok(res) => return res,
             Err(_) => {
+                if let Some(res) = check_ptrace().transpose() {
+                    return res;
+                }
+
                 if let Some(res) = check_children().transpose() {
                     return res;
                 }
