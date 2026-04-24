@@ -85,15 +85,71 @@ run_ltp() {
     emit_summary_if_missing() {
         output="$1"
         if ! printf '%s\n' "$output" | grep -q '^Summary:$'; then
-            passed=$(printf '%s\n' "$output" | grep -c 'TPASS')
-            failed=$(printf '%s\n' "$output" | grep -c 'TFAIL')
+            # Align with LTP result accounting:
+            # TPASS -> passed, TFAIL -> failed, TBROK -> broken,
+            # TCONF -> skipped, TWARN -> warnings, TINFO/TDEBUG ignored.
+            # For numbered legacy output ("tcid <num> TTYPE : ..."), deduplicate
+            # by "<tcid>:<num>:<TTYPE>" to avoid double counting when buffered
+            # output is replayed after fork.
+            counts=$(printf '%s\n' "$output" | awk '
+                function is_result(t) {
+                    return (t == "TPASS" || t == "TFAIL" || t == "TBROK" || t == "TCONF" || t == "TWARN");
+                }
+                function inc(t) {
+                    if (t == "TPASS")
+                        passed++;
+                    else if (t == "TFAIL")
+                        failed++;
+                    else if (t == "TBROK")
+                        broken++;
+                    else if (t == "TCONF")
+                        skipped++;
+                    else if (t == "TWARN")
+                        warnings++;
+                }
+                {
+                    line = $0;
+                    gsub(/\033\[[0-9;]*[A-Za-z]/, "", line);
+                    n = split(line, f, /[[:space:]]+/);
+                    idx = 1;
+                    if (f[1] == "")
+                        idx = 2;
+
+                    if (n >= idx + 3 && f[idx+1] ~ /^[0-9]+$/ && is_result(f[idx+2]) && f[idx+3] == ":") {
+                        key = f[idx] ":" f[idx+1] ":" f[idx+2];
+                        if (!(key in seen)) {
+                            seen[key] = 1;
+                            inc(f[idx+2]);
+                        }
+                        next;
+                    }
+
+                    for (i = 1; i <= n; i++) {
+                        t = f[i];
+                        has_colon = sub(/:$/, "", t);
+                        if (is_result(t) && has_colon) {
+                            inc(t);
+                            break;
+                        }
+                    }
+                }
+                END {
+                    printf "%d %d %d %d %d\n", passed, failed, broken, skipped, warnings;
+                }
+            ')
+            set -- $counts
+            passed=$1
+            failed=$2
+            broken=$3
+            skipped=$4
+            warnings=$5
             echo
             echo "Summary:"
             echo "passed   $passed"
             echo "failed   $failed"
-            echo "broken   0"
-            echo "skipped  0"
-            echo "warnings 0"
+            echo "broken   $broken"
+            echo "skipped  $skipped"
+            echo "warnings $warnings"
         fi
     }
 
