@@ -241,20 +241,11 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
         }
         PTRACE_ATTACH => {
             let pid = resolve_tracee_pid(pid);
-            warn!(
-                "ptrace attach: tracer pid={} uid={} euid={} target pid={}",
-                curr_pid,
-                curr_thr.proc_data.uid(),
-                curr_thr.proc_data.euid(),
-                pid
-            );
 
             if pid == 0 {
-                warn!("ptrace attach reject: target pid 0");
                 return Err(AxError::NoSuchProcess);
             }
             if pid == curr_pid {
-                warn!("ptrace attach reject: self");
                 return Err(AxError::OperationNotPermitted);
             }
 
@@ -271,7 +262,6 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
                     }
                 }
                 let Some(target) = found else {
-                    warn!("ptrace attach reject: target not found");
                     return Err(AxError::NoSuchProcess);
                 };
                 target
@@ -283,12 +273,10 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
                 .parent()
                 .is_some_and(|parent| parent.pid() == curr_pid);
             if !is_init_target && !is_direct_child {
-                warn!("ptrace attach reject: non-child/non-init target");
                 return Err(AxError::OperationNotPermitted);
             }
 
             if !allow_attach(curr_thr.proc_data.euid(), target.uid(), target.euid()) {
-                warn!("ptrace attach reject: permission check failed");
                 return Err(AxError::OperationNotPermitted);
             }
 

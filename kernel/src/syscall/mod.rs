@@ -470,6 +470,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg2() as _,
             uctx.arg3() as _,
         ),
+        #[cfg(target_arch = "x86_64")]
         Sysno::pause => sys_pause(uctx),
         Sysno::rt_sigsuspend => sys_rt_sigsuspend(uctx, uctx.arg0() as _, uctx.arg1() as _),
         Sysno::kill => sys_kill(uctx.arg0() as _, uctx.arg1() as _),

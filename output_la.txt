@@ -16,7 +16,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-23 16:53:24.004740540 UTC
+Boot at 2026-04-24 04:15:31.004695540 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -47,16 +47,16 @@ prepare musl runtime
 '/lib/libc.so' -> '/musl/lib/libc.so'
 #### OS COMP TEST GROUP START ltp-musl ####
 RUN LTP CASE ptrace01
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_KILL without child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild killed by SIGKILL as expected
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_KILL with child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild killed by SIGKILL as expected
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_CONT without child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild exited with 1 as expected
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_CONT with child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild exited with 1 as expected
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace01.c:88: TINFO: Testing PTRACE_KILL without child handler
+ptrace01.c:117: TPASS: Child killed by SIGKILL as expected
+ptrace01.c:88: TINFO: Testing PTRACE_KILL with child handler
+ptrace01.c:117: TPASS: Child killed by SIGKILL as expected
+ptrace01.c:88: TINFO: Testing PTRACE_CONT without child handler
+ptrace01.c:117: TPASS: Child exited with 1 as expected
+ptrace01.c:88: TINFO: Testing PTRACE_CONT with child handler
+ptrace01.c:117: TPASS: Child exited with 1 as expected
 
 Summary:
 passed   4
@@ -66,10 +66,10 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace01 : 0
 RUN LTP CASE ptrace02
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace02.c:45: [1;32mTPASS: [0mptrace() failed as expected: EPERM (1)
-ptrace02.c:47: [1;31mTFAIL: [0mptrace() expected EPERM, but got: ESRCH (3)
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace02.c:45: TPASS: ptrace() failed as expected: EPERM (1)
+ptrace02.c:47: TFAIL: ptrace() expected EPERM, but got: ESRCH (3)
 
 Summary:
 passed   1
@@ -79,12 +79,12 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace02 : 0
 RUN LTP CASE ptrace03
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace03.c:42: [1;34mTINFO: [0mTrace a process which does not exist
-ptrace03.c:55: [1;32mTPASS: [0mptrace() failed as expected: ESRCH (3)
-ptrace03.c:42: [1;34mTINFO: [0mTrace a process which is already been traced
-ptrace03.c:55: [1;32mTPASS: [0mptrace() failed as expected: EPERM (1)
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace03.c:42: TINFO: Trace a process which does not exist
+ptrace03.c:55: TPASS: ptrace() failed as expected: ESRCH (3)
+ptrace03.c:42: TINFO: Trace a process which is already been traced
+ptrace03.c:55: TPASS: ptrace() failed as expected: EPERM (1)
 
 Summary:
 passed   2
@@ -94,217 +94,251 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace03 : 0
 RUN LTP CASE ptrace04
-ptrace04    1  [1;33mTCONF[0m  :  ptrace04.c:103: test not supported for your arch (yet)
-ptrace04    2  [1;33mTCONF[0m  :  ptrace04.c:103: Remaining cases not appropriate for configuration
+ptrace04    1  TCONF  :  ptrace04.c:103: test not supported for your arch (yet)
+ptrace04    2  TCONF  :  ptrace04.c:103: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace04 : 0
 RUN LTP CASE ptrace05
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 0)
-ptrace05    1  [1;32mTPASS[0m  :  kill(.., 0) exited with 0, as expected.
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 1)
-ptrace05    2  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 2)
-ptrace05    3  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 3)
-ptrace05    4  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 4)
-ptrace05    5  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 5)
-ptrace05    6  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 6)
-ptrace05    7  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 7)
-ptrace05    8  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 8)
-ptrace05    9  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 9)
-ptrace05   10  [1;32mTPASS[0m  :  Killed with SIGKILL, as expected.
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 10)
-ptrace05   11  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 11)
-ptrace05   12  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 12)
-ptrace05   13  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 13)
-ptrace05   14  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 14)
-ptrace05   15  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 15)
-ptrace05   16  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 16)
-ptrace05   17  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 17)
-ptrace05   18  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 18)
-ptrace05   19  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 19)
-ptrace05   20  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 20)
-ptrace05   21  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 21)
-ptrace05   22  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 22)
-ptrace05   23  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 23)
-ptrace05   24  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 24)
-ptrace05   25  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 25)
-ptrace05   26  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 26)
-ptrace05   27  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 27)
-ptrace05   28  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 28)
-ptrace05   29  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 29)
-ptrace05   30  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 30)
-ptrace05   31  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 31)
-ptrace05   32  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 35)
-ptrace05   33  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 36)
-ptrace05   34  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 37)
-ptrace05   35  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 38)
-ptrace05   36  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 39)
-ptrace05   37  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 40)
-ptrace05   38  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 41)
-ptrace05   39  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 42)
-ptrace05   40  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 43)
-ptrace05   41  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 44)
-ptrace05   42  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 45)
-ptrace05   43  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 46)
-ptrace05   44  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 47)
-ptrace05   45  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 48)
-ptrace05   46  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 49)
-ptrace05   47  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 50)
-ptrace05   48  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 51)
-ptrace05   49  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 52)
-ptrace05   50  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 53)
-ptrace05   51  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 54)
-ptrace05   52  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 55)
-ptrace05   53  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 56)
-ptrace05   54  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 57)
-ptrace05   55  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 58)
-ptrace05   56  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 59)
-ptrace05   57  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 60)
-ptrace05   58  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 61)
-ptrace05   59  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 62)
-ptrace05   60  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 63)
-ptrace05   61  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 64)
-ptrace05   62  [1;32mTPASS[0m  :  Stopped as expected
+ptrace05    0  TINFO  :  [child] Sending kill(.., 0)
+ptrace05    1  TPASS  :  kill(.., 0) exited with 0, as expected.
+ptrace05    2  TPASS  :  Stopped as expected
+ptrace05    3  TPASS  :  Stopped as expected
+ptrace05    4  TPASS  :  Stopped as expected
+ptrace05    5  TPASS  :  Stopped as expected
+ptrace05    6  TPASS  :  Stopped as expected
+ptrace05    7  TPASS  :  Stopped as expected
+ptrace05    8  TPASS  :  Stopped as expected
+ptrace05    9  TPASS  :  Stopped as expected
+ptrace05   10  TPASS  :  Killed with SIGKILL, as expected.
+ptrace05   11  TPASS  :  Stopped as expected
+ptrace05   12  TPASS  :  Stopped as expected
+ptrace05   13  TPASS  :  Stopped as expected
+ptrace05   14  TPASS  :  Stopped as expected
+ptrace05   15  TPASS  :  Stopped as expected
+ptrace05   16  TPASS  :  Stopped as expected
+ptrace05   17  TPASS  :  Stopped as expected
+ptrace05   18  TPASS  :  Stopped as expected
+ptrace05   19  TPASS  :  Stopped as expected
+ptrace05   20  TPASS  :  Stopped as expected
+ptrace05   21  TPASS  :  Stopped as expected
+ptrace05   22  TPASS  :  Stopped as expected
+ptrace05   23  TPASS  :  Stopped as expected
+ptrace05    0  TINFO  :  [child] Sending kill(.., 23)
+ptrace05    2  TPASS  :  Stopped as expected
+ptrace05    3  TPASS  :  Stopped as expected
+ptrace05    4  TPASS  :  Stopped as expected
+ptrace05    5  TPASS  :  Stopped as expected
+ptrace05    6  TPASS  :  Stopped as expected
+ptrace05    7  TPASS  :  Stopped as expected
+ptrace05    8  TPASS  :  Stopped as expected
+ptrace05    9  TPASS  :  Stopped as expected
+ptrace05   10  TPASS  :  Killed with SIGKILL, as expected.
+ptrace05   11  TPASS  :  Stopped as expected
+ptrace05   12  TPASS  :  Stopped as expected
+ptrace05   13  TPASS  :  Stopped as expected
+ptrace05   14  TPASS  :  Stopped as expected
+ptrace05   15  TPASS  :  Stopped as expected
+ptrace05   16  TPASS  :  Stopped as expected
+ptrace05   17  TPASS  :  Stopped as expected
+ptrace05   18  TPASS  :  Stopped as expected
+ptrace05   19  TPASS  :  Stopped as expected
+ptrace05   20  TPASS  :  Stopped as expected
+ptrace05   21  TPASS  :  Stopped as expected
+ptrace05   22  TPASS  :  Stopped as expected
+ptrace05   23  TPASS  :  Stopped as expected
+ptrace05   24  TPASS  :  Stopped as expected
+ptrace05   25  TPASS  :  Stopped as expected
+ptrace05   26  TPASS  :  Stopped as expected
+ptrace05   27  TPASS  :  Stopped as expected
+ptrace05   28  TPASS  :  Stopped as expected
+ptrace05   29  TPASS  :  Stopped as expected
+ptrace05   30  TPASS  :  Stopped as expected
+ptrace05   31  TPASS  :  Stopped as expected
+ptrace05   32  TPASS  :  Stopped as expected
+ptrace05   33  TPASS  :  Stopped as expected
+ptrace05   34  TPASS  :  Stopped as expected
+ptrace05   35  TPASS  :  Stopped as expected
+ptrace05   36  TPASS  :  Stopped as expected
+ptrace05   37  TPASS  :  Stopped as expected
+ptrace05   38  TPASS  :  Stopped as expected
+ptrace05   39  TPASS  :  Stopped as expected
+ptrace05   40  TPASS  :  Stopped as expected
+ptrace05   41  TPASS  :  Stopped as expected
+ptrace05   42  TPASS  :  Stopped as expected
+ptrace05   43  TPASS  :  Stopped as expected
+ptrace05   44  TPASS  :  Stopped as expected
+ptrace05   45  TPASS  :  Stopped as expected
+ptrace05   46  TPASS  :  Stopped as expected
+ptrace05    0  TINFO  :  [child] Sending kill(.., 49)
+ptrace05   25  TPASS  :  Stopped as expected
+ptrace05   26  TPASS  :  Stopped as expected
+ptrace05   27  TPASS  :  Stopped as expected
+ptrace05   28  TPASS  :  Stopped as expected
+ptrace05   29  TPASS  :  Stopped as expected
+ptrace05   30  TPASS  :  Stopped as expected
+ptrace05   31  TPASS  :  Stopped as expected
+ptrace05   32  TPASS  :  Stopped as expected
+ptrace05   33  TPASS  :  Stopped as expected
+ptrace05   34  TPASS  :  Stopped as expected
+ptrace05   35  TPASS  :  Stopped as expected
+ptrace05   36  TPASS  :  Stopped as expected
+ptrace05   37  TPASS  :  Stopped as expected
+ptrace05   38  TPASS  :  Stopped as expected
+ptrace05   39  TPASS  :  Stopped as expected
+ptrace05   40  TPASS  :  Stopped as expected
+ptrace05   41  TPASS  :  Stopped as expected
+ptrace05   42  TPASS  :  Stopped as expected
+ptrace05   43  TPASS  :  Stopped as expected
+ptrace05   44  TPASS  :  Stopped as expected
+ptrace05   45  TPASS  :  Stopped as expected
+ptrace05   46  TPASS  :  Stopped as expected
+ptrace05   47  TPASS  :  Stopped as expected
+ptrace05   48  TPASS  :  Stopped as expected
+ptrace05   49  TPASS  :  Stopped as expected
+ptrace05   50  TPASS  :  Stopped as expected
+ptrace05   51  TPASS  :  Stopped as expected
+ptrace05   52  TPASS  :  Stopped as expected
+ptrace05   53  TPASS  :  Stopped as expected
+ptrace05   54  TPASS  :  Stopped as expected
+ptrace05   55  TPASS  :  Stopped as expected
+ptrace05   56  TPASS  :  Stopped as expected
+ptrace05   57  TPASS  :  Stopped as expected
+ptrace05   58  TPASS  :  Stopped as expected
+ptrace05   59  TPASS  :  Stopped as expected
+ptrace05   60  TPASS  :  Stopped as expected
+ptrace05   61  TPASS  :  Stopped as expected
+ptrace05   62  TPASS  :  Stopped as expected
+
+Summary:
+passed   106
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace05 : 0
 RUN LTP CASE ptrace06
-ptrace06    1  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 0, 0) failed as expected
-ptrace06    2  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 1, 0) failed as expected
-ptrace06    3  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 2, 0) failed as expected
-ptrace06    4  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 3, 0) failed as expected
-ptrace06    5  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -1, 0) failed as expected
-ptrace06    6  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -2, 0) failed as expected
-ptrace06    7  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -3, 0) failed as expected
-ptrace06    8  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -4, 0) failed as expected
-ptrace06    9  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 0, 0) failed as expected
-ptrace06   10  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 1, 0) failed as expected
-ptrace06   11  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 2, 0) failed as expected
-ptrace06   12  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 3, 0) failed as expected
-ptrace06   13  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -1, 0) failed as expected
-ptrace06   14  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -2, 0) failed as expected
-ptrace06   15  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -3, 0) failed as expected
-ptrace06   16  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -4, 0) failed as expected
-ptrace06   17  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4097, 0) failed as expected
-ptrace06   18  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4098, 0) failed as expected
-ptrace06   19  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4099, 0) failed as expected
-ptrace06   20  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4100, 0) failed as expected
-ptrace06   21  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -1, 0) failed as expected
-ptrace06   22  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -2, 0) failed as expected
-ptrace06   23  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -3, 0) failed as expected
-ptrace06   24  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -4, 0) failed as expected
-ptrace06   25  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 0, 0) failed as expected
-ptrace06   26  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 1, 0) failed as expected
-ptrace06   27  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 2, 0) failed as expected
-ptrace06   28  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 3, 0) failed as expected
-ptrace06   29  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -1, 0) failed as expected
-ptrace06   30  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -2, 0) failed as expected
-ptrace06   31  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -3, 0) failed as expected
-ptrace06   32  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -4, 0) failed as expected
-ptrace06   33  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 0, 0) failed as expected
-ptrace06   34  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 1, 0) failed as expected
-ptrace06   35  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 2, 0) failed as expected
-ptrace06   36  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 3, 0) failed as expected
-ptrace06   37  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -1, 0) failed as expected
-ptrace06   38  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -2, 0) failed as expected
-ptrace06   39  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -3, 0) failed as expected
-ptrace06   40  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -4, 0) failed as expected
-ptrace06   41  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4097, 0) failed as expected
-ptrace06   42  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4098, 0) failed as expected
-ptrace06   43  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4099, 0) failed as expected
-ptrace06   44  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4100, 0) failed as expected
-ptrace06   45  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -1, 0) failed as expected
-ptrace06   46  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -2, 0) failed as expected
-ptrace06   47  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -3, 0) failed as expected
-ptrace06   48  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -4, 0) failed as expected
-ptrace06   49  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, 0) failed as expected
-ptrace06   50  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, 1) failed as expected
-ptrace06   51  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, 2) failed as expected
-ptrace06   52  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, 3) failed as expected
-ptrace06   53  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, -1) failed as expected
-ptrace06   54  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, -2) failed as expected
-ptrace06   55  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, -3) failed as expected
-ptrace06   56  [1;32mTPASS[0m  :  ptrace(GETREGS, ..., 0, -4) failed as expected
-ptrace06   57  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, 0) failed as expected
-ptrace06   58  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, 1) failed as expected
-ptrace06   59  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, 2) failed as expected
-ptrace06   60  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, 3) failed as expected
-ptrace06   61  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, -1) failed as expected
-ptrace06   62  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, -2) failed as expected
-ptrace06   63  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, -3) failed as expected
-ptrace06   64  [1;32mTPASS[0m  :  ptrace(SETREGS, ..., 0, -4) failed as expected
+ptrace06    1  TPASS  :  ptrace(PEEKDATA, ..., 0, 0) failed as expected
+ptrace06    2  TPASS  :  ptrace(PEEKDATA, ..., 1, 0) failed as expected
+ptrace06    3  TPASS  :  ptrace(PEEKDATA, ..., 2, 0) failed as expected
+ptrace06    4  TPASS  :  ptrace(PEEKDATA, ..., 3, 0) failed as expected
+ptrace06    5  TPASS  :  ptrace(PEEKDATA, ..., -1, 0) failed as expected
+ptrace06    6  TPASS  :  ptrace(PEEKDATA, ..., -2, 0) failed as expected
+ptrace06    7  TPASS  :  ptrace(PEEKDATA, ..., -3, 0) failed as expected
+ptrace06    8  TPASS  :  ptrace(PEEKDATA, ..., -4, 0) failed as expected
+ptrace06    9  TPASS  :  ptrace(PEEKTEXT, ..., 0, 0) failed as expected
+ptrace06   10  TPASS  :  ptrace(PEEKTEXT, ..., 1, 0) failed as expected
+ptrace06   11  TPASS  :  ptrace(PEEKTEXT, ..., 2, 0) failed as expected
+ptrace06   12  TPASS  :  ptrace(PEEKTEXT, ..., 3, 0) failed as expected
+ptrace06   13  TPASS  :  ptrace(PEEKTEXT, ..., -1, 0) failed as expected
+ptrace06   14  TPASS  :  ptrace(PEEKTEXT, ..., -2, 0) failed as expected
+ptrace06   15  TPASS  :  ptrace(PEEKTEXT, ..., -3, 0) failed as expected
+ptrace06   16  TPASS  :  ptrace(PEEKTEXT, ..., -4, 0) failed as expected
+ptrace06   17  TPASS  :  ptrace(PEEKUSER, ..., 4097, 0) failed as expected
+ptrace06   18  TPASS  :  ptrace(PEEKUSER, ..., 4098, 0) failed as expected
+ptrace06   19  TPASS  :  ptrace(PEEKUSER, ..., 4099, 0) failed as expected
+ptrace06   20  TPASS  :  ptrace(PEEKUSER, ..., 4100, 0) failed as expected
+ptrace06   21  TPASS  :  ptrace(PEEKUSER, ..., -1, 0) failed as expected
+ptrace06   22  TPASS  :  ptrace(PEEKUSER, ..., -2, 0) failed as expected
+ptrace06   23  TPASS  :  ptrace(PEEKUSER, ..., -3, 0) failed as expected
+ptrace06   24  TPASS  :  ptrace(PEEKUSER, ..., -4, 0) failed as expected
+ptrace06   25  TPASS  :  ptrace(POKEDATA, ..., 0, 0) failed as expected
+ptrace06   26  TPASS  :  ptrace(POKEDATA, ..., 1, 0) failed as expected
+ptrace06   27  TPASS  :  ptrace(POKEDATA, ..., 2, 0) failed as expected
+ptrace06   28  TPASS  :  ptrace(POKEDATA, ..., 3, 0) failed as expected
+ptrace06   29  TPASS  :  ptrace(POKEDATA, ..., -1, 0) failed as expected
+ptrace06   30  TPASS  :  ptrace(POKEDATA, ..., -2, 0) failed as expected
+ptrace06   31  TPASS  :  ptrace(POKEDATA, ..., -3, 0) failed as expected
+ptrace06   32  TPASS  :  ptrace(POKEDATA, ..., -4, 0) failed as expected
+ptrace06   33  TPASS  :  ptrace(POKETEXT, ..., 0, 0) failed as expected
+ptrace06   34  TPASS  :  ptrace(POKETEXT, ..., 1, 0) failed as expected
+ptrace06   35  TPASS  :  ptrace(POKETEXT, ..., 2, 0) failed as expected
+ptrace06   36  TPASS  :  ptrace(POKETEXT, ..., 3, 0) failed as expected
+ptrace06   37  TPASS  :  ptrace(POKETEXT, ..., -1, 0) failed as expected
+ptrace06   38  TPASS  :  ptrace(POKETEXT, ..., -2, 0) failed as expected
+ptrace06   39  TPASS  :  ptrace(POKETEXT, ..., -3, 0) failed as expected
+ptrace06   40  TPASS  :  ptrace(POKETEXT, ..., -4, 0) failed as expected
+ptrace06   41  TPASS  :  ptrace(POKEUSER, ..., 4097, 0) failed as expected
+ptrace06   42  TPASS  :  ptrace(POKEUSER, ..., 4098, 0) failed as expected
+ptrace06   43  TPASS  :  ptrace(POKEUSER, ..., 4099, 0) failed as expected
+ptrace06   44  TPASS  :  ptrace(POKEUSER, ..., 4100, 0) failed as expected
+ptrace06   45  TPASS  :  ptrace(POKEUSER, ..., -1, 0) failed as expected
+ptrace06   46  TPASS  :  ptrace(POKEUSER, ..., -2, 0) failed as expected
+ptrace06   47  TPASS  :  ptrace(POKEUSER, ..., -3, 0) failed as expected
+ptrace06   48  TPASS  :  ptrace(POKEUSER, ..., -4, 0) failed as expected
+ptrace06   49  TPASS  :  ptrace(GETREGS, ..., 0, 0) failed as expected
+ptrace06   50  TPASS  :  ptrace(GETREGS, ..., 0, 1) failed as expected
+ptrace06   51  TPASS  :  ptrace(GETREGS, ..., 0, 2) failed as expected
+ptrace06   52  TPASS  :  ptrace(GETREGS, ..., 0, 3) failed as expected
+ptrace06   53  TPASS  :  ptrace(GETREGS, ..., 0, -1) failed as expected
+ptrace06   54  TPASS  :  ptrace(GETREGS, ..., 0, -2) failed as expected
+ptrace06   55  TPASS  :  ptrace(GETREGS, ..., 0, -3) failed as expected
+ptrace06   56  TPASS  :  ptrace(GETREGS, ..., 0, -4) failed as expected
+ptrace06   57  TPASS  :  ptrace(SETREGS, ..., 0, 0) failed as expected
+ptrace06   58  TPASS  :  ptrace(SETREGS, ..., 0, 1) failed as expected
+ptrace06   59  TPASS  :  ptrace(SETREGS, ..., 0, 2) failed as expected
+ptrace06   60  TPASS  :  ptrace(SETREGS, ..., 0, 3) failed as expected
+ptrace06   61  TPASS  :  ptrace(SETREGS, ..., 0, -1) failed as expected
+ptrace06   62  TPASS  :  ptrace(SETREGS, ..., 0, -2) failed as expected
+ptrace06   63  TPASS  :  ptrace(SETREGS, ..., 0, -3) failed as expected
+ptrace06   64  TPASS  :  ptrace(SETREGS, ..., 0, -4) failed as expected
+
+Summary:
+passed   64
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace06 : 0
 RUN LTP CASE ptrace07
-tst_test.c:1175: [1;33mTCONF: [0mTests an x86_64 feature
+tst_test.c:1175: TCONF: Tests an x86_64 feature
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace07 : 0
 RUN LTP CASE ptrace08
-tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+tst_test.c:1201: TCONF: This arch 'unknown' is not supported for test!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace08 : 0
 RUN LTP CASE ptrace09
-tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+tst_test.c:1201: TCONF: This arch 'unknown' is not supported for test!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace09 : 0
 RUN LTP CASE ptrace10
-tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+tst_test.c:1201: TCONF: This arch 'unknown' is not supported for test!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace10 : 0
 RUN LTP CASE ptrace11
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace11.c:27: [1;32mTPASS: [0mptrace() traces init process successfully
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace11.c:27: TPASS: ptrace() traces init process successfully
 
 Summary:
 passed   1
@@ -321,16 +355,17 @@ prepare musl runtime
 '/lib/libm.so' -> '/lib/libm.so.6'
 #### OS COMP TEST GROUP START ltp-glibc ####
 RUN LTP CASE ptrace01
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_KILL without child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild killed by SIGKILL as expected
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_KILL with child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild killed by SIGKILL as expected
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_CONT without child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild exited with 1 as expected
-ptrace01.c:88: [1;34mTINFO: [0mTesting PTRACE_CONT with child handler
-ptrace01.c:117: [1;32mTPASS: [0mChild exited with 1 as expected
+[37m[  7.040395 0:195 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace01.c:88: TINFO: Testing PTRACE_KILL without child handler
+ptrace01.c:117: TPASS: Child killed by SIGKILL as expected
+ptrace01.c:88: TINFO: Testing PTRACE_KILL with child handler
+ptrace01.c:117: TPASS: Child killed by SIGKILL as expected
+ptrace01.c:88: TINFO: Testing PTRACE_CONT without child handler
+ptrace01.c:117: TPASS: Child exited with 1 as expected
+ptrace01.c:88: TINFO: Testing PTRACE_CONT with child handler
+ptrace01.c:117: TPASS: Child exited with 1 as expected
 
 Summary:
 passed   4
@@ -340,10 +375,11 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace01 : 0
 RUN LTP CASE ptrace02
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace02.c:45: [1;32mTPASS: [0mptrace() failed as expected: EPERM (1)
-ptrace02.c:47: [1;31mTFAIL: [0mptrace() expected EPERM, but got: ESRCH (3)
+[37m[  7.512034 0:204 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace02.c:45: TPASS: ptrace() failed as expected: EPERM (1)
+ptrace02.c:47: TFAIL: ptrace() expected EPERM, but got: ESRCH (3)
 
 Summary:
 passed   1
@@ -353,12 +389,13 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace02 : 0
 RUN LTP CASE ptrace03
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace03.c:42: [1;34mTINFO: [0mTrace a process which does not exist
-ptrace03.c:55: [1;32mTPASS: [0mptrace() failed as expected: ESRCH (3)
-ptrace03.c:42: [1;34mTINFO: [0mTrace a process which is already been traced
-ptrace03.c:55: [1;32mTPASS: [0mptrace() failed as expected: EPERM (1)
+[37m[  7.953583 0:212 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace03.c:42: TINFO: Trace a process which does not exist
+ptrace03.c:55: TPASS: ptrace() failed as expected: ESRCH (3)
+ptrace03.c:42: TINFO: Trace a process which is already been traced
+ptrace03.c:55: TPASS: ptrace() failed as expected: EPERM (1)
 
 Summary:
 passed   2
@@ -368,203 +405,199 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace03 : 0
 RUN LTP CASE ptrace04
-ptrace04    1  [1;33mTCONF[0m  :  ptrace04.c:103: test not supported for your arch (yet)
-ptrace04    2  [1;33mTCONF[0m  :  ptrace04.c:103: Remaining cases not appropriate for configuration
+[37m[  8.526997 0:219 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mptrace04    1  TCONF  :  ptrace04.c:103: test not supported for your arch (yet)
+ptrace04    2  TCONF  :  ptrace04.c:103: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace04 : 0
 RUN LTP CASE ptrace05
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 0)
-ptrace05    1  [1;32mTPASS[0m  :  kill(.., 0) exited with 0, as expected.
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 1)
-ptrace05    2  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 2)
-ptrace05    3  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 3)
-ptrace05    4  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 4)
-ptrace05    5  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 5)
-ptrace05    6  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 6)
-ptrace05    7  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 7)
-ptrace05    8  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 8)
-ptrace05    9  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 9)
-ptrace05   10  [1;32mTPASS[0m  :  Killed with SIGKILL, as expected.
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 10)
-ptrace05   11  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 11)
-ptrace05   12  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 12)
-ptrace05   13  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 13)
-ptrace05   14  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 14)
-ptrace05   15  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 15)
-ptrace05   16  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 16)
-ptrace05   17  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 17)
-ptrace05   18  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 18)
-ptrace05   19  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 19)
-ptrace05   20  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 20)
-ptrace05   21  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 21)
-ptrace05   22  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 22)
-ptrace05   23  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 23)
-ptrace05   24  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 24)
-ptrace05   25  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 25)
-ptrace05   26  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 26)
-ptrace05   27  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 27)
-ptrace05   28  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 28)
-ptrace05   29  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 29)
-ptrace05   30  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 30)
-ptrace05   31  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 31)
-ptrace05   32  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 34)
-ptrace05   33  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 35)
-ptrace05   34  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 36)
-ptrace05   35  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 37)
-ptrace05   36  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 38)
-ptrace05   37  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 39)
-ptrace05   38  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 40)
-ptrace05   39  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 41)
-ptrace05   40  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 42)
-ptrace05   41  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 43)
-ptrace05   42  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 44)
-ptrace05   43  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 45)
-ptrace05   44  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 46)
-ptrace05   45  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 47)
-ptrace05   46  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 48)
-ptrace05   47  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 49)
-ptrace05   48  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 50)
-ptrace05   49  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 51)
-ptrace05   50  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 52)
-ptrace05   51  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 53)
-ptrace05   52  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 54)
-ptrace05   53  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 55)
-ptrace05   54  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 56)
-ptrace05   55  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 57)
-ptrace05   56  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 58)
-ptrace05   57  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 59)
-ptrace05   58  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 60)
-ptrace05   59  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 61)
-ptrace05   60  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 62)
-ptrace05   61  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 63)
-ptrace05   62  [1;32mTPASS[0m  :  Stopped as expected
-ptrace05    0  [1;34mTINFO[0m  :  [child] Sending kill(.., 64)
-ptrace05   63  [1;32mTPASS[0m  :  Stopped as expected
+[37m[  9.035379 0:230 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[m[37m[  9.065545 0:229 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mptrace05    0  TINFO  :  [child] Sending kill(.., 0)
+ptrace05    1  TPASS  :  kill(.., 0) exited with 0, as expected.
+ptrace05    2  TPASS  :  Stopped as expected
+ptrace05    3  TPASS  :  Stopped as expected
+ptrace05    4  TPASS  :  Stopped as expected
+ptrace05    5  TPASS  :  Stopped as expected
+ptrace05    6  TPASS  :  Stopped as expected
+ptrace05    7  TPASS  :  Stopped as expected
+ptrace05    8  TPASS  :  Stopped as expected
+ptrace05    9  TPASS  :  Stopped as expected
+ptrace05   10  TPASS  :  Killed with SIGKILL, as expected.
+ptrace05   11  TPASS  :  Stopped as expected
+ptrace05   12  TPASS  :  Stopped as expected
+ptrace05   13  TPASS  :  Stopped as expected
+ptrace05   14  TPASS  :  Stopped as expected
+ptrace05   15  TPASS  :  Stopped as expected
+ptrace05   16  TPASS  :  Stopped as expected
+ptrace05   17  TPASS  :  Stopped as expected
+ptrace05   18  TPASS  :  Stopped as expected
+ptrace05   19  TPASS  :  Stopped as expected
+ptrace05   20  TPASS  :  Stopped as expected
+ptrace05   21  TPASS  :  Stopped as expected
+ptrace05   22  TPASS  :  Stopped as expected
+ptrace05   23  TPASS  :  Stopped as expected
+ptrace05   24  TPASS  :  Stopped as expected
+ptrace05   25  TPASS  :  Stopped as expected
+ptrace05   26  TPASS  :  Stopped as expected
+ptrace05   27  TPASS  :  Stopped as expected
+ptrace05   28  TPASS  :  Stopped as expected
+ptrace05   29  TPASS  :  Stopped as expected
+ptrace05   30  TPASS  :  Stopped as expected
+ptrace05   31  TPASS  :  Stopped as expected
+ptrace05   32  TPASS  :  Stopped as expected
+ptrace05   33  TPASS  :  Stopped as expected
+ptrace05   34  TPASS  :  Stopped as expected
+ptrace05   35  TPASS  :  Stopped as expected
+ptrace05   36  TPASS  :  Stopped as expected
+ptrace05   37  TPASS  :  Stopped as expected
+ptrace05   38  TPASS  :  Stopped as expected
+ptrace05   39  TPASS  :  Stopped as expected
+ptrace05   40  TPASS  :  Stopped as expected
+ptrace05   41  TPASS  :  Stopped as expected
+ptrace05   42  TPASS  :  Stopped as expected
+ptrace05   43  TPASS  :  Stopped as expected
+ptrace05   44  TPASS  :  Stopped as expected
+ptrace05   45  TPASS  :  Stopped as expected
+ptrace05   46  TPASS  :  Stopped as expected
+ptrace05   47  TPASS  :  Stopped as expected
+ptrace05   48  TPASS  :  Stopped as expected
+ptrace05   49  TPASS  :  Stopped as expected
+ptrace05   50  TPASS  :  Stopped as expected
+ptrace05   51  TPASS  :  Stopped as expected
+ptrace05   52  TPASS  :  Stopped as expected
+ptrace05   53  TPASS  :  Stopped as expected
+ptrace05   54  TPASS  :  Stopped as expected
+ptrace05   55  TPASS  :  Stopped as expected
+ptrace05   56  TPASS  :  Stopped as expected
+ptrace05   57  TPASS  :  Stopped as expected
+ptrace05   58  TPASS  :  Stopped as expected
+ptrace05   59  TPASS  :  Stopped as expected
+ptrace05   60  TPASS  :  Stopped as expected
+ptrace05   61  TPASS  :  Stopped as expected
+ptrace05   62  TPASS  :  Stopped as expected
+ptrace05   63  TPASS  :  Stopped as expected
+
+Summary:
+passed   63
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace05 : 0
 RUN LTP CASE ptrace06
-ptrace06    1  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 0, 0) failed as expected
-ptrace06    2  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 1, 0) failed as expected
-ptrace06    3  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 2, 0) failed as expected
-ptrace06    4  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., 3, 0) failed as expected
-ptrace06    5  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -1, 0) failed as expected
-ptrace06    6  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -2, 0) failed as expected
-ptrace06    7  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -3, 0) failed as expected
-ptrace06    8  [1;32mTPASS[0m  :  ptrace(PEEKDATA, ..., -4, 0) failed as expected
-ptrace06    9  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 0, 0) failed as expected
-ptrace06   10  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 1, 0) failed as expected
-ptrace06   11  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 2, 0) failed as expected
-ptrace06   12  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., 3, 0) failed as expected
-ptrace06   13  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -1, 0) failed as expected
-ptrace06   14  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -2, 0) failed as expected
-ptrace06   15  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -3, 0) failed as expected
-ptrace06   16  [1;32mTPASS[0m  :  ptrace(PEEKTEXT, ..., -4, 0) failed as expected
-ptrace06   17  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4097, 0) failed as expected
-ptrace06   18  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4098, 0) failed as expected
-ptrace06   19  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4099, 0) failed as expected
-ptrace06   20  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., 4100, 0) failed as expected
-ptrace06   21  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -1, 0) failed as expected
-ptrace06   22  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -2, 0) failed as expected
-ptrace06   23  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -3, 0) failed as expected
-ptrace06   24  [1;32mTPASS[0m  :  ptrace(PEEKUSER, ..., -4, 0) failed as expected
-ptrace06   25  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 0, 0) failed as expected
-ptrace06   26  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 1, 0) failed as expected
-ptrace06   27  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 2, 0) failed as expected
-ptrace06   28  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., 3, 0) failed as expected
-ptrace06   29  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -1, 0) failed as expected
-ptrace06   30  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -2, 0) failed as expected
-ptrace06   31  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -3, 0) failed as expected
-ptrace06   32  [1;32mTPASS[0m  :  ptrace(POKEDATA, ..., -4, 0) failed as expected
-ptrace06   33  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 0, 0) failed as expected
-ptrace06   34  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 1, 0) failed as expected
-ptrace06   35  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 2, 0) failed as expected
-ptrace06   36  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., 3, 0) failed as expected
-ptrace06   37  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -1, 0) failed as expected
-ptrace06   38  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -2, 0) failed as expected
-ptrace06   39  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -3, 0) failed as expected
-ptrace06   40  [1;32mTPASS[0m  :  ptrace(POKETEXT, ..., -4, 0) failed as expected
-ptrace06   41  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4097, 0) failed as expected
-ptrace06   42  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4098, 0) failed as expected
-ptrace06   43  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4099, 0) failed as expected
-ptrace06   44  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., 4100, 0) failed as expected
-ptrace06   45  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -1, 0) failed as expected
-ptrace06   46  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -2, 0) failed as expected
-ptrace06   47  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -3, 0) failed as expected
-ptrace06   48  [1;32mTPASS[0m  :  ptrace(POKEUSER, ..., -4, 0) failed as expected
+[37m[  9.851964 0:302 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mptrace06    1  TPASS  :  ptrace(PEEKDATA, ..., 0, 0) failed as expected
+ptrace06    2  TPASS  :  ptrace(PEEKDATA, ..., 1, 0) failed as expected
+ptrace06    3  TPASS  :  ptrace(PEEKDATA, ..., 2, 0) failed as expected
+ptrace06    4  TPASS  :  ptrace(PEEKDATA, ..., 3, 0) failed as expected
+ptrace06    5  TPASS  :  ptrace(PEEKDATA, ..., -1, 0) failed as expected
+ptrace06    6  TPASS  :  ptrace(PEEKDATA, ..., -2, 0) failed as expected
+ptrace06    7  TPASS  :  ptrace(PEEKDATA, ..., -3, 0) failed as expected
+ptrace06    8  TPASS  :  ptrace(PEEKDATA, ..., -4, 0) failed as expected
+ptrace06    9  TPASS  :  ptrace(PEEKTEXT, ..., 0, 0) failed as expected
+ptrace06   10  TPASS  :  ptrace(PEEKTEXT, ..., 1, 0) failed as expected
+ptrace06   11  TPASS  :  ptrace(PEEKTEXT, ..., 2, 0) failed as expected
+ptrace06   12  TPASS  :  ptrace(PEEKTEXT, ..., 3, 0) failed as expected
+ptrace06   13  TPASS  :  ptrace(PEEKTEXT, ..., -1, 0) failed as expected
+ptrace06   14  TPASS  :  ptrace(PEEKTEXT, ..., -2, 0) failed as expected
+ptrace06   15  TPASS  :  ptrace(PEEKTEXT, ..., -3, 0) failed as expected
+ptrace06   16  TPASS  :  ptrace(PEEKTEXT, ..., -4, 0) failed as expected
+ptrace06   17  TPASS  :  ptrace(PEEKUSER, ..., 4097, 0) failed as expected
+ptrace06   18  TPASS  :  ptrace(PEEKUSER, ..., 4098, 0) failed as expected
+ptrace06   19  TPASS  :  ptrace(PEEKUSER, ..., 4099, 0) failed as expected
+ptrace06   20  TPASS  :  ptrace(PEEKUSER, ..., 4100, 0) failed as expected
+ptrace06   21  TPASS  :  ptrace(PEEKUSER, ..., -1, 0) failed as expected
+ptrace06   22  TPASS  :  ptrace(PEEKUSER, ..., -2, 0) failed as expected
+ptrace06   23  TPASS  :  ptrace(PEEKUSER, ..., -3, 0) failed as expected
+ptrace06   24  TPASS  :  ptrace(PEEKUSER, ..., -4, 0) failed as expected
+ptrace06   25  TPASS  :  ptrace(POKEDATA, ..., 0, 0) failed as expected
+ptrace06   26  TPASS  :  ptrace(POKEDATA, ..., 1, 0) failed as expected
+ptrace06   27  TPASS  :  ptrace(POKEDATA, ..., 2, 0) failed as expected
+ptrace06   28  TPASS  :  ptrace(POKEDATA, ..., 3, 0) failed as expected
+ptrace06   29  TPASS  :  ptrace(POKEDATA, ..., -1, 0) failed as expected
+ptrace06   30  TPASS  :  ptrace(POKEDATA, ..., -2, 0) failed as expected
+ptrace06   31  TPASS  :  ptrace(POKEDATA, ..., -3, 0) failed as expected
+ptrace06   32  TPASS  :  ptrace(POKEDATA, ..., -4, 0) failed as expected
+ptrace06   33  TPASS  :  ptrace(POKETEXT, ..., 0, 0) failed as expected
+ptrace06   34  TPASS  :  ptrace(POKETEXT, ..., 1, 0) failed as expected
+ptrace06   35  TPASS  :  ptrace(POKETEXT, ..., 2, 0) failed as expected
+ptrace06   36  TPASS  :  ptrace(POKETEXT, ..., 3, 0) failed as expected
+ptrace06   37  TPASS  :  ptrace(POKETEXT, ..., -1, 0) failed as expected
+ptrace06   38  TPASS  :  ptrace(POKETEXT, ..., -2, 0) failed as expected
+ptrace06   39  TPASS  :  ptrace(POKETEXT, ..., -3, 0) failed as expected
+ptrace06   40  TPASS  :  ptrace(POKETEXT, ..., -4, 0) failed as expected
+ptrace06   41  TPASS  :  ptrace(POKEUSER, ..., 4097, 0) failed as expected
+ptrace06   42  TPASS  :  ptrace(POKEUSER, ..., 4098, 0) failed as expected
+ptrace06   43  TPASS  :  ptrace(POKEUSER, ..., 4099, 0) failed as expected
+ptrace06   44  TPASS  :  ptrace(POKEUSER, ..., 4100, 0) failed as expected
+ptrace06   45  TPASS  :  ptrace(POKEUSER, ..., -1, 0) failed as expected
+ptrace06   46  TPASS  :  ptrace(POKEUSER, ..., -2, 0) failed as expected
+ptrace06   47  TPASS  :  ptrace(POKEUSER, ..., -3, 0) failed as expected
+ptrace06   48  TPASS  :  ptrace(POKEUSER, ..., -4, 0) failed as expected
+
+Summary:
+passed   48
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace06 : 0
 RUN LTP CASE ptrace07
-tst_test.c:1175: [1;33mTCONF: [0mTests an x86_64 feature
+[37m[ 10.341225 0:313 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1175: TCONF: Tests an x86_64 feature
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace07 : 0
 RUN LTP CASE ptrace08
-tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+[37m[ 10.800844 0:323 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1201: TCONF: This arch 'unknown' is not supported for test!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace08 : 0
 RUN LTP CASE ptrace09
-tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+[37m[ 11.251368 0:333 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1201: TCONF: This arch 'unknown' is not supported for test!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace09 : 0
 RUN LTP CASE ptrace10
-tst_test.c:1201: [1;33mTCONF: [0mThis arch 'unknown' is not supported for test!
+[37m[ 11.702271 0:343 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1201: TCONF: This arch 'unknown' is not supported for test!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
 FAIL LTP CASE ptrace10 : 0
 RUN LTP CASE ptrace11
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-ptrace11.c:27: [1;32mTPASS: [0mptrace() traces init process successfully
+[37m[ 12.207339 0:353 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+ptrace11.c:27: TPASS: ptrace() traces init process successfully
 
 Summary:
 passed   1
@@ -574,19 +607,20 @@ skipped  0
 warnings 0
 FAIL LTP CASE ptrace11 : 0
 RUN LTP CASE sigtimedwait01
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-sigwait.c:27: [1;32mTPASS: [0mWait interrupted by expected signal
-sigwait.c:88: [1;32mTPASS: [0mstruct siginfo is correct
-sigwait.c:148: [1;32mTPASS: [0mstruct siginfo is correct
-sigwait.c:160: [1;32mTPASS: [0msigwaitinfo restored the original mask
-sigwait.c:113: [1;32mTPASS: [0mWait interrupted by expected signal
-sigwait.c:259: [1;32mTPASS: [0mWait interrupted by expected signal
-sigwait.c:268: [1;32mTPASS: [0msigwaitinfo restored the original mask
-sigwait.c:302: [1;32mTPASS: [0mFault occurred while accessing the buffers
-sigwait.c:344: [1;32mTPASS: [0mChild exited with expected code
-sigwait.c:367: [1;32mTPASS: [0mFault occurred while accessing the buffers
-sigwait.c:57: [1;32mTPASS: [0mWait interrupted by timeout
+[37m[ 12.601618 0:358 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sigwait.c:27: TPASS: Wait interrupted by expected signal
+sigwait.c:88: TPASS: struct siginfo is correct
+sigwait.c:148: TPASS: struct siginfo is correct
+sigwait.c:160: TPASS: sigwaitinfo restored the original mask
+sigwait.c:113: TPASS: Wait interrupted by expected signal
+sigwait.c:259: TPASS: Wait interrupted by expected signal
+sigwait.c:268: TPASS: sigwaitinfo restored the original mask
+sigwait.c:302: TPASS: Fault occurred while accessing the buffers
+sigwait.c:344: TPASS: Child exited with expected code
+sigwait.c:367: TPASS: Fault occurred while accessing the buffers
+sigwait.c:57: TPASS: Wait interrupted by timeout
 
 Summary:
 passed   11
@@ -596,17 +630,18 @@ skipped  0
 warnings 0
 FAIL LTP CASE sigtimedwait01 : 0
 RUN LTP CASE sigwaitinfo01
-tst_test.c:1733: [1;34mTINFO: [0mLTP version: LTP-20240524
-tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 15s
-sigwait.c:27: [1;32mTPASS: [0mWait interrupted by expected signal
-sigwait.c:88: [1;32mTPASS: [0mstruct siginfo is correct
-sigwait.c:148: [1;32mTPASS: [0mstruct siginfo is correct
-sigwait.c:160: [1;32mTPASS: [0msigwaitinfo restored the original mask
-sigwait.c:113: [1;32mTPASS: [0mWait interrupted by expected signal
-sigwait.c:259: [1;32mTPASS: [0mWait interrupted by expected signal
-sigwait.c:268: [1;32mTPASS: [0msigwaitinfo restored the original mask
-sigwait.c:302: [1;32mTPASS: [0mFault occurred while accessing the buffers
-sigwait.c:344: [1;32mTPASS: [0mChild exited with expected code
+[37m[ 14.764961 0:371 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sigwait.c:27: TPASS: Wait interrupted by expected signal
+sigwait.c:88: TPASS: struct siginfo is correct
+sigwait.c:148: TPASS: struct siginfo is correct
+sigwait.c:160: TPASS: sigwaitinfo restored the original mask
+sigwait.c:113: TPASS: Wait interrupted by expected signal
+sigwait.c:259: TPASS: Wait interrupted by expected signal
+sigwait.c:268: TPASS: sigwaitinfo restored the original mask
+sigwait.c:302: TPASS: Fault occurred while accessing the buffers
+sigwait.c:344: TPASS: Child exited with expected code
 
 Summary:
 passed   9

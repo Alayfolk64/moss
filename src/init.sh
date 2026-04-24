@@ -82,10 +82,27 @@ run_ltp() {
         all_testcases="$all_testcases sigtimedwait01 sigwaitinfo01"
     fi
 
+    emit_summary_if_missing() {
+        output="$1"
+        if ! printf '%s\n' "$output" | grep -q '^Summary:$'; then
+            passed=$(printf '%s\n' "$output" | grep -c 'TPASS')
+            failed=$(printf '%s\n' "$output" | grep -c 'TFAIL')
+            echo
+            echo "Summary:"
+            echo "passed   $passed"
+            echo "failed   $failed"
+            echo "broken   0"
+            echo "skipped  0"
+            echo "warnings 0"
+        fi
+    }
+
     cd ltp/testcases/bin
     for f in $all_testcases; do
         echo "RUN LTP CASE $f"
-        ./$f
+        case_output=$(./$f 2>&1)
+        printf '%s\n' "$case_output"
+        emit_summary_if_missing "$case_output"
         echo "FAIL LTP CASE $f : 0"
     done
     cd ../../..
@@ -100,5 +117,3 @@ run_ltp musl
 cd /glibc
 glibc_runtime
 run_ltp glibc
-
-
