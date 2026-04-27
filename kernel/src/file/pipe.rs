@@ -12,7 +12,10 @@ use axtask::{
     current,
     future::{block_on, poll_io},
 };
-use linux_raw_sys::{general::S_IFIFO, ioctl::FIONREAD};
+use linux_raw_sys::{
+    general::{O_NONBLOCK, O_RDONLY, O_WRONLY, S_IFIFO},
+    ioctl::FIONREAD,
+};
 use memory_addr::PAGE_SIZE_4K;
 use ringbuf::{
     HeapRb,
@@ -204,6 +207,18 @@ impl FileLike for Pipe {
 
     fn nonblocking(&self) -> bool {
         self.non_blocking.load(Ordering::Acquire)
+    }
+
+    fn status_flags(&self) -> u32 {
+        let mut flags = if self.is_read() { O_RDONLY } else { O_WRONLY };
+        if self.nonblocking() {
+            flags |= O_NONBLOCK;
+        }
+        flags
+    }
+
+    fn set_status_flags(&self, flags: u32) -> AxResult {
+        self.set_nonblocking(flags & O_NONBLOCK != 0)
     }
 
     fn ioctl(&self, cmd: u32, arg: usize) -> AxResult<usize> {

@@ -2,17 +2,19 @@ use alloc::{borrow::Cow, string::ToString, sync::Arc};
 use core::{
     ffi::c_int,
     hint::likely,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     task::Context,
 };
 
 use axerrno::{AxError, AxResult};
-use axfs::{FS_CONTEXT, FsContext};
+use axfs::{FS_CONTEXT, FileFlags, FsContext};
 use axfs_ng_vfs::{Location, Metadata, NodeFlags};
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::future::{block_on, poll_io};
-use linux_raw_sys::general::{AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW};
+use linux_raw_sys::general::{
+    AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, O_APPEND, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY,
+};
 
 use super::{FileLike, Kstat, get_file_like};
 use crate::file::{IoDst, IoSrc};
@@ -100,13 +102,31 @@ pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
 pub struct File {
     inner: axfs::File,
     nonblock: AtomicBool,
+    status_flags: AtomicU32,
 }
 
 impl File {
+    fn open_mode_from_flags(flags: FileFlags) -> u32 {
+        match (
+            flags.contains(FileFlags::READ),
+            flags.contains(FileFlags::WRITE),
+        ) {
+            (true, true) => O_RDWR,
+            (false, true) => O_WRONLY,
+            _ => O_RDONLY,
+        }
+    }
+
     pub fn new(inner: axfs::File) -> Self {
+        let mut status_flags = Self::open_mode_from_flags(inner.flags());
+        if inner.flags().contains(FileFlags::APPEND) {
+            status_flags |= O_APPEND;
+        }
+
         Self {
             inner,
             nonblock: AtomicBool::new(false),
+            status_flags: AtomicU32::new(status_flags),
         }
     }
 
@@ -157,11 +177,31 @@ impl FileLike for File {
 
     fn set_nonblocking(&self, flag: bool) -> AxResult {
         self.nonblock.store(flag, Ordering::Release);
+        if flag {
+            self.status_flags.fetch_or(O_NONBLOCK, Ordering::AcqRel);
+        } else {
+            self.status_flags.fetch_and(!O_NONBLOCK, Ordering::AcqRel);
+        }
         Ok(())
     }
 
     fn nonblocking(&self) -> bool {
         self.nonblock.load(Ordering::Acquire)
+    }
+
+    fn status_flags(&self) -> u32 {
+        self.status_flags.load(Ordering::Acquire)
+    }
+
+    fn set_status_flags(&self, flags: u32) -> AxResult {
+        // Linux only allows changing a subset of status flags via F_SETFL.
+        const MUTABLE_STATUS_BITS: u32 = O_APPEND | O_NONBLOCK;
+        let old = self.status_flags.load(Ordering::Acquire);
+        let new = (old & !MUTABLE_STATUS_BITS) | (flags & MUTABLE_STATUS_BITS);
+        self.status_flags.store(new, Ordering::Release);
+        self.nonblock
+            .store(new & O_NONBLOCK != 0, Ordering::Release);
+        Ok(())
     }
 
     fn path(&self) -> Cow<'_, str> {
