@@ -1,0 +1,222 @@
+RUN LTP CASE ptrace01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace01 : 0
+
+RUN LTP CASE ptrace02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace02 : 0
+
+RUN LTP CASE ptrace03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace03 : 0
+
+RUN LTP CASE ptrace04
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace04 : 0
+
+RUN LTP CASE ptrace05
+Summary
+passed   106
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace05 : 0
+
+RUN LTP CASE ptrace06
+Summary
+passed   64
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace06 : 0
+
+RUN LTP CASE ptrace07
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace07 : 0
+
+RUN LTP CASE ptrace08
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace08 : 0
+
+RUN LTP CASE ptrace09
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace09 : 0
+
+RUN LTP CASE ptrace10
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace10 : 0
+
+RUN LTP CASE ptrace11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace11 : 0
+
+RUN LTP CASE ptrace01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace01 : 0
+
+RUN LTP CASE ptrace02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace02 : 0
+
+RUN LTP CASE ptrace03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace03 : 0
+
+RUN LTP CASE ptrace04
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace04 : 0
+
+RUN LTP CASE ptrace05
+Summary
+passed   63
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace05 : 0
+
+RUN LTP CASE ptrace06
+Summary
+passed   48
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace06 : 0
+
+RUN LTP CASE ptrace07
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace07 : 0
+
+RUN LTP CASE ptrace08
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace08 : 0
+
+RUN LTP CASE ptrace09
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace09 : 0
+
+RUN LTP CASE ptrace10
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace10 : 0
+
+RUN LTP CASE ptrace11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace11 : 0
+
+RUN LTP CASE sigtimedwait01
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigtimedwait01 : 0
+
+RUN LTP CASE sigwaitinfo01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigwaitinfo01 : 0
+
+Summary
+passed   317
+failed   2
+broken   0
+skipped  0
+warnings 0

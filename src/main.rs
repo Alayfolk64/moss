@@ -6,6 +6,9 @@ extern crate alloc;
 
 use alloc::{borrow::ToOwned, vec::Vec};
 
+#[cfg(feature = "shell-init")]
+pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
+#[cfg(not(feature = "shell-init"))]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
 pub const LTP_CASES_RAW: &str = include_str!("ltp.txt");
 

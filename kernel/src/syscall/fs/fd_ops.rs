@@ -1,13 +1,13 @@
 use alloc::{format, string::ToString, sync::Arc};
 use core::{
     ffi::{c_char, c_int},
-    mem,
-    ops::{Deref, DerefMut},
 };
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
 use axfs_ng_vfs::{DirEntry, FileNode, Location, NodePermission, NodeType, Reference};
+use kernel_guard::NoPreempt;
+use scope_local::ActiveScope;
 use axtask::current;
 use bitflags::bitflags;
 use linux_raw_sys::general::*;
@@ -126,7 +126,11 @@ pub fn sys_openat(
     }
     debug!("sys_openat <= {dirfd} {path:?} {flags:#o} {mode:#o}");
 
-    let mode = mode & !current().as_thread().proc_data.umask();
+    let mut mode = mode & !current().as_thread().proc_data.umask();
+    if (flags as u32) & O_CREAT != 0 {
+        // VFS clears setuid/setgid bits for regular-file creation.
+        mode &= !((S_ISUID | S_ISGID) as __kernel_mode_t);
+    }
 
     let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
     with_fs(dirfd, |fs| options.open(fs, path))
@@ -157,31 +161,46 @@ bitflags! {
     }
 }
 
-pub fn sys_close_range(first: i32, last: i32, flags: u32) -> AxResult<isize> {
-    if first < 0 || last < first {
+pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
+    if last < first {
         return Err(AxError::InvalidInput);
     }
     let flags = CloseRangeFlags::from_bits(flags).ok_or(AxError::InvalidInput)?;
     debug!("sys_close_range <= fds: [{first}, {last}], flags: {flags:?}");
+    let cloexec = flags.contains(CloseRangeFlags::CLOEXEC);
+    let first = first as usize;
+    let last = last as usize;
+
     if flags.contains(CloseRangeFlags::UNSHARE) {
-        // TODO: optimize
+        // 1) Snapshot current FD table.
+        let cloned = FD_TABLE.read().clone();
+
+        // 2) Detach current task's scope-local FD table pointer.
+        // The running task keeps a leaked scope read-lock (see TaskExt::on_enter/on_leave),
+        // so we must temporarily drop it before taking scope.write(). Keep preemption
+        // disabled during this window to avoid task switch with a mismatched lock count.
         let curr = current();
-        let mut scope = curr.as_thread().proc_data.scope.write();
-        let mut guard = FD_TABLE.scope_mut(&mut scope);
-        let old_files = mem::take(guard.deref_mut());
-        old_files.write().clone_from(old_files.read().deref());
+        let thr = curr.as_thread();
+        let _preempt_guard = NoPreempt::new();
+        ActiveScope::set_global();
+        unsafe { thr.proc_data.scope.force_read_decrement() };
+        let mut scope = thr.proc_data.scope.write();
+        *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
+        drop(scope);
+        let scope = thr.proc_data.scope.read();
+        unsafe { ActiveScope::set(&scope) };
+        core::mem::forget(scope);
     }
 
-    let cloexec = flags.contains(CloseRangeFlags::CLOEXEC);
     let mut fd_table = FD_TABLE.write();
     if let Some(max_index) = fd_table.ids().next_back() {
-        for fd in first..=last.min(max_index as i32) {
+        for fd in first..=last.min(max_index) {
             if cloexec {
-                if let Some(f) = fd_table.get_mut(fd as _) {
+                if let Some(f) = fd_table.get_mut(fd) {
                     f.cloexec = true;
                 }
             } else {
-                fd_table.remove(fd as _);
+                fd_table.remove(fd);
             }
         }
     }

@@ -112,6 +112,10 @@ impl CloneArgs {
         if flags.contains(CloneFlags::VFORK | CloneFlags::THREAD) {
             return Err(AxError::InvalidInput);
         }
+        // Linux rejects CLONE_FS together with CLONE_NEWNS.
+        if flags.contains(CloneFlags::FS) && flags.contains(CloneFlags::NEWNS) {
+            return Err(AxError::InvalidInput);
+        }
         if flags.contains(CloneFlags::PIDFD | CloneFlags::DETACHED) {
             return Err(AxError::InvalidInput);
         }
@@ -155,6 +159,9 @@ impl CloneArgs {
         );
 
         let exit_signal = if exit_signal > 0 {
+            if exit_signal > 64 {
+                return Err(AxError::InvalidInput);
+            }
             Some(Signo::from_repr(exit_signal as u8).ok_or(AxError::InvalidInput)?)
         } else {
             None
@@ -263,15 +270,30 @@ impl CloneArgs {
         if flags.contains(CloneFlags::CHILD_CLEARTID) {
             thr.set_clear_child_tid(child_tid);
         }
+        let rollback_unspawned_clone = || {
+            // Clone metadata has been created but the task was not spawned.
+            // Roll back process/thread bookkeeping to avoid leaking a ghost child.
+            if new_proc_data.proc.exit_thread(tid, 0) {
+                new_proc_data.proc.exit();
+                new_proc_data.proc.free();
+            }
+        };
         if flags.contains(CloneFlags::PIDFD) && pidfd != 0 {
             let pidfd_obj = if flags.contains(CloneFlags::THREAD) {
                 PidFd::new_thread(&thr)
             } else {
                 PidFd::new_process(&new_proc_data)
             };
-            let fd = pidfd_obj.add_to_fd_table(true)?;
+            let fd = match pidfd_obj.add_to_fd_table(true) {
+                Ok(fd) => fd,
+                Err(err) => {
+                    rollback_unspawned_clone();
+                    return Err(err);
+                }
+            };
             if let Err(err) = (pidfd as *mut i32).vm_write(fd) {
                 let _ = close_file_like(fd);
+                rollback_unspawned_clone();
                 return Err(err.into());
             }
         }

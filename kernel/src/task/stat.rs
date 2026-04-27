@@ -84,6 +84,18 @@ impl TaskStat {
         let ppid = proc.parent().map_or(0, |p| p.pid());
         let pgrp = proc.group().pgid();
         let session = proc.group().session().sid();
+        let (utime, stime) = thread.time.borrow().output();
+        // /proc/[pid]/stat reports utime/stime in USER_HZ ticks (usually 100).
+        // Use ceil conversion to avoid reporting 0 for a long time in syscall-heavy
+        // loops where user CPU time is positive but still < 1 tick.
+        const MICROS_PER_TICK: u128 = 10_000;
+        let to_user_hz_ticks = |micros: u128| {
+            if micros == 0 {
+                0
+            } else {
+                ((micros - 1) / MICROS_PER_TICK + 1) as u64
+            }
+        };
         Ok(Self {
             pid,
             comm: comm.to_owned(),
@@ -91,6 +103,8 @@ impl TaskStat {
             ppid,
             pgrp,
             session,
+            utime: to_user_hz_ticks(utime.as_micros()),
+            stime: to_user_hz_ticks(stime.as_micros()),
             num_threads: proc.threads().len() as u32,
             exit_signal: proc_data.exit_signal.unwrap_or(Signo::SIGCHLD) as u8,
             exit_code: proc.exit_code(),

@@ -45,13 +45,15 @@ impl TryFrom<Clone3Args> for CloneArgs {
         if flags.contains(CloneFlags::DETACHED) {
             return Err(AxError::InvalidInput);
         }
+        if args.stack != 0 && args.stack_size == 0 {
+            return Err(AxError::InvalidInput);
+        }
+        if args.stack == 0 && args.stack_size != 0 {
+            return Err(AxError::InvalidInput);
+        }
 
         let stack = if args.stack > 0 {
-            if args.stack_size > 0 {
-                (args.stack + args.stack_size) as usize
-            } else {
-                args.stack as usize
-            }
+            (args.stack + args.stack_size) as usize
         } else {
             0
         };
@@ -81,11 +83,35 @@ pub fn sys_clone3(uctx: &UserContext, args: *const u8, size: usize) -> AxResult<
     }
 
     let mut buffer = [0u8; core::mem::size_of::<Clone3Args>()];
+    let known_size = size.min(buffer.len());
+
     // SAFETY: MaybeUninit<T> is compatible with T, and we're filling in the
     // buffer with bytes read from the user
     vm_read_slice(args, unsafe {
-        mem::transmute::<&mut [u8], &mut [MaybeUninit<u8>]>(&mut buffer[..size])
+        mem::transmute::<&mut [u8], &mut [MaybeUninit<u8>]>(&mut buffer[..known_size])
     })?;
+
+    // Linux clone3 ABI compatibility:
+    // When userspace passes a larger `size`, extra bytes must be readable and
+    // all-zero. Unreadable bytes should return EFAULT; non-zero extras should
+    // return E2BIG.
+    if size > known_size {
+        let mut extra = [MaybeUninit::<u8>::uninit(); 64];
+        let mut checked = 0usize;
+        while checked < (size - known_size) {
+            let chunk_len = (size - known_size - checked).min(extra.len());
+            let extra_ptr = args.wrapping_add(known_size + checked);
+            vm_read_slice(extra_ptr, &mut extra[..chunk_len])?;
+            for b in &extra[..chunk_len] {
+                // SAFETY: vm_read_slice initialized these bytes.
+                if unsafe { b.assume_init() } != 0 {
+                    return Err(AxError::ArgumentListTooLong);
+                }
+            }
+            checked += chunk_len;
+        }
+    }
+
     let clone3_args: Clone3Args =
         bytemuck::try_pod_read_unaligned(&buffer).map_err(|_| AxError::InvalidInput)?;
 

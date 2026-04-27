@@ -8,7 +8,7 @@ use linux_raw_sys::general::{
 use starry_vm::{VmMutPtr, VmPtr, vm_load, vm_write_slice};
 
 use crate::{
-    task::{get_process_data, get_process_group},
+    task::{AsThread, get_process_data, get_process_group},
     time::TimeValueLike,
 };
 
@@ -17,17 +17,28 @@ pub fn sys_sched_yield() -> AxResult<isize> {
     Ok(0)
 }
 
-fn sleep_impl(clock: impl Fn() -> TimeValue, dur: TimeValue) -> TimeValue {
+fn has_unblocked_pending_signal() -> bool {
+    let curr = current();
+    let signal = &curr.as_thread().signal;
+    let pending = signal.pending();
+    let blocked = signal.blocked();
+    !(pending & !blocked).is_empty()
+}
+
+fn sleep_impl(clock: impl Fn() -> TimeValue, dur: TimeValue) -> (TimeValue, bool) {
     debug!("sleep_impl <= {dur:?}");
 
     let start = clock();
     let deadline = start.checked_add(dur).unwrap_or(TimeValue::MAX);
 
     while clock() < deadline {
+        if has_unblocked_pending_signal() {
+            return (clock() - start, true);
+        }
         axtask::yield_now();
     }
 
-    clock() - start
+    (clock() - start, false)
 }
 
 /// Sleep some nanoseconds
@@ -36,9 +47,10 @@ pub fn sys_nanosleep(req: *const timespec, rem: *mut timespec) -> AxResult<isize
     let req = unsafe { req.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
     debug!("sys_nanosleep <= req: {req:?}");
 
-    let actual = sleep_impl(axhal::time::monotonic_time, req);
+    let (actual, interrupted) = sleep_impl(axhal::time::monotonic_time, req);
 
-    if let Some(diff) = req.checked_sub(actual) {
+    if interrupted {
+        let diff = req.checked_sub(actual).unwrap_or(TimeValue::from_nanos(0));
         debug!("sys_nanosleep => rem: {diff:?}");
         if let Some(rem) = rem.nullable() {
             rem.vm_write(timespec::from_time_value(diff))?;
@@ -73,9 +85,10 @@ pub fn sys_clock_nanosleep(
         req
     };
 
-    let actual = sleep_impl(clock, dur);
+    let (actual, interrupted) = sleep_impl(clock, dur);
 
-    if let Some(diff) = dur.checked_sub(actual) {
+    if interrupted {
+        let diff = dur.checked_sub(actual).unwrap_or(TimeValue::from_nanos(0));
         debug!("sys_clock_nanosleep => rem: {diff:?}");
         if let Some(rem) = rem.nullable() {
             rem.vm_write(timespec::from_time_value(diff))?;
