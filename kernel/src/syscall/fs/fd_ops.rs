@@ -5,12 +5,12 @@ use core::{
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
-use axfs_ng_vfs::{DirEntry, FileNode, Location, NodePermission, NodeType, Reference};
-use kernel_guard::NoPreempt;
-use scope_local::ActiveScope;
+use axfs_ng_vfs::{DirEntry, FileNode, Location, NodeType, Reference};
 use axtask::current;
 use bitflags::bitflags;
+use kernel_guard::NoPreempt;
 use linux_raw_sys::general::*;
+use scope_local::ActiveScope;
 
 use crate::{
     file::{

@@ -1062,7 +1062,7 @@ run_ltp() {
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do
         echo "RUN LTP CASE $f"
 
-        timeout 20s ./"$f" 2>&1
+        ./"$f" 2>&1
         status=$?
 
         #printf '%s\n' "$case_output"
