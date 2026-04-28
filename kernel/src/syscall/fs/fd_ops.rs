@@ -5,17 +5,17 @@ use core::{
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
-use axfs_ng_vfs::{DirEntry, FileNode, Location, NodePermission, NodeType, Reference};
-use kernel_guard::NoPreempt;
-use scope_local::ActiveScope;
+use axfs_ng_vfs::{DirEntry, FileNode, Location, NodeType, Reference};
 use axtask::current;
 use bitflags::bitflags;
+use kernel_guard::NoPreempt;
 use linux_raw_sys::general::*;
+use scope_local::ActiveScope;
 
 use crate::{
     file::{
-        Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, close_file_like, get_file_like,
-        with_fs,
+        Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, add_file_like_from,
+        close_file_like, get_file_like, with_fs,
     },
     mm::{UserPtr, vm_load_string},
     pseudofs::{Device, dev::tty},
@@ -208,15 +208,15 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     Ok(0)
 }
 
-fn dup_fd(old_fd: c_int, cloexec: bool) -> AxResult<isize> {
+fn dup_fd(old_fd: c_int, min_fd: usize, cloexec: bool) -> AxResult<isize> {
     let f = get_file_like(old_fd)?;
-    let new_fd = add_file_like(f, cloexec)?;
+    let new_fd = add_file_like_from(f, cloexec, min_fd)?;
     Ok(new_fd as _)
 }
 
 pub fn sys_dup(old_fd: c_int) -> AxResult<isize> {
     debug!("sys_dup <= {old_fd}");
-    dup_fd(old_fd, false)
+    dup_fd(old_fd, 0, false)
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -262,8 +262,8 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
     debug!("sys_fcntl <= fd: {fd} cmd: {cmd} arg: {arg}");
 
     match cmd as u32 {
-        F_DUPFD => dup_fd(fd, false),
-        F_DUPFD_CLOEXEC => dup_fd(fd, true),
+        F_DUPFD => dup_fd(fd, arg, false),
+        F_DUPFD_CLOEXEC => dup_fd(fd, arg, true),
         F_SETLK | F_SETLKW => Ok(0),
         F_OFD_SETLK | F_OFD_SETLKW => Ok(0),
         F_GETLK | F_OFD_GETLK => {
@@ -272,28 +272,10 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
             Ok(0)
         }
         F_SETFL => {
-            get_file_like(fd)?.set_nonblocking(arg & (O_NONBLOCK as usize) > 0)?;
+            get_file_like(fd)?.set_status_flags(arg as _)?;
             Ok(0)
         }
-        F_GETFL => {
-            let f = get_file_like(fd)?;
-
-            let mut ret = 0;
-            if f.nonblocking() {
-                ret |= O_NONBLOCK;
-            }
-
-            let perm = NodePermission::from_bits_truncate(f.stat()?.mode as _);
-            if perm.contains(NodePermission::OWNER_WRITE) {
-                if perm.contains(NodePermission::OWNER_READ) {
-                    ret |= O_RDWR;
-                } else {
-                    ret |= O_WRONLY;
-                }
-            }
-
-            Ok(ret as _)
-        }
+        F_GETFL => Ok(get_file_like(fd)?.status_flags() as _),
         F_GETFD => {
             let cloexec = FD_TABLE
                 .read()

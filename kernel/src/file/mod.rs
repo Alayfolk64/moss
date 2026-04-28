@@ -18,16 +18,16 @@ use axpoll::Pollable;
 use axtask::current;
 use downcast_rs::{DowncastSync, impl_downcast};
 use flatten_objects::FlattenObjects;
-use linux_raw_sys::general::{RLIMIT_NOFILE, stat, statx, statx_timestamp};
+use linux_raw_sys::general::{O_NONBLOCK, RLIMIT_NOFILE, stat, statx, statx_timestamp};
 use spin::RwLock;
 
+#[cfg(feature = "net")]
+pub use self::net::Socket;
 pub use self::{
     fs::{Directory, File, resolve_at, with_fs},
     pidfd::PidFd,
     pipe::Pipe,
 };
-#[cfg(feature = "net")]
-pub use self::net::Socket;
 use crate::task::{AX_FILE_LIMIT, AsThread};
 
 #[derive(Debug, Clone, Copy)]
@@ -163,6 +163,14 @@ pub trait FileLike: Pollable + DowncastSync {
         Ok(())
     }
 
+    fn status_flags(&self) -> u32 {
+        if self.nonblocking() { O_NONBLOCK } else { 0 }
+    }
+
+    fn set_status_flags(&self, flags: u32) -> AxResult {
+        self.set_nonblocking(flags & O_NONBLOCK != 0)
+    }
+
     fn from_fd(fd: c_int) -> AxResult<Arc<Self>>
     where
         Self: Sized + 'static,
@@ -210,6 +218,29 @@ pub fn add_file_like(f: Arc<dyn FileLike>, cloexec: bool) -> AxResult<c_int> {
     }
     let fd = FileDescriptor { inner: f, cloexec };
     Ok(table.add(fd).map_err(|_| AxError::TooManyOpenFiles)? as c_int)
+}
+
+/// Add a file to the file descriptor table with a minimum fd hint.
+pub fn add_file_like_from(f: Arc<dyn FileLike>, cloexec: bool, min_fd: usize) -> AxResult<c_int> {
+    let max_nofile = current().as_thread().proc_data.rlim.read()[RLIMIT_NOFILE].current;
+    let max_fd = max_nofile.min(AX_FILE_LIMIT as u64) as usize;
+    if min_fd >= max_fd {
+        return Err(AxError::InvalidInput);
+    }
+
+    let mut table = FD_TABLE.write();
+    if table.count() as u64 >= max_nofile || table.count() >= max_fd {
+        return Err(AxError::TooManyOpenFiles);
+    }
+
+    let new_fd = (min_fd..max_fd)
+        .find(|fd| !table.is_assigned(*fd))
+        .ok_or(AxError::TooManyOpenFiles)?;
+    let fd = FileDescriptor { inner: f, cloexec };
+    table
+        .add_at(new_fd, fd)
+        .map_err(|_| AxError::TooManyOpenFiles)?;
+    Ok(new_fd as c_int)
 }
 
 /// Close a file by `fd`.
