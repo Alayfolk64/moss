@@ -225,6 +225,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());
+        crate::syscall::release_file_leases_for_pid(process.pid());
         if let Some(parent) = process.parent() {
             if let Some(signo) = thr.proc_data.exit_signal {
                 let _ = send_signal_to_process(parent.pid(), Some(SignalInfo::new_kernel(signo)));

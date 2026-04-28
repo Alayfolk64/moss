@@ -61,3 +61,59 @@ C1 --> C2["remove new_fd and install duplicated entry"]
 
 D["do_exit/process exit"] --> D1["release_posix_locks_for_pid(process.pid)"]
 ```
+
+## fcntl Lease Call Flow (Minimal)
+
+Implementation notes:
+- Lease state is tracked by `FILE_LEASES: BTreeMap<PosixLockKey, FileLease>`.
+- `PosixLockKey` is `(dev, ino)`, so lease is inode-scoped.
+- Owner is current process pid.
+- Supported lease types are `F_RDLCK`, `F_WRLCK`, `F_UNLCK`.
+- Access policy in minimal mode:
+- `F_RDLCK` requires `O_RDONLY` fd; `O_WRONLY/O_RDWR` returns `EAGAIN`.
+- `F_WRLCK` rejects `O_RDONLY` and returns `EAGAIN`.
+
+```mermaid
+flowchart TD
+U["Userspace: fcntl(fd, F_SETLEASE/F_GETLEASE, arg)"] --> T["Trap to kernel"]
+T --> H["handle_syscall(uctx)"]
+H --> F["sys_fcntl(fd, cmd, arg)"]
+
+F --> C{"cmd"}
+C -->|F_SETLEASE| S["handle_setlease(fd,arg)"]
+C -->|F_GETLEASE| G["handle_getlease(fd)"]
+
+S --> ST["validate_lease_type(arg as i16)"]
+ST --> SF["File::from_fd(fd) + posix_lock_key(dev,ino) + owner(pid)"]
+SF --> SU{"lease_type == F_UNLCK?"}
+SU -->|yes| SRM["if owner matches: remove FILE_LEASES[key]"]
+SRM --> SRET0["return 0"]
+SU -->|no| SA["validate_lease_access(mode, lease_type)"]
+SA -->|fail| SEAGAIN["return EAGAIN"]
+SA -->|ok| SC{"existing lease owned by other pid?"}
+SC -->|yes| SE2["return EAGAIN"]
+SC -->|no| SI["insert/update FILE_LEASES[key] = {owner, lease_type}"]
+SI --> SRET1["return 0"]
+
+G --> GF["File::from_fd(fd) + posix_lock_key + owner(pid)"]
+GF --> GL{"FILE_LEASES[key] exists and owner matches?"}
+GL -->|yes| GT["return stored lease_type"]
+GL -->|no| GU["return F_UNLCK"]
+```
+
+## Lease Release Lifecycle
+
+```mermaid
+flowchart TD
+A["sys_close(fd)"] --> A1["release_file_lease_for_file_like(fd->file)"]
+A1 --> A2["close_file_like(fd)"]
+
+B["sys_close_range(first,last,flags)"] --> B0{"flags has CLOEXEC?"}
+B0 -->|yes| B1["only set cloexec bit"]
+B0 -->|no| B2["for each fd: release_file_lease_for_file_like + remove fd"]
+
+C["sys_dup3(old_fd,new_fd,flags)"] --> C1["before overwrite new_fd: release_file_lease_for_file_like(new_fd)"]
+C1 --> C2["remove new_fd and install duplicated entry"]
+
+D["do_exit/process exit"] --> D1["release_file_leases_for_pid(process.pid)"]
+```

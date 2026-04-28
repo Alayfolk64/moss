@@ -237,6 +237,7 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
             } else {
                 if let Some(file_desc) = fd_table.get(fd) {
                     release_posix_locks_for_file_like(&file_desc.inner);
+                    release_file_lease_for_file_like(&file_desc.inner);
                 }
                 fd_table.remove(fd);
             }
@@ -273,9 +274,16 @@ struct PosixRecordLock {
     range: LockRange,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FileLease {
+    owner: u32,
+    lease_type: i16,
+}
+
 static POSIX_LOCKS: RwLock<BTreeMap<PosixLockKey, Vec<PosixRecordLock>>> =
     RwLock::new(BTreeMap::new());
 static POSIX_WAIT_GRAPH: RwLock<BTreeMap<u32, Vec<u32>>> = RwLock::new(BTreeMap::new());
+static FILE_LEASES: RwLock<BTreeMap<PosixLockKey, FileLease>> = RwLock::new(BTreeMap::new());
 
 fn has_unblocked_pending_signal() -> bool {
     let curr = current();
@@ -308,12 +316,31 @@ fn validate_lock_whence(lock_whence: i16) -> AxResult<()> {
     }
 }
 
+fn validate_lease_type(lease_type: i16) -> AxResult<()> {
+    if lease_type == F_RDLCK as i16 || lease_type == F_WRLCK as i16 || lease_type == F_UNLCK as i16
+    {
+        Ok(())
+    } else {
+        Err(AxError::InvalidInput)
+    }
+}
+
 fn validate_lock_access(file: &File, lock_type: i16) -> AxResult<()> {
     let mode = file.status_flags() & O_ACCMODE;
     if (lock_type == F_RDLCK as i16 && mode == O_WRONLY)
         || (lock_type == F_WRLCK as i16 && mode == O_RDONLY)
     {
         return Err(AxError::BadFileDescriptor);
+    }
+    Ok(())
+}
+
+fn validate_lease_access(file: &File, lease_type: i16) -> AxResult<()> {
+    let mode = file.status_flags() & O_ACCMODE;
+    if (lease_type == F_RDLCK as i16 && mode != O_RDONLY)
+        || (lease_type == F_WRLCK as i16 && mode == O_RDONLY)
+    {
+        return Err(AxError::from(LinuxError::EAGAIN));
     }
     Ok(())
 }
@@ -577,11 +604,26 @@ fn release_posix_locks_for_file_like(file_like: &Arc<dyn FileLike>) {
     }
 }
 
+fn release_file_lease_for_file_like(file_like: &Arc<dyn FileLike>) {
+    let Some(file) = file_like.downcast_ref::<File>() else {
+        return;
+    };
+    let Ok(key) = posix_lock_key(file) else {
+        return;
+    };
+    let owner = current().as_thread().proc_data.proc.pid();
+    let mut leases = FILE_LEASES.write();
+    if leases.get(&key).is_some_and(|lease| lease.owner == owner) {
+        leases.remove(&key);
+    }
+}
+
 fn release_posix_locks_for_fd(fd: c_int) {
     let Ok(file_like) = get_file_like(fd) else {
         return;
     };
     release_posix_locks_for_file_like(&file_like);
+    release_file_lease_for_file_like(&file_like);
 }
 
 pub fn release_posix_locks_for_pid(pid: u32) {
@@ -591,6 +633,10 @@ pub fn release_posix_locks_for_pid(pid: u32) {
         !locks.is_empty()
     });
     clear_wait_dependencies(pid);
+}
+
+pub fn release_file_leases_for_pid(pid: u32) {
+    FILE_LEASES.write().retain(|_, lease| lease.owner != pid);
 }
 
 fn handle_getlk(fd: c_int, arg: usize) -> AxResult<isize> {
@@ -678,6 +724,48 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
     }
 }
 
+fn handle_setlease(fd: c_int, arg: usize) -> AxResult<isize> {
+    let lease_type = arg as i16;
+    validate_lease_type(lease_type)?;
+
+    let file = File::from_fd(fd)?;
+    let key = posix_lock_key(&file)?;
+    let owner = current().as_thread().proc_data.proc.pid();
+
+    if lease_type == F_UNLCK as i16 {
+        let mut leases = FILE_LEASES.write();
+        if leases.get(&key).is_some_and(|lease| lease.owner == owner) {
+            leases.remove(&key);
+        }
+        return Ok(0);
+    }
+
+    validate_lease_access(&file, lease_type)?;
+
+    let mut leases = FILE_LEASES.write();
+    if let Some(lease) = leases.get(&key)
+        && lease.owner != owner
+    {
+        return Err(AxError::from(LinuxError::EAGAIN));
+    }
+
+    leases.insert(key, FileLease { owner, lease_type });
+    Ok(0)
+}
+
+fn handle_getlease(fd: c_int) -> AxResult<isize> {
+    let file = File::from_fd(fd)?;
+    let key = posix_lock_key(&file)?;
+    let owner = current().as_thread().proc_data.proc.pid();
+
+    let lease_type = FILE_LEASES
+        .read()
+        .get(&key)
+        .and_then(|lease| (lease.owner == owner).then_some(lease.lease_type))
+        .unwrap_or(F_UNLCK as i16);
+    Ok(lease_type as isize)
+}
+
 pub fn sys_dup(old_fd: c_int) -> AxResult<isize> {
     debug!("sys_dup <= {old_fd}");
     dup_fd(old_fd, 0, false)
@@ -716,6 +804,7 @@ pub fn sys_dup3(old_fd: c_int, new_fd: c_int, flags: c_int) -> AxResult<isize> {
 
     if let Some(file_desc) = fd_table.get(new_fd as _) {
         release_posix_locks_for_file_like(&file_desc.inner);
+        release_file_lease_for_file_like(&file_desc.inner);
     }
     fd_table.remove(new_fd as _);
     fd_table
@@ -733,8 +822,10 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
         F_DUPFD_CLOEXEC => dup_fd(fd, arg, true),
         F_SETLK => handle_setlk(fd, arg, false),
         F_SETLKW => handle_setlk(fd, arg, true),
+        F_SETLEASE => handle_setlease(fd, arg),
         F_OFD_SETLK | F_OFD_SETLKW => Ok(0),
         F_GETLK => handle_getlk(fd, arg),
+        F_GETLEASE => handle_getlease(fd),
         F_OFD_GETLK => {
             let arg = UserPtr::<flock64>::from(arg);
             arg.get_as_mut()?.l_type = F_UNLCK as _;

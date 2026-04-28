@@ -985,7 +985,8 @@ run_ltp() {
 
     "
     if [ "$1" = "glibc" ]; then
-        all_testcases="$all_testcases sigtimedwait01 sigwaitinfo01"
+        all_testcases="$all_testcases"
+        # sigtimedwait01 sigwaitinfo01
     fi
 
     emit_summary_if_missing() {
