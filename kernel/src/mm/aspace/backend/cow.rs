@@ -1,5 +1,8 @@
 use alloc::{collections::BTreeMap, sync::Arc};
-use core::slice;
+use core::{
+    slice,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use axerrno::{AxError, AxResult};
 use axfs::FileBackend;
@@ -76,14 +79,40 @@ static FRAME_TABLE: SpinNoIrq<FrameTableRefCount> = SpinNoIrq::new(FrameTableRef
 /// Copy-on-write mapping backend.
 ///
 /// This corresponds to the `MAP_PRIVATE` flag.
-#[derive(Clone)]
 pub struct CowBackend {
     start: VirtAddr,
     size: PageSize,
     file: Option<(FileBackend, u64, Option<u64>)>,
+    mapped_pages: AtomicUsize,
+}
+
+impl Clone for CowBackend {
+    fn clone(&self) -> Self {
+        Self {
+            start: self.start,
+            size: self.size,
+            file: self.file.clone(),
+            mapped_pages: AtomicUsize::new(self.mapped_pages.load(Ordering::Relaxed)),
+        }
+    }
 }
 
 impl CowBackend {
+    fn dec_mapped_pages(&self) {
+        let mut old = self.mapped_pages.load(Ordering::Relaxed);
+        while old != 0 {
+            match self.mapped_pages.compare_exchange_weak(
+                old,
+                old - 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return,
+                Err(v) => old = v,
+            }
+        }
+    }
+
     fn alloc_new_frame(&self, zeroed: bool) -> AxResult<PhysAddr> {
         let frame = alloc_frame(zeroed, self.size)?;
         FRAME_TABLE.lock().init_frame(frame);
@@ -116,6 +145,7 @@ impl CowBackend {
             file.read_at(&mut &mut buf[start..start + max_read], file_start)?;
         }
         pt.map(vaddr, frame, self.size, flags)?;
+        self.mapped_pages.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -163,12 +193,7 @@ impl BackendOps for CowBackend {
         self.size
     }
 
-    fn map(
-        &self,
-        range: VirtAddrRange,
-        flags: MappingFlags,
-        _pt: &mut PageTableMut,
-    ) -> AxResult {
+    fn map(&self, range: VirtAddrRange, flags: MappingFlags, _pt: &mut PageTableMut) -> AxResult {
         debug!("Cow::map: {range:?} {flags:?}",);
         Ok(())
     }
@@ -184,6 +209,7 @@ impl BackendOps for CowBackend {
                     .ok_or(AxError::BadAddress)?;
                 let mut frame_ref = frame_ref.lock();
                 frame_ref.drop_frame(frame, self.size);
+                self.dec_mapped_pages();
             } else {
                 // Deallocation is needn't if the page is not allocated.
             }
@@ -231,6 +257,12 @@ impl BackendOps for CowBackend {
         new_pt: &mut PageTableMut,
         _new_aspace: &Arc<Mutex<AddrSpace>>,
     ) -> AxResult<Backend> {
+        // Forking untouched lazy COW regions is common (e.g. fork14). In that
+        // case, there is nothing in page tables to duplicate.
+        if self.mapped_pages.load(Ordering::Relaxed) == 0 {
+            return Ok(Backend::Cow(self.clone()));
+        }
+
         let cow_flags = flags - MappingFlags::WRITE;
 
         for vaddr in pages_in(range, self.size)? {
@@ -278,6 +310,7 @@ impl Backend {
             start,
             size,
             file: Some((file, file_start, file_end)),
+            mapped_pages: AtomicUsize::new(0),
         })
     }
 
@@ -286,6 +319,7 @@ impl Backend {
             start,
             size,
             file: None,
+            mapped_pages: AtomicUsize::new(0),
         })
     }
 }

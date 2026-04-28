@@ -14,6 +14,7 @@ use core::{
 };
 
 use axfs_ng_vfs::{Filesystem, NodeType, VfsError, VfsResult};
+use axsync::Mutex;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use indoc::indoc;
 use starry_process::Process;
@@ -422,10 +423,25 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
 
         sys.add("kernel", {
             let mut kernel = DirMapping::new();
+            let pid_max = Arc::new(Mutex::new(b"32768\n".to_vec()));
 
             kernel.add(
                 "pid_max",
-                SimpleFile::new_regular(fs.clone(), || Ok("32768\n")),
+                SimpleFile::new_regular(
+                    fs.clone(),
+                    RwFile::new({
+                        let pid_max = pid_max.clone();
+                        move |op| match op {
+                            SimpleFileOperation::Read => Ok(Some(pid_max.lock().clone())),
+                            SimpleFileOperation::Write(data) => {
+                                let mut value = pid_max.lock();
+                                value.clear();
+                                value.extend_from_slice(data);
+                                Ok(None::<Vec<u8>>)
+                            }
+                        }
+                    }),
+                ),
             );
 
             SimpleDir::new_maker(fs.clone(), Arc::new(kernel))
