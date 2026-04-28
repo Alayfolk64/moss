@@ -23,7 +23,7 @@ use crate::{
         Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, add_file_like_from,
         close_file_like, get_file_like, with_fs,
     },
-    mm::{UserPtr, vm_load_string},
+    mm::{UserConstPtr, UserPtr, vm_load_string},
     pseudofs::{Device, dev::tty},
     syscall::sys::{sys_getegid, sys_geteuid},
     task::AsThread,
@@ -270,6 +270,13 @@ fn validate_lock_type(lock_type: i16) -> AxResult<()> {
         Ok(())
     } else {
         Err(AxError::InvalidInput)
+    }
+}
+
+fn validate_lock_whence(lock_whence: i16) -> AxResult<()> {
+    match i32::from(lock_whence) {
+        v if v == SEEK_SET as i32 || v == SEEK_CUR as i32 || v == SEEK_END as i32 => Ok(()),
+        _ => Err(AxError::InvalidInput),
     }
 }
 
@@ -559,6 +566,7 @@ pub fn release_posix_locks_for_pid(pid: u32) {
 }
 
 fn handle_getlk(fd: c_int, arg: usize) -> AxResult<isize> {
+    let file = File::from_fd(fd)?;
     let lock = UserPtr::<flock64>::from(arg).get_as_mut()?;
     let req_type = lock.l_type;
     validate_lock_type(req_type)?;
@@ -566,8 +574,8 @@ fn handle_getlk(fd: c_int, arg: usize) -> AxResult<isize> {
         lock.l_type = F_UNLCK as _;
         return Ok(0);
     }
+    validate_lock_whence(lock.l_whence)?;
 
-    let file = File::from_fd(fd)?;
     validate_lock_access(&file, req_type)?;
     let key = posix_lock_key(&file)?;
     let req_range = normalize_range(&file, lock.l_whence, lock.l_start, lock.l_len)?;
@@ -586,9 +594,10 @@ fn handle_getlk(fd: c_int, arg: usize) -> AxResult<isize> {
 }
 
 fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
-    let lock = UserPtr::<flock64>::from(arg).get_as_mut()?;
+    let lock = UserConstPtr::<flock64>::from(arg).get_as_ref()?;
     let req_type = lock.l_type;
     validate_lock_type(req_type)?;
+    validate_lock_whence(lock.l_whence)?;
 
     let file = File::from_fd(fd)?;
     if req_type != F_UNLCK as i16 {
@@ -736,7 +745,7 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
         }
         _ => {
             warn!("unsupported fcntl parameters: cmd: {cmd}");
-            Ok(0)
+            Err(AxError::InvalidInput)
         }
     }
 }
