@@ -220,9 +220,12 @@ impl SocketOps for TcpSocket {
             .lock(State::Idle)
             .map_err(|_| ax_err_type!(InvalidInput, "already bound"))?
             .transit(State::Idle, || {
-                // TODO: check addr is available
                 if local_addr.port() == 0 {
                     local_addr.set_port(get_ephemeral_port()?);
+                }
+                let local_ip = local_addr.ip().into();
+                if !SERVICE.lock().can_bind_ip(&local_ip) {
+                    return Err(AxError::from(LinuxError::EADDRNOTAVAIL));
                 }
                 if !self.general.reuse_address() {
                     SOCKET_SET.bind_check(local_addr.ip().into(), local_addr.port())?;

@@ -11,8 +11,9 @@ use axtask::current;
 use linux_raw_sys::{
     general::{O_CLOEXEC, O_NONBLOCK},
     net::{
-        AF_INET, AF_UNIX, AF_VSOCK, IPPROTO_TCP, IPPROTO_UDP, SHUT_RD, SHUT_RDWR, SHUT_WR,
-        SOCK_DGRAM, SOCK_SEQPACKET, SOCK_STREAM, sockaddr, socklen_t,
+        AF_INET, AF_INET6, AF_UNIX, AF_VSOCK, IPPROTO_SCTP, IPPROTO_TCP, IPPROTO_UDP,
+        IPPROTO_UDPLITE, SHUT_RD, SHUT_RDWR, SHUT_WR, SOCK_DGRAM, SOCK_SEQPACKET, SOCK_STREAM,
+        sockaddr, socklen_t,
     },
 };
 
@@ -23,31 +24,44 @@ use crate::{
     task::AsThread,
 };
 
+fn check_privileged_bind(addr: &SocketAddrEx) -> AxResult {
+    if let SocketAddrEx::Ip(addr) = addr {
+        let euid = current().as_thread().proc_data.euid();
+        if addr.port() != 0 && addr.port() < 1024 && euid != 0 {
+            return Err(AxError::from(LinuxError::EACCES));
+        }
+    }
+    Ok(())
+}
+
 pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
     debug!("sys_socket <= domain: {domain}, ty: {raw_ty}, proto: {proto}");
     let ty = raw_ty & 0xFF;
 
     let pid = current().as_thread().proc_data.proc.pid();
     let socket = match (domain, ty) {
-        (AF_INET, SOCK_STREAM) => {
-            if proto != 0 && proto != IPPROTO_TCP as _ {
+        (AF_INET | AF_INET6, SOCK_STREAM) => {
+            if proto != 0 && proto != IPPROTO_TCP as _ && proto != IPPROTO_SCTP as _ {
                 return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
             }
             SocketInner::Tcp(TcpSocket::new())
         }
-        (AF_INET, SOCK_DGRAM) => {
-            if proto != 0 && proto != IPPROTO_UDP as _ {
+        (AF_INET | AF_INET6, SOCK_DGRAM) => {
+            if proto != 0 && proto != IPPROTO_UDP as _ && proto != IPPROTO_UDPLITE as _ {
                 return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
             }
             SocketInner::Udp(UdpSocket::new())
         }
         (AF_UNIX, SOCK_STREAM) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
+        (AF_UNIX, SOCK_SEQPACKET) => {
+            SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid)))
+        }
         (AF_UNIX, SOCK_DGRAM) => SocketInner::Unix(UnixSocket::new(DgramTransport::new(pid))),
         #[cfg(feature = "vsock")]
         (AF_VSOCK, SOCK_STREAM) => {
             SocketInner::Vsock(VsockSocket::new(VsockStreamTransport::new()))
         }
-        (AF_INET, _) | (AF_UNIX, _) | (AF_VSOCK, _) => {
+        (AF_INET | AF_INET6, _) | (AF_UNIX, _) | (AF_VSOCK, _) => {
             warn!("Unsupported socket type: domain: {domain}, ty: {ty}");
             return Err(AxError::from(LinuxError::ESOCKTNOSUPPORT));
         }
@@ -69,6 +83,7 @@ pub fn sys_bind(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> AxResult
     let addr = SocketAddrEx::read_from_user(addr, addrlen)?;
     debug!("sys_bind <= fd: {fd}, addr: {addr:?}");
 
+    check_privileged_bind(&addr)?;
     Socket::from_fd(fd)?.bind(addr)?;
 
     Ok(0)

@@ -4,7 +4,7 @@ use core::{
     task::Context,
 };
 
-use axerrno::{AxError, AxResult, ax_bail, ax_err_type};
+use axerrno::{AxError, AxResult, LinuxError, ax_bail, ax_err_type};
 use axio::prelude::*;
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
@@ -124,6 +124,9 @@ impl SocketOps for UdpSocket {
         }
 
         let local_endpoint = IpEndpoint::from(local_addr);
+        if !SERVICE.lock().can_bind_ip(&local_endpoint.addr) {
+            return Err(AxError::from(LinuxError::EADDRNOTAVAIL));
+        }
         let endpoint = IpListenEndpoint {
             addr: (!local_endpoint.addr.is_unspecified()).then_some(local_endpoint.addr),
             port: local_endpoint.port,
@@ -224,10 +227,15 @@ impl SocketOps for UdpSocket {
         enum ExpectedRemote<'a> {
             Any(&'a mut SocketAddrEx),
             Expecting(IpEndpoint),
+            Unspecified,
         }
         let mut expected_remote = match options.from {
             Some(addr) => ExpectedRemote::Any(addr),
-            None => ExpectedRemote::Expecting(self.remote_endpoint()?.0),
+            None => match self.remote_endpoint() {
+                Ok((endpoint, _)) => ExpectedRemote::Expecting(endpoint),
+                Err(AxError::NotConnected) => ExpectedRemote::Unspecified,
+                Err(e) => return Err(e),
+            },
         };
 
         self.general.recv_poller(self, || {
@@ -259,6 +267,7 @@ impl SocketOps for UdpSocket {
                                         return Err(AxError::WouldBlock);
                                     }
                                 }
+                                ExpectedRemote::Unspecified => {}
                             }
 
                             let read = dst.write(src)?;

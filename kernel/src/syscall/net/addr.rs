@@ -174,7 +174,7 @@ impl SocketAddrExt for UnixSocketAddr {
             UnixSocketAddr::Path(path) => 1 + path.len(),
         };
         let mut buf = Vec::with_capacity(size_of::<__kernel_sa_family_t>() + data_len);
-        buf.extend_from_slice(&AF_UNIX.to_ne_bytes());
+        buf.extend_from_slice(&(AF_UNIX as __kernel_sa_family_t).to_ne_bytes());
         match self {
             UnixSocketAddr::Unnamed => {}
             UnixSocketAddr::Abstract(name) => {

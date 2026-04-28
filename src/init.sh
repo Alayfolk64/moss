@@ -28,10 +28,14 @@ if ! /glibc/busybox test -d /bin; then
     mkdir -v etc
     echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
     echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
+    echo "root:x:0:" >>/etc/group
+    echo "nobody:x:65534:" >>/etc/group
     echo "nameserver 8.8.8.8" >/etc/resolv.conf
 
     mkdir -vp /lib/modules/10.0.0/build
-    echo "CONFIG_EVENTFD=y" >>/lib/modules/10.0.0/build/.config
+    echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
+    echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
+    echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
 fi
 
 musl_runtime() {
@@ -73,21 +77,23 @@ run_ltp() {
         # access02
         # access03
         # access04
-        adjtimex01
-        adjtimex02
-        adjtimex03
-        arch_prctl01
-        # bind02
-        # bind04
-        # bind06
-        # bpf_map01
-        # bpf_prog01
-        # bpf_prog02
-        # bpf_prog03
-        # bpf_prog04
-        # bpf_prog05
-        # bpf_prog06
-        # bpf_prog07
+        # adjtimex01
+        # adjtimex02
+        # adjtimex03
+        # arch_prctl01
+        bind01
+        bind02
+        bind03
+        bind04
+        bind05
+        bpf_map01
+        bpf_prog01
+        bpf_prog02
+        bpf_prog03
+        bpf_prog04
+        bpf_prog05
+        bpf_prog06
+        bpf_prog07
         # cacheflush01
         # capget01
         # capget02

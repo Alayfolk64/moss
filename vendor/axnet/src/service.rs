@@ -50,6 +50,13 @@ impl Service {
         rule.src
     }
 
+    pub fn can_bind_ip(&self, addr: &IpAddress) -> bool {
+        addr.is_unspecified()
+            || addr.is_multicast()
+            || addr.is_broadcast()
+            || self.iface.has_ip_addr(*addr)
+    }
+
     pub fn device_mask_for(&self, endpoint: &IpListenEndpoint) -> u32 {
         match endpoint.addr {
             Some(addr) => self

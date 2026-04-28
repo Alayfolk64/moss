@@ -186,7 +186,11 @@ impl FsContext {
         if let Some(name) = name {
             Ok((dir, name))
         } else {
-            Err(VfsError::InvalidInput)
+            if !path.as_str().is_empty() && self.resolve(path).is_ok() {
+                Err(VfsError::AlreadyExists)
+            } else {
+                Err(VfsError::InvalidInput)
+            }
         }
     }
 
