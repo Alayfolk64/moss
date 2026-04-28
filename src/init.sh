@@ -66,17 +66,17 @@ run_ltp() {
     export LTP_SINGLE_FS_TYPE=tmpfs
 
     all_testcases="
-        accept01
-        accept02
-        accept03
-        access01
-        access02
-        access03
-        access04
-        # adjtimex01
-        # adjtimex02
-        # adjtimex03
-        # arch_prctl01
+        # accept01
+        # accept02
+        # accept03
+        # access01
+        # access02
+        # access03
+        # access04
+        adjtimex01
+        adjtimex02
+        adjtimex03
+        arch_prctl01
         # bind02
         # bind04
         # bind06
