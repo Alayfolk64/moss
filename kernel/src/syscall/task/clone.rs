@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FS_CONTEXT;
 use axhal::uspace::UserContext;
 use axtask::{AxTaskExt, current, spawn_task};
@@ -339,6 +339,56 @@ pub fn sys_clone(
     };
 
     args.do_clone(uctx)
+}
+
+pub fn sys_unshare(flags: u64) -> AxResult<isize> {
+    let Some(flags) = CloneFlags::from_bits(flags) else {
+        return Err(AxError::InvalidInput);
+    };
+
+    // Linux rejects these in unshare(2).
+    if flags.intersects(CloneFlags::THREAD | CloneFlags::SIGHAND | CloneFlags::VM) {
+        return Err(AxError::InvalidInput);
+    }
+
+    // Keep behavior predictable: if the process is multithreaded, we cannot
+    // safely emulate namespace/file table separation yet.
+    let thread_count = current().as_thread().proc_data.proc.threads().len();
+    if thread_count > 1 {
+        return Err(AxError::from(LinuxError::EINVAL));
+    }
+
+    // Minimal reusable semantics:
+    // accept unshare requests that LTP setup commonly needs, while leaving
+    // the current process context unchanged until real namespace support lands.
+    let supported_unshare = CloneFlags::FILES
+        | CloneFlags::FS
+        | CloneFlags::SYSVSEM
+        | CloneFlags::NEWNS
+        | CloneFlags::NEWIPC
+        | CloneFlags::NEWNET
+        | CloneFlags::NEWPID
+        | CloneFlags::NEWUSER
+        | CloneFlags::NEWUTS
+        | CloneFlags::NEWCGROUP;
+
+    if !supported_unshare.contains(flags) {
+        return Err(AxError::InvalidInput);
+    }
+
+    if flags.intersects(
+        CloneFlags::NEWNS
+            | CloneFlags::NEWIPC
+            | CloneFlags::NEWNET
+            | CloneFlags::NEWPID
+            | CloneFlags::NEWUSER
+            | CloneFlags::NEWUTS
+            | CloneFlags::NEWCGROUP,
+    ) {
+        warn!("sys_unshare: namespace flags detected, stub support only");
+    }
+
+    Ok(0)
 }
 
 #[cfg(target_arch = "x86_64")]

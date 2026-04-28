@@ -443,6 +443,7 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                     }),
                 ),
             );
+            kernel.add("tainted", SimpleFile::new_regular(fs.clone(), || Ok("0\n")));
 
             SimpleDir::new_maker(fs.clone(), Arc::new(kernel))
         });

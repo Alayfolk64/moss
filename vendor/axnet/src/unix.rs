@@ -2,7 +2,10 @@ pub(crate) mod dgram;
 pub(crate) mod stream;
 
 use alloc::{boxed::Box, sync::Arc};
-use core::task::Context;
+use core::{
+    sync::atomic::{AtomicBool, Ordering},
+    task::Context,
+};
 
 use async_trait::async_trait;
 use axerrno::{AxError, AxResult};
@@ -105,6 +108,54 @@ pub(crate) fn with_slot<R>(
         }
     }
 }
+
+fn clear_slot(slot: &BindSlot, transport: &Transport) {
+    match transport {
+        Transport::Stream(_) => {
+            *slot.stream.lock() = None;
+        }
+        Transport::Dgram(_) => {
+            *slot.dgram.lock() = None;
+        }
+    }
+}
+
+fn is_slot_empty(slot: &BindSlot) -> bool {
+    slot.stream.lock().is_none() && slot.dgram.lock().is_none()
+}
+
+fn cleanup_bound_slot(addr: &UnixSocketAddr, transport: &Transport) {
+    match addr {
+        UnixSocketAddr::Unnamed => {}
+        UnixSocketAddr::Abstract(name) => {
+            let mut binds = ABSTRACT_BINDS.lock();
+            let should_remove = if let Some(slot) = binds.get(name) {
+                clear_slot(slot, transport);
+                is_slot_empty(slot)
+            } else {
+                false
+            };
+            if should_remove {
+                binds.remove(name);
+            }
+        }
+        UnixSocketAddr::Path(path) => {
+            let Ok(loc) = FS_CONTEXT.lock().resolve(path.as_ref()) else {
+                return;
+            };
+            if !loc
+                .metadata()
+                .is_ok_and(|meta| meta.node_type == NodeType::Socket)
+            {
+                return;
+            }
+            let Some(slot) = loc.user_data().get::<BindSlot>() else {
+                return;
+            };
+            clear_slot(slot.as_ref(), transport);
+        }
+    }
+}
 fn with_slot_or_insert<R>(
     addr: &UnixSocketAddr,
     f: impl FnOnce(&BindSlot) -> AxResult<R>,
@@ -137,6 +188,7 @@ pub struct UnixSocket {
     transport: Transport,
     local_addr: Mutex<UnixSocketAddr>,
     remote_addr: Mutex<UnixSocketAddr>,
+    has_bind_ownership: AtomicBool,
 }
 impl UnixSocket {
     pub fn new(transport: impl Into<Transport>) -> Self {
@@ -144,6 +196,7 @@ impl UnixSocket {
             transport: transport.into(),
             local_addr: Mutex::new(UnixSocketAddr::Unnamed),
             remote_addr: Mutex::new(UnixSocketAddr::Unnamed),
+            has_bind_ownership: AtomicBool::new(false),
         }
     }
 }
@@ -163,6 +216,7 @@ impl SocketOps for UnixSocket {
         if matches!(&*guard, UnixSocketAddr::Unnamed) {
             with_slot_or_insert(&local_addr, |slot| self.transport.bind(slot, &local_addr))?;
             *guard = local_addr;
+            self.has_bind_ownership.store(true, Ordering::Release);
         } else {
             return Err(AxError::InvalidInput);
         }
@@ -194,6 +248,7 @@ impl SocketOps for UnixSocket {
             transport,
             local_addr: Mutex::new(self.local_addr.lock().clone()),
             remote_addr: Mutex::new(peer_addr),
+            has_bind_ownership: AtomicBool::new(false),
         }))
     }
 
@@ -225,5 +280,15 @@ impl Pollable for UnixSocket {
 
     fn register(&self, context: &mut Context<'_>, events: IoEvents) {
         self.transport.register(context, events);
+    }
+}
+
+impl Drop for UnixSocket {
+    fn drop(&mut self) {
+        if !self.has_bind_ownership.load(Ordering::Acquire) {
+            return;
+        }
+        let local_addr = self.local_addr.lock().clone();
+        cleanup_bound_slot(&local_addr, &self.transport);
     }
 }
