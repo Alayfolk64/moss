@@ -5,7 +5,7 @@ use core::{
     task::Context,
 };
 
-use axerrno::{AxError, AxResult, ax_bail, ax_err_type};
+use axerrno::{AxError, AxResult, LinuxError, ax_bail, ax_err_type};
 use axio::prelude::*;
 use axpoll::{IoEvents, PollSet, Pollable};
 use axsync::Mutex;
@@ -39,6 +39,7 @@ pub struct TcpSocket {
     handle: SocketHandle,
 
     general: GeneralOptions,
+    has_mcast_group: AtomicBool,
     rx_closed: AtomicBool,
     poll_rx_closed: PollSet,
 }
@@ -53,6 +54,7 @@ impl TcpSocket {
             handle: SOCKET_SET.add(new_tcp_socket()),
 
             general: GeneralOptions::new(),
+            has_mcast_group: AtomicBool::new(false),
             rx_closed: AtomicBool::new(false),
             poll_rx_closed: PollSet::new(),
         }
@@ -65,6 +67,7 @@ impl TcpSocket {
             handle,
 
             general: GeneralOptions::new(),
+            has_mcast_group: AtomicBool::new(false),
             rx_closed: AtomicBool::new(false),
             poll_rx_closed: PollSet::new(),
         };
@@ -197,6 +200,13 @@ impl Configurable for TcpSocket {
                 self.with_smol_socket(|socket| {
                     socket.set_keep_alive(keep_alive.then(|| Duration::from_secs(75)));
                 });
+            }
+            O::McastGroupOp(join) => {
+                if *join {
+                    self.has_mcast_group.store(true, Ordering::Release);
+                } else if !self.has_mcast_group.swap(false, Ordering::AcqRel) {
+                    return Err(AxError::from(LinuxError::EADDRNOTAVAIL));
+                }
             }
             _ => return Ok(false),
         }

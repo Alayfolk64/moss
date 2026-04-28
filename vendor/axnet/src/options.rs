@@ -65,6 +65,8 @@ define_options! {
 
     // ---- IP level options (IP_*) ----
     Ttl(u8),
+    // MCAST_JOIN_GROUP/MCAST_LEAVE_GROUP state used by kernel syscall mapping.
+    McastGroupOp(bool),
 
     // ---- Extra options ----
     NonBlocking(bool),
