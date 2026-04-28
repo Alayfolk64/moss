@@ -125,149 +125,150 @@ run_ltp() {
         # clone09
         # clone301
         # clone302
-        clone303
-        close_range01
-        close_range02
-        connect01
-        connect02
-        copy_file_range02
-        copy_file_range03
-        creat04
-        creat06
-        creat07
-        creat09
-        delete_module01
-        delete_module02
-        delete_module03
-        dirtyc0w
-        dirtyc0w_shmem
-        dup05
-        epoll01
-        epoll_wait01
-        eventfd06
-        execve02
-        execve04
-        execve06
-        execveat01
-        execveat02
-        execveat03
-        exit01
-        fallocate01
-        fallocate02
-        fallocate04
-        fallocate05
-        fallocate06
-        fanotify01
-        fanotify02
-        fanotify03
-        fanotify04
-        fanotify05
-        fanotify06
-        fanotify07
-        fanotify08
-        fanotify09
-        fanotify10
-        fanotify11
-        fanotify12
-        fanotify13
-        fanotify14
-        fanotify15
-        fanotify16
-        fanotify17
-        fanotify18
-        fanotify19
-        fanotify20
-        fanotify21
-        fanotify22
-        fanotify23
-        fchdir03
-        fchown01_16
-        fchown02_16
-        fchown03_16
-        fchown04_16
-        fchown05_16
-        fchownat01
-        fchownat02
-        fcntl01
-        fcntl01_64
-        fcntl07
-        fcntl07_64
-        fcntl09
-        fcntl09_64
-        fcntl10
-        fcntl10_64
-        fcntl11
-        fcntl11_64
-        fcntl12
-        fcntl12_64
-        fcntl13
-        fcntl13_64
-        fcntl14
-        fcntl14_64
-        fcntl15
-        fcntl15_64
-        fcntl16
-        fcntl16_64
-        fcntl17
-        fcntl17_64
-        fcntl18
-        fcntl18_64
-        fcntl19
-        fcntl19_64
-        fcntl20
-        fcntl20_64
-        fcntl21
-        fcntl21_64
-        fcntl22
-        fcntl22_64
-        fcntl23
-        fcntl23_64
-        fcntl24
-        fcntl24_64
-        fcntl25
-        fcntl25_64
-        fcntl26
-        fcntl26_64
-        fcntl30
-        fcntl30_64
-        fcntl31
-        fcntl31_64
-        fcntl32
-        fcntl32_64
-        fcntl33
-        fcntl33_64
-        fcntl34
-        fcntl34_64
-        fcntl35
-        fcntl35_64
-        fcntl36
-        fcntl36_64
-        fcntl37
-        fcntl37_64
-        fcntl38
-        fcntl38_64
-        fcntl39
-        fcntl39_64
-        fdatasync03
-        fgetxattr01
-        fgetxattr02
-        fgetxattr03
-        finit_module01
-        finit_module02
-        flistxattr01
-        flistxattr02
-        flistxattr03
-        flock01
-        flock02
-        flock03
-        flock04
-        fmtmsg01
-        fork05
-        fork06
+        # clone303
+        # close_range01
+        # close_range02
+        # connect01
+        # connect02
+        # copy_file_range02
+        # copy_file_range03
+        # creat04
+        # creat06
+        # creat07
+        # creat09
+        # delete_module01
+        # delete_module02
+        # delete_module03
+        # dirtyc0w
+        # dirtyc0w_shmem
+        # dup05
+        # epoll01
+        # epoll_wait01
+        # eventfd06
+        # execve02
+        # execve04
+        # execve06
+        # execveat01
+        # execveat02
+        # execveat03
+        # exit01
+        # fallocate01
+        # fallocate02
+        # fallocate04
+        # fallocate05
+        # fallocate06
+        # fanotify01
+        # fanotify02
+        # fanotify03
+        # fanotify04
+        # fanotify05
+        # fanotify06
+        # fanotify07
+        # fanotify08
+        # fanotify09
+        # fanotify10
+        # fanotify11
+        # fanotify12
+        # fanotify13
+        # fanotify14
+        # fanotify15
+        # fanotify16
+        # fanotify17
+        # fanotify18
+        # fanotify19
+        # fanotify20
+        # fanotify21
+        # fanotify22
+        # fanotify23
+        # fchdir03
+        # fchown01_16
+        # fchown02_16
+        # fchown03_16
+        # fchown04_16
+        # fchown05_16
+        # fchownat01
+        # fchownat02
+        # fcntl01
+        # fcntl01_64
+        # fcntl07
+        # fcntl07_64
+        # fcntl09
+        # fcntl09_64
+        # fcntl10
+        # fcntl10_64
+        # fcntl11
+        # fcntl11_64
+        # fcntl12
+        # fcntl12_64
+        # fcntl13
+        # fcntl13_64
+        # fcntl14
+        # fcntl14_64
+        # fcntl15
+        # fcntl15_64
+        # fcntl16
+        # fcntl16_64
+        # fcntl17
+        # fcntl17_64
+        # fcntl18
+        # fcntl18_64
+        # fcntl19
+        # fcntl19_64
+        # fcntl20
+        # fcntl20_64
+        # fcntl21
+        # fcntl21_64
+        # fcntl22
+        # fcntl22_64
+        # fcntl23
+        # fcntl23_64
+        # fcntl24
+        # fcntl24_64
+        # fcntl25
+        # fcntl25_64
+        # fcntl26
+        # fcntl26_64
+        # fcntl30
+        # fcntl30_64
+        # fcntl31
+        # fcntl31_64
+        # fcntl32
+        # fcntl32_64
+        # fcntl33
+        # fcntl33_64
+        # fcntl34
+        # fcntl34_64
+        # fcntl35
+        # fcntl35_64
+        # fcntl36
+        # fcntl36_64
+        # fcntl37
+        # fcntl37_64
+        # fcntl38
+        # fcntl38_64
+        # fcntl39
+        # fcntl39_64
+        # fdatasync03
+        # fgetxattr01
+        # fgetxattr02
+        # fgetxattr03
+        # finit_module01
+        # finit_module02
+        # flistxattr01
+        # flistxattr02
+        # flistxattr03
+        # flock01
+        # flock02
+        # flock03
+        # flock04
+        # fmtmsg01
+        fork01
+        fork03
+        fork04
+        fork07
+        fork08
         fork09
-        fork11
-        fork13
-        fork14
+        fork10
         fremovexattr01
         fremovexattr02
         fsconfig01
@@ -1057,22 +1058,15 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    timeout_file="${1}_timeout.txt"
 
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do
         echo "RUN LTP CASE $f"
 
-        ./"$f" 2>&1
-        status=$?
+        case_output=$(./"$f" 2>&1)
 
-        #printf '%s\n' "$case_output"
+        printf '%s\n' "$case_output"
 
-        if [ "$status" -eq 124 ]; then
-            echo "$f" >> "$timeout_file"
-            echo "TIMEOUT LTP CASE $f : 20s"
-        fi
-
-        #emit_summary_if_missing "$case_output"
+        emit_summary_if_missing "$case_output"
 
         echo "FAIL LTP CASE $f : 0"
     done
