@@ -44,7 +44,8 @@ impl WaitQueue {
         timeout: Option<Duration>,
         condition: impl FnOnce() -> bool,
     ) -> AxResult<bool> {
-        let deadline = timeout.and_then(|duration| axhal::time::monotonic_time().checked_add(duration));
+        let deadline =
+            timeout.and_then(|duration| axhal::time::monotonic_time().checked_add(duration));
         let notified = Arc::new(AtomicBool::new(false));
 
         {

@@ -80,20 +80,25 @@ pub fn sys_mount(
             if dev_idx >= total_slots {
                 warn!(
                     "mount ext4: source={source} index={} out of range (runtime_block_slots={})",
-                    dev_idx,
-                    total_slots
+                    dev_idx, total_slots
                 );
                 return Err(AxError::NoSuchDevice);
             }
 
             let Some(dev) = axruntime::take_runtime_block_device(dev_idx) else {
-                warn!("mount ext4: source={source} index={} is unavailable", dev_idx);
+                warn!(
+                    "mount ext4: source={source} index={} is unavailable",
+                    dev_idx
+                );
                 return Err(AxError::NoSuchDevice);
             };
             let fs = match axfs::new_filesystem_from_block_device(dev) {
                 Ok(fs) => fs,
                 Err(err) => {
-                    warn!("mount ext4: source={source} index={} init fs failed: {err:?}", dev_idx);
+                    warn!(
+                        "mount ext4: source={source} index={} init fs failed: {err:?}",
+                        dev_idx
+                    );
                     return Err(err.into());
                 }
             };
@@ -108,7 +113,10 @@ pub fn sys_mount(
                 }
             };
             if let Err(err) = target.mount(&fs) {
-                warn!("mount ext4: source={source} index={} mount target failed: {err:?}", dev_idx);
+                warn!(
+                    "mount ext4: source={source} index={} mount target failed: {err:?}",
+                    dev_idx
+                );
                 return Err(err.into());
             }
             Ok(0)

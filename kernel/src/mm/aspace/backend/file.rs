@@ -111,12 +111,7 @@ impl BackendOps for FileBackend {
         PageSize::Size4K
     }
 
-    fn map(
-        &self,
-        _range: VirtAddrRange,
-        flags: MappingFlags,
-        _pt: &mut PageTableMut,
-    ) -> AxResult {
+    fn map(&self, _range: VirtAddrRange, flags: MappingFlags, _pt: &mut PageTableMut) -> AxResult {
         self.check_flags(flags)
     }
 

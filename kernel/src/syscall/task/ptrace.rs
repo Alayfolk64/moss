@@ -342,18 +342,9 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             Ok(0)
         }
         // Minimal behavior to satisfy ptrace06: bad access must fail with EIO/EFAULT.
-        PTRACE_PEEKTEXT
-        | PTRACE_PEEKDATA
-        | PTRACE_PEEKUSER
-        | PTRACE_POKETEXT
-        | PTRACE_POKEDATA
-        | PTRACE_POKEUSER
-        | PTRACE_GETREGS
-        | PTRACE_SETREGS
-        | PTRACE_GETSIGINFO
-        | PTRACE_SETSIGINFO
-        | PTRACE_GETREGSET
-        | PTRACE_SETREGSET => {
+        PTRACE_PEEKTEXT | PTRACE_PEEKDATA | PTRACE_PEEKUSER | PTRACE_POKETEXT | PTRACE_POKEDATA
+        | PTRACE_POKEUSER | PTRACE_GETREGS | PTRACE_SETREGS | PTRACE_GETSIGINFO
+        | PTRACE_SETSIGINFO | PTRACE_GETREGSET | PTRACE_SETREGSET => {
             let pid = resolve_tracee_pid(pid);
             get_process_data(pid)?;
             check_trace_access(pid, curr_pid)?;

@@ -52,7 +52,11 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
                     .to_string();
                 let name = loc.name().to_string();
                 if candidate != args {
-                    info!("Init executable fallback: {:?} -> {}", args.first(), candidate[0]);
+                    info!(
+                        "Init executable fallback: {:?} -> {}",
+                        args.first(),
+                        candidate[0]
+                    );
                 }
                 return (candidate, path, name);
             }

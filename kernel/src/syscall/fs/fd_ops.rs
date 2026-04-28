@@ -1,16 +1,22 @@
-use alloc::{format, string::ToString, sync::Arc};
-use core::{
-    ffi::{c_char, c_int},
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    format,
+    string::ToString,
+    sync::Arc,
+    vec::Vec,
 };
+use core::ffi::{c_char, c_int};
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
 use axfs_ng_vfs::{DirEntry, FileNode, Location, NodeType, Reference};
-use axtask::current;
+use axio::{Seek, SeekFrom};
+use axtask::{current, yield_now};
 use bitflags::bitflags;
 use kernel_guard::NoPreempt;
 use linux_raw_sys::general::*;
 use scope_local::ActiveScope;
+use spin::RwLock;
 
 use crate::{
     file::{
@@ -149,6 +155,7 @@ pub fn sys_open(path: *const c_char, flags: i32, mode: __kernel_mode_t) -> AxRes
 
 pub fn sys_close(fd: c_int) -> AxResult<isize> {
     debug!("sys_close <= {fd}");
+    release_posix_locks_for_fd(fd);
     close_file_like(fd)?;
     Ok(0)
 }
@@ -200,6 +207,9 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
                     f.cloexec = true;
                 }
             } else {
+                if let Some(file_desc) = fd_table.get(fd) {
+                    release_posix_locks_for_file_like(&file_desc.inner);
+                }
                 fd_table.remove(fd);
             }
         }
@@ -212,6 +222,423 @@ fn dup_fd(old_fd: c_int, min_fd: usize, cloexec: bool) -> AxResult<isize> {
     let f = get_file_like(old_fd)?;
     let new_fd = add_file_like_from(f, cloexec, min_fd)?;
     Ok(new_fd as _)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct PosixLockKey {
+    dev: u64,
+    ino: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LockRange {
+    /// Inclusive start byte.
+    start: u64,
+    /// Exclusive end byte. `None` means to EOF/infinity.
+    end: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PosixRecordLock {
+    owner: u32,
+    lock_type: i16,
+    range: LockRange,
+}
+
+static POSIX_LOCKS: RwLock<BTreeMap<PosixLockKey, Vec<PosixRecordLock>>> =
+    RwLock::new(BTreeMap::new());
+static POSIX_WAIT_GRAPH: RwLock<BTreeMap<u32, Vec<u32>>> = RwLock::new(BTreeMap::new());
+
+fn has_unblocked_pending_signal() -> bool {
+    let curr = current();
+    let signal = &curr.as_thread().signal;
+    let pending = signal.pending();
+    let blocked = signal.blocked();
+    !(pending & !blocked).is_empty()
+}
+
+fn posix_lock_key(file: &File) -> AxResult<PosixLockKey> {
+    let meta = file.inner().location().metadata()?;
+    Ok(PosixLockKey {
+        dev: meta.device,
+        ino: meta.inode,
+    })
+}
+
+fn validate_lock_type(lock_type: i16) -> AxResult<()> {
+    if lock_type == F_RDLCK as i16 || lock_type == F_WRLCK as i16 || lock_type == F_UNLCK as i16 {
+        Ok(())
+    } else {
+        Err(AxError::InvalidInput)
+    }
+}
+
+fn validate_lock_access(file: &File, lock_type: i16) -> AxResult<()> {
+    let mode = file.status_flags() & O_ACCMODE;
+    if (lock_type == F_RDLCK as i16 && mode == O_WRONLY)
+        || (lock_type == F_WRLCK as i16 && mode == O_RDONLY)
+    {
+        return Err(AxError::BadFileDescriptor);
+    }
+    Ok(())
+}
+
+fn normalize_range(file: &File, l_whence: i16, l_start: i64, l_len: i64) -> AxResult<LockRange> {
+    let whence = i32::from(l_whence);
+    let base = match whence {
+        v if v == SEEK_SET as i32 => 0_i128,
+        v if v == SEEK_CUR as i32 => i128::from(file.inner().seek(SeekFrom::Current(0))?),
+        v if v == SEEK_END as i32 => i128::from(file.inner().location().metadata()?.size),
+        _ => return Err(AxError::InvalidInput),
+    };
+
+    let mut start = base
+        .checked_add(i128::from(l_start))
+        .ok_or(AxError::InvalidInput)?;
+    let mut end = None;
+    if l_len > 0 {
+        end = Some(
+            start
+                .checked_add(i128::from(l_len))
+                .ok_or(AxError::InvalidInput)?,
+        );
+    } else if l_len < 0 {
+        let old_start = start;
+        start = start
+            .checked_add(i128::from(l_len))
+            .ok_or(AxError::InvalidInput)?;
+        end = Some(old_start);
+    }
+
+    if start < 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if let Some(end) = end
+        && end <= start
+    {
+        return Err(AxError::InvalidInput);
+    }
+
+    let start = u64::try_from(start).map_err(|_| AxError::InvalidInput)?;
+    let end = end
+        .map(|it| u64::try_from(it).map_err(|_| AxError::InvalidInput))
+        .transpose()?;
+    Ok(LockRange { start, end })
+}
+
+fn overlaps(a: LockRange, b: LockRange) -> bool {
+    let a_ends_after_b_starts = a.end.is_none_or(|end| end > b.start);
+    let b_ends_after_a_starts = b.end.is_none_or(|end| end > a.start);
+    a_ends_after_b_starts && b_ends_after_a_starts
+}
+
+fn ends_after(end: Option<u64>, point: u64) -> bool {
+    end.is_none_or(|it| it > point)
+}
+
+fn max_end(a: Option<u64>, b: Option<u64>) -> Option<u64> {
+    match (a, b) {
+        (None, _) | (_, None) => None,
+        (Some(a), Some(b)) => Some(a.max(b)),
+    }
+}
+
+fn lock_conflicts(req_type: i16, existing_type: i16) -> bool {
+    if req_type == F_WRLCK as i16 {
+        existing_type == F_WRLCK as i16 || existing_type == F_RDLCK as i16
+    } else {
+        req_type == F_RDLCK as i16 && existing_type == F_WRLCK as i16
+    }
+}
+
+fn lock_conflict_error(req_type: i16) -> AxError {
+    if req_type == F_RDLCK as i16 {
+        AxError::from(LinuxError::EACCES)
+    } else {
+        AxError::from(LinuxError::EAGAIN)
+    }
+}
+
+fn find_conflict(
+    locks: &[PosixRecordLock],
+    owner: u32,
+    req_type: i16,
+    req_range: LockRange,
+) -> Option<PosixRecordLock> {
+    locks.iter().copied().find(|lock| {
+        lock.owner != owner
+            && overlaps(lock.range, req_range)
+            && lock_conflicts(req_type, lock.lock_type)
+    })
+}
+
+fn collect_conflict_owners(
+    locks: &[PosixRecordLock],
+    owner: u32,
+    req_type: i16,
+    req_range: LockRange,
+) -> Vec<u32> {
+    let mut owners = Vec::new();
+    for lock in locks {
+        if lock.owner == owner
+            || !overlaps(lock.range, req_range)
+            || !lock_conflicts(req_type, lock.lock_type)
+        {
+            continue;
+        }
+        if !owners.contains(&lock.owner) {
+            owners.push(lock.owner);
+        }
+    }
+    owners
+}
+
+fn clear_wait_dependencies(waiter: u32) {
+    POSIX_WAIT_GRAPH.write().remove(&waiter);
+}
+
+fn set_wait_dependencies(waiter: u32, blockers: &[u32]) {
+    let mut uniq = Vec::new();
+    for blocker in blockers {
+        if *blocker != waiter && !uniq.contains(blocker) {
+            uniq.push(*blocker);
+        }
+    }
+    POSIX_WAIT_GRAPH.write().insert(waiter, uniq);
+}
+
+fn has_wait_path(start: u32, target: u32, graph: &BTreeMap<u32, Vec<u32>>) -> bool {
+    let mut stack = Vec::new();
+    stack.push(start);
+    let mut visited = BTreeSet::new();
+    while let Some(node) = stack.pop() {
+        if node == target {
+            return true;
+        }
+        if !visited.insert(node) {
+            continue;
+        }
+        if let Some(nexts) = graph.get(&node) {
+            stack.extend(nexts.iter().copied());
+        }
+    }
+    false
+}
+
+fn would_deadlock(waiter: u32, blockers: &[u32]) -> bool {
+    let graph = POSIX_WAIT_GRAPH.read();
+    blockers
+        .iter()
+        .any(|blocker| *blocker == waiter || has_wait_path(*blocker, waiter, &graph))
+}
+
+fn push_if_non_empty(
+    out: &mut Vec<PosixRecordLock>,
+    owner: u32,
+    lock_type: i16,
+    start: u64,
+    end: Option<u64>,
+) {
+    if end.is_some_and(|it| it <= start) {
+        return;
+    }
+    out.push(PosixRecordLock {
+        owner,
+        lock_type,
+        range: LockRange { start, end },
+    });
+}
+
+fn apply_owner_lock(locks: &mut Vec<PosixRecordLock>, owner: u32, req_type: i16, req: LockRange) {
+    let mut next = Vec::with_capacity(locks.len() + 1);
+
+    for lock in locks.drain(..) {
+        if lock.owner != owner || !overlaps(lock.range, req) {
+            next.push(lock);
+            continue;
+        }
+
+        // Keep the left part that does not overlap with the requested range.
+        if lock.range.start < req.start {
+            push_if_non_empty(
+                &mut next,
+                owner,
+                lock.lock_type,
+                lock.range.start,
+                Some(req.start),
+            );
+        }
+
+        // Keep the right part that does not overlap with the requested range.
+        if let Some(req_end) = req.end
+            && ends_after(lock.range.end, req_end)
+        {
+            push_if_non_empty(&mut next, owner, lock.lock_type, req_end, lock.range.end);
+        }
+    }
+
+    if req_type != F_UNLCK as i16 {
+        next.push(PosixRecordLock {
+            owner,
+            lock_type: req_type,
+            range: req,
+        });
+    }
+
+    next.sort_by(|a, b| {
+        a.range
+            .start
+            .cmp(&b.range.start)
+            .then_with(|| {
+                a.range
+                    .end
+                    .unwrap_or(u64::MAX)
+                    .cmp(&b.range.end.unwrap_or(u64::MAX))
+            })
+            .then_with(|| a.owner.cmp(&b.owner))
+            .then_with(|| a.lock_type.cmp(&b.lock_type))
+    });
+
+    let mut merged: Vec<PosixRecordLock> = Vec::with_capacity(next.len());
+    for lock in next {
+        if let Some(last) = merged.last_mut()
+            && last.owner == lock.owner
+            && last.lock_type == lock.lock_type
+            && last.range.end.is_none_or(|end| lock.range.start <= end)
+        {
+            last.range.end = max_end(last.range.end, lock.range.end);
+            continue;
+        }
+        merged.push(lock);
+    }
+    *locks = merged;
+}
+
+fn set_flock_from_lock(dst: &mut flock64, src: PosixRecordLock) {
+    dst.l_type = src.lock_type;
+    dst.l_whence = SEEK_SET as _;
+    dst.l_start = src.range.start as _;
+    dst.l_len = src
+        .range
+        .end
+        .map_or(0, |end| end.saturating_sub(src.range.start) as _);
+    dst.l_pid = src.owner as _;
+}
+
+fn release_posix_locks_for_file_like(file_like: &Arc<dyn FileLike>) {
+    let Some(file) = file_like.downcast_ref::<File>() else {
+        return;
+    };
+    let Ok(key) = posix_lock_key(file) else {
+        return;
+    };
+    let owner = current().as_thread().proc_data.proc.pid();
+    let mut map = POSIX_LOCKS.write();
+    if let Some(locks) = map.get_mut(&key) {
+        locks.retain(|lock| lock.owner != owner);
+        if locks.is_empty() {
+            map.remove(&key);
+        }
+    }
+}
+
+fn release_posix_locks_for_fd(fd: c_int) {
+    let Ok(file_like) = get_file_like(fd) else {
+        return;
+    };
+    release_posix_locks_for_file_like(&file_like);
+}
+
+pub fn release_posix_locks_for_pid(pid: u32) {
+    let mut map = POSIX_LOCKS.write();
+    map.retain(|_, locks| {
+        locks.retain(|lock| lock.owner != pid);
+        !locks.is_empty()
+    });
+    clear_wait_dependencies(pid);
+}
+
+fn handle_getlk(fd: c_int, arg: usize) -> AxResult<isize> {
+    let lock = UserPtr::<flock64>::from(arg).get_as_mut()?;
+    let req_type = lock.l_type;
+    validate_lock_type(req_type)?;
+    if req_type == F_UNLCK as i16 {
+        lock.l_type = F_UNLCK as _;
+        return Ok(0);
+    }
+
+    let file = File::from_fd(fd)?;
+    validate_lock_access(&file, req_type)?;
+    let key = posix_lock_key(&file)?;
+    let req_range = normalize_range(&file, lock.l_whence, lock.l_start, lock.l_len)?;
+    let owner = current().as_thread().proc_data.proc.pid();
+
+    let map = POSIX_LOCKS.read();
+    if let Some(locks) = map.get(&key)
+        && let Some(conflict) = find_conflict(locks, owner, req_type, req_range)
+    {
+        set_flock_from_lock(lock, conflict);
+    } else {
+        // Keep user-provided fields unchanged except l_type as required by F_GETLK.
+        lock.l_type = F_UNLCK as _;
+    }
+    Ok(0)
+}
+
+fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
+    let lock = UserPtr::<flock64>::from(arg).get_as_mut()?;
+    let req_type = lock.l_type;
+    validate_lock_type(req_type)?;
+
+    let file = File::from_fd(fd)?;
+    if req_type != F_UNLCK as i16 {
+        validate_lock_access(&file, req_type)?;
+    }
+    let key = posix_lock_key(&file)?;
+    let req_range = normalize_range(&file, lock.l_whence, lock.l_start, lock.l_len)?;
+    let owner = current().as_thread().proc_data.proc.pid();
+
+    loop {
+        let mut map = POSIX_LOCKS.write();
+        let mut should_remove_key = false;
+        let mut conflict_owners = Vec::new();
+        {
+            let locks = map.entry(key).or_default();
+            if req_type != F_UNLCK as i16 {
+                conflict_owners = collect_conflict_owners(locks, owner, req_type, req_range);
+            }
+            if conflict_owners.is_empty() {
+                apply_owner_lock(locks, owner, req_type, req_range);
+                should_remove_key = locks.is_empty();
+            }
+        }
+
+        if conflict_owners.is_empty() {
+            if should_remove_key {
+                map.remove(&key);
+            }
+            clear_wait_dependencies(owner);
+            return Ok(0);
+        }
+
+        if !blocking {
+            clear_wait_dependencies(owner);
+            return Err(lock_conflict_error(req_type));
+        }
+        drop(map);
+
+        if would_deadlock(owner, &conflict_owners) {
+            clear_wait_dependencies(owner);
+            return Err(AxError::from(LinuxError::EDEADLK));
+        }
+        set_wait_dependencies(owner, &conflict_owners);
+
+        if has_unblocked_pending_signal() {
+            clear_wait_dependencies(owner);
+            return Err(AxError::Interrupted);
+        }
+        yield_now();
+    }
 }
 
 pub fn sys_dup(old_fd: c_int) -> AxResult<isize> {
@@ -250,6 +677,9 @@ pub fn sys_dup3(old_fd: c_int, new_fd: c_int, flags: c_int) -> AxResult<isize> {
         .ok_or(AxError::BadFileDescriptor)?;
     f.cloexec = flags.contains(Dup3Flags::O_CLOEXEC);
 
+    if let Some(file_desc) = fd_table.get(new_fd as _) {
+        release_posix_locks_for_file_like(&file_desc.inner);
+    }
     fd_table.remove(new_fd as _);
     fd_table
         .add_at(new_fd as _, f)
@@ -264,9 +694,11 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
     match cmd as u32 {
         F_DUPFD => dup_fd(fd, arg, false),
         F_DUPFD_CLOEXEC => dup_fd(fd, arg, true),
-        F_SETLK | F_SETLKW => Ok(0),
+        F_SETLK => handle_setlk(fd, arg, false),
+        F_SETLKW => handle_setlk(fd, arg, true),
         F_OFD_SETLK | F_OFD_SETLKW => Ok(0),
-        F_GETLK | F_OFD_GETLK => {
+        F_GETLK => handle_getlk(fd, arg),
+        F_OFD_GETLK => {
             let arg = UserPtr::<flock64>::from(arg);
             arg.get_as_mut()?.l_type = F_UNLCK as _;
             Ok(0)
