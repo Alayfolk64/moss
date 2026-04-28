@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-28 00:59:12.004808400 UTC
+Boot at 2026-04-28 03:04:49.004489 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -110,24 +110,31 @@ PWD=/
 prepare musl runtime
 '/lib/libc.so' -> '/musl/lib/libc.so'
 #### OS COMP TEST GROUP START ltp-musl ####
-RUN LTP CASE fork01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
+RUN LTP CASE accept01
+[37m[  4.366335 0:32 axnet::tcp:338] [33m[AxErrorKind::InvalidInput] not listening[m
+[m[37m[  4.370402 0:32 axnet::tcp:338] [33m[AxErrorKind::InvalidInput] not listening[m
+[m[37m[  4.371514 0:32 axnet::tcp:338] [33m[AxErrorKind::InvalidInput] not listening[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-fork01.c:47: TPASS: correct child status returned 42
-fork01.c:50: TPASS: child_pid == pid (33)
+accept01.c:92: TPASS: bad file descriptor : EBADF (9)
+accept01.c:92: TPASS: invalid socket buffer : EINVAL (22)
+accept01.c:92: TPASS: invalid salen : EINVAL (22)
+accept01.c:92: TPASS: no queued connections : EINVAL (22)
+accept01.c:92: TPASS: UDP accept : EOPNOTSUPP (95)
 
 Summary:
-passed   2
+passed   5
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE fork01 : 0
-RUN LTP CASE fork03
+FAIL LTP CASE accept01 : 0
+RUN LTP CASE accept02
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-fork03.c:40: TINFO: process id in parent of child from fork: 38
-fork03.c:53: TPASS: test PASSED
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+accept02.c:131: TINFO: Starting listener on port: 49153
+accept02.c:75: TPASS: Multicast group was not copied: EADDRNOTAVAIL (99)
 
 Summary:
 passed   1
@@ -135,29 +142,368 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE fork03 : 0
-RUN LTP CASE fork04
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
+FAIL LTP CASE accept02 : 0
+RUN LTP CASE accept03
+[37m[  5.323051 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
+[m[37m[  5.325048 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[m[37m[  5.325562 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[m[37m[  5.325881 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[m[37m[  5.326330 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[m[37m[  5.326719 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[m[37m[  5.327110 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[  5.327394 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[m[37m[  5.327796 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[m[37m[  5.328111 0:42 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[m[37m[  5.332526 0:42 starry_kernel::syscall:24] [33mInvalid syscall number: 18446744073709551615[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-fork04.c:52: TINFO: Set LTP_FORK04=PASS environ variable inside parent
-fork04.c:58: TINFO: Spawning child
-fork04.c:30: TPASS: Expect: LTP_FORK04 environ variable has been inherited by the child
-fork04.c:34: TINFO: Unset LTP_FORK04 environ variable inside child
-fork04.c:73: TPASS: Expect: LTP_FORK04 environ variable is still present inside parent
-fork04.c:41: TINFO: Set LTP_FORK04=FAIL environ variable inside child
-fork04.c:86: TPASS: Expect: LTP_FORK04 environ variable didn't change inside parent
+accept03.c:48: TPASS: accept() on file : ENOTSOCK (88)
+accept03.c:48: TFAIL: accept() on O_PATH file expected EBADF: ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on directory : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on /dev/zero : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on /proc/self/maps : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pipe read end : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pipe write end : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on epoll : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on eventfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on signalfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on timerfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pidfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fanotify : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on inotify : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on userfaultfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on perf event : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on io uring : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on bpf map : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fsopen : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fspick : ENOTSOCK (88)
+accept03.c:48: TFAIL: accept() on open_tree expected EBADF: ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on memfd : ENOTSOCK (88)
+tst_fd.c:260: TCONF: Skipping memfd secret: ENOSYS (38)
 
 Summary:
-passed   3
+passed   20
+failed   2
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE accept03 : 0
+RUN LTP CASE access01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as nobody passed
+access01.c:242: TPASS: access(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: TPASS: access(accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
+
+Summary:
+passed   199
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE fork04 : 0
-RUN LTP CASE fork07
+FAIL LTP CASE access01 : 0
+RUN LTP CASE access02
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-fork07.c:48: TPASS: read the end of file correctly
+access02.c:139: TPASS: access(file_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as nobody behaviour is correct.
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+RUN LTP CASE access03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+RUN LTP CASE access04
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_accPljdEh/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access04.c:68: TPASS: access as root : EINVAL (22)
+access04.c:68: TPASS: access as nobody : EINVAL (22)
+access04.c:68: TPASS: access as root : ENOENT (2)
+access04.c:68: TPASS: access as nobody : ENOENT (2)
+access04.c:68: TPASS: access as root : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as nobody : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as root : ENOTDIR (20)
+access04.c:68: TPASS: access as nobody : ENOTDIR (20)
+access04.c:68: TPASS: access as root : ELOOP (40)
+access04.c:68: TPASS: access as nobody : ELOOP (40)
+access04.c:68: TPASS: access as root : EROFS (30)
+access04.c:68: TPASS: access as nobody : EROFS (30)
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_accPljdEh) failed: unlink(/tmp/LTP_accPljdEh) failed; errno=21: EISDIR
+FAIL LTP CASE access04 : 0
+#### OS COMP TEST GROUP END ltp-musl ####
+prepare musl runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE accept01
+[37m[  9.379533 0:192 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[m[37m[  9.415263 0:193 axnet::tcp:338] [33m[AxErrorKind::InvalidInput] not listening[m
+[m[37m[  9.416357 0:193 axnet::tcp:338] [33m[AxErrorKind::InvalidInput] not listening[m
+[m[37m[  9.416603 0:193 axnet::tcp:338] [33m[AxErrorKind::InvalidInput] not listening[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+accept01.c:92: TPASS: bad file descriptor : EBADF (9)
+accept01.c:92: TPASS: invalid socket buffer : EINVAL (22)
+accept01.c:92: TPASS: invalid salen : EINVAL (22)
+accept01.c:92: TPASS: no queued connections : EINVAL (22)
+accept01.c:92: TPASS: UDP accept : EOPNOTSUPP (95)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept01 : 0
+RUN LTP CASE accept02
+[37m[  9.831142 0:196 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+accept02.c:131: TINFO: Starting listener on port: 49156
+accept02.c:75: TPASS: Multicast group was not copied: EADDRNOTAVAIL (99)
 
 Summary:
 passed   1
@@ -165,48 +511,360 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE fork07 : 0
-RUN LTP CASE fork08
+FAIL LTP CASE accept02 : 0
+RUN LTP CASE accept03
+[37m[ 10.320706 0:202 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[m[37m[ 10.373292 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: timerfd_create[m
+[m[37m[ 10.376047 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[m[37m[ 10.376478 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[m[37m[ 10.376851 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[m[37m[ 10.377328 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[m[37m[ 10.377721 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[m[37m[ 10.378083 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[m[37m[ 10.378382 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[m[37m[ 10.379685 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[m[37m[ 10.379964 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[m[37m[ 10.382757 0:203 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+accept03.c:48: TPASS: accept() on file : ENOTSOCK (88)
+accept03.c:48: TFAIL: accept() on O_PATH file expected EBADF: ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on directory : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on /dev/zero : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on /proc/self/maps : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pipe read end : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pipe write end : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on epoll : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on eventfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on signalfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on timerfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pidfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fanotify : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on inotify : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on userfaultfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on perf event : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on io uring : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on bpf map : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fsopen : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fspick : ENOTSOCK (88)
+accept03.c:48: TFAIL: accept() on open_tree expected EBADF: ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on memfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on memfd secret : ENOTSOCK (88)
+
+Summary:
+passed   21
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept03 : 0
+RUN LTP CASE access01
+[37m[ 10.776664 0:206 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as nobody passed
+access01.c:242: TPASS: access(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: TPASS: access(accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
+
+Summary:
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access01 : 0
+RUN LTP CASE access02
+[37m[ 11.751430 0:311 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access02.c:139: TPASS: access(file_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as nobody behaviour is correct.
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+RUN LTP CASE access03
+[37m[ 13.320043 0:327 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+RUN LTP CASE access04
+[37m[ 13.776521 0:335 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1017: TINFO: Cannot resolve the absolute path of mntpoint: ENOTTY (25)
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-fork08.c:46: TPASS: read the end of file correctly
+access04.c:68: TPASS: access as root : EINVAL (22)
+access04.c:68: TPASS: access as nobody : EINVAL (22)
+access04.c:68: TPASS: access as root : ENOENT (2)
+access04.c:68: TPASS: access as nobody : ENOENT (2)
+access04.c:68: TPASS: access as root : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as nobody : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as root : ENOTDIR (20)
+access04.c:68: TPASS: access as nobody : ENOTDIR (20)
+access04.c:68: TPASS: access as root : ELOOP (40)
+access04.c:68: TPASS: access as nobody : ELOOP (40)
+access04.c:68: TPASS: access as root : EROFS (30)
+access04.c:68: TPASS: access as nobody : EROFS (30)
 
 Summary:
-passed   1
+passed   12
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE fork08 : 0
-RUN LTP CASE fork09
-fork09      0  TINFO  :  OPEN_MAX is 1024
-fork09      0  TINFO  :  first file descriptor is 3 
-fork09      0  TINFO  :  Parent reporting 1023 files open
-fork09      0  TINFO  :  Child opened new file #1023
-fork09      0  TINFO  :  first file descriptor is 3 
-fork09      0  TINFO  :  Parent reporting 1023 files open
-fork09      1  TPASS  :  test 1 PASSED
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fork09 : 0
-RUN LTP CASE fork10
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_accjbUl6t) failed: unlink(/tmp/LTP_accjbUl6t) failed; errno=21: EISDIR
+FAIL LTP CASE access04 : 0
+RUN LTP CASE sigtimedwait01
+[37m[ 14.330447 0:345 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-fork10.c:54: TPASS: Expect: read first part of data from parent process
-fork10.c:61: TPASS: Expect: read second part of data from child process
+sigwait.c:27: TPASS: Wait interrupted by expected signal
+sigwait.c:88: TPASS: struct siginfo is correct
+sigwait.c:148: TPASS: struct siginfo is correct
+sigwait.c:160: TPASS: sigwaitinfo restored the original mask
+sigwait.c:113: TPASS: Wait interrupted by expected signal
+sigwait.c:259: TPASS: Wait interrupted by expected signal
+sigwait.c:268: TPASS: sigwaitinfo restored the original mask
+sigwait.c:302: TPASS: Fault occurred while accessing the buffers
+sigwait.c:344: TPASS: Child exited with expected code
+sigwait.c:367: TPASS: Fault occurred while accessing the buffers
+sigwait.c:57: TPASS: Wait interrupted by timeout
 
 Summary:
-passed   2
+passed   11
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE fork10 : 0
-RUN LTP CASE fork13
-QEMU: Terminated
-
+FAIL LTP CASE sigtimedwait01 : 0
+#### OS COMP TEST GROUP END ltp-glibc ####
