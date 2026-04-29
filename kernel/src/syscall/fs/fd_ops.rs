@@ -1,7 +1,5 @@
 use alloc::{format, string::ToString, sync::Arc};
-use core::{
-    ffi::{c_char, c_int},
-};
+use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};

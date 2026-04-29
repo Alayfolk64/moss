@@ -11,14 +11,13 @@ mod opt;
 #[cfg(feature = "net")]
 mod socket;
 
-#[cfg(feature = "net")]
-pub use self::{cmsg::*, io::*, name::*, opt::*, socket::*};
-
 #[cfg(not(feature = "net"))]
 use axerrno::{AxError, AxResult, LinuxError};
 #[cfg(not(feature = "net"))]
 use linux_raw_sys::net::{msghdr, sockaddr, socklen_t};
 
+#[cfg(feature = "net")]
+pub use self::{cmsg::*, io::*, name::*, opt::*, socket::*};
 #[cfg(not(feature = "net"))]
 use crate::mm::{UserConstPtr, UserPtr};
 

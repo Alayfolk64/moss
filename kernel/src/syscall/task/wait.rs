@@ -148,20 +148,27 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
                     continue;
                 }
 
-                // Some signals should restart blocking syscalls (SA_RESTART).
-                // Retry waitpid in that case to match Linux behavior.
-                let restartable = (1u8..=64).filter_map(Signo::from_repr).any(|signo| {
-                    pending.has(signo) && proc_data.signal.can_restart(signo)
-                });
-                if restartable {
-                    debug!("sys_waitpid: interrupted by restartable signal, retrying");
+                // Spurious wakeup / already-consumed interrupt, keep waiting.
+                if pending.is_empty() {
                     continue;
                 }
 
-                // Be tolerant to rare spurious wakeups where interrupt flag is set
-                // but no signal is pending by the time we re-check.
-                if pending.is_empty() {
-                    debug!("sys_waitpid: interrupted with empty pending set, retrying");
+                // Control signals must break out so user-space handlers
+                // (timeout/Ctrl-C paths) can run promptly.
+                if pending.has(Signo::SIGALRM)
+                    || pending.has(Signo::SIGINT)
+                    || pending.has(Signo::SIGTERM)
+                {
+                    return Err(AxError::Interrupted);
+                }
+
+                // Restart waitpid for pure SA_RESTART-style interrupts
+                // (e.g. LTP heartbeat SIGUSR1 in the harness parent).
+                let all_restartable = (1u8..=64)
+                    .filter_map(Signo::from_repr)
+                    .filter(|&signo| pending.has(signo))
+                    .all(|signo| proc_data.signal.can_restart(signo));
+                if all_restartable {
                     continue;
                 }
 

@@ -59,8 +59,12 @@ struct Rusage {
 
 impl Rusage {
     fn from_thread(thread: &Thread) -> Self {
-        let (utime, stime) = thread.time.borrow().output();
-        Self { utime, stime }
+        if let Ok(time) = thread.time.try_borrow() {
+            let (utime, stime) = time.output();
+            Self { utime, stime }
+        } else {
+            Self::default()
+        }
     }
 
     fn collate(mut self, other: Rusage) -> Self {

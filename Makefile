@@ -181,15 +181,8 @@ rv-shell:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-riscv64 -machine virt -kernel $(A)/kernel-rv -m 1G -nographic -smp 1 \
-		-bios default \
-		-drive file=$$tmp_img,if=none,format=raw,snapshot=on,id=x0 \
-		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-		-no-reboot \
-		-device virtio-net-device,netdev=net \
-		-netdev user,id=net \
-		-serial mon:stdio \
-		-rtc base=utc
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m 1G -nographic -smp 1 -bios default -drive file=sdcard-rv.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee output_rv.txt
+
 
 la:
 	$(MAKE) ARCH=loongarch64 BUS=pci run
@@ -203,14 +196,8 @@ la-shell:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-loongarch64 -kernel $(A)/kernel-la -m 1G -nographic -smp 1 \
-		-drive file=$$tmp_img,if=none,format=raw,snapshot=on,id=x0 \
-		-device virtio-blk-pci,drive=x0 \
-		-no-reboot \
-		-device virtio-net-pci,netdev=net0 \
-		-netdev user,id=net0 \
-		-serial mon:stdio \
-		-rtc base=utc
+	qemu-system-loongarch64 -kernel kernel-la -m 1G -nographic -smp 1 -drive file=sdcard-la.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee output_la.txt
+
 
 vf2:
 	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build

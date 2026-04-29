@@ -320,12 +320,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         ),
         #[cfg(target_arch = "x86_64")]
         Sysno::access => sys_access(uctx.arg0() as _, uctx.arg1() as _),
-        Sysno::faccessat => sys_faccessat2(
-            uctx.arg0() as _,
-            uctx.arg1() as _,
-            uctx.arg2() as _,
-            0,
-        ),
+        Sysno::faccessat => sys_faccessat2(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _, 0),
         Sysno::faccessat2 => sys_faccessat2(
             uctx.arg0() as _,
             uctx.arg1() as _,
@@ -358,6 +353,9 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::msync => sys_msync(uctx.arg0(), uctx.arg1() as _, uctx.arg2() as _),
         Sysno::mlock => sys_mlock(uctx.arg0(), uctx.arg1() as _),
         Sysno::mlock2 => sys_mlock2(uctx.arg0(), uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::munlock => sys_munlock(uctx.arg0(), uctx.arg1() as _),
+        Sysno::mlockall => sys_mlockall(uctx.arg0() as _),
+        Sysno::munlockall => sys_munlockall(),
 
         // task info
         Sysno::getpid => sys_getpid(),
