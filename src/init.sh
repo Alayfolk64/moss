@@ -86,21 +86,23 @@ run_ltp() {
         # bind03
         # bind04
         # bind05
-        bpf_map01
-        bpf_prog01
-        bpf_prog02
-        bpf_prog03
-        bpf_prog04
-        bpf_prog05
-        bpf_prog06
-        bpf_prog07
-        # cacheflush01
-        # capget01
-        # capget02
-        # capset01
-        # capset02
-        # capset03
-        # capset04
+        # bpf_map01
+        # bpf_prog01
+        # bpf_prog02
+        # bpf_prog03
+        # bpf_prog04
+        # bpf_prog05
+        # bpf_prog06
+        # bpf_prog07
+        brk01
+        brk02
+        cacheflush01
+        capget01
+        capget02
+        capset01
+        capset02
+        capset03
+        capset04
         # chdir01A
         # chmod01A
         # chmod05

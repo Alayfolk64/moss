@@ -1,7 +1,10 @@
 use core::ffi::c_char;
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
+use axsync::Mutex;
 use axtask::current;
+use hashbrown::HashMap;
+use lazy_static::lazy_static;
 use linux_raw_sys::general::{__user_cap_data_struct, __user_cap_header_struct};
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
@@ -10,39 +13,171 @@ use crate::{
     task::{AsThread, get_process_data},
 };
 
+const CAPABILITY_VERSION_1: u32 = 0x19980330;
+const CAPABILITY_VERSION_2: u32 = 0x20071026;
 const CAPABILITY_VERSION_3: u32 = 0x20080522;
+const CAP_SETPCAP: u32 = 8;
 
-fn validate_cap_header(header_ptr: *mut __user_cap_header_struct) -> AxResult<()> {
+#[derive(Clone, Copy, Debug)]
+struct CapState {
+    effective: u64,
+    permitted: u64,
+    inheritable: u64,
+    bounding: u64,
+}
+
+impl Default for CapState {
+    fn default() -> Self {
+        Self {
+            effective: u32::MAX as u64,
+            permitted: u32::MAX as u64,
+            inheritable: 0,
+            bounding: u32::MAX as u64,
+        }
+    }
+}
+
+lazy_static! {
+    static ref CAP_STATE: Mutex<HashMap<u32, CapState>> = Mutex::new(HashMap::new());
+}
+
+fn current_pid() -> u32 {
+    current().as_thread().proc_data.proc.pid()
+}
+
+#[inline]
+fn eperm() -> AxError {
+    AxError::from(LinuxError::EPERM)
+}
+
+fn get_state(pid: u32) -> CapState {
+    let mut all = CAP_STATE.lock();
+    *all.entry(pid).or_default()
+}
+
+fn set_state(pid: u32, state: CapState) {
+    CAP_STATE.lock().insert(pid, state);
+}
+
+fn read_caps(version: u32, data: *mut __user_cap_data_struct) -> AxResult<(u64, u64, u64)> {
+    let d0 = unsafe { data.vm_read_uninit()?.assume_init() };
+    let d1 = if version == CAPABILITY_VERSION_1 {
+        __user_cap_data_struct {
+            effective: 0,
+            permitted: 0,
+            inheritable: 0,
+        }
+    } else {
+        unsafe { data.wrapping_add(1).vm_read_uninit()?.assume_init() }
+    };
+    let merge = |lo: u32, hi: u32| (lo as u64) | ((hi as u64) << 32);
+    Ok((
+        merge(d0.effective, d1.effective),
+        merge(d0.permitted, d1.permitted),
+        merge(d0.inheritable, d1.inheritable),
+    ))
+}
+
+fn write_caps(version: u32, data: *mut __user_cap_data_struct, caps: CapState) -> AxResult {
+    let split = |bits: u64| (bits as u32, (bits >> 32) as u32);
+    let (e0, e1) = split(caps.effective);
+    let (p0, p1) = split(caps.permitted);
+    let (i0, i1) = split(caps.inheritable);
+
+    data.vm_write(__user_cap_data_struct {
+        effective: e0,
+        permitted: p0,
+        inheritable: i0,
+    })?;
+    if version != CAPABILITY_VERSION_1 {
+        data.wrapping_add(1).vm_write(__user_cap_data_struct {
+            effective: e1,
+            permitted: p1,
+            inheritable: i1,
+        })?;
+    }
+    Ok(())
+}
+
+fn validate_cap_header(header_ptr: *mut __user_cap_header_struct) -> AxResult<u32> {
     // FIXME: AnyBitPattern
     let mut header = unsafe { header_ptr.vm_read_uninit()?.assume_init() };
-    if header.version != CAPABILITY_VERSION_3 {
-        header.version = CAPABILITY_VERSION_3;
-        header_ptr.vm_write(header)?;
+
+    let version = match header.version {
+        CAPABILITY_VERSION_1 | CAPABILITY_VERSION_2 | CAPABILITY_VERSION_3 => header.version,
+        _ => {
+            header.version = CAPABILITY_VERSION_3;
+            header_ptr.vm_write(header)?;
+            return Err(AxError::InvalidInput);
+        }
+    };
+
+    if header.pid < 0 {
         return Err(AxError::InvalidInput);
     }
     let _ = get_process_data(header.pid as u32)?;
-    Ok(())
+    Ok(version)
 }
 
 pub fn sys_capget(
     header: *mut __user_cap_header_struct,
     data: *mut __user_cap_data_struct,
 ) -> AxResult<isize> {
-    validate_cap_header(header)?;
-
-    data.vm_write(__user_cap_data_struct {
-        effective: u32::MAX,
-        permitted: u32::MAX,
-        inheritable: u32::MAX,
-    })?;
+    let version = validate_cap_header(header)?;
+    // FIXME: AnyBitPattern
+    let h = unsafe { header.vm_read_uninit()?.assume_init() };
+    let target_pid = if h.pid == 0 {
+        current_pid()
+    } else {
+        h.pid as u32
+    };
+    let caps = get_state(target_pid);
+    write_caps(version, data, caps)?;
     Ok(0)
 }
 
 pub fn sys_capset(
     header: *mut __user_cap_header_struct,
-    _data: *mut __user_cap_data_struct,
+    data: *mut __user_cap_data_struct,
 ) -> AxResult<isize> {
-    validate_cap_header(header)?;
+    let version = validate_cap_header(header)?;
+    // FIXME: AnyBitPattern
+    let h = unsafe { header.vm_read_uninit()?.assume_init() };
+    let pid = current_pid();
+    let tid = current().id().as_u64() as u32;
+    let target_pid = if h.pid == 0 { tid } else { h.pid as u32 };
+    if target_pid != tid && target_pid != pid {
+        return Err(eperm());
+    }
+
+    let old = get_state(pid);
+    let (new_e, new_p, new_i) = read_caps(version, data)?;
+
+    if new_e & !new_p != 0 {
+        return Err(eperm());
+    }
+    if new_p & !old.permitted != 0 {
+        return Err(eperm());
+    }
+    // Linux: inherited new bits must stay inside the bounding set.
+    if (new_i & !old.inheritable) & !old.bounding != 0 {
+        return Err(eperm());
+    }
+    // Without CAP_SETPCAP, new inheritable bits must come from old permitted/inheritable.
+    let has_setpcap = (old.effective & (1u64 << CAP_SETPCAP)) != 0;
+    if !has_setpcap && (new_i & !(old.inheritable | old.permitted) != 0) {
+        return Err(eperm());
+    }
+
+    set_state(
+        pid,
+        CapState {
+            effective: new_e,
+            permitted: new_p,
+            inheritable: new_i,
+            bounding: old.bounding,
+        },
+    );
 
     Ok(0)
 }
@@ -135,6 +270,16 @@ pub fn sys_prctl(
         }
         PR_SET_SECCOMP => {}
         PR_MCE_KILL => {}
+        x if x == PR_CAPBSET_DROP || x == 24 => {
+            let cap = arg2 as u32;
+            if cap >= 64 {
+                return Err(AxError::InvalidInput);
+            }
+            let pid = current_pid();
+            let mut state = get_state(pid);
+            state.bounding &= !(1u64 << cap);
+            set_state(pid, state);
+        }
         PR_SET_MM => {
             // not implemented; but avoid annoying warnings
             return Err(AxError::InvalidInput);
