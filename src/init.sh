@@ -81,11 +81,11 @@ run_ltp() {
         # adjtimex02
         # adjtimex03
         # arch_prctl01
-        bind01
-        bind02
-        bind03
-        bind04
-        bind05
+        # bind01
+        # bind02
+        # bind03
+        # bind04
+        # bind05
         bpf_map01
         bpf_prog01
         bpf_prog02

@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-04-28 14:04:55.004675100 UTC
+Boot at 2026-04-29 09:25:15.004479200 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -124,16 +124,18 @@ PWD=/
 prepare musl runtime
 '/lib/libc.so' -> '/musl/lib/libc.so'
 #### OS COMP TEST GROUP START ltp-musl ####
-RUN LTP CASE bind01
+RUN LTP CASE bpf_map01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind01.c:60: TPASS: invalid salen : EINVAL (22)
-bind01.c:60: TPASS: invalid socket : ENOTSOCK (88)
-bind01.c:63: TPASS: INADDR_ANYPORT passed
-bind01.c:60: TPASS: UNIX-domain of current directory : EAFNOSUPPORT (97)
-bind01.c:60: TPASS: non-local address : EADDRNOTAVAIL (99)
-bind01.c:60: TPASS: sockfd is not a valid file descriptor : EBADF (9)
-bind01.c:60: TPASS: a component of addr prefix is not a directory : ENOTDIR (20)
+bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
+bpf_map01.c:53: TPASS: Created hash map
+bpf_map01.c:70: TPASS: Empty hash map lookup: ENOENT (2)
+bpf_map01.c:102: TPASS: Update hash map element
+bpf_map01.c:122: TPASS: hash map lookup
+bpf_map01.c:53: TPASS: Created array map
+bpf_map01.c:102: TPASS: Update array map element
+bpf_map01.c:122: TPASS: array map lookup
 
 Summary:
 passed   7
@@ -141,26 +143,31 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE bind01 : 0
-RUN LTP CASE bind02
+FAIL LTP CASE bpf_map01 : 0
+RUN LTP CASE bpf_prog01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind02.c:52: TINFO: Switching credentials to user: nobody, group: nobody
-bind02.c:39: TPASS: bind() : EACCES (13)
+bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
+bpf_common.c:114: TPASS: Loaded program
+bpf_prog01.c:95: TPASS: val = 1
 
 Summary:
-passed   1
+passed   2
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE bind02 : 0
-RUN LTP CASE bind03
+FAIL LTP CASE bpf_prog01 : 0
+RUN LTP CASE bpf_prog02
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind03.c:31: TPASS: re-bind() socket : EINVAL (22)
-bind03.c:38: TPASS: bind() with bound pathname : EADDRINUSE (98)
-bind03.c:49: TPASS: check exist of SNAME_B : ENOENT (2)
+bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
+tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
+bpf_common.c:114: TPASS: Loaded program
+bpf_prog02.c:93: TPASS: val = 1152921504606846976 + 1
+bpf_prog02.c:103: TPASS: val = 1152921504606846976 - 1
 
 Summary:
 passed   3
@@ -168,329 +175,90 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE bind03 : 0
-RUN LTP CASE bind04
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind04.c:117: TINFO: Testing AF_UNIX pathname stream
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing AF_UNIX pathname seqpacket
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing AF_UNIX abstract stream
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing AF_UNIX abstract seqpacket
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 loop TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 loop TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 loop SCTP
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 any TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 any TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 any SCTP
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 loop TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 loop TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 loop SCTP
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 any TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 any TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 any SCTP
-bind04.c:149: TPASS: Communication successful
-
-Summary:
-passed   16
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE bind04 : 0
-RUN LTP CASE bind05
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind05.c:131: TINFO: Testing AF_UNIX pathname datagram
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing AF_UNIX abstract datagram
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 loop UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 loop UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 loop UDP-Lite
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 any UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 any UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 any UDP-Lite
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 loop UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 loop UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 loop UDP-Lite
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 any UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 any UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 any UDP-Lite
-bind05.c:167: TPASS: Communication successful
-
-Summary:
-passed   14
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE bind05 : 0
-RUN LTP CASE bpf_map01
-[37m[  6.704516 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.708713 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.711517 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.712352 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.714600 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.714990 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.715720 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  6.716074 0:82 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
-bpf_map01.c:53: TPASS: Created hash map
-bpf_map01.c:67: TFAIL: Empty hash map lookup should fail with ENOENT: SUCCESS (0)
-bpf_map01.c:102: TPASS: Update hash map element
-bpf_map01.c:118: TFAIL: hash map lookup returned different value
-bpf_map01.c:53: TPASS: Created array map
-bpf_map01.c:77: TFAIL: Preallocated array map val not zero
-bpf_map01.c:83: TPASS: Preallocated array map lookup
-bpf_map01.c:102: TPASS: Update array map element
-bpf_map01.c:118: TFAIL: array map lookup returned different value
-
-Summary:
-passed   5
-failed   4
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE bpf_map01 : 0
-RUN LTP CASE bpf_prog01
-[37m[  7.068616 0:86 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  7.070715 0:86 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
-bpf_common.c:114: TPASS: Loaded program
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffc1c, 4) failed: ENOPROTOOPT (92)
-
-Summary:
-passed   1
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE bpf_prog01 : 0
-RUN LTP CASE bpf_prog02
-[37m[  7.408795 0:90 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  7.411001 0:90 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
-tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
-bpf_common.c:114: TPASS: Loaded program
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffb3c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3612af783cf5
-
-Summary:
-passed   1
-failed   0
-broken   1
-skipped  0
-warnings 0
 FAIL LTP CASE bpf_prog02 : 0
 RUN LTP CASE bpf_prog03
-[37m[  7.758211 0:94 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  7.758855 0:94 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  7.760566 0:94 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
-bpf_prog03.c:97: TINFO: Verification log:
-bpf_prog03.c:135: TFAIL: Loaded bad eBPF, now we will run it and maybe crash
-bpf_common.c:136: TBROK: setsockopt(7, 1, 50, 0x3fffffb0c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
+bpf_prog03.c:105: TPASS: Failed verification: EACCES (13)
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog03 : 0
 RUN LTP CASE bpf_prog04
-[37m[  8.211969 0:98 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  8.213780 0:98 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
-bpf_prog04.c:68: TINFO: Verification log:
-bpf_prog04.c:97: TFAIL: Malicious eBPF code passed verification. Now let's try crashing the kernel.
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffb6c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b799207e1e18
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-18445
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b799207e1e18
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-18445
+bpf_prog04.c:79: TPASS: BPF program failed verification: EPERM (1)
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog04 : 0
 RUN LTP CASE bpf_prog05
-[37m[  8.581487 0:102 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  8.583411 0:102 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  8.585251 0:102 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
 bpf_prog05.c:89: TINFO: Have pointer arithmetic
 bpf_common.c:114: TPASS: Loaded program
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffbcc, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f6b1b3bf0d5f
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=468f6eafa6c4
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e88b2c6e5a4d
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9b00f1b78809
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-3444
+bpf_prog05.c:181: TINFO: Check w7(-1) /= w6(0) [r7 = -1, r6 = 1 << 32]
+bpf_prog05.c:158: TPASS: src(r6) = 4294967296
+bpf_prog05.c:158: TPASS: dst(r7) = 0
+bpf_prog05.c:185: TINFO: Check w7(-1) %= w6(0) [r7 = -1, r6 = 1 << 32]
+bpf_prog05.c:158: TPASS: src(r6) = 4294967296
+bpf_prog05.c:158: TPASS: dst(r7) = 4294967295
 
 Summary:
-passed   1
+passed   5
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog05 : 0
 RUN LTP CASE bpf_prog06
-[37m[  8.930214 0:106 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  8.932329 0:106 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
 bpf_prog06.c:118: TINFO: Trying to load eBPF with OOB write
-bpf_prog06.c:125: TFAIL: Loaded program with OOB write
-bpf_prog06.c:126: TINFO: Running eBPF with OOB
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffb1c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-4204
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-4204
+bpf verifier reject
+bpf_prog06.c:121: TPASS: Failed verification
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog06 : 0
 RUN LTP CASE bpf_prog07
-[37m[  9.284053 0:110 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[  9.286381 0:110 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
 bpf_prog07.c:126: TINFO: Trying to load eBPF with OOB write
-bpf_prog07.c:133: TFAIL: Loaded program with OOB write
-bpf_prog07.c:134: TINFO: Running eBPF with OOB
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffaec, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2022-23222
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2022-23222
+bpf verifier reject
+bpf_prog07.c:129: TPASS: Failed verification
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog07 : 0
@@ -501,17 +269,19 @@ prepare musl runtime
 '/lib/libc.so' -> '/lib/libc.so.6'
 '/lib/libm.so' -> '/lib/libm.so.6'
 #### OS COMP TEST GROUP START ltp-glibc ####
-RUN LTP CASE bind01
-[37m[ 10.363313 0:121 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+RUN LTP CASE bpf_map01
+[37m[  9.220011 0:71 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind01.c:60: TPASS: invalid salen : EINVAL (22)
-bind01.c:60: TPASS: invalid socket : ENOTSOCK (88)
-bind01.c:63: TPASS: INADDR_ANYPORT passed
-bind01.c:60: TPASS: UNIX-domain of current directory : EAFNOSUPPORT (97)
-bind01.c:60: TPASS: non-local address : EADDRNOTAVAIL (99)
-bind01.c:60: TPASS: sockfd is not a valid file descriptor : EBADF (9)
-bind01.c:60: TPASS: a component of addr prefix is not a directory : ENOTDIR (20)
+bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
+bpf_map01.c:53: TPASS: Created hash map
+bpf_map01.c:70: TPASS: Empty hash map lookup: ENOENT (2)
+bpf_map01.c:102: TPASS: Update hash map element
+bpf_map01.c:122: TPASS: hash map lookup
+bpf_map01.c:53: TPASS: Created array map
+bpf_map01.c:102: TPASS: Update array map element
+bpf_map01.c:122: TPASS: array map lookup
 
 Summary:
 passed   7
@@ -519,28 +289,33 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE bind01 : 0
-RUN LTP CASE bind02
-[37m[ 10.859440 0:125 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+FAIL LTP CASE bpf_map01 : 0
+RUN LTP CASE bpf_prog01
+[37m[ 10.249359 0:75 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind02.c:52: TINFO: Switching credentials to user: nobody, group: nobody
-bind02.c:39: TPASS: bind() : EACCES (13)
+bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
+bpf_common.c:114: TPASS: Loaded program
+bpf_prog01.c:95: TPASS: val = 1
 
 Summary:
-passed   1
+passed   2
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE bind02 : 0
-RUN LTP CASE bind03
-[37m[ 11.416406 0:129 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+FAIL LTP CASE bpf_prog01 : 0
+RUN LTP CASE bpf_prog02
+[37m[ 10.797047 0:79 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind03.c:31: TPASS: re-bind() socket : EINVAL (22)
-bind03.c:38: TPASS: bind() with bound pathname : EADDRINUSE (98)
-bind03.c:49: TPASS: check exist of SNAME_B : ENOENT (2)
+bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
+tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
+bpf_common.c:114: TPASS: Loaded program
+bpf_prog02.c:93: TPASS: val = 1152921504606846976 + 1
+bpf_prog02.c:103: TPASS: val = 1152921504606846976 - 1
 
 Summary:
 passed   3
@@ -548,241 +323,41 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE bind03 : 0
-RUN LTP CASE bind04
-[37m[ 11.958483 0:133 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind04.c:117: TINFO: Testing AF_UNIX pathname stream
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing AF_UNIX pathname seqpacket
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing AF_UNIX abstract stream
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing AF_UNIX abstract seqpacket
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 loop TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 loop TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 loop SCTP
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 any TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 any TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv4 any SCTP
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 loop TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 loop TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 loop SCTP
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 any TCP variant 1
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 any TCP variant 2
-bind04.c:149: TPASS: Communication successful
-bind04.c:117: TINFO: Testing IPv6 any SCTP
-bind04.c:149: TPASS: Communication successful
-
-Summary:
-passed   16
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE bind04 : 0
-RUN LTP CASE bind05
-[37m[ 12.536071 0:153 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bind05.c:131: TINFO: Testing AF_UNIX pathname datagram
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing AF_UNIX abstract datagram
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 loop UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 loop UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 loop UDP-Lite
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 any UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 any UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv4 any UDP-Lite
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 loop UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 loop UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 loop UDP-Lite
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 any UDP variant 1
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 any UDP variant 2
-bind05.c:167: TPASS: Communication successful
-bind05.c:131: TINFO: Testing IPv6 any UDP-Lite
-bind05.c:167: TPASS: Communication successful
-
-Summary:
-passed   14
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE bind05 : 0
-RUN LTP CASE bpf_map01
-[37m[ 13.108941 0:171 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 13.195833 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.197440 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.199280 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.200104 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.202646 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.204147 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.204955 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.205241 0:172 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
-bpf_map01.c:53: TPASS: Created hash map
-bpf_map01.c:67: TFAIL: Empty hash map lookup should fail with ENOENT: SUCCESS (0)
-bpf_map01.c:102: TPASS: Update hash map element
-bpf_map01.c:118: TFAIL: hash map lookup returned different value
-bpf_map01.c:53: TPASS: Created array map
-bpf_map01.c:77: TFAIL: Preallocated array map val not zero
-bpf_map01.c:83: TPASS: Preallocated array map lookup
-bpf_map01.c:102: TPASS: Update array map element
-bpf_map01.c:118: TFAIL: array map lookup returned different value
-
-Summary:
-passed   5
-failed   4
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE bpf_map01 : 0
-RUN LTP CASE bpf_prog01
-[37m[ 13.638475 0:175 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 13.714027 0:176 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 13.718656 0:176 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
-bpf_common.c:114: TPASS: Loaded program
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffabc, 4) failed: ENOPROTOOPT (92)
-
-Summary:
-passed   1
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE bpf_prog01 : 0
-RUN LTP CASE bpf_prog02
-[37m[ 14.126464 0:179 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 14.204956 0:180 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 14.209417 0:180 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[mtst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
-tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
-bpf_common.c:114: TPASS: Loaded program
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffff9ec, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3612af783cf5
-
-Summary:
-passed   1
-failed   0
-broken   1
-skipped  0
-warnings 0
 FAIL LTP CASE bpf_prog02 : 0
 RUN LTP CASE bpf_prog03
-[37m[ 14.631636 0:183 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 14.715899 0:184 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 14.716946 0:184 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 14.721303 0:184 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 11.302417 0:83 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
 [mtst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
-bpf_prog03.c:97: TINFO: Verification log:
-bpf_prog03.c:135: TFAIL: Loaded bad eBPF, now we will run it and maybe crash
-bpf_common.c:136: TBROK: setsockopt(7, 1, 50, 0x3fffff9bc, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=95a762e2c8c9
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-16995
+bpf_prog03.c:105: TPASS: Failed verification: EACCES (13)
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog03 : 0
 RUN LTP CASE bpf_prog04
-[37m[ 15.131470 0:187 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 15.212678 0:188 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 15.216882 0:188 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 11.819745 0:87 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
 [mtst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
-bpf_prog04.c:68: TINFO: Verification log:
-bpf_prog04.c:97: TFAIL: Malicious eBPF code passed verification. Now let's try crashing the kernel.
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffa0c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b799207e1e18
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-18445
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=b799207e1e18
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2018-18445
+bpf_prog04.c:79: TPASS: BPF program failed verification: EPERM (1)
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog04 : 0
 RUN LTP CASE bpf_prog05
-[37m[ 15.635101 0:191 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 15.717840 0:192 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 15.722217 0:192 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 15.725650 0:192 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 12.309279 0:91 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
 [mtst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -790,102 +365,58 @@ bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
 bpf_prog05.c:89: TINFO: Have pointer arithmetic
 bpf_common.c:114: TPASS: Loaded program
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffffa6c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f6b1b3bf0d5f
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=468f6eafa6c4
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e88b2c6e5a4d
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9b00f1b78809
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-3444
+bpf_prog05.c:181: TINFO: Check w7(-1) /= w6(0) [r7 = -1, r6 = 1 << 32]
+bpf_prog05.c:158: TPASS: src(r6) = 4294967296
+bpf_prog05.c:158: TPASS: dst(r7) = 0
+bpf_prog05.c:185: TINFO: Check w7(-1) %= w6(0) [r7 = -1, r6 = 1 << 32]
+bpf_prog05.c:158: TPASS: src(r6) = 4294967296
+bpf_prog05.c:158: TPASS: dst(r7) = 4294967295
 
 Summary:
-passed   1
+passed   5
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog05 : 0
 RUN LTP CASE bpf_prog06
-[37m[ 16.154294 0:195 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 16.236226 0:196 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 16.241010 0:196 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 12.819067 0:95 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
 [mtst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
 bpf_prog06.c:118: TINFO: Trying to load eBPF with OOB write
-bpf_prog06.c:125: TFAIL: Loaded program with OOB write
-bpf_prog06.c:126: TINFO: Running eBPF with OOB
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffff9bc, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-4204
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2021-4204
+bpf verifier reject
+bpf_prog06.c:121: TPASS: Failed verification
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog06 : 0
 RUN LTP CASE bpf_prog07
-[37m[ 16.662522 0:199 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
-[m[37m[ 16.748202 0:200 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
-[m[37m[ 16.753889 0:200 starry_kernel::syscall::fs::io:41] [33mDummy fd created: bpf[m
+[37m[ 13.860140 0:99 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
 [mtst_buffers.c:57: TINFO: Test is using guarded buffers
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 bpf_common.c:16: TINFO: Raising RLIMIT_MEMLOCK to 2097152
 tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
 bpf_prog07.c:126: TINFO: Trying to load eBPF with OOB write
-bpf_prog07.c:133: TFAIL: Loaded program with OOB write
-bpf_prog07.c:134: TINFO: Running eBPF with OOB
-bpf_common.c:136: TBROK: setsockopt(6, 1, 50, 0x3fffff98c, 4) failed: ENOPROTOOPT (92)
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2022-23222
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=64620e0a1e71
-
-HINT: You _MAY_ be vulnerable to CVE(s):
-
-https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-CVE-2022-23222
+bpf verifier reject
+bpf_prog07.c:129: TPASS: Failed verification
 
 Summary:
-passed   0
-failed   1
-broken   1
+passed   1
+failed   0
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE bpf_prog07 : 0
 RUN LTP CASE sigtimedwait01
-[37m[ 17.219683 0:203 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[37m[ 14.906841 0:103 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
 [mtst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 sigwait.c:27: TPASS: Wait interrupted by expected signal

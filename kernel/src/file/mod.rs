@@ -1,3 +1,4 @@
+mod bpf;
 pub mod epoll;
 pub mod event;
 mod fs;
@@ -24,6 +25,7 @@ use spin::RwLock;
 #[cfg(feature = "net")]
 pub use self::net::Socket;
 pub use self::{
+    bpf::{BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_HASH, BPF_MAP_TYPE_RINGBUF, BpfMap, BpfProgram, BpfProgramKind},
     fs::{Directory, File, resolve_at, with_fs},
     pidfd::PidFd,
     pipe::Pipe,

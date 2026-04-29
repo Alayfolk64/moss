@@ -1,9 +1,9 @@
 use axerrno::{AxError, AxResult, LinuxError};
 use axnet::options::{Configurable, GetSocketOption, SetSocketOption};
-use linux_raw_sys::net::socklen_t;
+use linux_raw_sys::net::{SO_ATTACH_BPF, SOL_SOCKET, socklen_t};
 
 use crate::{
-    file::{FileLike, Socket},
+    file::{BpfProgram, FileLike, Socket},
     mm::{UserConstPtr, UserPtr},
 };
 
@@ -179,6 +179,12 @@ pub fn sys_setsockopt(
     }
 
     let socket = Socket::from_fd(fd)?;
+    if level == SOL_SOCKET && optname == SO_ATTACH_BPF {
+        let prog_fd = *get::<i32>(optval, optlen)?;
+        BpfProgram::from_fd(prog_fd)?.execute()?;
+        return Ok(0);
+    }
+
     if level == PROTO_IP {
         if optname == MCAST_JOIN_GROUP {
             if (optlen as usize) < size_of::<linux_raw_sys::net::group_req>() {

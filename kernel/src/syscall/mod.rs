@@ -1,3 +1,4 @@
+mod bpf;
 mod fs;
 mod io_mpx;
 mod ipc;
@@ -15,8 +16,8 @@ use axhal::uspace::UserContext;
 use syscalls::Sysno;
 
 pub use self::{
-    fs::*, io_mpx::*, ipc::*, mm::*, net::*, resources::*, signal::*, sync::*, sys::*, task::*,
-    time::*,
+    bpf::*, fs::*, io_mpx::*, ipc::*, mm::*, net::*, resources::*, signal::*, sync::*, sys::*,
+    task::*, time::*,
 };
 
 pub fn handle_syscall(uctx: &mut UserContext) {
@@ -650,11 +651,12 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         | Sysno::userfaultfd
         | Sysno::perf_event_open
         | Sysno::io_uring_setup
-        | Sysno::bpf
         | Sysno::fsopen
         | Sysno::fspick
         | Sysno::open_tree
         | Sysno::memfd_secret => sys_dummy_fd(sysno),
+
+        Sysno::bpf => sys_bpf(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 
         Sysno::timer_create | Sysno::timer_gettime | Sysno::timer_settime => Ok(0),
 
