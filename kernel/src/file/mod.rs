@@ -8,7 +8,7 @@ mod pidfd;
 mod pipe;
 pub mod signalfd;
 
-use alloc::{borrow::Cow, sync::Arc};
+use alloc::{borrow::Cow, collections::BTreeMap, sync::Arc};
 use core::{ffi::c_int, time::Duration};
 
 use axerrno::{AxError, AxResult};
@@ -19,8 +19,12 @@ use axpoll::Pollable;
 use axtask::current;
 use downcast_rs::{DowncastSync, impl_downcast};
 use flatten_objects::FlattenObjects;
-use linux_raw_sys::general::{O_NONBLOCK, RLIMIT_NOFILE, stat, statx, statx_timestamp};
+use linux_raw_sys::general::{
+    F_OWNER_PGRP, F_OWNER_PID, F_OWNER_TID, O_NONBLOCK, RLIMIT_NOFILE, stat, statx,
+    statx_timestamp,
+};
 use spin::RwLock;
+use starry_signal::{SignalInfo, Signo};
 
 #[cfg(feature = "net")]
 pub use self::net::Socket;
@@ -31,6 +35,7 @@ pub use self::{
     pipe::Pipe,
 };
 use crate::task::{AX_FILE_LIMIT, AsThread};
+use crate::task::{send_signal_to_process, send_signal_to_process_group, send_signal_to_thread};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Kstat {
@@ -195,6 +200,94 @@ impl_downcast!(sync FileLike);
 pub struct FileDescriptor {
     pub inner: Arc<dyn FileLike>,
     pub cloexec: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AsyncFcntlState {
+    pub owner_type: i32,
+    pub owner_pid: i32,
+    pub signal: i32,
+}
+
+impl Default for AsyncFcntlState {
+    fn default() -> Self {
+        Self {
+            owner_type: F_OWNER_PID as i32,
+            owner_pid: 0,
+            signal: 0,
+        }
+    }
+}
+
+static ASYNC_FCNTL_STATE: RwLock<BTreeMap<usize, AsyncFcntlState>> = RwLock::new(BTreeMap::new());
+
+fn file_like_key(file: &Arc<dyn FileLike>) -> usize {
+    if let Some(pipe) = file.downcast_ref::<Pipe>() {
+        return pipe.async_key();
+    }
+    let ptr: *const dyn FileLike = Arc::as_ptr(file);
+    ptr as *const () as usize
+}
+
+pub fn async_fcntl_set_owner(file: &Arc<dyn FileLike>, owner_type: i32, owner_pid: i32) {
+    let mut map = ASYNC_FCNTL_STATE.write();
+    let state = map.entry(file_like_key(file)).or_default();
+    state.owner_type = owner_type;
+    state.owner_pid = owner_pid;
+}
+
+pub fn async_fcntl_get_owner(file: &Arc<dyn FileLike>) -> AsyncFcntlState {
+    ASYNC_FCNTL_STATE
+        .read()
+        .get(&file_like_key(file))
+        .copied()
+        .unwrap_or_default()
+}
+
+pub fn async_fcntl_set_signal(file: &Arc<dyn FileLike>, signal: i32) {
+    ASYNC_FCNTL_STATE
+        .write()
+        .entry(file_like_key(file))
+        .or_default()
+        .signal = signal;
+}
+
+pub fn async_fcntl_get_signal(file: &Arc<dyn FileLike>) -> i32 {
+    ASYNC_FCNTL_STATE
+        .read()
+        .get(&file_like_key(file))
+        .map_or(0, |state| state.signal)
+}
+
+pub fn notify_async_io(file_data_ptr: usize) {
+    let Some(state) = ASYNC_FCNTL_STATE.read().get(&file_data_ptr).copied() else {
+        return;
+    };
+    if state.owner_pid <= 0 {
+        return;
+    }
+
+    let signo = if state.signal == 0 {
+        Signo::SIGIO
+    } else if let Some(signo) = Signo::from_repr(state.signal as u8) {
+        signo
+    } else {
+        return;
+    };
+    let sig = SignalInfo::new_kernel(signo);
+
+    match state.owner_type as u32 {
+        F_OWNER_TID => {
+            let _ = send_signal_to_thread(None, state.owner_pid as _, Some(sig));
+        }
+        F_OWNER_PID => {
+            let _ = send_signal_to_process(state.owner_pid as _, Some(sig));
+        }
+        F_OWNER_PGRP => {
+            let _ = send_signal_to_process_group(state.owner_pid as _, Some(sig));
+        }
+        _ => {}
+    }
 }
 
 scope_local::scope_local! {

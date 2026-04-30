@@ -1,0 +1,2990 @@
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = loongarch64
+platform = loongarch64-qemu-virt
+target = loongarch64-unknown-none-softfloat
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-04-29 11:40:32.002105060 UTC
+
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 0      
+lrw-rw-rw-    1 root     0             40 Jan  1  1970 [1;36mld-linux-loongarch-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-loongarch-lp64d.so.1[m
+lrw-rw-rw-    1 root     0             17 Jan  1  1970 [1;36mld-musl-loongarch-lp64d.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrw-rw-rw-    1 root     0             14 Jan  1  1970 [1;36mlibc.so[m -> [1;32m/lib/libc.so.6[m
+lrw-rw-rw-    1 root     0             20 Jan  1  1970 [1;36mlibc.so.6[m -> [1;32m/glibc/lib/libc.so.6[m
+lrw-rw-rw-    1 root     0             14 Jan  1  1970 [1;36mlibm.so[m -> [1;32m/lib/libm.so.6[m
+lrw-rw-rw-    1 root     0             20 Jan  1  1970 [1;36mlibm.so.6[m -> [1;32m/glibc/lib/libm.so.6[m
+@@@@@@@@@@ env @@@@@@@@@@
+LTP_CASES=accept01 accept02 accept03 accept4_01 access01 access02 access03 access04 abort01 abs01
+HUSH_VERSION=1.33.1
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE fcntl01
+
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl01 : 0
+RUN LTP CASE fcntl01_64
+
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl01_64 : 0
+RUN LTP CASE fcntl02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl02.c:41: TPASS: fcntl(fcntl02_34, F_DUPFD, 0) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_34, F_DUPFD, 1) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_34, F_DUPFD, 2) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_34, F_DUPFD, 3) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_34, F_DUPFD, 10) returned 10
+fcntl02.c:41: TPASS: fcntl(fcntl02_34, F_DUPFD, 100) returned 100
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02 : 0
+RUN LTP CASE fcntl02_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl02.c:41: TPASS: fcntl(fcntl02_39, F_DUPFD, 0) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_39, F_DUPFD, 1) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_39, F_DUPFD, 2) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_39, F_DUPFD, 3) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_39, F_DUPFD, 10) returned 10
+fcntl02.c:41: TPASS: fcntl(fcntl02_39, F_DUPFD, 100) returned 100
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02_64 : 0
+RUN LTP CASE fcntl03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl03.c:32: TPASS: fcntl(fcntl03_44, F_GETFD, 0) returned 0
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03 : 0
+RUN LTP CASE fcntl03_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl03.c:32: TPASS: fcntl(fcntl03_49, F_GETFD, 0) returned 0
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03_64 : 0
+RUN LTP CASE fcntl04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl04.c:38: TPASS: fcntl(fcntl04_54, F_GETFL, 0) returned 2
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04 : 0
+RUN LTP CASE fcntl04_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl04.c:38: TPASS: fcntl(fcntl04_59, F_GETFL, 0) returned 2
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04_64 : 0
+RUN LTP CASE fcntl05
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl05.c:42: TPASS: fcntl(3, F_GETLK, &flocks) passed
+fcntl05.c:43: TPASS: flocks.l_type == F_UNLCK (2)
+fcntl05.c:44: TPASS: flocks.l_whence == SEEK_CUR (1)
+fcntl05.c:45: TPASS: flocks.l_start == 0 (0)
+fcntl05.c:46: TPASS: flocks.l_len == 0 (0)
+fcntl05.c:47: TPASS: flocks.l_pid == pid (64)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05 : 0
+RUN LTP CASE fcntl05_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl05.c:42: TPASS: fcntl(3, F_GETLK, &flocks) passed
+fcntl05.c:43: TPASS: flocks.l_type == F_UNLCK (2)
+fcntl05.c:44: TPASS: flocks.l_whence == SEEK_CUR (1)
+fcntl05.c:45: TPASS: flocks.l_start == 0 (0)
+fcntl05.c:46: TPASS: flocks.l_len == 0 (0)
+fcntl05.c:47: TPASS: flocks.l_pid == pid (69)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05_64 : 0
+RUN LTP CASE fcntl07
+[37m[  7.502020 0:73 starry_kernel::syscall:656] [33mUnimplemented syscall: mknodat[m
+[mfcntl07     1  TBROK  :  fcntl07.c:172: mkfifo(fifo, 0666) failed: errno=ENOSYS(38): Function not implemented
+fcntl07     2  TBROK  :  fcntl07.c:172: Remaining cases broken
+
+Summary:
+passed   0
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl07 : 0
+RUN LTP CASE fcntl07_64
+[37m[  8.154404 0:80 starry_kernel::syscall:656] [33mUnimplemented syscall: mknodat[m
+[mfcntl07     1  TBROK  :  fcntl07.c:172: mkfifo(fifo, 0666) failed: errno=ENOSYS(38): Function not implemented
+fcntl07     2  TBROK  :  fcntl07.c:172: Remaining cases broken
+
+Summary:
+passed   0
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl07_64 : 0
+RUN LTP CASE fcntl08
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl08.c:34: TPASS: fcntl(fd, F_SETFL, O_NDELAY | O_APPEND | O_NONBLOCK) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08 : 0
+RUN LTP CASE fcntl08_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl08.c:34: TPASS: fcntl(fd, F_SETFL, O_NDELAY | O_APPEND | O_NONBLOCK) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08_64 : 0
+RUN LTP CASE fcntl09
+fcntl09     1  TPASS  :  fcntl(./file_97, F_SETLK, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_97, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl09     1  TPASS  :  fcntl(./file_97, F_SETLK, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_97, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09 : 0
+RUN LTP CASE fcntl09_64
+fcntl09     1  TPASS  :  fcntl(./file_104, F_SETLK, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_104, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl09     1  TPASS  :  fcntl(./file_104, F_SETLK, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_104, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09_64 : 0
+RUN LTP CASE fcntl10
+fcntl10     1  TPASS  :  fcntl(tfile_111, F_SETLKW, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_111, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl10     1  TPASS  :  fcntl(tfile_111, F_SETLKW, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_111, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10 : 0
+RUN LTP CASE fcntl10_64
+fcntl10     1  TPASS  :  fcntl(tfile_118, F_SETLKW, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_118, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl10     1  TPASS  :  fcntl(tfile_118, F_SETLKW, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_118, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10_64 : 0
+RUN LTP CASE fcntl11
+fcntl11     0  TINFO  :  Enter block 1
+fcntl11     0  TINFO  :  Exit block 1
+fcntl11     0  TINFO  :  Enter block 2
+fcntl11     0  TINFO  :  Exit block 2
+fcntl11     0  TINFO  :  Enter block 3
+fcntl11     0  TINFO  :  Exit block 3
+fcntl11     0  TINFO  :  Enter block 4
+fcntl11     0  TINFO  :  Exit block 4
+fcntl11     0  TINFO  :  Enter block 5
+fcntl11     0  TINFO  :  Exit block 5
+fcntl11     0  TINFO  :  Enter block 6
+fcntl11     0  TINFO  :  Exit block 6
+fcntl11     0  TINFO  :  Enter block 7
+fcntl11     0  TINFO  :  Exit block 7
+fcntl11     0  TINFO  :  Enter block 8
+fcntl11     0  TINFO  :  Exit block 8
+fcntl11     0  TINFO  :  Enter block 9
+fcntl11     0  TINFO  :  Exit block 9
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11 : 0
+RUN LTP CASE fcntl11_64
+fcntl11     0  TINFO  :  Enter block 1
+fcntl11     0  TINFO  :  Exit block 1
+fcntl11     0  TINFO  :  Enter block 2
+fcntl11     0  TINFO  :  Exit block 2
+fcntl11     0  TINFO  :  Enter block 3
+fcntl11     0  TINFO  :  Exit block 3
+fcntl11     0  TINFO  :  Enter block 4
+fcntl11     0  TINFO  :  Exit block 4
+fcntl11     0  TINFO  :  Enter block 5
+fcntl11     0  TINFO  :  Exit block 5
+fcntl11     0  TINFO  :  Enter block 6
+fcntl11     0  TINFO  :  Exit block 6
+fcntl11     0  TINFO  :  Enter block 7
+fcntl11     0  TINFO  :  Exit block 7
+fcntl11     0  TINFO  :  Enter block 8
+fcntl11     0  TINFO  :  Exit block 8
+fcntl11     0  TINFO  :  Enter block 9
+fcntl11     0  TINFO  :  Exit block 9
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11_64 : 0
+RUN LTP CASE fcntl12
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl12.c:39: TPASS: fcntl(1, F_DUPFD, 1) : EMFILE (24)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12 : 0
+RUN LTP CASE fcntl12_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl12.c:39: TPASS: fcntl(1, F_DUPFD, 1) : EMFILE (24)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12_64 : 0
+RUN LTP CASE fcntl13
+[37m[ 15.412181 0:154 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: 999[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EFAULT (14)
+fcntl13.c:47: TPASS: fcntl(1, F_BADCMD, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(-1, F_GETLK, flock) : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13 : 0
+RUN LTP CASE fcntl13_64
+[37m[ 15.897051 0:159 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: 999[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EFAULT (14)
+fcntl13.c:47: TPASS: fcntl(1, F_BADCMD, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(-1, F_GETLK, flock) : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13_64 : 0
+RUN LTP CASE fcntl14
+fcntl14     0  TINFO  :  Enter block 1: without mandatory locking
+fcntl14     1  TPASS  :  testcase:1 PASSED
+fcntl14     2  TPASS  :  testcase:2 PASSED
+fcntl14     3  TPASS  :  testcase:3 PASSED
+fcntl14     4  TPASS  :  testcase:4 PASSED
+fcntl14     5  TPASS  :  testcase:5 PASSED
+fcntl14     6  TPASS  :  testcase:6 PASSED
+fcntl14     7  TPASS  :  testcase:7 PASSED
+fcntl14     8  TPASS  :  testcase:8 PASSED
+fcntl14     9  TPASS  :  testcase:9 PASSED
+fcntl14    10  TPASS  :  testcase:10 PASSED
+fcntl14    11  TPASS  :  testcase:11 PASSED
+fcntl14    12  TPASS  :  testcase:12 PASSED
+fcntl14    13  TPASS  :  testcase:13 PASSED
+fcntl14    14  TPASS  :  testcase:14 PASSED
+fcntl14    15  TPASS  :  testcase:15 PASSED
+fcntl14    16  TPASS  :  testcase:16 PASSED
+fcntl14    17  TPASS  :  testcase:17 PASSED
+fcntl14    18  TPASS  :  testcase:18 PASSED
+fcntl14    19  TPASS  :  testcase:19 PASSED
+fcntl14    20  TPASS  :  testcase:20 PASSED
+fcntl14    21  TPASS  :  testcase:21 PASSED
+fcntl14    22  TPASS  :  testcase:22 PASSED
+fcntl14    23  TPASS  :  testcase:23 PASSED
+fcntl14    24  TPASS  :  testcase:24 PASSED
+fcntl14    25  TPASS  :  testcase:25 PASSED
+fcntl14    26  TPASS  :  testcase:26 PASSED
+fcntl14    27  TPASS  :  testcase:27 PASSED
+fcntl14    28  TPASS  :  testcase:28 PASSED
+fcntl14    29  TPASS  :  testcase:29 PASSED
+fcntl14    30  TPASS  :  testcase:30 PASSED
+fcntl14    31  TPASS  :  testcase:31 PASSED
+fcntl14    32  TPASS  :  testcase:32 PASSED
+fcntl14    33  TPASS  :  testcase:33 PASSED
+fcntl14    34  TPASS  :  testcase:34 PASSED
+fcntl14    35  TPASS  :  testcase:35 PASSED
+fcntl14    36  TPASS  :  testcase:36 PASSED
+fcntl14    37  TPASS  :  Block 1, test 1 PASSED
+fcntl14    38  TPASS  :  testcase:37 PASSED
+fcntl14    39  TPASS  :  testcase:38 PASSED
+fcntl14    40  TPASS  :  testcase:39 PASSED
+fcntl14    41  TPASS  :  testcase:40 PASSED
+fcntl14    42  TPASS  :  testcase:41 PASSED
+fcntl14    43  TPASS  :  testcase:42 PASSED
+fcntl14    44  TPASS  :  testcase:43 PASSED
+fcntl14    45  TPASS  :  testcase:44 PASSED
+fcntl14    46  TPASS  :  testcase:45 PASSED
+fcntl14    47  TPASS  :  Block 1, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 1
+fcntl14     0  TINFO  :  Enter block 2: with mandatory locking
+fcntl14    48  TPASS  :  testcase:1 PASSED
+fcntl14    49  TPASS  :  testcase:2 PASSED
+fcntl14    50  TPASS  :  testcase:3 PASSED
+fcntl14    51  TPASS  :  testcase:4 PASSED
+fcntl14    52  TPASS  :  testcase:5 PASSED
+fcntl14    53  TPASS  :  testcase:6 PASSED
+fcntl14    54  TPASS  :  testcase:7 PASSED
+fcntl14    55  TPASS  :  testcase:8 PASSED
+fcntl14    56  TPASS  :  testcase:9 PASSED
+fcntl14    57  TPASS  :  testcase:10 PASSED
+fcntl14    58  TPASS  :  testcase:11 PASSED
+fcntl14    59  TPASS  :  testcase:12 PASSED
+fcntl14    60  TPASS  :  testcase:13 PASSED
+fcntl14    61  TPASS  :  testcase:14 PASSED
+fcntl14    62  TPASS  :  testcase:15 PASSED
+fcntl14    63  TPASS  :  testcase:16 PASSED
+fcntl14    64  TPASS  :  testcase:17 PASSED
+fcntl14    65  TPASS  :  testcase:18 PASSED
+fcntl14    66  TPASS  :  testcase:19 PASSED
+fcntl14    67  TPASS  :  testcase:20 PASSED
+fcntl14    68  TPASS  :  testcase:21 PASSED
+fcntl14    69  TPASS  :  testcase:22 PASSED
+fcntl14    70  TPASS  :  testcase:23 PASSED
+fcntl14    71  TPASS  :  testcase:24 PASSED
+fcntl14    72  TPASS  :  testcase:25 PASSED
+fcntl14    73  TPASS  :  testcase:26 PASSED
+fcntl14    74  TPASS  :  testcase:27 PASSED
+fcntl14    75  TPASS  :  testcase:28 PASSED
+fcntl14    76  TPASS  :  testcase:29 PASSED
+fcntl14    77  TPASS  :  testcase:30 PASSED
+fcntl14    78  TPASS  :  testcase:31 PASSED
+fcntl14    79  TPASS  :  testcase:32 PASSED
+fcntl14    80  TPASS  :  testcase:33 PASSED
+fcntl14    81  TPASS  :  testcase:34 PASSED
+fcntl14    82  TPASS  :  testcase:35 PASSED
+fcntl14    83  TPASS  :  testcase:36 PASSED
+fcntl14    84  TPASS  :  Block 2, test 1 PASSED
+fcntl14    85  TPASS  :  testcase:37 PASSED
+fcntl14    86  TPASS  :  testcase:38 PASSED
+fcntl14    87  TPASS  :  testcase:39 PASSED
+fcntl14    88  TPASS  :  testcase:40 PASSED
+fcntl14    89  TPASS  :  testcase:41 PASSED
+fcntl14    90  TPASS  :  testcase:42 PASSED
+fcntl14    91  TPASS  :  testcase:43 PASSED
+fcntl14    92  TPASS  :  testcase:44 PASSED
+fcntl14    93  TPASS  :  testcase:45 PASSED
+fcntl14    94  TPASS  :  Block 2, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 2
+fcntl14     0  TINFO  :  Enter block 3
+fcntl14    95  TPASS  :  Test with negative whence locking PASSED
+fcntl14     0  TINFO  :  Exit block 3
+fcntl14     0  TINFO  :  Enter block 4
+fcntl14    96  TPASS  :  Test of locks on file PASSED
+fcntl14     0  TINFO  :  Exit block 4
+
+Summary:
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14 : 0
+RUN LTP CASE fcntl14_64
+fcntl14     0  TINFO  :  Enter block 1: without mandatory locking
+fcntl14     1  TPASS  :  testcase:1 PASSED
+fcntl14     2  TPASS  :  testcase:2 PASSED
+fcntl14     3  TPASS  :  testcase:3 PASSED
+fcntl14     4  TPASS  :  testcase:4 PASSED
+fcntl14     5  TPASS  :  testcase:5 PASSED
+fcntl14     6  TPASS  :  testcase:6 PASSED
+fcntl14     7  TPASS  :  testcase:7 PASSED
+fcntl14     8  TPASS  :  testcase:8 PASSED
+fcntl14     9  TPASS  :  testcase:9 PASSED
+fcntl14    10  TPASS  :  testcase:10 PASSED
+fcntl14    11  TPASS  :  testcase:11 PASSED
+fcntl14    12  TPASS  :  testcase:12 PASSED
+fcntl14    13  TPASS  :  testcase:13 PASSED
+fcntl14    14  TPASS  :  testcase:14 PASSED
+fcntl14    15  TPASS  :  testcase:15 PASSED
+fcntl14    16  TPASS  :  testcase:16 PASSED
+fcntl14    17  TPASS  :  testcase:17 PASSED
+fcntl14    18  TPASS  :  testcase:18 PASSED
+fcntl14    19  TPASS  :  testcase:19 PASSED
+fcntl14    20  TPASS  :  testcase:20 PASSED
+fcntl14    21  TPASS  :  testcase:21 PASSED
+fcntl14    22  TPASS  :  testcase:22 PASSED
+fcntl14    23  TPASS  :  testcase:23 PASSED
+fcntl14    24  TPASS  :  testcase:24 PASSED
+fcntl14    25  TPASS  :  testcase:25 PASSED
+fcntl14    26  TPASS  :  testcase:26 PASSED
+fcntl14    27  TPASS  :  testcase:27 PASSED
+fcntl14    28  TPASS  :  testcase:28 PASSED
+fcntl14    29  TPASS  :  testcase:29 PASSED
+fcntl14    30  TPASS  :  testcase:30 PASSED
+fcntl14    31  TPASS  :  testcase:31 PASSED
+fcntl14    32  TPASS  :  testcase:32 PASSED
+fcntl14    33  TPASS  :  testcase:33 PASSED
+fcntl14    34  TPASS  :  testcase:34 PASSED
+fcntl14    35  TPASS  :  testcase:35 PASSED
+fcntl14    36  TPASS  :  testcase:36 PASSED
+fcntl14    37  TPASS  :  Block 1, test 1 PASSED
+fcntl14    38  TPASS  :  testcase:37 PASSED
+fcntl14    39  TPASS  :  testcase:38 PASSED
+fcntl14    40  TPASS  :  testcase:39 PASSED
+fcntl14    41  TPASS  :  testcase:40 PASSED
+fcntl14    42  TPASS  :  testcase:41 PASSED
+fcntl14    43  TPASS  :  testcase:42 PASSED
+fcntl14    44  TPASS  :  testcase:43 PASSED
+fcntl14    45  TPASS  :  testcase:44 PASSED
+fcntl14    46  TPASS  :  testcase:45 PASSED
+fcntl14    47  TPASS  :  Block 1, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 1
+fcntl14     0  TINFO  :  Enter block 2: with mandatory locking
+fcntl14    48  TPASS  :  testcase:1 PASSED
+fcntl14    49  TPASS  :  testcase:2 PASSED
+fcntl14    50  TPASS  :  testcase:3 PASSED
+fcntl14    51  TPASS  :  testcase:4 PASSED
+fcntl14    52  TPASS  :  testcase:5 PASSED
+fcntl14    53  TPASS  :  testcase:6 PASSED
+fcntl14    54  TPASS  :  testcase:7 PASSED
+fcntl14    55  TPASS  :  testcase:8 PASSED
+fcntl14    56  TPASS  :  testcase:9 PASSED
+fcntl14    57  TPASS  :  testcase:10 PASSED
+fcntl14    58  TPASS  :  testcase:11 PASSED
+fcntl14    59  TPASS  :  testcase:12 PASSED
+fcntl14    60  TPASS  :  testcase:13 PASSED
+fcntl14    61  TPASS  :  testcase:14 PASSED
+fcntl14    62  TPASS  :  testcase:15 PASSED
+fcntl14    63  TPASS  :  testcase:16 PASSED
+fcntl14    64  TPASS  :  testcase:17 PASSED
+fcntl14    65  TPASS  :  testcase:18 PASSED
+fcntl14    66  TPASS  :  testcase:19 PASSED
+fcntl14    67  TPASS  :  testcase:20 PASSED
+fcntl14    68  TPASS  :  testcase:21 PASSED
+fcntl14    69  TPASS  :  testcase:22 PASSED
+fcntl14    70  TPASS  :  testcase:23 PASSED
+fcntl14    71  TPASS  :  testcase:24 PASSED
+fcntl14    72  TPASS  :  testcase:25 PASSED
+fcntl14    73  TPASS  :  testcase:26 PASSED
+fcntl14    74  TPASS  :  testcase:27 PASSED
+fcntl14    75  TPASS  :  testcase:28 PASSED
+fcntl14    76  TPASS  :  testcase:29 PASSED
+fcntl14    77  TPASS  :  testcase:30 PASSED
+fcntl14    78  TPASS  :  testcase:31 PASSED
+fcntl14    79  TPASS  :  testcase:32 PASSED
+fcntl14    80  TPASS  :  testcase:33 PASSED
+fcntl14    81  TPASS  :  testcase:34 PASSED
+fcntl14    82  TPASS  :  testcase:35 PASSED
+fcntl14    83  TPASS  :  testcase:36 PASSED
+fcntl14    84  TPASS  :  Block 2, test 1 PASSED
+fcntl14    85  TPASS  :  testcase:37 PASSED
+fcntl14    86  TPASS  :  testcase:38 PASSED
+fcntl14    87  TPASS  :  testcase:39 PASSED
+fcntl14    88  TPASS  :  testcase:40 PASSED
+fcntl14    89  TPASS  :  testcase:41 PASSED
+fcntl14    90  TPASS  :  testcase:42 PASSED
+fcntl14    91  TPASS  :  testcase:43 PASSED
+fcntl14    92  TPASS  :  testcase:44 PASSED
+fcntl14    93  TPASS  :  testcase:45 PASSED
+fcntl14    94  TPASS  :  Block 2, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 2
+fcntl14     0  TINFO  :  Enter block 3
+fcntl14    95  TPASS  :  Test with negative whence locking PASSED
+fcntl14     0  TINFO  :  Exit block 3
+fcntl14     0  TINFO  :  Enter block 4
+fcntl14    96  TPASS  :  Test of locks on file PASSED
+fcntl14     0  TINFO  :  Exit block 4
+
+Summary:
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14_64 : 0
+RUN LTP CASE fcntl15
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl15.c:178: TINFO: Running test with dup
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with open
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with fork
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:110: TPASS: Failed to lock already locked region two
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15 : 0
+RUN LTP CASE fcntl15_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl15.c:178: TINFO: Running test with dup
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with open
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with fork
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:110: TPASS: Failed to lock already locked region two
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15_64 : 0
+RUN LTP CASE fcntl16
+fcntl16     0  TINFO  :  Entering block 1
+fcntl16     0  TINFO  :  Test case 1: without manadatory locking PASSED
+fcntl16     0  TINFO  :  Exiting block 1
+fcntl16     0  TINFO  :  Entering block 2
+fcntl16     0  TINFO  :  Test case 2: with mandatory record locking PASSED
+fcntl16     0  TINFO  :  Exiting block 2
+fcntl16     0  TINFO  :  Entering block 3
+fcntl16     0  TINFO  :  Test case 3: mandatory locking with NODELAY PASSED
+fcntl16     0  TINFO  :  Exiting block 3
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16 : 0
+RUN LTP CASE fcntl16_64
+fcntl16     0  TINFO  :  Entering block 1
+fcntl16     0  TINFO  :  Test case 1: without manadatory locking PASSED
+fcntl16     0  TINFO  :  Exiting block 1
+fcntl16     0  TINFO  :  Entering block 2
+fcntl16     0  TINFO  :  Test case 2: with mandatory record locking PASSED
+fcntl16     0  TINFO  :  Exiting block 2
+fcntl16     0  TINFO  :  Entering block 3
+fcntl16     0  TINFO  :  Test case 3: mandatory locking with NODELAY PASSED
+fcntl16     0  TINFO  :  Exiting block 3
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16_64 : 0
+RUN LTP CASE fcntl17
+fcntl17     0  TINFO  :  Enter preparation phase
+fcntl17     0  TINFO  :  child 1 starting
+fcntl17     0  TINFO  :  child 1 pid 498 locked
+fcntl17     0  TINFO  :  child 1 resuming
+fcntl17     0  TINFO  :  child 1 unlocked
+fcntl17     0  TINFO  :  child 1 exiting
+fcntl17     0  TINFO  :  child 3 starting
+fcntl17     0  TINFO  :  child 3 pid 500 locked
+fcntl17     0  TINFO  :  child 3 resuming
+fcntl17     0  TINFO  :  child 3 lockw err 35
+fcntl17     0  TINFO  :  child 3 exiting
+fcntl17     0  TINFO  :  child 2 starting
+fcntl17     0  TINFO  :  child 2 pid 499 locked
+fcntl17     0  TINFO  :  child 2 resuming
+fcntl17     0  TINFO  :  child 2 lockw locked
+fcntl17     0  TINFO  :  child 2 exiting
+fcntl17     0  TINFO  :  Exit preparation phase
+fcntl17     0  TINFO  :  Enter block 1
+fcntl17     1  TPASS  :  Block 1 PASSED
+fcntl17     0  TINFO  :  Exit block 1
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17 : 0
+RUN LTP CASE fcntl17_64
+fcntl17     0  TINFO  :  Enter preparation phase
+fcntl17     0  TINFO  :  child 1 starting
+fcntl17     0  TINFO  :  child 1 pid 508 locked
+fcntl17     0  TINFO  :  child 1 resuming
+fcntl17     0  TINFO  :  child 1 unlocked
+fcntl17     0  TINFO  :  child 1 exiting
+fcntl17     0  TINFO  :  child 3 starting
+fcntl17     0  TINFO  :  child 3 pid 510 locked
+fcntl17     0  TINFO  :  child 3 resuming
+fcntl17     0  TINFO  :  child 3 lockw err 35
+fcntl17     0  TINFO  :  child 3 exiting
+fcntl17     0  TINFO  :  child 2 starting
+fcntl17     0  TINFO  :  child 2 pid 509 locked
+fcntl17     0  TINFO  :  child 2 resuming
+fcntl17     0  TINFO  :  child 2 lockw locked
+fcntl17     0  TINFO  :  child 2 exiting
+fcntl17     0  TINFO  :  Exit preparation phase
+fcntl17     0  TINFO  :  Enter block 1
+fcntl17     1  TPASS  :  Block 1 PASSED
+fcntl17     0  TINFO  :  Exit block 1
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17_64 : 0
+RUN LTP CASE fcntl18
+[37m[ 34.306781 0:518 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: -1[m
+[mfcntl18     0  TINFO  :  Enter block 1
+fcntl18     1  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 1 PASSED
+fcntl18     0  TINFO  :  Exit block 1
+fcntl18     0  TINFO  :  Enter block 2
+fcntl18     2  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 2 PASSED
+fcntl18     0  TINFO  :  Exit block 2
+fcntl18     0  TINFO  :  Enter block 3
+fcntl18     3  TPASS  :  Test for errno EINVAL PASSED
+fcntl18     0  TINFO  :  Block 3 PASSED
+fcntl18     0  TINFO  :  Exit block 3
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18 : 0
+RUN LTP CASE fcntl18_64
+[37m[ 34.991599 0:526 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: -1[m
+[mfcntl18     0  TINFO  :  Enter block 1
+fcntl18     1  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 1 PASSED
+fcntl18     0  TINFO  :  Exit block 1
+fcntl18     0  TINFO  :  Enter block 2
+fcntl18     2  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 2 PASSED
+fcntl18     0  TINFO  :  Exit block 2
+fcntl18     0  TINFO  :  Enter block 3
+fcntl18     3  TPASS  :  Test for errno EINVAL PASSED
+fcntl18     0  TINFO  :  Block 3 PASSED
+fcntl18     0  TINFO  :  Exit block 3
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18_64 : 0
+RUN LTP CASE fcntl19
+fcntl19     0  TINFO  :  Enter block 1
+fcntl19     0  TINFO  :  Test block 1: PASSED
+fcntl19     0  TINFO  :  Exit block 1
+fcntl19     0  TINFO  :  Enter block 2
+fcntl19     0  TINFO  :  Test block 2: PASSED
+fcntl19     0  TINFO  :  Exit block 2
+fcntl19     0  TINFO  :  Enter block 3
+fcntl19     0  TINFO  :  Test block 3: PASSED
+fcntl19     0  TINFO  :  Exit block 3
+fcntl19     0  TINFO  :  Enter blcok 4
+fcntl19     0  TINFO  :  Test block 4: PASSED
+fcntl19     0  TINFO  :  Exit block 4
+fcntl19     0  TINFO  :  Enter block 5
+fcntl19     0  TINFO  :  Test block 5: PASSED
+fcntl19     0  TINFO  :  Exit block 5
+fcntl19     0  TINFO  :  Enter block 6
+fcntl19     0  TINFO  :  Test block 6: PASSED
+fcntl19     0  TINFO  :  Exit block 6
+fcntl19     0  TINFO  :  Enter block 7
+fcntl19     0  TINFO  :  Test block 7: PASSED
+fcntl19     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19 : 0
+RUN LTP CASE fcntl19_64
+fcntl19     0  TINFO  :  Enter block 1
+fcntl19     0  TINFO  :  Test block 1: PASSED
+fcntl19     0  TINFO  :  Exit block 1
+fcntl19     0  TINFO  :  Enter block 2
+fcntl19     0  TINFO  :  Test block 2: PASSED
+fcntl19     0  TINFO  :  Exit block 2
+fcntl19     0  TINFO  :  Enter block 3
+fcntl19     0  TINFO  :  Test block 3: PASSED
+fcntl19     0  TINFO  :  Exit block 3
+fcntl19     0  TINFO  :  Enter blcok 4
+fcntl19     0  TINFO  :  Test block 4: PASSED
+fcntl19     0  TINFO  :  Exit block 4
+fcntl19     0  TINFO  :  Enter block 5
+fcntl19     0  TINFO  :  Test block 5: PASSED
+fcntl19     0  TINFO  :  Exit block 5
+fcntl19     0  TINFO  :  Enter block 6
+fcntl19     0  TINFO  :  Test block 6: PASSED
+fcntl19     0  TINFO  :  Exit block 6
+fcntl19     0  TINFO  :  Enter block 7
+fcntl19     0  TINFO  :  Test block 7: PASSED
+fcntl19     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19_64 : 0
+RUN LTP CASE fcntl20
+fcntl20     0  TINFO  :  Enter block 1
+fcntl20     0  TINFO  :  Test block 1: PASSED
+fcntl20     0  TINFO  :  Exit block 1
+fcntl20     0  TINFO  :  Enter block 2
+fcntl20     0  TINFO  :  Test block 2: PASSED
+fcntl20     0  TINFO  :  Exit block 2
+fcntl20     0  TINFO  :  Enter block 3
+fcntl20     0  TINFO  :  Test block 3: PASSED
+fcntl20     0  TINFO  :  Exit block 3
+fcntl20     0  TINFO  :  Enter blcok 4
+fcntl20     0  TINFO  :  Test block 4: PASSED
+fcntl20     0  TINFO  :  Exit block 4
+fcntl20     0  TINFO  :  Enter block 5
+fcntl20     0  TINFO  :  Test block 5: PASSED
+fcntl20     0  TINFO  :  Exit block 5
+fcntl20     0  TINFO  :  Enter block 6
+fcntl20     0  TINFO  :  Test block 6: PASSED
+fcntl20     0  TINFO  :  Exit block 6
+fcntl20     0  TINFO  :  Enter block 7
+fcntl20     0  TINFO  :  Test block 7: PASSED
+fcntl20     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20 : 0
+RUN LTP CASE fcntl20_64
+fcntl20     0  TINFO  :  Enter block 1
+fcntl20     0  TINFO  :  Test block 1: PASSED
+fcntl20     0  TINFO  :  Exit block 1
+fcntl20     0  TINFO  :  Enter block 2
+fcntl20     0  TINFO  :  Test block 2: PASSED
+fcntl20     0  TINFO  :  Exit block 2
+fcntl20     0  TINFO  :  Enter block 3
+fcntl20     0  TINFO  :  Test block 3: PASSED
+fcntl20     0  TINFO  :  Exit block 3
+fcntl20     0  TINFO  :  Enter blcok 4
+fcntl20     0  TINFO  :  Test block 4: PASSED
+fcntl20     0  TINFO  :  Exit block 4
+fcntl20     0  TINFO  :  Enter block 5
+fcntl20     0  TINFO  :  Test block 5: PASSED
+fcntl20     0  TINFO  :  Exit block 5
+fcntl20     0  TINFO  :  Enter block 6
+fcntl20     0  TINFO  :  Test block 6: PASSED
+fcntl20     0  TINFO  :  Exit block 6
+fcntl20     0  TINFO  :  Enter block 7
+fcntl20     0  TINFO  :  Test block 7: PASSED
+fcntl20     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20_64 : 0
+RUN LTP CASE fcntl21
+fcntl21     0  TINFO  :  Enter block 1
+fcntl21     0  TINFO  :  Test block 1: PASSED
+fcntl21     0  TINFO  :  Exit block 1
+fcntl21     0  TINFO  :  Enter block 2
+fcntl21     0  TINFO  :  Test block 2: PASSED
+fcntl21     0  TINFO  :  Exit block 2
+fcntl21     0  TINFO  :  Enter block 3
+fcntl21     0  TINFO  :  Test block 3 : PASSED
+fcntl21     0  TINFO  :  Exit block 3
+fcntl21     0  TINFO  :  Enter block 4
+fcntl21     0  TINFO  :  Test block 4: PASSED
+fcntl21     0  TINFO  :  Exit block 4
+fcntl21     0  TINFO  :  Enter block 5
+fcntl21     0  TINFO  :  Test block 5: PASSED
+fcntl21     0  TINFO  :  Exit block 5
+fcntl21     0  TINFO  :  Enter block 6
+fcntl21     0  TINFO  :  Test block 6 PASSED
+fcntl21     0  TINFO  :  Exit block 6
+fcntl21     0  TINFO  :  Enter block 7
+fcntl21     0  TINFO  :  Test block 7: PASSED
+fcntl21     0  TINFO  :  Exit block 7
+fcntl21     0  TINFO  :  Enter block 8
+fcntl21     0  TINFO  :  Test block 8: PASSED
+fcntl21     0  TINFO  :  Exit block 8
+fcntl21     0  TINFO  :  Enter block 9
+fcntl21     0  TINFO  :  Test block 9: PASSED
+fcntl21     0  TINFO  :  Exit block 9
+fcntl21     0  TINFO  :  Enter block 10
+fcntl21     0  TINFO  :  Test block 10: PASSED
+fcntl21     0  TINFO  :  Exit block 10
+fcntl21     0  TINFO  :  Enter block 11
+fcntl21     0  TINFO  :  Test block 11: PASSED
+fcntl21     0  TINFO  :  Exit block 11
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21 : 0
+RUN LTP CASE fcntl21_64
+fcntl21     0  TINFO  :  Enter block 1
+fcntl21     0  TINFO  :  Test block 1: PASSED
+fcntl21     0  TINFO  :  Exit block 1
+fcntl21     0  TINFO  :  Enter block 2
+fcntl21     0  TINFO  :  Test block 2: PASSED
+fcntl21     0  TINFO  :  Exit block 2
+fcntl21     0  TINFO  :  Enter block 3
+fcntl21     0  TINFO  :  Test block 3 : PASSED
+fcntl21     0  TINFO  :  Exit block 3
+fcntl21     0  TINFO  :  Enter block 4
+fcntl21     0  TINFO  :  Test block 4: PASSED
+fcntl21     0  TINFO  :  Exit block 4
+fcntl21     0  TINFO  :  Enter block 5
+fcntl21     0  TINFO  :  Test block 5: PASSED
+fcntl21     0  TINFO  :  Exit block 5
+fcntl21     0  TINFO  :  Enter block 6
+fcntl21     0  TINFO  :  Test block 6 PASSED
+fcntl21     0  TINFO  :  Exit block 6
+fcntl21     0  TINFO  :  Enter block 7
+fcntl21     0  TINFO  :  Test block 7: PASSED
+fcntl21     0  TINFO  :  Exit block 7
+fcntl21     0  TINFO  :  Enter block 8
+fcntl21     0  TINFO  :  Test block 8: PASSED
+fcntl21     0  TINFO  :  Exit block 8
+fcntl21     0  TINFO  :  Enter block 9
+fcntl21     0  TINFO  :  Test block 9: PASSED
+fcntl21     0  TINFO  :  Exit block 9
+fcntl21     0  TINFO  :  Enter block 10
+fcntl21     0  TINFO  :  Test block 10: PASSED
+fcntl21     0  TINFO  :  Exit block 10
+fcntl21     0  TINFO  :  Enter block 11
+fcntl21     0  TINFO  :  Test block 11: PASSED
+fcntl21     0  TINFO  :  Exit block 11
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21_64 : 0
+RUN LTP CASE fcntl22
+fcntl22     1  TPASS  :  fcntl() fails with expected error EAGAIN errno:11
+fcntl22     0  TINFO  :  Child process returned TPASS
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22 : 0
+RUN LTP CASE fcntl22_64
+fcntl22     1  TPASS  :  fcntl() fails with expected error EAGAIN errno:11
+fcntl22     0  TINFO  :  Child process returned TPASS
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22_64 : 0
+RUN LTP CASE fcntl23
+fcntl23     1  TPASS  :  fcntl(tfile_597, F_SETLEASE, F_RDLCK)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23 : 0
+RUN LTP CASE fcntl23_64
+fcntl23     1  TPASS  :  fcntl(tfile_604, F_SETLEASE, F_RDLCK)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23_64 : 0
+RUN LTP CASE fcntl24
+fcntl24     1  TCONF  :  fcntl24.c:125: Cannot do fcntl on a file on tmpfs filesystem
+fcntl24     2  TCONF  :  fcntl24.c:125: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl24 : 0
+RUN LTP CASE fcntl24_64
+fcntl24     1  TCONF  :  fcntl24.c:125: Cannot do fcntl on a file on tmpfs filesystem
+fcntl24     2  TCONF  :  fcntl24.c:125: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl24_64 : 0
+RUN LTP CASE fcntl25
+fcntl25     1  TCONF  :  fcntl25.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl25     2  TCONF  :  fcntl25.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl25 : 0
+RUN LTP CASE fcntl25_64
+fcntl25     1  TCONF  :  fcntl25.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl25     2  TCONF  :  fcntl25.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl25_64 : 0
+RUN LTP CASE fcntl26
+fcntl26     1  TCONF  :  fcntl26.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl26     2  TCONF  :  fcntl26.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl26 : 0
+RUN LTP CASE fcntl26_64
+fcntl26     1  TCONF  :  fcntl26.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl26     2  TCONF  :  fcntl26.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl26_64 : 0
+RUN LTP CASE fcntl27
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl27.c:35: TINFO: Testing O_RDWR | O_CREAT with mode 0777
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+fcntl27.c:35: TINFO: Testing O_WRONLY | O_CREAT with mode 0222
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27 : 0
+RUN LTP CASE fcntl27_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl27.c:35: TINFO: Testing O_RDWR | O_CREAT with mode 0777
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+fcntl27.c:35: TINFO: Testing O_WRONLY | O_CREAT with mode 0222
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27_64 : 0
+RUN LTP CASE fcntl29
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl29.c:32: TPASS: fcntl(fd, F_DUPFD_CLOEXEC, 0) returned fd 4
+fcntl29.c:35: TPASS: fcntl test F_GETFD returned 1
+fcntl29.c:37: TPASS: fcntl() set FD_CLOEXEC
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29 : 0
+RUN LTP CASE fcntl29_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl29.c:32: TPASS: fcntl(fd, F_DUPFD_CLOEXEC, 0) returned fd 4
+fcntl29.c:35: TPASS: fcntl test F_GETFD returned 1
+fcntl29.c:37: TPASS: fcntl() set FD_CLOEXEC
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29_64 : 0
+RUN LTP CASE fcntl30
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl30.c:39: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30 : 0
+RUN LTP CASE fcntl30_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl30.c:39: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30_64 : 0
+RUN LTP CASE fcntl31
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     1  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     2  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process group ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     3  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for thread ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     4  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     5  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process group ID success
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31 : 0
+RUN LTP CASE fcntl31_64
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     1  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     2  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process group ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     3  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for thread ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     4  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     5  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process group ID success
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31_64 : 0
+RUN LTP CASE fcntl32
+fcntl32     1  TCONF  :  fcntl32.c:88: Cannot do fcntl(F_SETLEASE, F_WRLCK) on tmpfs filesystem
+fcntl32     2  TCONF  :  fcntl32.c:88: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl32 : 0
+RUN LTP CASE fcntl32_64
+fcntl32     1  TCONF  :  fcntl32.c:88: Cannot do fcntl(F_SETLEASE, F_WRLCK) on tmpfs filesystem
+fcntl32     2  TCONF  :  fcntl32.c:88: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl32_64 : 0
+RUN LTP CASE fcntl33
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_test.c:1367: TCONF: tmpfs is not supported by the test
+fcntl33.c:212: TWARN: Failed to open FILE '/proc/sys/fs/lease-break-time' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl33 : 0
+RUN LTP CASE fcntl33_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_test.c:1367: TCONF: tmpfs is not supported by the test
+fcntl33.c:212: TWARN: Failed to open FILE '/proc/sys/fs/lease-break-time' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl33_64 : 0
+RUN LTP CASE fcntl34
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl34.c:87: TINFO: write to a file inside threads with OFD locks
+fcntl34.c:33: TINFO: spawning '3' threads
+fcntl34.c:42: TINFO: waiting for '3' threads
+fcntl34.c:96: TINFO: verifying file's data
+fcntl34.c:124: TPASS: OFD locks synchronized access between threads
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34 : 0
+RUN LTP CASE fcntl34_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl34.c:87: TINFO: write to a file inside threads with OFD locks
+fcntl34.c:33: TINFO: spawning '3' threads
+fcntl34.c:42: TINFO: waiting for '3' threads
+fcntl34.c:96: TINFO: verifying file's data
+fcntl34.c:124: TPASS: OFD locks synchronized access between threads
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34_64 : 0
+RUN LTP CASE fcntl35
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl35.c:58: TCONF: /proc/sys/fs/pipe-max-size doesn't exist
+fcntl35.c:66: TWARN: Failed to open FILE '/proc/sys/fs/pipe-max-size' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl35 : 0
+RUN LTP CASE fcntl35_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl35.c:58: TCONF: /proc/sys/fs/pipe-max-size doesn't exist
+fcntl35.c:66: TWARN: Failed to open FILE '/proc/sys/fs/pipe-max-size' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl35_64 : 0
+RUN LTP CASE fcntl36
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl36.c:288: TINFO: OFD read lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD read lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36 : 0
+RUN LTP CASE fcntl36_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl36.c:288: TINFO: OFD read lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD read lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36_64 : 0
+RUN LTP CASE fcntl37
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl37.c:73: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37 : 0
+RUN LTP CASE fcntl37_64
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl37.c:73: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37_64 : 0
+RUN LTP CASE fcntl38
+tst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl38 : 0
+RUN LTP CASE fcntl38_64
+tst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl38_64 : 0
+RUN LTP CASE fcntl39
+tst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl39 : 0
+RUN LTP CASE fcntl39_64
+tst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl39_64 : 0
+#### OS COMP TEST GROUP END ltp-musl ####
+prepare musl runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE fcntl01
+
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl01 : 0
+RUN LTP CASE fcntl01_64
+
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl01_64 : 0
+RUN LTP CASE fcntl02
+[37m[ 77.285664 0:953 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl02.c:41: TPASS: fcntl(fcntl02_954, F_DUPFD, 0) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_954, F_DUPFD, 1) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_954, F_DUPFD, 2) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_954, F_DUPFD, 3) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_954, F_DUPFD, 10) returned 10
+fcntl02.c:41: TPASS: fcntl(fcntl02_954, F_DUPFD, 100) returned 100
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02 : 0
+RUN LTP CASE fcntl02_64
+[37m[ 77.897347 0:958 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl02.c:41: TPASS: fcntl(fcntl02_959, F_DUPFD, 0) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_959, F_DUPFD, 1) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_959, F_DUPFD, 2) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_959, F_DUPFD, 3) returned 4
+fcntl02.c:41: TPASS: fcntl(fcntl02_959, F_DUPFD, 10) returned 10
+fcntl02.c:41: TPASS: fcntl(fcntl02_959, F_DUPFD, 100) returned 100
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02_64 : 0
+RUN LTP CASE fcntl03
+[37m[ 78.538775 0:963 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl03.c:32: TPASS: fcntl(fcntl03_964, F_GETFD, 0) returned 0
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03 : 0
+RUN LTP CASE fcntl03_64
+[37m[ 79.134309 0:968 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl03.c:32: TPASS: fcntl(fcntl03_969, F_GETFD, 0) returned 0
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03_64 : 0
+RUN LTP CASE fcntl04
+[37m[ 79.665992 0:973 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl04.c:38: TPASS: fcntl(fcntl04_974, F_GETFL, 0) returned 2
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04 : 0
+RUN LTP CASE fcntl04_64
+[37m[ 80.245371 0:978 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl04.c:38: TPASS: fcntl(fcntl04_979, F_GETFL, 0) returned 2
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04_64 : 0
+RUN LTP CASE fcntl05
+[37m[ 80.847264 0:983 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl05.c:42: TPASS: fcntl(3, F_GETLK, &flocks) passed
+fcntl05.c:43: TPASS: flocks.l_type == F_UNLCK (2)
+fcntl05.c:44: TPASS: flocks.l_whence == SEEK_CUR (1)
+fcntl05.c:45: TPASS: flocks.l_start == 0 (0)
+fcntl05.c:46: TPASS: flocks.l_len == 0 (0)
+fcntl05.c:47: TPASS: flocks.l_pid == pid (984)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05 : 0
+RUN LTP CASE fcntl05_64
+[37m[ 81.458002 0:988 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl05.c:42: TPASS: fcntl(3, F_GETLK, &flocks) passed
+fcntl05.c:43: TPASS: flocks.l_type == F_UNLCK (2)
+fcntl05.c:44: TPASS: flocks.l_whence == SEEK_CUR (1)
+fcntl05.c:45: TPASS: flocks.l_start == 0 (0)
+fcntl05.c:46: TPASS: flocks.l_len == 0 (0)
+fcntl05.c:47: TPASS: flocks.l_pid == pid (989)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05_64 : 0
+RUN LTP CASE fcntl07
+[37m[ 82.012169 0:993 starry_kernel::syscall:656] [33mUnimplemented syscall: mknodat[m
+[m[37m[ 82.028564 0:993 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl07     1  TBROK  :  fcntl07.c:172: mkfifo(fifo, 0666) failed: errno=ENOSYS(38): Function not implemented
+fcntl07     2  TBROK  :  fcntl07.c:172: Remaining cases broken
+
+Summary:
+passed   0
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl07 : 0
+RUN LTP CASE fcntl07_64
+[37m[ 82.986319 0:1000 starry_kernel::syscall:656] [33mUnimplemented syscall: mknodat[m
+[m[37m[ 83.008483 0:1000 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl07     1  TBROK  :  fcntl07.c:172: mkfifo(fifo, 0666) failed: errno=ENOSYS(38): Function not implemented
+fcntl07     2  TBROK  :  fcntl07.c:172: Remaining cases broken
+
+Summary:
+passed   0
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl07_64 : 0
+RUN LTP CASE fcntl08
+[37m[ 83.821091 0:1007 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl08.c:34: TPASS: fcntl(fd, F_SETFL, O_NDELAY | O_APPEND | O_NONBLOCK) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08 : 0
+RUN LTP CASE fcntl08_64
+[37m[ 84.470942 0:1012 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl08.c:34: TPASS: fcntl(fd, F_SETFL, O_NDELAY | O_APPEND | O_NONBLOCK) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08_64 : 0
+RUN LTP CASE fcntl09
+[37m[ 85.230238 0:1017 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl09     1  TPASS  :  fcntl(./file_1017, F_SETLK, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_1017, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl09     1  TPASS  :  fcntl(./file_1017, F_SETLK, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_1017, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09 : 0
+RUN LTP CASE fcntl09_64
+[37m[ 86.246402 0:1024 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl09     1  TPASS  :  fcntl(./file_1024, F_SETLK, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_1024, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl09     1  TPASS  :  fcntl(./file_1024, F_SETLK, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl09     2  TPASS  :  fcntl(./file_1024, F_SETLK, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09_64 : 0
+RUN LTP CASE fcntl10
+[37m[ 87.105044 0:1031 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl10     1  TPASS  :  fcntl(tfile_1031, F_SETLKW, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_1031, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl10     1  TPASS  :  fcntl(tfile_1031, F_SETLKW, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_1031, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10 : 0
+RUN LTP CASE fcntl10_64
+[37m[ 88.031340 0:1038 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl10     1  TPASS  :  fcntl(tfile_1038, F_SETLKW, &flocks) flocks.l_type = F_WRLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_1038, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+fcntl10     1  TPASS  :  fcntl(tfile_1038, F_SETLKW, &flocks) flocks.l_type = F_RDLCK returned 0
+fcntl10     2  TPASS  :  fcntl(tfile_1038, F_SETLKW, &flocks) flocks.l_type = F_UNLCK returned 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10_64 : 0
+RUN LTP CASE fcntl11
+[37m[ 88.814050 0:1045 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl11     0  TINFO  :  Enter block 1
+fcntl11     0  TINFO  :  Exit block 1
+fcntl11     0  TINFO  :  Enter block 2
+fcntl11     0  TINFO  :  Exit block 2
+fcntl11     0  TINFO  :  Enter block 3
+fcntl11     0  TINFO  :  Exit block 3
+fcntl11     0  TINFO  :  Enter block 4
+fcntl11     0  TINFO  :  Exit block 4
+fcntl11     0  TINFO  :  Enter block 5
+fcntl11     0  TINFO  :  Exit block 5
+fcntl11     0  TINFO  :  Enter block 6
+fcntl11     0  TINFO  :  Exit block 6
+fcntl11     0  TINFO  :  Enter block 7
+fcntl11     0  TINFO  :  Exit block 7
+fcntl11     0  TINFO  :  Enter block 8
+fcntl11     0  TINFO  :  Exit block 8
+fcntl11     0  TINFO  :  Enter block 9
+fcntl11     0  TINFO  :  Exit block 9
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11 : 0
+RUN LTP CASE fcntl11_64
+[37m[ 89.656810 0:1053 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl11     0  TINFO  :  Enter block 1
+fcntl11     0  TINFO  :  Exit block 1
+fcntl11     0  TINFO  :  Enter block 2
+fcntl11     0  TINFO  :  Exit block 2
+fcntl11     0  TINFO  :  Enter block 3
+fcntl11     0  TINFO  :  Exit block 3
+fcntl11     0  TINFO  :  Enter block 4
+fcntl11     0  TINFO  :  Exit block 4
+fcntl11     0  TINFO  :  Enter block 5
+fcntl11     0  TINFO  :  Exit block 5
+fcntl11     0  TINFO  :  Enter block 6
+fcntl11     0  TINFO  :  Exit block 6
+fcntl11     0  TINFO  :  Enter block 7
+fcntl11     0  TINFO  :  Exit block 7
+fcntl11     0  TINFO  :  Enter block 8
+fcntl11     0  TINFO  :  Exit block 8
+fcntl11     0  TINFO  :  Enter block 9
+fcntl11     0  TINFO  :  Exit block 9
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11_64 : 0
+RUN LTP CASE fcntl12
+[37m[ 90.527425 0:1061 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl12.c:39: TPASS: fcntl(1, F_DUPFD, 1) : EMFILE (24)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12 : 0
+RUN LTP CASE fcntl12_64
+[37m[ 91.226530 0:1067 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl12.c:39: TPASS: fcntl(1, F_DUPFD, 1) : EMFILE (24)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12_64 : 0
+RUN LTP CASE fcntl13
+[37m[ 91.874579 0:1073 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[m[37m[ 91.918308 0:1074 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: 999[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EFAULT (14)
+fcntl13.c:47: TPASS: fcntl(1, F_BADCMD, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(-1, F_GETLK, flock) : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13 : 0
+RUN LTP CASE fcntl13_64
+[37m[ 92.633229 0:1078 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[m[37m[ 92.679420 0:1079 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: 999[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EFAULT (14)
+fcntl13.c:47: TPASS: fcntl(1, F_BADCMD, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(1, F_SETLK, flock) : EINVAL (22)
+fcntl13.c:47: TPASS: fcntl(-1, F_GETLK, flock) : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13_64 : 0
+RUN LTP CASE fcntl14
+[37m[ 93.190522 0:1083 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl14     0  TINFO  :  Enter block 1: without mandatory locking
+fcntl14     1  TPASS  :  testcase:1 PASSED
+fcntl14     2  TPASS  :  testcase:2 PASSED
+fcntl14     3  TPASS  :  testcase:3 PASSED
+fcntl14     4  TPASS  :  testcase:4 PASSED
+fcntl14     5  TPASS  :  testcase:5 PASSED
+fcntl14     6  TPASS  :  testcase:6 PASSED
+fcntl14     7  TPASS  :  testcase:7 PASSED
+fcntl14     8  TPASS  :  testcase:8 PASSED
+fcntl14     9  TPASS  :  testcase:9 PASSED
+fcntl14    10  TPASS  :  testcase:10 PASSED
+fcntl14    11  TPASS  :  testcase:11 PASSED
+fcntl14    12  TPASS  :  testcase:12 PASSED
+fcntl14    13  TPASS  :  testcase:13 PASSED
+fcntl14    14  TPASS  :  testcase:14 PASSED
+fcntl14    15  TPASS  :  testcase:15 PASSED
+fcntl14    16  TPASS  :  testcase:16 PASSED
+fcntl14    17  TPASS  :  testcase:17 PASSED
+fcntl14    18  TPASS  :  testcase:18 PASSED
+fcntl14    19  TPASS  :  testcase:19 PASSED
+fcntl14    20  TPASS  :  testcase:20 PASSED
+fcntl14    21  TPASS  :  testcase:21 PASSED
+fcntl14    22  TPASS  :  testcase:22 PASSED
+fcntl14    23  TPASS  :  testcase:23 PASSED
+fcntl14    24  TPASS  :  testcase:24 PASSED
+fcntl14    25  TPASS  :  testcase:25 PASSED
+fcntl14    26  TPASS  :  testcase:26 PASSED
+fcntl14    27  TPASS  :  testcase:27 PASSED
+fcntl14    28  TPASS  :  testcase:28 PASSED
+fcntl14    29  TPASS  :  testcase:29 PASSED
+fcntl14    30  TPASS  :  testcase:30 PASSED
+fcntl14    31  TPASS  :  testcase:31 PASSED
+fcntl14    32  TPASS  :  testcase:32 PASSED
+fcntl14    33  TPASS  :  testcase:33 PASSED
+fcntl14    34  TPASS  :  testcase:34 PASSED
+fcntl14    35  TPASS  :  testcase:35 PASSED
+fcntl14    36  TPASS  :  testcase:36 PASSED
+fcntl14    37  TPASS  :  Block 1, test 1 PASSED
+fcntl14    38  TPASS  :  testcase:37 PASSED
+fcntl14    39  TPASS  :  testcase:38 PASSED
+fcntl14    40  TPASS  :  testcase:39 PASSED
+fcntl14    41  TPASS  :  testcase:40 PASSED
+fcntl14    42  TPASS  :  testcase:41 PASSED
+fcntl14    43  TPASS  :  testcase:42 PASSED
+fcntl14    44  TPASS  :  testcase:43 PASSED
+fcntl14    45  TPASS  :  testcase:44 PASSED
+fcntl14    46  TPASS  :  testcase:45 PASSED
+fcntl14    47  TPASS  :  Block 1, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 1
+fcntl14     0  TINFO  :  Enter block 2: with mandatory locking
+fcntl14    48  TPASS  :  testcase:1 PASSED
+fcntl14    49  TPASS  :  testcase:2 PASSED
+fcntl14    50  TPASS  :  testcase:3 PASSED
+fcntl14    51  TPASS  :  testcase:4 PASSED
+fcntl14    52  TPASS  :  testcase:5 PASSED
+fcntl14    53  TPASS  :  testcase:6 PASSED
+fcntl14    54  TPASS  :  testcase:7 PASSED
+fcntl14    55  TPASS  :  testcase:8 PASSED
+fcntl14    56  TPASS  :  testcase:9 PASSED
+fcntl14    57  TPASS  :  testcase:10 PASSED
+fcntl14    58  TPASS  :  testcase:11 PASSED
+fcntl14    59  TPASS  :  testcase:12 PASSED
+fcntl14    60  TPASS  :  testcase:13 PASSED
+fcntl14    61  TPASS  :  testcase:14 PASSED
+fcntl14    62  TPASS  :  testcase:15 PASSED
+fcntl14    63  TPASS  :  testcase:16 PASSED
+fcntl14    64  TPASS  :  testcase:17 PASSED
+fcntl14    65  TPASS  :  testcase:18 PASSED
+fcntl14    66  TPASS  :  testcase:19 PASSED
+fcntl14    67  TPASS  :  testcase:20 PASSED
+fcntl14    68  TPASS  :  testcase:21 PASSED
+fcntl14    69  TPASS  :  testcase:22 PASSED
+fcntl14    70  TPASS  :  testcase:23 PASSED
+fcntl14    71  TPASS  :  testcase:24 PASSED
+fcntl14    72  TPASS  :  testcase:25 PASSED
+fcntl14    73  TPASS  :  testcase:26 PASSED
+fcntl14    74  TPASS  :  testcase:27 PASSED
+fcntl14    75  TPASS  :  testcase:28 PASSED
+fcntl14    76  TPASS  :  testcase:29 PASSED
+fcntl14    77  TPASS  :  testcase:30 PASSED
+fcntl14    78  TPASS  :  testcase:31 PASSED
+fcntl14    79  TPASS  :  testcase:32 PASSED
+fcntl14    80  TPASS  :  testcase:33 PASSED
+fcntl14    81  TPASS  :  testcase:34 PASSED
+fcntl14    82  TPASS  :  testcase:35 PASSED
+fcntl14    83  TPASS  :  testcase:36 PASSED
+fcntl14    84  TPASS  :  Block 2, test 1 PASSED
+fcntl14    85  TPASS  :  testcase:37 PASSED
+fcntl14    86  TPASS  :  testcase:38 PASSED
+fcntl14    87  TPASS  :  testcase:39 PASSED
+fcntl14    88  TPASS  :  testcase:40 PASSED
+fcntl14    89  TPASS  :  testcase:41 PASSED
+fcntl14    90  TPASS  :  testcase:42 PASSED
+fcntl14    91  TPASS  :  testcase:43 PASSED
+fcntl14    92  TPASS  :  testcase:44 PASSED
+fcntl14    93  TPASS  :  testcase:45 PASSED
+fcntl14    94  TPASS  :  Block 2, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 2
+fcntl14     0  TINFO  :  Enter block 3
+fcntl14    95  TPASS  :  Test with negative whence locking PASSED
+fcntl14     0  TINFO  :  Exit block 3
+fcntl14     0  TINFO  :  Enter block 4
+fcntl14    96  TPASS  :  Test of locks on file PASSED
+fcntl14     0  TINFO  :  Exit block 4
+
+Summary:
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14 : 0
+RUN LTP CASE fcntl14_64
+[37m[100.968759 0:1234 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl14     0  TINFO  :  Enter block 1: without mandatory locking
+fcntl14     1  TPASS  :  testcase:1 PASSED
+fcntl14     2  TPASS  :  testcase:2 PASSED
+fcntl14     3  TPASS  :  testcase:3 PASSED
+fcntl14     4  TPASS  :  testcase:4 PASSED
+fcntl14     5  TPASS  :  testcase:5 PASSED
+fcntl14     6  TPASS  :  testcase:6 PASSED
+fcntl14     7  TPASS  :  testcase:7 PASSED
+fcntl14     8  TPASS  :  testcase:8 PASSED
+fcntl14     9  TPASS  :  testcase:9 PASSED
+fcntl14    10  TPASS  :  testcase:10 PASSED
+fcntl14    11  TPASS  :  testcase:11 PASSED
+fcntl14    12  TPASS  :  testcase:12 PASSED
+fcntl14    13  TPASS  :  testcase:13 PASSED
+fcntl14    14  TPASS  :  testcase:14 PASSED
+fcntl14    15  TPASS  :  testcase:15 PASSED
+fcntl14    16  TPASS  :  testcase:16 PASSED
+fcntl14    17  TPASS  :  testcase:17 PASSED
+fcntl14    18  TPASS  :  testcase:18 PASSED
+fcntl14    19  TPASS  :  testcase:19 PASSED
+fcntl14    20  TPASS  :  testcase:20 PASSED
+fcntl14    21  TPASS  :  testcase:21 PASSED
+fcntl14    22  TPASS  :  testcase:22 PASSED
+fcntl14    23  TPASS  :  testcase:23 PASSED
+fcntl14    24  TPASS  :  testcase:24 PASSED
+fcntl14    25  TPASS  :  testcase:25 PASSED
+fcntl14    26  TPASS  :  testcase:26 PASSED
+fcntl14    27  TPASS  :  testcase:27 PASSED
+fcntl14    28  TPASS  :  testcase:28 PASSED
+fcntl14    29  TPASS  :  testcase:29 PASSED
+fcntl14    30  TPASS  :  testcase:30 PASSED
+fcntl14    31  TPASS  :  testcase:31 PASSED
+fcntl14    32  TPASS  :  testcase:32 PASSED
+fcntl14    33  TPASS  :  testcase:33 PASSED
+fcntl14    34  TPASS  :  testcase:34 PASSED
+fcntl14    35  TPASS  :  testcase:35 PASSED
+fcntl14    36  TPASS  :  testcase:36 PASSED
+fcntl14    37  TPASS  :  Block 1, test 1 PASSED
+fcntl14    38  TPASS  :  testcase:37 PASSED
+fcntl14    39  TPASS  :  testcase:38 PASSED
+fcntl14    40  TPASS  :  testcase:39 PASSED
+fcntl14    41  TPASS  :  testcase:40 PASSED
+fcntl14    42  TPASS  :  testcase:41 PASSED
+fcntl14    43  TPASS  :  testcase:42 PASSED
+fcntl14    44  TPASS  :  testcase:43 PASSED
+fcntl14    45  TPASS  :  testcase:44 PASSED
+fcntl14    46  TPASS  :  testcase:45 PASSED
+fcntl14    47  TPASS  :  Block 1, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 1
+fcntl14     0  TINFO  :  Enter block 2: with mandatory locking
+fcntl14    48  TPASS  :  testcase:1 PASSED
+fcntl14    49  TPASS  :  testcase:2 PASSED
+fcntl14    50  TPASS  :  testcase:3 PASSED
+fcntl14    51  TPASS  :  testcase:4 PASSED
+fcntl14    52  TPASS  :  testcase:5 PASSED
+fcntl14    53  TPASS  :  testcase:6 PASSED
+fcntl14    54  TPASS  :  testcase:7 PASSED
+fcntl14    55  TPASS  :  testcase:8 PASSED
+fcntl14    56  TPASS  :  testcase:9 PASSED
+fcntl14    57  TPASS  :  testcase:10 PASSED
+fcntl14    58  TPASS  :  testcase:11 PASSED
+fcntl14    59  TPASS  :  testcase:12 PASSED
+fcntl14    60  TPASS  :  testcase:13 PASSED
+fcntl14    61  TPASS  :  testcase:14 PASSED
+fcntl14    62  TPASS  :  testcase:15 PASSED
+fcntl14    63  TPASS  :  testcase:16 PASSED
+fcntl14    64  TPASS  :  testcase:17 PASSED
+fcntl14    65  TPASS  :  testcase:18 PASSED
+fcntl14    66  TPASS  :  testcase:19 PASSED
+fcntl14    67  TPASS  :  testcase:20 PASSED
+fcntl14    68  TPASS  :  testcase:21 PASSED
+fcntl14    69  TPASS  :  testcase:22 PASSED
+fcntl14    70  TPASS  :  testcase:23 PASSED
+fcntl14    71  TPASS  :  testcase:24 PASSED
+fcntl14    72  TPASS  :  testcase:25 PASSED
+fcntl14    73  TPASS  :  testcase:26 PASSED
+fcntl14    74  TPASS  :  testcase:27 PASSED
+fcntl14    75  TPASS  :  testcase:28 PASSED
+fcntl14    76  TPASS  :  testcase:29 PASSED
+fcntl14    77  TPASS  :  testcase:30 PASSED
+fcntl14    78  TPASS  :  testcase:31 PASSED
+fcntl14    79  TPASS  :  testcase:32 PASSED
+fcntl14    80  TPASS  :  testcase:33 PASSED
+fcntl14    81  TPASS  :  testcase:34 PASSED
+fcntl14    82  TPASS  :  testcase:35 PASSED
+fcntl14    83  TPASS  :  testcase:36 PASSED
+fcntl14    84  TPASS  :  Block 2, test 1 PASSED
+fcntl14    85  TPASS  :  testcase:37 PASSED
+fcntl14    86  TPASS  :  testcase:38 PASSED
+fcntl14    87  TPASS  :  testcase:39 PASSED
+fcntl14    88  TPASS  :  testcase:40 PASSED
+fcntl14    89  TPASS  :  testcase:41 PASSED
+fcntl14    90  TPASS  :  testcase:42 PASSED
+fcntl14    91  TPASS  :  testcase:43 PASSED
+fcntl14    92  TPASS  :  testcase:44 PASSED
+fcntl14    93  TPASS  :  testcase:45 PASSED
+fcntl14    94  TPASS  :  Block 2, test 2 PASSED
+fcntl14     0  TINFO  :  Exit block 2
+fcntl14     0  TINFO  :  Enter block 3
+fcntl14    95  TPASS  :  Test with negative whence locking PASSED
+fcntl14     0  TINFO  :  Exit block 3
+fcntl14     0  TINFO  :  Enter block 4
+fcntl14    96  TPASS  :  Test of locks on file PASSED
+fcntl14     0  TINFO  :  Exit block 4
+
+Summary:
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14_64 : 0
+RUN LTP CASE fcntl15
+[37m[108.902380 0:1385 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl15.c:178: TINFO: Running test with dup
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with open
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with fork
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:110: TPASS: Failed to lock already locked region two
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15 : 0
+RUN LTP CASE fcntl15_64
+[37m[109.617001 0:1394 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl15.c:178: TINFO: Running test with dup
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with open
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:117: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:178: TINFO: Running test with fork
+fcntl15.c:92: TPASS: Failed to lock already locked region one
+fcntl15.c:97: TPASS: Failed to lock already locked region two
+fcntl15.c:159: TINFO: Closing a file descriptor in parent
+fcntl15.c:104: TPASS: Succeeded to lock now ulocked region two
+fcntl15.c:110: TPASS: Failed to lock already locked region two
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15_64 : 0
+RUN LTP CASE fcntl16
+[37m[110.338958 0:1403 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl16     0  TINFO  :  Entering block 1
+fcntl16     0  TINFO  :  Test case 1: without manadatory locking PASSED
+fcntl16     0  TINFO  :  Exiting block 1
+fcntl16     0  TINFO  :  Entering block 2
+fcntl16     0  TINFO  :  Test case 2: with mandatory record locking PASSED
+fcntl16     0  TINFO  :  Exiting block 2
+fcntl16     0  TINFO  :  Entering block 3
+fcntl16     0  TINFO  :  Test case 3: mandatory locking with NODELAY PASSED
+fcntl16     0  TINFO  :  Exiting block 3
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16 : 0
+RUN LTP CASE fcntl16_64
+[37m[111.085952 0:1410 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl16     0  TINFO  :  Entering block 1
+fcntl16     0  TINFO  :  Test case 1: without manadatory locking PASSED
+fcntl16     0  TINFO  :  Exiting block 1
+fcntl16     0  TINFO  :  Entering block 2
+fcntl16     0  TINFO  :  Test case 2: with mandatory record locking PASSED
+fcntl16     0  TINFO  :  Exiting block 2
+fcntl16     0  TINFO  :  Entering block 3
+fcntl16     0  TINFO  :  Test case 3: mandatory locking with NODELAY PASSED
+fcntl16     0  TINFO  :  Exiting block 3
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16_64 : 0
+RUN LTP CASE fcntl17
+[37m[111.999146 0:1417 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl17     0  TINFO  :  Enter preparation phase
+fcntl17     0  TINFO  :  child 1 starting
+fcntl17     0  TINFO  :  child 1 pid 1418 locked
+fcntl17     0  TINFO  :  child 1 resuming
+fcntl17     0  TINFO  :  child 1 unlocked
+fcntl17     0  TINFO  :  child 1 exiting
+fcntl17     0  TINFO  :  child 3 starting
+fcntl17     0  TINFO  :  child 3 pid 1420 locked
+fcntl17     0  TINFO  :  child 3 resuming
+fcntl17     0  TINFO  :  child 3 lockw err 35
+fcntl17     0  TINFO  :  child 3 exiting
+fcntl17     0  TINFO  :  child 2 starting
+fcntl17     0  TINFO  :  child 2 pid 1419 locked
+fcntl17     0  TINFO  :  child 2 resuming
+fcntl17     0  TINFO  :  child 2 lockw locked
+fcntl17     0  TINFO  :  child 2 exiting
+fcntl17     0  TINFO  :  Exit preparation phase
+fcntl17     0  TINFO  :  Enter block 1
+fcntl17     1  TPASS  :  Block 1 PASSED
+fcntl17     0  TINFO  :  Exit block 1
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17 : 0
+RUN LTP CASE fcntl17_64
+[37m[112.935759 0:1427 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl17     0  TINFO  :  Enter preparation phase
+fcntl17     0  TINFO  :  child 1 starting
+fcntl17     0  TINFO  :  child 1 pid 1428 locked
+fcntl17     0  TINFO  :  child 1 resuming
+fcntl17     0  TINFO  :  child 1 unlocked
+fcntl17     0  TINFO  :  child 1 exiting
+fcntl17     0  TINFO  :  child 3 starting
+fcntl17     0  TINFO  :  child 3 pid 1430 locked
+fcntl17     0  TINFO  :  child 3 resuming
+fcntl17     0  TINFO  :  child 3 lockw err 35
+fcntl17     0  TINFO  :  child 3 exiting
+fcntl17     0  TINFO  :  child 2 starting
+fcntl17     0  TINFO  :  child 2 pid 1429 locked
+fcntl17     0  TINFO  :  child 2 resuming
+fcntl17     0  TINFO  :  child 2 lockw locked
+fcntl17     0  TINFO  :  child 2 exiting
+fcntl17     0  TINFO  :  Exit preparation phase
+fcntl17     0  TINFO  :  Enter block 1
+fcntl17     1  TPASS  :  Block 1 PASSED
+fcntl17     0  TINFO  :  Exit block 1
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17_64 : 0
+RUN LTP CASE fcntl18
+[37m[113.782662 0:1437 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[m[37m[113.912790 0:1438 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: -1[m
+[mfcntl18     0  TINFO  :  Enter block 1
+fcntl18     1  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 1 PASSED
+fcntl18     0  TINFO  :  Exit block 1
+fcntl18     0  TINFO  :  Enter block 2
+fcntl18     2  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 2 PASSED
+fcntl18     0  TINFO  :  Exit block 2
+fcntl18     0  TINFO  :  Enter block 3
+fcntl18     3  TPASS  :  Test for errno EINVAL PASSED
+fcntl18     0  TINFO  :  Block 3 PASSED
+fcntl18     0  TINFO  :  Exit block 3
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18 : 0
+RUN LTP CASE fcntl18_64
+[37m[114.733339 0:1445 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[m[37m[114.784741 0:1446 starry_kernel::syscall::fs::fd_ops:946] [33munsupported fcntl parameters: cmd: -1[m
+[mfcntl18     0  TINFO  :  Enter block 1
+fcntl18     1  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 1 PASSED
+fcntl18     0  TINFO  :  Exit block 1
+fcntl18     0  TINFO  :  Enter block 2
+fcntl18     2  TPASS  :  Test F_GETLK: for errno EFAULT PASSED
+fcntl18     0  TINFO  :  Block 2 PASSED
+fcntl18     0  TINFO  :  Exit block 2
+fcntl18     0  TINFO  :  Enter block 3
+fcntl18     3  TPASS  :  Test for errno EINVAL PASSED
+fcntl18     0  TINFO  :  Block 3 PASSED
+fcntl18     0  TINFO  :  Exit block 3
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18_64 : 0
+RUN LTP CASE fcntl19
+[37m[115.532926 0:1453 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl19     0  TINFO  :  Enter block 1
+fcntl19     0  TINFO  :  Test block 1: PASSED
+fcntl19     0  TINFO  :  Exit block 1
+fcntl19     0  TINFO  :  Enter block 2
+fcntl19     0  TINFO  :  Test block 2: PASSED
+fcntl19     0  TINFO  :  Exit block 2
+fcntl19     0  TINFO  :  Enter block 3
+fcntl19     0  TINFO  :  Test block 3: PASSED
+fcntl19     0  TINFO  :  Exit block 3
+fcntl19     0  TINFO  :  Enter blcok 4
+fcntl19     0  TINFO  :  Test block 4: PASSED
+fcntl19     0  TINFO  :  Exit block 4
+fcntl19     0  TINFO  :  Enter block 5
+fcntl19     0  TINFO  :  Test block 5: PASSED
+fcntl19     0  TINFO  :  Exit block 5
+fcntl19     0  TINFO  :  Enter block 6
+fcntl19     0  TINFO  :  Test block 6: PASSED
+fcntl19     0  TINFO  :  Exit block 6
+fcntl19     0  TINFO  :  Enter block 7
+fcntl19     0  TINFO  :  Test block 7: PASSED
+fcntl19     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19 : 0
+RUN LTP CASE fcntl19_64
+[37m[116.403897 0:1461 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl19     0  TINFO  :  Enter block 1
+fcntl19     0  TINFO  :  Test block 1: PASSED
+fcntl19     0  TINFO  :  Exit block 1
+fcntl19     0  TINFO  :  Enter block 2
+fcntl19     0  TINFO  :  Test block 2: PASSED
+fcntl19     0  TINFO  :  Exit block 2
+fcntl19     0  TINFO  :  Enter block 3
+fcntl19     0  TINFO  :  Test block 3: PASSED
+fcntl19     0  TINFO  :  Exit block 3
+fcntl19     0  TINFO  :  Enter blcok 4
+fcntl19     0  TINFO  :  Test block 4: PASSED
+fcntl19     0  TINFO  :  Exit block 4
+fcntl19     0  TINFO  :  Enter block 5
+fcntl19     0  TINFO  :  Test block 5: PASSED
+fcntl19     0  TINFO  :  Exit block 5
+fcntl19     0  TINFO  :  Enter block 6
+fcntl19     0  TINFO  :  Test block 6: PASSED
+fcntl19     0  TINFO  :  Exit block 6
+fcntl19     0  TINFO  :  Enter block 7
+fcntl19     0  TINFO  :  Test block 7: PASSED
+fcntl19     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19_64 : 0
+RUN LTP CASE fcntl20
+[37m[117.259726 0:1469 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl20     0  TINFO  :  Enter block 1
+fcntl20     0  TINFO  :  Test block 1: PASSED
+fcntl20     0  TINFO  :  Exit block 1
+fcntl20     0  TINFO  :  Enter block 2
+fcntl20     0  TINFO  :  Test block 2: PASSED
+fcntl20     0  TINFO  :  Exit block 2
+fcntl20     0  TINFO  :  Enter block 3
+fcntl20     0  TINFO  :  Test block 3: PASSED
+fcntl20     0  TINFO  :  Exit block 3
+fcntl20     0  TINFO  :  Enter blcok 4
+fcntl20     0  TINFO  :  Test block 4: PASSED
+fcntl20     0  TINFO  :  Exit block 4
+fcntl20     0  TINFO  :  Enter block 5
+fcntl20     0  TINFO  :  Test block 5: PASSED
+fcntl20     0  TINFO  :  Exit block 5
+fcntl20     0  TINFO  :  Enter block 6
+fcntl20     0  TINFO  :  Test block 6: PASSED
+fcntl20     0  TINFO  :  Exit block 6
+fcntl20     0  TINFO  :  Enter block 7
+fcntl20     0  TINFO  :  Test block 7: PASSED
+fcntl20     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20 : 0
+RUN LTP CASE fcntl20_64
+[37m[118.091118 0:1477 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl20     0  TINFO  :  Enter block 1
+fcntl20     0  TINFO  :  Test block 1: PASSED
+fcntl20     0  TINFO  :  Exit block 1
+fcntl20     0  TINFO  :  Enter block 2
+fcntl20     0  TINFO  :  Test block 2: PASSED
+fcntl20     0  TINFO  :  Exit block 2
+fcntl20     0  TINFO  :  Enter block 3
+fcntl20     0  TINFO  :  Test block 3: PASSED
+fcntl20     0  TINFO  :  Exit block 3
+fcntl20     0  TINFO  :  Enter blcok 4
+fcntl20     0  TINFO  :  Test block 4: PASSED
+fcntl20     0  TINFO  :  Exit block 4
+fcntl20     0  TINFO  :  Enter block 5
+fcntl20     0  TINFO  :  Test block 5: PASSED
+fcntl20     0  TINFO  :  Exit block 5
+fcntl20     0  TINFO  :  Enter block 6
+fcntl20     0  TINFO  :  Test block 6: PASSED
+fcntl20     0  TINFO  :  Exit block 6
+fcntl20     0  TINFO  :  Enter block 7
+fcntl20     0  TINFO  :  Test block 7: PASSED
+fcntl20     0  TINFO  :  Exit block 7
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20_64 : 0
+RUN LTP CASE fcntl21
+[37m[118.826151 0:1485 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl21     0  TINFO  :  Enter block 1
+fcntl21     0  TINFO  :  Test block 1: PASSED
+fcntl21     0  TINFO  :  Exit block 1
+fcntl21     0  TINFO  :  Enter block 2
+fcntl21     0  TINFO  :  Test block 2: PASSED
+fcntl21     0  TINFO  :  Exit block 2
+fcntl21     0  TINFO  :  Enter block 3
+fcntl21     0  TINFO  :  Test block 3 : PASSED
+fcntl21     0  TINFO  :  Exit block 3
+fcntl21     0  TINFO  :  Enter block 4
+fcntl21     0  TINFO  :  Test block 4: PASSED
+fcntl21     0  TINFO  :  Exit block 4
+fcntl21     0  TINFO  :  Enter block 5
+fcntl21     0  TINFO  :  Test block 5: PASSED
+fcntl21     0  TINFO  :  Exit block 5
+fcntl21     0  TINFO  :  Enter block 6
+fcntl21     0  TINFO  :  Test block 6 PASSED
+fcntl21     0  TINFO  :  Exit block 6
+fcntl21     0  TINFO  :  Enter block 7
+fcntl21     0  TINFO  :  Test block 7: PASSED
+fcntl21     0  TINFO  :  Exit block 7
+fcntl21     0  TINFO  :  Enter block 8
+fcntl21     0  TINFO  :  Test block 8: PASSED
+fcntl21     0  TINFO  :  Exit block 8
+fcntl21     0  TINFO  :  Enter block 9
+fcntl21     0  TINFO  :  Test block 9: PASSED
+fcntl21     0  TINFO  :  Exit block 9
+fcntl21     0  TINFO  :  Enter block 10
+fcntl21     0  TINFO  :  Test block 10: PASSED
+fcntl21     0  TINFO  :  Exit block 10
+fcntl21     0  TINFO  :  Enter block 11
+fcntl21     0  TINFO  :  Test block 11: PASSED
+fcntl21     0  TINFO  :  Exit block 11
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21 : 0
+RUN LTP CASE fcntl21_64
+[37m[119.592093 0:1493 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl21     0  TINFO  :  Enter block 1
+fcntl21     0  TINFO  :  Test block 1: PASSED
+fcntl21     0  TINFO  :  Exit block 1
+fcntl21     0  TINFO  :  Enter block 2
+fcntl21     0  TINFO  :  Test block 2: PASSED
+fcntl21     0  TINFO  :  Exit block 2
+fcntl21     0  TINFO  :  Enter block 3
+fcntl21     0  TINFO  :  Test block 3 : PASSED
+fcntl21     0  TINFO  :  Exit block 3
+fcntl21     0  TINFO  :  Enter block 4
+fcntl21     0  TINFO  :  Test block 4: PASSED
+fcntl21     0  TINFO  :  Exit block 4
+fcntl21     0  TINFO  :  Enter block 5
+fcntl21     0  TINFO  :  Test block 5: PASSED
+fcntl21     0  TINFO  :  Exit block 5
+fcntl21     0  TINFO  :  Enter block 6
+fcntl21     0  TINFO  :  Test block 6 PASSED
+fcntl21     0  TINFO  :  Exit block 6
+fcntl21     0  TINFO  :  Enter block 7
+fcntl21     0  TINFO  :  Test block 7: PASSED
+fcntl21     0  TINFO  :  Exit block 7
+fcntl21     0  TINFO  :  Enter block 8
+fcntl21     0  TINFO  :  Test block 8: PASSED
+fcntl21     0  TINFO  :  Exit block 8
+fcntl21     0  TINFO  :  Enter block 9
+fcntl21     0  TINFO  :  Test block 9: PASSED
+fcntl21     0  TINFO  :  Exit block 9
+fcntl21     0  TINFO  :  Enter block 10
+fcntl21     0  TINFO  :  Test block 10: PASSED
+fcntl21     0  TINFO  :  Exit block 10
+fcntl21     0  TINFO  :  Enter block 11
+fcntl21     0  TINFO  :  Test block 11: PASSED
+fcntl21     0  TINFO  :  Exit block 11
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21_64 : 0
+RUN LTP CASE fcntl22
+[37m[120.367369 0:1502 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[m[37m[120.385643 0:1501 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl22     1  TPASS  :  fcntl() fails with expected error EAGAIN errno:11
+fcntl22     0  TINFO  :  Child process returned TPASS
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22 : 0
+RUN LTP CASE fcntl22_64
+[37m[121.071487 0:1510 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[m[37m[121.100509 0:1509 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl22     1  TPASS  :  fcntl() fails with expected error EAGAIN errno:11
+fcntl22     0  TINFO  :  Child process returned TPASS
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22_64 : 0
+RUN LTP CASE fcntl23
+[37m[121.909761 0:1517 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl23     1  TPASS  :  fcntl(tfile_1517, F_SETLEASE, F_RDLCK)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23 : 0
+RUN LTP CASE fcntl23_64
+[37m[122.746287 0:1524 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl23     1  TPASS  :  fcntl(tfile_1524, F_SETLEASE, F_RDLCK)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23_64 : 0
+RUN LTP CASE fcntl24
+[37m[123.468922 0:1531 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl24     1  TCONF  :  fcntl24.c:125: Cannot do fcntl on a file on tmpfs filesystem
+fcntl24     2  TCONF  :  fcntl24.c:125: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl24 : 0
+RUN LTP CASE fcntl24_64
+[37m[124.171178 0:1538 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl24     1  TCONF  :  fcntl24.c:125: Cannot do fcntl on a file on tmpfs filesystem
+fcntl24     2  TCONF  :  fcntl24.c:125: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl24_64 : 0
+RUN LTP CASE fcntl25
+[37m[124.943058 0:1545 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl25     1  TCONF  :  fcntl25.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl25     2  TCONF  :  fcntl25.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl25 : 0
+RUN LTP CASE fcntl25_64
+[37m[125.753263 0:1552 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl25     1  TCONF  :  fcntl25.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl25     2  TCONF  :  fcntl25.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl25_64 : 0
+RUN LTP CASE fcntl26
+[37m[126.588983 0:1559 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl26     1  TCONF  :  fcntl26.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl26     2  TCONF  :  fcntl26.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl26 : 0
+RUN LTP CASE fcntl26_64
+[37m[127.490302 0:1566 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl26     1  TCONF  :  fcntl26.c:126: Cannot do fcntl on a file on tmpfs filesystem
+fcntl26     2  TCONF  :  fcntl26.c:126: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl26_64 : 0
+RUN LTP CASE fcntl27
+[37m[128.276747 0:1573 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl27.c:35: TINFO: Testing O_RDWR | O_CREAT with mode 0777
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+fcntl27.c:35: TINFO: Testing O_WRONLY | O_CREAT with mode 0222
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27 : 0
+RUN LTP CASE fcntl27_64
+[37m[128.888729 0:1578 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl27.c:35: TINFO: Testing O_RDWR | O_CREAT with mode 0777
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+fcntl27.c:35: TINFO: Testing O_WRONLY | O_CREAT with mode 0222
+fcntl27.c:39: TPASS: fcntl(fd, F_SETLEASE, F_RDLCK) : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27_64 : 0
+RUN LTP CASE fcntl29
+[37m[129.466318 0:1583 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl29.c:32: TPASS: fcntl(fd, F_DUPFD_CLOEXEC, 0) returned fd 4
+fcntl29.c:35: TPASS: fcntl test F_GETFD returned 1
+fcntl29.c:37: TPASS: fcntl() set FD_CLOEXEC
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29 : 0
+RUN LTP CASE fcntl29_64
+[37m[130.083856 0:1588 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl29.c:32: TPASS: fcntl(fd, F_DUPFD_CLOEXEC, 0) returned fd 4
+fcntl29.c:35: TPASS: fcntl test F_GETFD returned 1
+fcntl29.c:37: TPASS: fcntl() set FD_CLOEXEC
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29_64 : 0
+RUN LTP CASE fcntl30
+[37m[130.666455 0:1593 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl30.c:39: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30 : 0
+RUN LTP CASE fcntl30_64
+[37m[131.219653 0:1598 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl30.c:39: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30_64 : 0
+RUN LTP CASE fcntl31
+[37m[131.783090 0:1603 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     1  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     2  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process group ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     3  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for thread ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     4  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     5  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process group ID success
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31 : 0
+RUN LTP CASE fcntl31_64
+[37m[132.782884 0:1615 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     1  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     2  TPASS  :  fcntl test F_GETOWN, F_SETOWN for process group ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     3  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for thread ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     4  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process ID success
+fcntl31     0  TINFO  :  default io events signal is SIGIO
+fcntl31     5  TPASS  :  fcntl test F_GETOWN_EX, F_SETOWN_EX for process group ID success
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31_64 : 0
+RUN LTP CASE fcntl32
+[37m[133.687755 0:1627 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl32     1  TCONF  :  fcntl32.c:88: Cannot do fcntl(F_SETLEASE, F_WRLCK) on tmpfs filesystem
+fcntl32     2  TCONF  :  fcntl32.c:88: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl32 : 0
+RUN LTP CASE fcntl32_64
+[37m[134.534501 0:1634 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 1[m
+[mfcntl32     1  TCONF  :  fcntl32.c:88: Cannot do fcntl(F_SETLEASE, F_WRLCK) on tmpfs filesystem
+fcntl32     2  TCONF  :  fcntl32.c:88: Remaining cases not appropriate for configuration
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE fcntl32_64 : 0
+RUN LTP CASE fcntl33
+[37m[135.313305 0:1641 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_test.c:1367: TCONF: tmpfs is not supported by the test
+fcntl33.c:212: TWARN: Failed to open FILE '/proc/sys/fs/lease-break-time' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl33 : 0
+RUN LTP CASE fcntl33_64
+[37m[135.977434 0:1646 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_test.c:1367: TCONF: tmpfs is not supported by the test
+fcntl33.c:212: TWARN: Failed to open FILE '/proc/sys/fs/lease-break-time' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl33_64 : 0
+RUN LTP CASE fcntl34
+[37m[136.603797 0:1651 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl34.c:87: TINFO: write to a file inside threads with OFD locks
+fcntl34.c:33: TINFO: spawning '6' threads
+fcntl34.c:42: TINFO: waiting for '6' threads
+fcntl34.c:96: TINFO: verifying file's data
+fcntl34.c:124: TPASS: OFD locks synchronized access between threads
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34 : 0
+RUN LTP CASE fcntl34_64
+[37m[137.385069 0:1662 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl34.c:87: TINFO: write to a file inside threads with OFD locks
+fcntl34.c:33: TINFO: spawning '6' threads
+fcntl34.c:42: TINFO: waiting for '6' threads
+fcntl34.c:96: TINFO: verifying file's data
+fcntl34.c:124: TPASS: OFD locks synchronized access between threads
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34_64 : 0
+RUN LTP CASE fcntl35
+[37m[138.273508 0:1673 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl35.c:58: TCONF: /proc/sys/fs/pipe-max-size doesn't exist
+fcntl35.c:66: TWARN: Failed to open FILE '/proc/sys/fs/pipe-max-size' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl35 : 0
+RUN LTP CASE fcntl35_64
+[37m[138.887482 0:1678 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl35.c:58: TCONF: /proc/sys/fs/pipe-max-size doesn't exist
+fcntl35.c:66: TWARN: Failed to open FILE '/proc/sys/fs/pipe-max-size' for writing: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 1
+FAIL LTP CASE fcntl35_64 : 0
+RUN LTP CASE fcntl36
+[37m[139.449557 0:1683 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl36.c:288: TINFO: OFD read lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD read lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36 : 0
+RUN LTP CASE fcntl36_64
+[37m[147.196149 0:1814 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl36.c:288: TINFO: OFD read lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD read lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD write lock vs OFD write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX write lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+fcntl36.c:288: TINFO: OFD r/w lock vs POSIX read lock
+fcntl36.c:366: TPASS: Access between threads synchronized
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36_64 : 0
+RUN LTP CASE fcntl37
+[37m[154.914228 0:1945 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl37.c:73: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37 : 0
+RUN LTP CASE fcntl37_64
+[37m[155.476868 0:1950 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fcntl37.c:73: TBROK: Failed to open FILE '/proc/sys/fs/pipe-max-size' for reading: ENOENT (2)
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37_64 : 0
+RUN LTP CASE fcntl38
+[37m[156.035338 0:1955 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl38 : 0
+RUN LTP CASE fcntl38_64
+[37m[156.733805 0:1962 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl38_64 : 0
+RUN LTP CASE fcntl39
+[37m[157.466298 0:1969 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl39 : 0
+RUN LTP CASE fcntl39_64
+[37m[158.192285 0:1976 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_kconfig.c:71: TINFO: Couldn't locate kernel config!
+tst_kconfig.c:207: TBROK: Cannot parse kernel .config
+
+Summary:
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl39_64 : 0
+RUN LTP CASE sigtimedwait01
+[37m[158.968617 0:1983 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 21505 for fd: 2[m
+[mtst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sigwait.c:27: TPASS: Wait interrupted by expected signal
+sigwait.c:88: TPASS: struct siginfo is correct
+sigwait.c:148: TPASS: struct siginfo is correct
+sigwait.c:160: TPASS: sigwaitinfo restored the original mask
+sigwait.c:113: TPASS: Wait interrupted by expected signal
+sigwait.c:259: TPASS: Wait interrupted by expected signal
+sigwait.c:268: TPASS: sigwaitinfo restored the original mask
+sigwait.c:302: TPASS: Fault occurred while accessing the buffers
+sigwait.c:344: TPASS: Child exited with expected code
+sigwait.c:367: TPASS: Fault occurred while accessing the buffers
+sigwait.c:57: TPASS: Wait interrupted by timeout
+
+Summary:
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigtimedwait01 : 0
+#### OS COMP TEST GROUP END ltp-glibc ####

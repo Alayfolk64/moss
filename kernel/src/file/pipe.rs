@@ -24,7 +24,7 @@ use ringbuf::{
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::VmMutPtr;
 
-use super::{FileLike, Kstat};
+use super::{FileLike, Kstat, notify_async_io};
 use crate::{
     file::{IoDst, IoSrc},
     task::{AsThread, send_signal_to_process},
@@ -103,6 +103,10 @@ impl Pipe {
         buffer.push_slice(right);
         Ok(())
     }
+
+    pub(super) fn async_key(&self) -> usize {
+        Arc::as_ptr(&self.shared) as usize
+    }
 }
 
 fn raise_pipe() {
@@ -180,6 +184,8 @@ impl FileLike for Pipe {
             };
             if written > 0 {
                 self.shared.poll_rx.wake();
+                // Async I/O notifications configured by fcntl(F_SETOWN*/F_SETSIG).
+                notify_async_io(self.async_key());
                 total_written += written;
                 if total_written == size || self.nonblocking() {
                     return Ok(total_written);

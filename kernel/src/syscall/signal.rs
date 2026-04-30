@@ -243,6 +243,7 @@ pub fn sys_rt_sigtimedwait(
             signal.set_blocked(old_blocked);
             Poll::Ready(Some(sig))
         } else if check_signals(thr, uctx, Some(old_blocked)) {
+            signal.set_blocked(old_blocked);
             Poll::Ready(None)
         } else {
             let _ = curr.poll_interrupt(cx);
@@ -256,8 +257,8 @@ pub fn sys_rt_sigtimedwait(
         return Err(AxError::WouldBlock);
     };
     let Some(sig) = sig else {
-        // Interrupted
-        return Ok(0);
+        // Interrupted by a signal handler.
+        return Err(AxError::Interrupted);
     };
 
     if let Some(info) = info.nullable() {

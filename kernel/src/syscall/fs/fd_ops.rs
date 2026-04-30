@@ -21,13 +21,15 @@ use spin::RwLock;
 use crate::{
     file::{
         Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, add_file_like_from,
-        close_file_like, get_file_like, with_fs,
+        async_fcntl_get_owner, async_fcntl_get_signal, async_fcntl_set_owner,
+        async_fcntl_set_signal, close_file_like, get_file_like, with_fs,
     },
     mm::{UserConstPtr, UserPtr, vm_load_string},
     pseudofs::{Device, dev::tty},
     syscall::sys::{sys_getegid, sys_geteuid},
     task::AsThread,
 };
+use starry_signal::Signo;
 
 /// Convert open flags to [`OpenOptions`].
 fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32)) -> OpenOptions {
@@ -322,6 +324,13 @@ fn validate_lease_type(lease_type: i16) -> AxResult<()> {
         Ok(())
     } else {
         Err(AxError::InvalidInput)
+    }
+}
+
+fn validate_owner_type(owner_type: i32) -> AxResult<()> {
+    match owner_type as u32 {
+        F_OWNER_TID | F_OWNER_PID | F_OWNER_PGRP => Ok(()),
+        _ => Err(AxError::InvalidInput),
     }
 }
 
@@ -636,7 +645,11 @@ pub fn release_posix_locks_for_pid(pid: u32) {
 }
 
 pub fn release_file_leases_for_pid(pid: u32) {
-    FILE_LEASES.write().retain(|_, lease| lease.owner != pid);
+    // Best-effort cleanup on process exit: never block exit path on a
+    // contended global lease map, otherwise parent waiters may stall.
+    if let Some(mut leases) = FILE_LEASES.try_write() {
+        leases.retain(|_, lease| lease.owner != pid);
+    }
 }
 
 fn handle_getlk(fd: c_int, arg: usize) -> AxResult<isize> {
@@ -766,6 +779,67 @@ fn handle_getlease(fd: c_int) -> AxResult<isize> {
     Ok(lease_type as isize)
 }
 
+fn handle_setown(fd: c_int, arg: usize) -> AxResult<isize> {
+    let file_like = get_file_like(fd)?;
+    let owner = arg as isize as i32;
+    let (owner_type, owner_pid) = if owner < 0 {
+        (F_OWNER_PGRP as i32, owner.saturating_abs())
+    } else {
+        (F_OWNER_PID as i32, owner)
+    };
+    async_fcntl_set_owner(&file_like, owner_type, owner_pid);
+    Ok(0)
+}
+
+fn handle_getown(fd: c_int) -> AxResult<isize> {
+    let file_like = get_file_like(fd)?;
+    let owner = async_fcntl_get_owner(&file_like);
+    let pid = isize::try_from(owner.owner_pid).map_err(|_| AxError::InvalidInput)?;
+    if owner.owner_type as u32 == F_OWNER_PGRP {
+        Ok(-pid)
+    } else {
+        Ok(pid)
+    }
+}
+
+fn handle_setown_ex(fd: c_int, arg: usize) -> AxResult<isize> {
+    let file_like = get_file_like(fd)?;
+    let owner_ex = UserConstPtr::<f_owner_ex>::from(arg).get_as_ref()?;
+    validate_owner_type(owner_ex.type_)?;
+    if owner_ex.pid < 0 {
+        return Err(AxError::InvalidInput);
+    }
+    async_fcntl_set_owner(&file_like, owner_ex.type_, owner_ex.pid);
+    Ok(0)
+}
+
+fn handle_getown_ex(fd: c_int, arg: usize) -> AxResult<isize> {
+    let file_like = get_file_like(fd)?;
+    let owner = async_fcntl_get_owner(&file_like);
+    let owner_ex = UserPtr::<f_owner_ex>::from(arg).get_as_mut()?;
+    owner_ex.type_ = owner.owner_type;
+    owner_ex.pid = owner.owner_pid;
+    Ok(0)
+}
+
+fn handle_setsig(fd: c_int, arg: usize) -> AxResult<isize> {
+    let file_like = get_file_like(fd)?;
+    let signal = arg as i32;
+    if signal < 0
+        || signal > u8::MAX as i32
+        || (signal != 0 && Signo::from_repr(signal as u8).is_none())
+    {
+        return Err(AxError::InvalidInput);
+    }
+    async_fcntl_set_signal(&file_like, signal);
+    Ok(0)
+}
+
+fn handle_getsig(fd: c_int) -> AxResult<isize> {
+    let file_like = get_file_like(fd)?;
+    Ok(async_fcntl_get_signal(&file_like) as isize)
+}
+
 pub fn sys_dup(old_fd: c_int) -> AxResult<isize> {
     debug!("sys_dup <= {old_fd}");
     dup_fd(old_fd, 0, false)
@@ -822,6 +896,12 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
         F_DUPFD_CLOEXEC => dup_fd(fd, arg, true),
         F_SETLK => handle_setlk(fd, arg, false),
         F_SETLKW => handle_setlk(fd, arg, true),
+        F_SETOWN => handle_setown(fd, arg),
+        F_GETOWN => handle_getown(fd),
+        F_SETOWN_EX => handle_setown_ex(fd, arg),
+        F_GETOWN_EX => handle_getown_ex(fd, arg),
+        F_SETSIG => handle_setsig(fd, arg),
+        F_GETSIG => handle_getsig(fd),
         F_SETLEASE => handle_setlease(fd, arg),
         F_OFD_SETLK | F_OFD_SETLKW => Ok(0),
         F_GETLK => handle_getlk(fd, arg),
