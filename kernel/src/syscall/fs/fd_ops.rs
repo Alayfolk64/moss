@@ -144,8 +144,7 @@ pub fn sys_openat(
 
     // axfs::OpenOptions rejects (read-only + create), but Linux permits
     // O_RDONLY|O_CREAT. Handle it locally without modifying third-party crates.
-    if flags_u32 & O_CREAT != 0 && flags_u32 & O_PATH == 0 && (flags_u32 & O_ACCMODE) == O_RDONLY
-    {
+    if flags_u32 & O_CREAT != 0 && flags_u32 & O_PATH == 0 && (flags_u32 & O_ACCMODE) == O_RDONLY {
         let open_flags = (flags_u32 & !(O_CREAT | O_EXCL)) as i32;
         let open_options = flags_to_options(open_flags, mode, ids);
 

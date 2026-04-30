@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FileBackend;
 use axhal::paging::{MappingFlags, PageSize};
 use axtask::current;
@@ -332,6 +332,29 @@ pub fn sys_mlock(addr: usize, length: usize) -> AxResult<isize> {
     sys_mlock2(addr, length, 0)
 }
 
-pub fn sys_mlock2(_addr: usize, _length: usize, _flags: u32) -> AxResult<isize> {
+pub fn sys_mlock2(_addr: usize, _length: usize, flags: u32) -> AxResult<isize> {
+    if flags & !MLOCK_ONFAULT != 0 {
+        return Err(AxError::from(LinuxError::EINVAL));
+    }
+    Ok(0)
+}
+
+pub fn sys_munlock(_addr: usize, _length: usize) -> AxResult<isize> {
+    Ok(0)
+}
+
+pub fn sys_mlockall(flags: u32) -> AxResult<isize> {
+    const VALID: u32 = MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT;
+
+    if flags == 0 || flags & !VALID != 0 {
+        return Err(AxError::from(LinuxError::EINVAL));
+    }
+    if flags & MCL_ONFAULT != 0 && flags & (MCL_CURRENT | MCL_FUTURE) == 0 {
+        return Err(AxError::from(LinuxError::EINVAL));
+    }
+    Ok(0)
+}
+
+pub fn sys_munlockall() -> AxResult<isize> {
     Ok(0)
 }

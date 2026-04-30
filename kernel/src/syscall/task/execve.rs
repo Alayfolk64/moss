@@ -12,14 +12,13 @@ use axhal::uspace::UserContext;
 use axtask::current;
 use starry_vm::vm_load_until_nul;
 
+use super::ptrace_on_exec;
 use crate::{
     config::USER_HEAP_BASE,
     file::{FD_TABLE, File},
     mm::{load_user_app, vm_load_string},
     task::{AsThread, processes},
 };
-
-use super::ptrace_on_exec;
 
 fn has_exec_permission(loc: &Location, uid: u32, gid: u32) -> AxResult<bool> {
     let meta = loc.metadata()?;

@@ -6,14 +6,20 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    future::poll_fn,
     ops::Deref,
     sync::atomic::{AtomicBool, Ordering},
+    task::Poll,
     time::Duration,
 };
 
 use axerrno::{AxError, AxResult};
+use axpoll::PollSet;
 use axsync::Mutex;
-use axtask::current;
+use axtask::{
+    current,
+    future::{block_on, interruptible, timeout},
+};
 use hashbrown::HashMap;
 use kspin::SpinNoIrq;
 use memory_addr::VirtAddr;
@@ -26,7 +32,7 @@ use crate::{
 /// Wait queue used by futex.
 #[derive(Default)]
 pub struct WaitQueue {
-    queue: SpinNoIrq<VecDeque<(Arc<AtomicBool>, u32)>>,
+    queue: SpinNoIrq<VecDeque<(Arc<AtomicBool>, u32, Arc<PollSet>)>>,
 }
 impl WaitQueue {
     /// Creates a new `WaitQueue`.
@@ -41,31 +47,49 @@ impl WaitQueue {
     pub fn wait_if(
         &self,
         bitset: u32,
-        timeout: Option<Duration>,
+        timeout_dur: Option<Duration>,
         condition: impl FnOnce() -> bool,
     ) -> AxResult<bool> {
         let deadline =
             timeout.and_then(|duration| axhal::time::monotonic_time().checked_add(duration));
         let notified = Arc::new(AtomicBool::new(false));
+        let poll = Arc::new(PollSet::new());
 
         {
             let mut queue = self.queue.lock();
             if !condition() {
                 return Ok(false);
             }
-            queue.push_back((notified.clone(), bitset));
+            queue.push_back((notified.clone(), bitset, poll.clone()));
         }
 
-        loop {
-            if notified.load(Ordering::Acquire) {
-                return Ok(true);
-            }
-            if deadline.is_some_and(|deadline| axhal::time::monotonic_time() >= deadline) {
+        let result = block_on(interruptible(timeout(
+            timeout_dur,
+            poll_fn(|cx| {
+                if notified.load(Ordering::Acquire) {
+                    return Poll::Ready(());
+                }
+                poll.register(cx.waker());
+                if notified.load(Ordering::Acquire) {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }),
+        )));
+
+        match result {
+            Ok(Ok(())) => Ok(true),
+            Ok(Err(_)) => {
                 let mut queue = self.queue.lock();
-                queue.retain(|(waiter, _)| !Arc::ptr_eq(waiter, &notified));
+                queue.retain(|(waiter, ..)| !Arc::ptr_eq(waiter, &notified));
                 return Err(AxError::TimedOut);
             }
-            axtask::yield_now();
+            Err(_) => {
+                let mut queue = self.queue.lock();
+                queue.retain(|(waiter, ..)| !Arc::ptr_eq(waiter, &notified));
+                Err(AxError::Interrupted)
+            }
         }
     }
 
@@ -73,11 +97,12 @@ impl WaitQueue {
     /// bitmask.
     pub fn wake(&self, count: usize, mask: u32) -> usize {
         let mut woke = 0;
-        self.queue.lock().retain(|(waiter, bitset)| {
+        self.queue.lock().retain(|(waiter, bitset, poll)| {
             if woke >= count || (bitset & mask) == 0 {
                 true
             } else {
                 waiter.store(true, Ordering::Release);
+                poll.wake();
                 woke += 1;
                 false
             }

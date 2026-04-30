@@ -53,9 +53,7 @@ pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
             SocketInner::Udp(UdpSocket::new())
         }
         (AF_UNIX, SOCK_STREAM) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
-        (AF_UNIX, SOCK_SEQPACKET) => {
-            SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid)))
-        }
+        (AF_UNIX, SOCK_SEQPACKET) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
         (AF_UNIX, SOCK_DGRAM) => SocketInner::Unix(UnixSocket::new(DgramTransport::new(pid))),
         #[cfg(feature = "vsock")]
         (AF_VSOCK, SOCK_STREAM) => {

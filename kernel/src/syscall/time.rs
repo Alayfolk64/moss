@@ -1,6 +1,6 @@
 use axerrno::{AxError, AxResult};
 use axhal::time::{TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time};
-use axtask::current;
+use axtask::{current, yield_now};
 use linux_raw_sys::general::{
     __kernel_clockid_t, CLOCK_BOOTTIME, CLOCK_MONOTONIC, CLOCK_MONOTONIC_COARSE,
     CLOCK_MONOTONIC_RAW, CLOCK_PROCESS_CPUTIME_ID, CLOCK_REALTIME, CLOCK_REALTIME_COARSE,
@@ -221,11 +221,12 @@ pub fn sys_setitimer(
 
     debug!("sys_setitimer <= type: {ty:?}, interval: {interval:?}, remained: {remained:?}");
 
-    let old = curr
-        .as_thread()
-        .time
-        .borrow_mut()
-        .set_itimer(ty, interval, remained);
+    let old = loop {
+        if let Ok(mut time) = curr.as_thread().time.try_borrow_mut() {
+            break time.set_itimer(ty, interval, remained);
+        }
+        yield_now();
+    };
 
     if let Some(old_value) = old_value.nullable() {
         old_value.vm_write(itimerval {

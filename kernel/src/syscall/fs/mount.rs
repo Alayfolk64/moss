@@ -60,7 +60,8 @@ pub fn sys_mount(
             let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
             if kind == MountKind::CompatVfat {
                 debug!(
-                    "mount: use tmpfs-compatible backend for fs_type={fs_type:?}, source={source:?}, target={target:?}"
+                    "mount: use tmpfs-compatible backend for fs_type={fs_type:?}, \
+                     source={source:?}, target={target:?}"
                 );
             }
             let target = FS_CONTEXT.lock().resolve(target)?;
