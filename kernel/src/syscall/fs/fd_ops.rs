@@ -133,12 +133,40 @@ pub fn sys_openat(
     debug!("sys_openat <= {dirfd} {path:?} {flags:#o} {mode:#o}");
 
     let mut mode = mode & !current().as_thread().proc_data.umask();
-    if (flags as u32) & O_CREAT != 0 {
+    let flags_u32 = flags as u32;
+    if flags_u32 & O_CREAT != 0 {
         // VFS clears setuid/setgid bits for regular-file creation.
         mode &= !((S_ISUID | S_ISGID) as __kernel_mode_t);
     }
+    let ids = (sys_geteuid()? as u32, sys_getegid()? as u32);
 
-    let options = flags_to_options(flags, mode, (sys_geteuid()? as _, sys_getegid()? as _));
+    // axfs::OpenOptions rejects (read-only + create), but Linux permits
+    // O_RDONLY|O_CREAT. Handle it locally without modifying third-party crates.
+    if flags_u32 & O_CREAT != 0 && flags_u32 & O_PATH == 0 && (flags_u32 & O_ACCMODE) == O_RDONLY
+    {
+        let open_flags = (flags_u32 & !(O_CREAT | O_EXCL)) as i32;
+        let open_options = flags_to_options(open_flags, mode, ids);
+
+        if flags_u32 & O_EXCL == 0 {
+            match with_fs(dirfd, |fs| open_options.open(fs, path.as_str())) {
+                Ok(result) => {
+                    return add_to_fd(result, flags_u32).map(|fd| fd as isize);
+                }
+                Err(AxError::NotFound) => {}
+                Err(err) => return Err(err),
+            }
+        }
+
+        let create_flags = ((flags_u32 & !O_ACCMODE) | O_WRONLY) as i32;
+        let create_options = flags_to_options(create_flags, mode, ids);
+        with_fs(dirfd, |fs| create_options.open(fs, path.as_str()))?;
+
+        return with_fs(dirfd, |fs| open_options.open(fs, path.as_str()))
+            .and_then(|it| add_to_fd(it, flags_u32))
+            .map(|fd| fd as isize);
+    }
+
+    let options = flags_to_options(flags, mode, ids);
     with_fs(dirfd, |fs| options.open(fs, path))
         .and_then(|it| add_to_fd(it, flags as _))
         .map(|fd| fd as isize)

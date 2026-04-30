@@ -1,12 +1,12 @@
 #!/bin/sh
 set -e
 
-rm -rf sdcard-la.img
+# rm -rf sdcard-la.img
 # rm -rf sdcard-rv.img
 # cp ./imgs/sdcard-rv.img ./
-cp ./imgs/sdcard-la.img ./
+# cp ./imgs/sdcard-la.img ./
 
-sleep 1
+# sleep 1
 
 make all
 
