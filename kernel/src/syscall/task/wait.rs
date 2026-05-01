@@ -155,6 +155,9 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
                     .any(|signo| pending.has(signo) && proc_data.signal.can_restart(signo));
                 if restartable {
                     debug!("sys_waitpid: interrupted by restartable signal, retrying");
+                    continue;
+                }
+
                 // Spurious wakeup / already-consumed interrupt, keep waiting.
                 if pending.is_empty() {
                     continue;
