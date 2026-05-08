@@ -12,7 +12,7 @@ use axhal::time::wall_time;
 use axtask::current;
 use linux_raw_sys::{
     general::*,
-    ioctl::{FIONBIO, TIOCGWINSZ},
+    ioctl::{FIONBIO, TCGETA, TCGETS, TCGETS2, TIOCGWINSZ},
 };
 use starry_vm::{VmPtr, vm_write_slice};
 
@@ -40,9 +40,9 @@ pub fn sys_ioctl(fd: i32, cmd: u32, arg: usize) -> AxResult<isize> {
         .map(|result| result as isize)
         .inspect_err(|err| {
             if *err == AxError::NotATty {
-                // glibc likes to call TIOCGWINSZ on non-terminal files, just
-                // ignore it
-                if cmd == TIOCGWINSZ {
+                // libc/test harnesses commonly probe stdio fds with terminal
+                // ioctls. Returning ENOTTY is correct; keep the log quiet.
+                if matches!(cmd, TCGETS | TCGETA | TCGETS2 | TIOCGWINSZ) {
                     return;
                 }
                 warn!("Unsupported ioctl command: {cmd} for fd: {fd}");

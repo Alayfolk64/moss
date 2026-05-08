@@ -1,12 +1,42 @@
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::{
+    future::poll_fn,
+    sync::atomic::{AtomicBool, Ordering},
+    task::Poll,
+};
 
 use axerrno::{AxError, AxResult};
 use axhal::uspace::UserContext;
-use axtask::{TaskInner, current};
+use axtask::{TaskInner, current, future::block_on};
 use starry_process::Pid;
-use starry_signal::{SignalInfo, SignalOSAction, SignalSet};
+use starry_signal::{SignalInfo, SignalOSAction, SignalSet, Signo};
 
-use super::{AsThread, Thread, do_exit, get_process_data, get_process_group, get_task};
+use super::{
+    AsThread, ProcessData, ProcessWaitStatus, Thread, do_exit, get_process_data, get_process_group,
+    get_task,
+};
+
+fn wake_waiting_parent(proc_data: &ProcessData) {
+    if let Some(parent) = proc_data.proc.parent()
+        && let Ok(parent_data) = get_process_data(parent.pid())
+    {
+        parent_data.child_exit_event.wake();
+    }
+}
+
+fn wait_for_continue(proc_data: &ProcessData) {
+    block_on(poll_fn(|cx| {
+        let stopped = matches!(
+            *proc_data.wait_status.lock(),
+            Some(ProcessWaitStatus::Stopped(_))
+        );
+        if !stopped || proc_data.proc.is_zombie() {
+            Poll::Ready(())
+        } else {
+            proc_data.stop_event.register(cx.waker());
+            Poll::Pending
+        }
+    }));
+}
 
 pub fn check_signals(
     thr: &Thread,
@@ -37,15 +67,18 @@ pub fn check_signals(
             do_exit(signo as i32, true);
         }
         SignalOSAction::CoreDump => {
-            // TODO: implement core dump
-            do_exit(128 + signo as i32, true);
+            // TODO: implement core dump. Until then, report the signal as a
+            // normal signal termination instead of setting the core-dump bit.
+            do_exit(signo as i32, true);
         }
         SignalOSAction::Stop => {
-            // TODO: implement stop
-            do_exit(1, true);
+            *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Stopped(signo));
+            wake_waiting_parent(&thr.proc_data);
+            wait_for_continue(&thr.proc_data);
         }
         SignalOSAction::Continue => {
-            // TODO: implement continue
+            *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Continued(signo));
+            wake_waiting_parent(&thr.proc_data);
         }
         SignalOSAction::Handler => {
             // do nothing
@@ -97,6 +130,13 @@ pub fn send_signal_to_thread(tgid: Option<Pid>, tid: Pid, sig: Option<SignalInfo
         let signo = sig.signo();
         info!("Send signal {signo:?} to thread {tid}");
         let pid = thread.proc_data.proc.pid();
+        if signo == Signo::SIGCONT {
+            *thread.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Continued(signo));
+            thread.proc_data.stop_event.wake();
+            wake_waiting_parent(&thread.proc_data);
+        } else if signo == Signo::SIGKILL {
+            thread.proc_data.stop_event.wake();
+        }
         if thread.signal.process().signal_ignored(signo)
             && crate::syscall::ptrace_mark_signal_stop(pid, signo)
         {
@@ -115,6 +155,13 @@ pub fn send_signal_to_process(pid: Pid, sig: Option<SignalInfo>) -> AxResult<()>
     if let Some(sig) = sig {
         let signo = sig.signo();
         info!("Send signal {signo:?} to process {pid}");
+        if signo == Signo::SIGCONT {
+            *proc_data.wait_status.lock() = Some(ProcessWaitStatus::Continued(signo));
+            proc_data.stop_event.wake();
+            wake_waiting_parent(&proc_data);
+        } else if signo == Signo::SIGKILL {
+            proc_data.stop_event.wake();
+        }
         if proc_data.signal.signal_ignored(signo)
             && crate::syscall::ptrace_mark_signal_stop(pid, signo)
         {

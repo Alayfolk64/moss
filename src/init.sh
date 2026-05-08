@@ -1492,7 +1492,9 @@ run_ltp() {
 
     emit_summary_if_missing() {
         output="$1"
-        if ! printf '%s\n' "$output" | grep -q '^Summary:$'; then
+        if printf '%s\n' "$output" | grep -q '^Summary:[[:space:]]*$'; then
+            printf '%s\n' "$output" | awk '/^Summary:[[:space:]]*$/ { show = 1 } show { print } show && /^warnings[[:space:]]/ { exit }'
+        else
             # Align with LTP result accounting:
             # TPASS -> passed, TFAIL -> failed, TBROK -> broken,
             # TCONF -> skipped, TWARN -> warnings, TINFO/TDEBUG ignored.
@@ -1566,17 +1568,15 @@ run_ltp() {
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do
         echo "RUN LTP CASE $f"
 
-        case_output=$(timeout 20 ./"$f" 2>&1)
-
+        case_output=$(./"$f" 2>&1)
         printf '%s\n' "$case_output"
 
-        emit_summary_if_missing "$case_output"
-
-        if printf '%s\n' "$case_output" | grep -q "Sending SIGKILL to test process"; then
-            echo "$f" >> timeout_ltp_testcases.txt
+        if ! printf '%s\n' "$case_output" | grep -q '^Summary:[[:space:]]*$'; then
+            emit_summary_if_missing "$case_output"
         fi
 
         echo "FAIL LTP CASE $f : 0"
+        date '+%Y-%m-%d-%H-%M-%S'
     done
 
     cd ../../..

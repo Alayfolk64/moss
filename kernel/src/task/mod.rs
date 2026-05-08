@@ -30,6 +30,12 @@ use starry_signal::{
 pub use self::{futex::*, ops::*, resources::*, signal::*, stat::*, timer::*, user::*};
 use crate::mm::AddrSpace;
 
+#[derive(Debug, Clone, Copy)]
+pub enum ProcessWaitStatus {
+    Stopped(Signo),
+    Continued(Signo),
+}
+
 ///  A wrapper type that assumes the inner type is `Sync`.
 #[repr(transparent)]
 pub struct AssumeSync<T>(pub T);
@@ -207,6 +213,10 @@ pub struct ProcessData {
     pub child_exit_event: Arc<PollSet>,
     /// Self exit event
     pub exit_event: Arc<PollSet>,
+    /// Status visible to waitid(WSTOPPED/WCONTINUED).
+    pub wait_status: SpinNoIrq<Option<ProcessWaitStatus>>,
+    /// Wakes threads blocked by job-control stop signals.
+    pub stop_event: Arc<PollSet>,
     /// The exit signal of the thread
     pub exit_signal: Option<Signo>,
 
@@ -246,6 +256,8 @@ impl ProcessData {
 
             child_exit_event: Arc::default(),
             exit_event: Arc::default(),
+            wait_status: SpinNoIrq::new(None),
+            stop_event: Arc::default(),
             exit_signal,
 
             signal: Arc::new(ProcessSignalManager::new(
