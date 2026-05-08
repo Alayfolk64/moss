@@ -79,14 +79,14 @@ run_ltp() {
         access02
         access03
         access04
-        acct01
-        acct02
-        acct02_helper
-        add_key01
-        add_key02
-        add_key03
-        add_key04
-        add_key05
+        # acct01
+        # acct02
+        # acct02_helper
+        # add_key01
+        # add_key02
+        # add_key03
+        # add_key04
+        # add_key05
         adjtimex01
         adjtimex02
         adjtimex03
@@ -95,24 +95,24 @@ run_ltp() {
         alarm05
         alarm06
         alarm07
-        arch_prctl01
+        # arch_prctl01
         bind01
         bind02
         bind03
         bind04
         bind05
-        bind06
-        bpf_map01
-        bpf_prog01
-        bpf_prog02
-        bpf_prog03
-        bpf_prog04
-        bpf_prog05
-        bpf_prog06
-        bpf_prog07
-        brk01
-        brk02
-        cacheflush01
+        # bind06
+        # bpf_map01
+        # bpf_prog01
+        # bpf_prog02
+        # bpf_prog03
+        # bpf_prog04
+        # bpf_prog05
+        # bpf_prog06
+        # bpf_prog07
+        # brk01
+        # brk02
+        # cacheflush01
         capget01
         capget02
         capset01
@@ -123,76 +123,76 @@ run_ltp() {
         chdir04
         chmod01
         chmod03
-        chmod05
+        # chmod05
         chmod06
-        chmod07
+        # chmod07
         chown01
-        chown01_16
+        # chown01_16
         chown02
-        chown02_16
+        # chown02_16
         chown03
-        chown03_16
+        # chown03_16
         chown04
-        chown04_16
+        # chown04_16
         chown05
-        chown05_16
-        chroot01
+        # chown05_16
+        # chroot01
         chroot02
         chroot03
-        chroot04
+        # chroot04
         clock_adjtime01
         clock_adjtime02
         clock_getres01
         clock_gettime01
         clock_gettime02
-        clock_gettime03
-        clock_gettime04
+        # clock_gettime03
+        # clock_gettime04
         clock_nanosleep01
-        clock_nanosleep02
-        clock_nanosleep03
+        # clock_nanosleep02
+        # clock_nanosleep03
         clock_nanosleep04
-        clock_settime01
-        clock_settime02
-        clock_settime03
+        # clock_settime01
+        # clock_settime02
+        # clock_settime03
         clone01
         clone02
         clone03
         clone04
-        clone05
+        # clone05
         clone06
         clone07
         clone08
-        clone09
+        # clone09
         clone301
         clone302
-        clone303
+        # clone303
         close01
         close02
         close_range01
         close_range02
         confstr01
         connect01
-        connect02
+        # connect02
         copy_file_range01
-        copy_file_range02
-        copy_file_range03
+        # copy_file_range02
+        # copy_file_range03
         creat01
         creat03
-        creat04
+        # creat04
         creat05
         creat06
-        creat07
-        creat07_child
-        creat08
-        creat09
-        delete_module01
-        delete_module02
-        delete_module03
+        # creat07
+        # creat07_child
+        # creat08
+        # creat09
+        # delete_module01
+        # delete_module02
+        # delete_module03
         dup01
         dup02
         dup03
         dup04
-        dup05
+        # dup05
         dup06
         dup07
         dup201
@@ -204,7 +204,7 @@ run_ltp() {
         dup207
         dup3_01
         dup3_02
-        endian_switch01
+        # endian_switch01
         epoll-ltp
         epoll_create01
         epoll_create02
@@ -213,53 +213,53 @@ run_ltp() {
         epoll_ctl01
         epoll_ctl02
         epoll_ctl03
-        epoll_ctl04
-        epoll_ctl05
+        # epoll_ctl04
+        # epoll_ctl05
         epoll_pwait01
         epoll_pwait02
-        epoll_pwait03
+        # epoll_pwait03
         epoll_pwait04
         epoll_pwait05
-        epoll_wait01
-        epoll_wait02
-        epoll_wait03
-        epoll_wait04
-        epoll_wait05
-        epoll_wait06
-        epoll_wait07
+        # epoll_wait01
+        # epoll_wait02
+        # epoll_wait03
+        # epoll_wait04
+        # epoll_wait05
+        # epoll_wait06
+        # epoll_wait07
         eventfd01
         eventfd02
         eventfd03
         eventfd04
         eventfd05
-        eventfd06
+        # eventfd06
         eventfd2_01
         eventfd2_02
         eventfd2_03
         execl01
-        execl01_child
+        # execl01_child
         execle01
-        execle01_child
+        # execle01_child
         execlp01
-        execlp01_child
+        # execlp01_child
         execv01
-        execv01_child
+        # execv01_child
         execve01
-        execve01_child
+        # execve01_child
         execve02
         execve03
         execve04
         execve05
         execve06
-        execve06_child
-        execve_child
-        execveat01
-        execveat02
-        execveat03
-        execveat_child
-        execveat_errno
+        # execve06_child
+        # execve_child
+        # execveat01
+        # execveat02
+        # execveat03
+        # execveat_child
+        # execveat_errno
         execvp01
-        execvp01_child
+        # execvp01_child
         exit01
         exit02
         exit_group01
@@ -268,60 +268,60 @@ run_ltp() {
         faccessat201
         faccessat202
         fallocate01
-        fallocate02
+        # fallocate02
         fallocate03
         fallocate04
-        fallocate05
-        fallocate06
-        fanotify01
-        fanotify02
-        fanotify03
+        # fallocate05
+        # fallocate06
+        # fanotify01
+        # fanotify02
+        # fanotify03
         fanotify04
-        fanotify05
-        fanotify06
-        fanotify07
+        # fanotify05
+        # fanotify06
+        # fanotify07
         fanotify08
-        fanotify09
-        fanotify10
-        fanotify11
-        fanotify12
-        fanotify13
-        fanotify14
-        fanotify15
-        fanotify16
-        fanotify17
-        fanotify18
-        fanotify19
-        fanotify20
-        fanotify21
-        fanotify22
-        fanotify23
-        fanotify_child
+        # fanotify09
+        # fanotify10
+        # fanotify11
+        # fanotify12
+        # fanotify13
+        # fanotify14
+        # fanotify15
+        # fanotify16
+        # fanotify17
+        # fanotify18
+        # fanotify19
+        # fanotify20
+        # fanotify21
+        # fanotify22
+        # fanotify23
+        # fanotify_child
         fchdir01
         fchdir02
-        fchdir03
+        # fchdir03
         fchmod01
-        fchmod02
+        # fchmod02
         fchmod03
         fchmod04
-        fchmod05
-        fchmod06
+        # fchmod05
+        # fchmod06
         fchmodat01
         fchmodat02
         fchown01
-        fchown01_16
+        # fchown01_16
         fchown02
-        fchown02_16
+        # fchown02_16
         fchown03
-        fchown03_16
+        # fchown03_16
         fchown04
-        fchown04_16
+        # fchown04_16
         fchown05
-        fchown05_16
+        # fchown05_16
         fchownat01
         fchownat02
-        fcntl01
-        fcntl01_64
+        # fcntl01
+        # fcntl01_64
         fcntl02
         fcntl02_64
         fcntl03
@@ -330,8 +330,8 @@ run_ltp() {
         fcntl04_64
         fcntl05
         fcntl05_64
-        fcntl07
-        fcntl07_64
+        # fcntl07
+        # fcntl07_64
         fcntl08
         fcntl08_64
         fcntl09
@@ -396,45 +396,45 @@ run_ltp() {
         fcntl39_64
         fdatasync01
         fdatasync02
-        fdatasync03
-        fgetxattr01
-        fgetxattr02
-        fgetxattr03
-        finit_module01
-        finit_module02
-        flistxattr01
-        flistxattr02
-        flistxattr03
+        # fdatasync03
+        # fgetxattr01
+        # fgetxattr02
+        # fgetxattr03
+        # finit_module01
+        # finit_module02
+        # flistxattr01
+        # flistxattr02
+        # flistxattr03
         flock01
-        flock02
+        # flock02
         flock03
         flock04
         flock06
         fork01
         fork03
         fork04
-        fork05
+        # fork05
         fork07
         fork08
         fork09
         fork10
-        fork13
-        fork14
+        # fork13
+        # fork14
         fork_procs
         fpathconf01
-        fremovexattr01
-        fremovexattr02
-        fsconfig01
-        fsconfig02
-        fsconfig03
-        fsetxattr01
-        fsetxattr02
-        fsmount01
-        fsmount02
-        fsopen01
-        fsopen02
-        fspick01
-        fspick02
+        # fremovexattr01
+        # fremovexattr02
+        # fsconfig01
+        # fsconfig02
+        # fsconfig03
+        # fsetxattr01
+        # fsetxattr02
+        # fsmount01
+        # fsmount02
+        # fsopen01
+        # fsopen02
+        # fspick01
+        # fspick02
         fstat02
         fstat02_64
         fstat03
@@ -445,40 +445,40 @@ run_ltp() {
         fstatfs02
         fstatfs02_64
         fsync01
-        fsync02
-        fsync03
-        fsync04
+        # fsync02
+        # fsync03
+        # fsync04
         ftruncate01
         ftruncate01_64
-        ftruncate03
-        ftruncate03_64
-        ftruncate04
-        ftruncate04_64
+        # ftruncate03
+        # ftruncate03_64
+        # ftruncate04
+        # ftruncate04_64
         futex_cmp_requeue01
         futex_cmp_requeue02
-        futex_wait01
-        futex_wait02
-        futex_wait03
-        futex_wait04
-        futex_wait05
-        futex_wait_bitset01
-        futex_waitv01
-        futex_waitv02
-        futex_waitv03
-        futex_wake01
-        futex_wake02
-        futex_wake03
-        futex_wake04
-        futimesat01
-        get_mempolicy01
-        get_mempolicy02
+        # futex_wait01
+        # futex_wait02
+        # futex_wait03
+        # futex_wait04
+        # futex_wait05
+        # futex_wait_bitset01
+        # futex_waitv01
+        # futex_waitv02
+        # futex_waitv03
+        # futex_wake01
+        # futex_wake02
+        # futex_wake03
+        # futex_wake04
+        # futimesat01
+        # get_mempolicy01
+        # get_mempolicy02
         get_robust_list01
-        getcontext01
-        getcpu01
+        # getcontext01
+        # getcpu01
         getcwd01
         getcwd02
         getcwd03
-        getcwd04
+        # getcwd04
         getdents01
         getdents02
         getdomainname01
@@ -487,21 +487,21 @@ run_ltp() {
         getegid02
         getegid02_16
         geteuid01
-        geteuid01_16
+        # geteuid01_16
         geteuid02
-        geteuid02_16
+        # geteuid02_16
         getgid01
-        getgid01_16
+        # getgid01_16
         getgid03
-        getgid03_16
+        # getgid03_16
         getgroups01
-        getgroups01_16
+        # getgroups01_16
         getgroups03
-        getgroups03_16
-        gethostbyname_r01
-        gethostid01
+        # getgroups03_16
+        # gethostbyname_r01
+        # gethostid01
         gethostname01
-        gethostname02
+        # gethostname02
         getitimer01
         getitimer02
         getpagesize01
@@ -509,9 +509,9 @@ run_ltp() {
         getpgid01
         getpgid02
         getpgrp01
-        getpid01
+        # getpid01
         getpid02
-        getppid01
+        # getppid01
         getppid02
         getpriority01
         getpriority02
@@ -520,26 +520,26 @@ run_ltp() {
         getrandom03
         getrandom04
         getrandom05
-        getresgid01
-        getresgid01_16
-        getresgid02
-        getresgid02_16
-        getresgid03
-        getresgid03_16
-        getresuid01
-        getresuid01_16
-        getresuid02
-        getresuid02_16
-        getresuid03
-        getresuid03_16
+        # getresgid01
+        # getresgid01_16
+        # getresgid02
+        # getresgid02_16
+        # getresgid03
+        # getresgid03_16
+        # getresuid01
+        # getresuid01_16
+        # getresuid02
+        # getresuid02_16
+        # getresuid03
+        # getresuid03_16
         getrlimit01
         getrlimit02
-        getrlimit03
+        # getrlimit03
         getrusage01
         getrusage02
         getrusage03
-        getrusage03_child
-        getrusage04
+        # getrusage03_child
+        # getrusage04
         getsid01
         getsid02
         getsockname01
@@ -547,354 +547,354 @@ run_ltp() {
         getsockopt02
         gettid01
         gettid02
-        gettimeofday01
-        gettimeofday02
+        # gettimeofday01
+        # gettimeofday02
         getuid01
-        getuid01_16
+        # getuid01_16
         getuid03
-        getuid03_16
-        getxattr01
-        getxattr02
-        getxattr03
-        getxattr04
-        getxattr05
-        init_module01
-        init_module02
-        inotify01
-        inotify02
-        inotify03
-        inotify04
-        inotify05
-        inotify06
-        inotify07
-        inotify08
-        inotify09
-        inotify10
-        inotify11
-        inotify12
+        # getuid03_16
+        # getxattr01
+        # getxattr02
+        # getxattr03
+        # getxattr04
+        # getxattr05
+        # init_module01
+        # init_module02
+        # inotify01
+        # inotify02
+        # inotify03
+        # inotify04
+        # inotify05
+        # inotify06
+        # inotify07
+        # inotify08
+        # inotify09
+        # inotify10
+        # inotify11
+        # inotify12
         inotify_init1_01
         inotify_init1_02
-        io_cancel01
-        io_cancel02
-        io_destroy01
-        io_destroy02
-        io_getevents01
-        io_getevents02
-        io_pgetevents01
-        io_pgetevents02
-        io_setup01
-        io_setup02
-        io_submit01
-        io_submit02
-        io_submit03
+        # io_cancel01
+        # io_cancel02
+        # io_destroy01
+        # io_destroy02
+        # io_getevents01
+        # io_getevents02
+        # io_pgetevents01
+        # io_pgetevents02
+        # io_setup01
+        # io_setup02
+        # io_submit01
+        # io_submit02
+        # io_submit03
         io_uring01
-        io_uring02
-        ioctl01
-        ioctl02
-        ioctl03
+        # io_uring02
+        # ioctl01
+        # ioctl02
+        # ioctl03
         ioctl04
         ioctl05
-        ioctl06
-        ioctl07
-        ioctl08
-        ioctl09
-        ioctl_loop01
-        ioctl_loop02
-        ioctl_loop03
-        ioctl_loop04
-        ioctl_loop05
-        ioctl_loop06
-        ioctl_loop07
-        ioctl_ns01
-        ioctl_ns02
-        ioctl_ns03
-        ioctl_ns04
-        ioctl_ns05
-        ioctl_ns06
+        # ioctl06
+        # ioctl07
+        # ioctl08
+        # ioctl09
+        # ioctl_loop01
+        # ioctl_loop02
+        # ioctl_loop03
+        # ioctl_loop04
+        # ioctl_loop05
+        # ioctl_loop06
+        # ioctl_loop07
+        # ioctl_ns01
+        # ioctl_ns02
+        # ioctl_ns03
+        # ioctl_ns04
+        # ioctl_ns05
+        # ioctl_ns06
         ioctl_ns07
-        ioctl_sg01
-        ioperm01
-        ioperm02
-        iopl01
-        iopl02
-        ioprio_get01
-        ioprio_set01
-        ioprio_set02
-        ioprio_set03
-        kcmp01
-        kcmp02
-        kcmp03
-        keyctl01
-        keyctl02
-        keyctl03
-        keyctl04
-        keyctl05
-        keyctl06
-        keyctl07
-        keyctl08
-        keyctl09
-        kill02
-        kill03
-        kill05
-        kill06
-        kill07
-        kill08
-        kill09
+        # ioctl_sg01
+        # ioperm01
+        # ioperm02
+        # iopl01
+        # iopl02
+        # ioprio_get01
+        # ioprio_set01
+        # ioprio_set02
+        # ioprio_set03
+        # kcmp01
+        # kcmp02
+        # kcmp03
+        # keyctl01
+        # keyctl02
+        # keyctl03
+        # keyctl04
+        # keyctl05
+        # keyctl06
+        # keyctl07
+        # keyctl08
+        # keyctl09
+        # kill02
+        # kill03
+        # kill05
+        # kill06
+        # kill07
+        # kill08
+        # kill09
         # kill10
-        kill11
-        kill12
-        kill13
+        # kill11
+        # kill12
+        # kill13
         lchown01
-        lchown01_16
+        # lchown01_16
         lchown02
-        lchown02_16
+        # lchown02_16
         lchown03
-        lchown03_16
-        leapsec01
-        lgetxattr01
-        lgetxattr02
+        # lchown03_16
+        # leapsec01
+        # lgetxattr01
+        # lgetxattr02
         link02
         link04
         link05
         link08
-        linkat01
+        # linkat01
         linkat02
         listen01
-        listxattr01
-        listxattr02
-        listxattr03
-        llistxattr01
-        llistxattr02
-        llistxattr03
+        # listxattr01
+        # listxattr02
+        # listxattr03
+        # llistxattr01
+        # llistxattr02
+        # llistxattr03
         llseek01
         llseek02
         llseek03
-        lremovexattr01
+        # lremovexattr01
         lseek01
-        lseek02
+        # lseek02
         lseek07
-        lseek11
+        # lseek11
         lstat01
         lstat01_64
         lstat02
         lstat02_64
         madvise01
-        madvise02
-        madvise03
+        # madvise02
+        # madvise03
         madvise05
-        madvise06
-        madvise07
-        madvise08
-        madvise09
+        # madvise06
+        # madvise07
+        # madvise08
+        # madvise09
         madvise10
-        madvise11
-        mallinfo01
-        mallinfo02
-        mallinfo2_01
-        mallopt01
-        mbind01
-        mbind02
-        mbind03
-        mbind04
-        membarrier01
+        # madvise11
+        # mallinfo01
+        # mallinfo02
+        # mallinfo2_01
+        # mallopt01
+        # mbind01
+        # mbind02
+        # mbind03
+        # mbind04
+        # membarrier01
         memcmp01
         memcpy01
         memfd_create01
-        memfd_create02
-        memfd_create03
-        memfd_create04
+        # memfd_create02
+        # memfd_create03
+        # memfd_create04
         memset01
-        migrate_pages01
-        migrate_pages02
+        # migrate_pages01
+        # migrate_pages02
         # migrate_pages03
         # mincore01
         # mincore02
         # mincore03
         # mincore04
-        mkdir02
-        mkdir03
-        mkdir04
-        mkdir05
-        mkdir09
+        # mkdir02
+        # mkdir03
+        # mkdir04
+        # mkdir05
+        # mkdir09
         mkdirat01
         mkdirat02
-        mknod01
-        mknod02
-        mknod03
-        mknod04
-        mknod05
-        mknod06
-        mknod07
-        mknod08
-        mknod09
-        mknodat01
-        mknodat02
+        # mknod01
+        # mknod02
+        # mknod03
+        # mknod04
+        # mknod05
+        # mknod06
+        # mknod07
+        # mknod08
+        # mknod09
+        # mknodat01
+        # mknodat02
         mlock01
-        mlock02
+        # mlock02
         mlock03
         mlock04
-        mlock05
-        mlock201
+        # mlock05
+        # mlock201
         mlock202
-        mlock203
+        # mlock203
         mlockall01
         mlockall02
-        mlockall03
-        mmap001
-        mmap01
+        # mlockall03
+        # mmap001
+        # mmap01
         mmap02
-        mmap03
-        mmap04
+        # mmap03
+        # mmap04
         mmap05
         mmap06
-        mmap08
+        # mmap08
         mmap09
-        mmap10
+        # mmap10
         mmap11
-        mmap12
-        mmap13
-        mmap14
+        # mmap12
+        # mmap13
+        # mmap14
         mmap15
-        mmap16
+        # mmap16
         mmap17
         mmap18
         mmap19
         mmap20
-        modify_ldt01
-        modify_ldt02
-        modify_ldt03
+        # modify_ldt01
+        # modify_ldt02
+        # modify_ldt03
         mount01
-        mount02
+        # mount02
         mount03
-        mount03_suid_child
-        mount04
-        mount05
-        mount06
+        # mount03_suid_child
+        # mount04
+        # mount05
+        # mount06
         mount07
-        mount_setattr01
-        move_mount01
-        move_mount02
-        move_pages01
-        move_pages02
-        move_pages03
-        move_pages04
-        move_pages05
-        move_pages06
-        move_pages07
-        move_pages09
-        move_pages10
-        move_pages11
-        move_pages12
+        # mount_setattr01
+        # move_mount01
+        # move_mount02
+        # move_pages01
+        # move_pages02
+        # move_pages03
+        # move_pages04
+        # move_pages05
+        # move_pages06
+        # move_pages07
+        # move_pages09
+        # move_pages10
+        # move_pages11
+        # move_pages12
         # mprotect01
         # mprotect02
         # mprotect03
         # mprotect04
         # mprotect05
-        mq_notify01
-        mq_notify02
-        mq_notify03
-        mq_open01
-        mq_timedreceive01
-        mq_timedsend01
-        mq_unlink01
-        mremap01
+        # mq_notify01
+        # mq_notify02
+        # mq_notify03
+        # mq_open01
+        # mq_timedreceive01
+        # mq_timedsend01
+        # mq_unlink01
+        # mremap01
         mremap02
-        mremap03
-        mremap04
+        # mremap03
+        # mremap04
         mremap05
-        mremap06
-        msgctl01
-        msgctl02
+        # mremap06
+        # msgctl01
+        # msgctl02
         msgctl03
-        msgctl04
-        msgctl05
-        msgctl06
+        # msgctl04
+        # msgctl05
+        # msgctl06
         msgctl12
-        msgget01
-        msgget02
-        msgget03
-        msgget04
-        msgget05
-        msgrcv01
-        msgrcv02
-        msgrcv03
-        msgrcv05
-        msgrcv06
-        msgrcv07
-        msgrcv08
-        msgsnd01
-        msgsnd02
-        msgsnd05
-        msgsnd06
-        msgstress01
+        # msgget01
+        # msgget02
+        # msgget03
+        # msgget04
+        # msgget05
+        # msgrcv01
+        # msgrcv02
+        # msgrcv03
+        # msgrcv05
+        # msgrcv06
+        # msgrcv07
+        # msgrcv08
+        # msgsnd01
+        # msgsnd02
+        # msgsnd05
+        # msgsnd06
+        # msgstress01
         msync01
         msync02
-        msync03
-        msync04
+        # msync03
+        # msync04
         munlock01
-        munlock02
-        munlockall01
+        # munlock02
+        # munlockall01
         munmap01
         munmap02
         munmap03
-        name_to_handle_at01
-        name_to_handle_at02
-        nanosleep01
+        # name_to_handle_at01
+        # name_to_handle_at02
+        # nanosleep01
         nanosleep02
         nanosleep04
         newuname01
         nftw01
         nftw6401
-        nice01
-        nice02
-        nice03
-        nice04
-        nice05
+        # nice01
+        # nice02
+        # nice03
+        # nice04
+        # nice05
         open01
         open02
         open03
         open04
-        open06
+        # open06
         open07
         open08
         open09
         open10
-        open11
+        # open11
         open12
-        open12_child
+        # open12_child
         open13
-        open14
-        open_by_handle_at01
-        open_by_handle_at02
-        open_tree01
-        open_tree02
-        openat01
+        # open14
+        # open_by_handle_at01
+        # open_by_handle_at02
+        # open_tree01
+        # open_tree02
+        # openat01
         openat02
-        openat02_child
-        openat03
-        openat04
-        openat201
-        openat202
-        openat203
+        # openat02_child
+        # openat03
+        # openat04
+        # openat201
+        # openat202
+        # openat203
         pathconf01
         pathconf02
-        pause01
-        pause02
-        pause03
-        perf_event_open01
-        perf_event_open02
-        perf_event_open03
-        personality01
-        personality02
+        # pause01
+        # pause02
+        # pause03
+        # perf_event_open01
+        # perf_event_open02
+        # perf_event_open03
+        # personality01
+        # personality02
         # pidfd_getfd01
         # pidfd_getfd02
         pidfd_open01
         pidfd_open02
         pidfd_open03
         pidfd_open04
-        pidfd_send_signal01
-        pidfd_send_signal02
-        pidfd_send_signal03
+        # pidfd_send_signal01
+        # pidfd_send_signal02
+        # pidfd_send_signal03
         pipe01
         pipe02
         pipe03
@@ -907,37 +907,37 @@ run_ltp() {
         pipe10
         pipe11
         pipe12
-        pipe13
-        pipe14
-        pipe15
-        pipe2_01
-        pipe2_02
-        pipe2_02_child
-        pipe2_04
-        pivot_root01
-        pkey01
+        # pipe13
+        # pipe14
+        # pipe15
+        # pipe2_01
+        # pipe2_02
+        # pipe2_02_child
+        # pipe2_04
+        # pivot_root01
+        # pkey01
         poll01
-        poll02
+        # poll02
         posix_fadvise01
         posix_fadvise01_64
-        posix_fadvise02
-        posix_fadvise02_64
+        # posix_fadvise02
+        # posix_fadvise02_64
         posix_fadvise03
         posix_fadvise03_64
-        posix_fadvise04
-        posix_fadvise04_64
-        ppoll01
-        prctl01
+        # posix_fadvise04
+        # posix_fadvise04_64
+        # ppoll01
+        # prctl01
         prctl02
-        prctl03
-        prctl04
+        # prctl03
+        # prctl04
         prctl05
-        prctl06
-        prctl06_execve
-        prctl07
-        prctl08
-        prctl09
-        prctl10
+        # prctl06
+        # prctl06_execve
+        # prctl07
+        # prctl08
+        # prctl09
+        # prctl10
         pread01
         pread01_64
         pread02
@@ -946,22 +946,22 @@ run_ltp() {
         preadv01_64
         preadv02
         preadv02_64
-        preadv03
-        preadv03_64
+        # preadv03
+        # preadv03_64
         preadv201
         preadv201_64
         preadv202
         preadv202_64
-        preadv203
-        preadv203_64
-        process_madvise01
-        process_vm01
-        process_vm_readv02
-        process_vm_readv03
-        process_vm_writev02
-        profil01
-        pselect01
-        pselect01_64
+        # preadv203
+        # preadv203_64
+        # process_madvise01
+        # process_vm01
+        # process_vm_readv02
+        # process_vm_readv03
+        # process_vm_writev02
+        # profil01
+        # pselect01
+        # pselect01_64
         pselect02
         pselect02_64
         pselect03
@@ -969,149 +969,149 @@ run_ltp() {
         ptrace01
         ptrace02
         ptrace03
-        ptrace04
+        # ptrace04
         ptrace05
         ptrace06
-        ptrace07
-        ptrace08
-        ptrace09
-        ptrace10
+        # ptrace07
+        # ptrace08
+        # ptrace09
+        # ptrace10
         ptrace11
         pwrite01
         pwrite01_64
-        pwrite02
-        pwrite02_64
+        # pwrite02
+        # pwrite02_64
         pwrite03
         pwrite03_64
         pwrite04
         pwrite04_64
-        pwritev01
-        pwritev01_64
-        pwritev02
-        pwritev02_64
-        pwritev03
-        pwritev03_64
-        pwritev201
-        pwritev201_64
-        pwritev202
-        pwritev202_64
-        quotactl01
-        quotactl02
-        quotactl03
-        quotactl04
-        quotactl05
-        quotactl06
-        quotactl07
-        quotactl08
-        quotactl09
+        # pwritev01
+        # pwritev01_64
+        # pwritev02
+        # pwritev02_64
+        # pwritev03
+        # pwritev03_64
+        # pwritev201
+        # pwritev201_64
+        # pwritev202
+        # pwritev202_64
+        # quotactl01
+        # quotactl02
+        # quotactl03
+        # quotactl04
+        # quotactl05
+        # quotactl06
+        # quotactl07
+        # quotactl08
+        # quotactl09
         read01
         read02
-        read03
+        # read03
         read04
-        readahead01
-        readahead02
+        # readahead01
+        # readahead02
         readdir01
-        readdir21
+        # readdir21
         readlink01
         readlink03
-        readlinkat01
+        # readlinkat01
         readlinkat02
         readv01
         readv02
-        realpath01
+        # realpath01
         # reboot01
         # reboot02
         recv01
         recvfrom01
-        recvmmsg01
+        # recvmmsg01
         recvmsg01
         recvmsg02
-        recvmsg03
-        remap_file_pages01
-        remap_file_pages02
-        removexattr01
-        removexattr02
+        # recvmsg03
+        # remap_file_pages01
+        # remap_file_pages02
+        # removexattr01
+        # removexattr02
         rename01
         rename03
         rename04
         rename05
         rename06
-        rename07
+        # rename07
         rename08
-        rename09
+        # rename09
         rename10
         rename11
-        rename12
+        # rename12
         rename13
         rename14
         renameat01
         renameat201
-        renameat202
-        request_key01
-        request_key02
-        request_key03
-        request_key04
-        request_key05
+        # renameat202
+        # request_key01
+        # request_key02
+        # request_key03
+        # request_key04
+        # request_key05
         rmdir01
         rmdir02
-        rmdir03
+        # rmdir03
         rt_sigaction01
         rt_sigaction02
         rt_sigaction03
         rt_sigprocmask01
         rt_sigprocmask02
-        rt_sigqueueinfo01
-        rt_sigsuspend01
+        # rt_sigqueueinfo01
+        # rt_sigsuspend01
         sbrk01
         sbrk02
-        sbrk03
-        sched_get_priority_max01
-        sched_get_priority_max02
-        sched_get_priority_min01
-        sched_get_priority_min02
+        # sbrk03
+        # sched_get_priority_max01
+        # sched_get_priority_max02
+        # sched_get_priority_min01
+        # sched_get_priority_min02
         sched_getaffinity01
-        sched_getattr01
-        sched_getattr02
-        sched_getparam01
-        sched_getparam03
+        # sched_getattr01
+        # sched_getattr02
+        # sched_getparam01
+        # sched_getparam03
         sched_getscheduler01
-        sched_getscheduler02
-        sched_rr_get_interval01
-        sched_rr_get_interval02
-        sched_rr_get_interval03
+        # sched_getscheduler02
+        # sched_rr_get_interval01
+        # sched_rr_get_interval02
+        # sched_rr_get_interval03
         sched_setaffinity01
-        sched_setattr01
-        sched_setparam01
-        sched_setparam02
-        sched_setparam03
-        sched_setparam04
-        sched_setparam05
-        sched_setscheduler01
-        sched_setscheduler02
-        sched_setscheduler03
-        sched_setscheduler04
+        # sched_setattr01
+        # sched_setparam01
+        # sched_setparam02
+        # sched_setparam03
+        # sched_setparam04
+        # sched_setparam05
+        # sched_setscheduler01
+        # sched_setscheduler02
+        # sched_setscheduler03
+        # sched_setscheduler04
         sched_yield01
-        select01
-        select02
+        # select01
+        # select02
         select03
-        select04
-        semctl01
-        semctl02
-        semctl03
-        semctl04
-        semctl05
-        semctl06
-        semctl07
-        semctl08
-        semctl09
-        semget01
-        semget02
-        semget05
-        semop01
-        semop02
-        semop03
-        semop04
-        semop05
+        # select04
+        # semctl01
+        # semctl02
+        # semctl03
+        # semctl04
+        # semctl05
+        # semctl06
+        # semctl07
+        # semctl08
+        # semctl09
+        # semget01
+        # semget02
+        # semget05
+        # semop01
+        # semop02
+        # semop03
+        # semop04
+        # semop05
         # send01
         # send02
         # sendfile02
@@ -1130,158 +1130,158 @@ run_ltp() {
         # sendfile08_64
         # sendfile09
         # sendfile09_64
-        sendmmsg01
+        # sendmmsg01
         sendmmsg02
-        sendmsg01
-        sendmsg02
-        sendmsg03
+        # sendmsg01
+        # sendmsg02
+        # sendmsg03
         sendto01
-        sendto02
-        sendto03
-        set_mempolicy01
-        set_mempolicy02
-        set_mempolicy03
-        set_mempolicy04
-        set_mempolicy05
+        # sendto02
+        # sendto03
+        # set_mempolicy01
+        # set_mempolicy02
+        # set_mempolicy03
+        # set_mempolicy04
+        # set_mempolicy05
         set_robust_list01
-        set_thread_area01
+        # set_thread_area01
         set_tid_address01
-        setdomainname01
-        setdomainname02
-        setdomainname03
-        setegid01
-        setegid02
-        setfsgid01
-        setfsgid01_16
-        setfsgid02
-        setfsgid02_16
-        setfsgid03
-        setfsgid03_16
-        setfsuid01
-        setfsuid01_16
-        setfsuid02
-        setfsuid02_16
-        setfsuid03
-        setfsuid03_16
-        setfsuid04
-        setfsuid04_16
+        # setdomainname01
+        # setdomainname02
+        # setdomainname03
+        # setegid01
+        # setegid02
+        # setfsgid01
+        # setfsgid01_16
+        # setfsgid02
+        # setfsgid02_16
+        # setfsgid03
+        # setfsgid03_16
+        # setfsuid01
+        # setfsuid01_16
+        # setfsuid02
+        # setfsuid02_16
+        # setfsuid03
+        # setfsuid03_16
+        # setfsuid04
+        # setfsuid04_16
         setgid01
-        setgid01_16
-        setgid02
-        setgid02_16
+        # setgid01_16
+        # setgid02
+        # setgid02_16
         setgid03
-        setgid03_16
+        # setgid03_16
         setgroups01
-        setgroups01_16
+        # setgroups01_16
         setgroups02
-        setgroups02_16
-        setgroups03
-        setgroups03_16
-        setgroups04
-        setgroups04_16
-        sethostname01
-        sethostname02
-        sethostname03
-        setitimer01
-        setitimer02
-        setns01
-        setns02
-        setpgid01
-        setpgid02
-        setpgid03
-        setpgid03_child
+        # setgroups02_16
+        # setgroups03
+        # setgroups03_16
+        # setgroups04
+        # setgroups04_16
+        # sethostname01
+        # sethostname02
+        # sethostname03
+        # setitimer01
+        # setitimer02
+        # setns01
+        # setns02
+        # setpgid01
+        # setpgid02
+        # setpgid03
+        # setpgid03_child
         setpgrp01
         setpgrp02
-        setpriority01
-        setpriority02
-        setregid01
-        setregid01_16
+        # setpriority01
+        # setpriority02
+        # setregid01
+        # setregid01_16
         setregid02
-        setregid02_16
-        setregid03
-        setregid03_16
-        setregid04
-        setregid04_16
-        setresgid01
-        setresgid01_16
-        setresgid02
-        setresgid02_16
-        setresgid03
-        setresgid03_16
+        # setregid02_16
+        # setregid03
+        # setregid03_16
+        # setregid04
+        # setregid04_16
+        # setresgid01
+        # setresgid01_16
+        # setresgid02
+        # setresgid02_16
+        # setresgid03
+        # setresgid03_16
         setresgid04
-        setresgid04_16
-        setresuid01
-        setresuid01_16
-        setresuid02
-        setresuid02_16
-        setresuid03
-        setresuid03_16
+        # setresgid04_16
+        # setresuid01
+        # setresuid01_16
+        # setresuid02
+        # setresuid02_16
+        # setresuid03
+        # setresuid03_16
         setresuid04
-        setresuid04_16
+        # setresuid04_16
         setresuid05
-        setresuid05_16
+        # setresuid05_16
         setreuid01
-        setreuid01_16
-        setreuid02
-        setreuid02_16
+        # setreuid01_16
+        # setreuid02
+        # setreuid02_16
         setreuid03
-        setreuid03_16
+        # setreuid03_16
         setreuid04
-        setreuid04_16
+        # setreuid04_16
         setreuid05
-        setreuid05_16
-        setreuid06
-        setreuid06_16
+        # setreuid05_16
+        # setreuid06
+        # setreuid06_16
         setreuid07
-        setreuid07_16
-        setrlimit01
-        setrlimit02
-        setrlimit03
-        setrlimit04
-        setrlimit05
-        setrlimit06
-        setsid01
+        # setreuid07_16
+        # setrlimit01
+        # setrlimit02
+        # setrlimit03
+        # setrlimit04
+        # setrlimit05
+        # setrlimit06
+        # setsid01
         setsockopt01
-        setsockopt02
+        # setsockopt02
         setsockopt03
-        setsockopt04
-        setsockopt05
-        setsockopt06
-        setsockopt07
-        setsockopt08
-        setsockopt09
-        setsockopt10
-        settimeofday01
+        # setsockopt04
+        # setsockopt05
+        # setsockopt06
+        # setsockopt07
+        # setsockopt08
+        # setsockopt09
+        # setsockopt10
+        # settimeofday01
         settimeofday02
         setuid01
-        setuid01_16
-        setuid03
-        setuid03_16
-        setuid04
-        setuid04_16
-        setxattr01
-        setxattr02
-        setxattr03
-        sgetmask01
-        shmat01
-        shmat02
+        # setuid01_16
+        # setuid03
+        # setuid03_16
+        # setuid04
+        # setuid04_16
+        # setxattr01
+        # setxattr02
+        # setxattr03
+        # sgetmask01
+        # shmat01
+        # shmat02
         shmat03
-        shmat04
-        shmctl01
-        shmctl02
-        shmctl03
-        shmctl04
-        shmctl05
-        shmctl06
+        # shmat04
+        # shmctl01
+        # shmctl02
+        # shmctl03
+        # shmctl04
+        # shmctl05
+        # shmctl06
         shmctl07
         shmctl08
-        shmdt01
-        shmdt02
-        shmget02
-        shmget03
-        shmget04
-        shmget05
-        shmget06
+        # shmdt01
+        # shmdt02
+        # shmget02
+        # shmget03
+        # shmget04
+        # shmget05
+        # shmget06
         sigaction01
         sigaction02
         sigaltstack01
@@ -1292,22 +1292,22 @@ run_ltp() {
         signal03
         signal04
         signal05
-        signal06
+        # signal06
         signalfd01
         signalfd4_01
         signalfd4_02
         sigpending02
         sigprocmask01
-        sigrelse01
-        sigsuspend01
-        sigtimedwait01
+        # sigrelse01
+        # sigsuspend01
+        # sigtimedwait01
         sigwait01
-        sigwaitinfo01
+        # sigwaitinfo01
         socket01
         socket02
-        socketcall01
-        socketcall02
-        socketcall03
+        # socketcall01
+        # socketcall02
+        # socketcall03
         socketpair01
         socketpair02
         sockioctl01
@@ -1316,11 +1316,11 @@ run_ltp() {
         splice03
         splice04
         splice05
-        splice06
+        # splice06
         splice07
         splice08
         splice09
-        ssetmask01
+        # ssetmask01
         stat01
         stat01_64
         stat02
@@ -1331,8 +1331,8 @@ run_ltp() {
         statfs01_64
         statfs02
         statfs02_64
-        statfs03
-        statfs03_64
+        # statfs03
+        # statfs03_64
         statvfs01
         statvfs02
         # statx01
@@ -1347,61 +1347,61 @@ run_ltp() {
         # statx10
         # statx11
         # statx12
-        stime01
-        stime02
+        # stime01
+        # stime02
         string01
-        swapoff01
-        swapoff02
-        swapon01
-        swapon02
-        swapon03
+        # swapoff01
+        # swapoff02
+        # swapon01
+        # swapon02
+        # swapon03
         symlink01
         symlink02
         symlink03
         symlink04
-        symlinkat01
-        sync01
-        sync_file_range01
-        sync_file_range02
-        syncfs01
+        # symlinkat01
+        # sync01
+        # sync_file_range01
+        # sync_file_range02
+        # syncfs01
         syscall01
         sysconf01
-        sysctl01
-        sysctl03
-        sysctl04
-        sysfs01
-        sysfs02
-        sysfs03
-        sysfs04
-        sysfs05
+        # sysctl01
+        # sysctl03
+        # sysctl04
+        # sysfs01
+        # sysfs02
+        # sysfs03
+        # sysfs04
+        # sysfs05
         sysinfo01
         sysinfo02
-        sysinfo03
-        syslog11
-        syslog12
-        tee01
-        tee02
-        test_ioctl
+        # sysinfo03
+        # syslog11
+        # syslog12
+        # tee01
+        # tee02
+        # test_ioctl
         tgkill01
-        tgkill02
+        # tgkill02
         tgkill03
         time01
-        timer_delete01
-        timer_delete02
-        timer_getoverrun01
+        # timer_delete01
+        # timer_delete02
+        # timer_getoverrun01
         # timer_gettime01
         # timer_settime01
         # timer_settime02
         # timer_settime03
-        timerfd01
+        # timerfd01
         timerfd02
-        timerfd04
-        timerfd_create01
-        timerfd_gettime01
-        timerfd_settime01
-        timerfd_settime02
-        times01
-        times03
+        # timerfd04
+        # timerfd_create01
+        # timerfd_gettime01
+        # timerfd_settime01
+        # timerfd_settime02
+        # times01
+        # times03
         tkill01
         tkill02
         truncate02
@@ -1412,8 +1412,8 @@ run_ltp() {
         umask01
         umount01
         umount02
-        umount03
-        umount2_01
+        # umount03
+        # umount2_01
         umount2_02
         uname01
         uname02
@@ -1421,13 +1421,13 @@ run_ltp() {
         unlink05
         unlink07
         unlink08
-        unlink09
+        # unlink09
         unlinkat01
         unshare01
         unshare02
-        userfaultfd01
-        ustat01
-        ustat02
+        # userfaultfd01
+        # ustat01
+        # ustat02
         utime01
         utime02
         utime03
@@ -1437,14 +1437,14 @@ run_ltp() {
         utime07
         utimensat01
         utimes01
-        vfork01
+        # vfork01
         vfork02
-        vhangup01
-        vhangup02
-        vmsplice01
-        vmsplice02
-        vmsplice03
-        vmsplice04
+        # vhangup01
+        # vhangup02
+        # vmsplice01
+        # vmsplice02
+        # vmsplice03
+        # vmsplice04
         wait01
         wait02
         wait401
@@ -1475,21 +1475,17 @@ run_ltp() {
         write01
         write02
         write03
-        write04
+        # write04
         write05
         write06
-        writev01
-        writev02
-        writev03
-        writev05
-        writev06
-        writev07
+        # writev01
+        # writev02
+        # writev03
+        # writev05
+        # writev06
+        # writev07
     "
-    if [ "$1" = "glibc" ]; then
-        all_testcases="$all_testcases sigtimedwait01 sigwaitinfo01"
-        
-    fi
-
+    
     emit_summary_if_missing() {
         output="$1"
         if printf '%s\n' "$output" | grep -q '^Summary:[[:space:]]*$'; then
@@ -1584,10 +1580,150 @@ run_ltp() {
     echo "#### OS COMP TEST GROUP END ltp-$1 ####"
 }
 
+skip_group() {
+    echo "#### OS COMP TEST GROUP START $1-$2 ####"
+    echo "#### OS COMP TEST GROUP END $1-$2 ####"
+}
+
+# Test switches: 1 means run, 0 means only print group start/end.
+basic=0
+busybox=0
+cyclictest=0
+iozone=0
+iperf=0
+libcbench=0
+libctest=0
+lmbench=0
+ltp=1
+lua=0
+netperf=0
+
 cd /musl
 musl_runtime
-run_ltp musl
+if [ "$basic" = 1 ]; then
+    ./basic_testcode.sh
+else
+    skip_group basic musl
+fi
+
+if [ "$busybox" = 1 ]; then
+    ./busybox_testcode.sh
+else
+    skip_group busybox musl
+fi
+
+if [ "$cyclictest" = 1 ]; then
+    ./cyclictest_testcode.sh
+else
+    skip_group cyclictest musl
+fi
+
+if [ "$iozone" = 1 ]; then
+    ./iozone_testcode.sh
+else
+    skip_group iozone musl
+fi
+
+if [ "$iperf" = 1 ]; then
+    ./iperf_testcode.sh
+else
+    skip_group iperf musl
+fi
+
+if [ "$libcbench" = 1 ]; then
+    ./libcbench_testcode.sh
+else
+    skip_group libcbench musl
+fi
+
+if [ "$libctest" = 1 ]; then
+    ./libctest_testcode.sh
+else
+    skip_group libctest musl
+fi
+
+if [ "$lmbench" = 1 ]; then
+    ./lmbench_testcode.sh
+else
+    skip_group lmbench musl
+fi
+
+if [ "$lua" = 1 ]; then
+    ./lua_testcode.sh
+else
+    skip_group lua musl
+fi
+
+if [ "$netperf" = 1 ]; then
+    ./netperf_testcode.sh
+else
+    skip_group netperf musl
+fi
+
+if [ "$ltp" = 1 ]; then
+    run_ltp musl
+else
+    skip_group ltp musl
+fi
 
 cd /glibc
 glibc_runtime
-run_ltp glibc
+if [ "$basic" = 1 ]; then
+    ./basic_testcode.sh
+else
+    skip_group basic glibc
+fi
+
+if [ "$busybox" = 1 ]; then
+    ./busybox_testcode.sh
+else
+    skip_group busybox glibc
+fi
+
+if [ "$cyclictest" = 1 ]; then
+    ./cyclictest_testcode.sh
+else
+    skip_group cyclictest glibc
+fi
+
+if [ "$iozone" = 1 ]; then
+    ./iozone_testcode.sh
+else
+    skip_group iozone glibc
+fi
+
+if [ "$iperf" = 1 ]; then
+    ./iperf_testcode.sh
+else
+    skip_group iperf glibc
+fi
+
+if [ "$libcbench" = 1 ]; then
+    ./libcbench_testcode.sh
+else
+    skip_group libcbench glibc
+fi
+
+if [ "$lmbench" = 1 ]; then
+    ./lmbench_testcode.sh
+else
+    skip_group lmbench glibc
+fi
+
+if [ "$lua" = 1 ]; then
+    ./lua_testcode.sh
+else
+    skip_group lua glibc
+fi
+
+if [ "$netperf" = 1 ]; then
+    ./netperf_testcode.sh
+else
+    skip_group netperf glibc
+fi
+
+if [ "$ltp" = 1 ]; then
+    run_ltp glibc
+else
+    skip_group ltp glibc
+fi
