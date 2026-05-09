@@ -38,6 +38,11 @@ if ! /glibc/busybox test -d /bin; then
     echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
 fi
 
+ARCH=RISCV
+if [[-e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+    ARCH=LOONGARCH
+fi
+
 musl_runtime() {
     echo "prepare musl runtime"
     rm -rf /lib/libc.so
@@ -1386,21 +1391,21 @@ run_ltp() {
         # tgkill02
         tgkill03
         time01
-        # timer_delete01
-        # timer_delete02
-        # timer_getoverrun01
-        # timer_gettime01
-        # timer_settime01
-        # timer_settime02
-        # timer_settime03
-        # timerfd01
+        timer_delete01
+        timer_delete02
+        timer_getoverrun01
+        timer_gettime01
+        timer_settime01
+        timer_settime02
+        timer_settime03
+        timerfd01
         timerfd02
-        # timerfd04
-        # timerfd_create01
-        # timerfd_gettime01
-        # timerfd_settime01
-        # timerfd_settime02
-        # times01
+        timerfd04
+        timerfd_create01
+        timerfd_gettime01
+        timerfd_settime01
+        timerfd_settime02
+        times01
         # times03
         tkill01
         tkill02
@@ -1562,17 +1567,21 @@ run_ltp() {
     cd ltp/testcases/bin
 
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do
+
         echo "RUN LTP CASE $f"
+        tmp_output="/tmp/${ARCH}_ltp_case_${f}_output.txt"
+        rm -f "$tmp_output"
 
-        case_output=$(./"$f" 2>&1)
-        printf '%s\n' "$case_output"
-
+        ./"$f" 2>&1 | tee "$tmp_output"
+        case_output=$(cat "$tmp_output")
         if ! printf '%s\n' "$case_output" | grep -q '^Summary:[[:space:]]*$'; then
             emit_summary_if_missing "$case_output"
         fi
 
         echo "FAIL LTP CASE $f : 0"
+
         date '+%Y-%m-%d-%H-%M-%S'
+
     done
 
     cd ../../..

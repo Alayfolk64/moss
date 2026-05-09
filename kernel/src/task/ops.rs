@@ -222,6 +222,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
 
     let process = &thr.proc_data.proc;
     if process.exit_thread(curr.id().as_u64() as Pid, exit_code) {
+        let (utime, stime) = thr.time.borrow().output();
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());
@@ -231,6 +232,13 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
                 let _ = send_signal_to_process(parent.pid(), Some(SignalInfo::new_kernel(signo)));
             }
             if let Ok(data) = get_process_data(parent.pid()) {
+                let mut child_time = data.child_cpu_time.lock();
+                child_time.0 = child_time
+                    .0
+                    .saturating_add(to_user_hz_ticks(utime.as_micros()));
+                child_time.1 = child_time
+                    .1
+                    .saturating_add(to_user_hz_ticks(stime.as_micros()));
                 data.child_exit_event.wake();
             }
         }
@@ -250,4 +258,13 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         }
     }
     thr.set_exit();
+}
+
+fn to_user_hz_ticks(micros: u128) -> u64 {
+    const MICROS_PER_TICK: u128 = 10_000;
+    if micros == 0 {
+        0
+    } else {
+        ((micros - 1) / MICROS_PER_TICK + 1) as u64
+    }
 }

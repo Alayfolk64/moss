@@ -76,7 +76,9 @@ impl BpfMap {
         match &self.data {
             MapData::Hash(map) => {
                 let map = map.lock();
-                let val = map.get(&key).ok_or_else(|| AxError::from(LinuxError::ENOENT))?;
+                let val = map
+                    .get(&key)
+                    .ok_or_else(|| AxError::from(LinuxError::ENOENT))?;
                 Self::write_user(val_ptr, val)
             }
             MapData::Array(vals) => {

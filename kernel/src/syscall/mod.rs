@@ -650,8 +650,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         ),
 
         // dummy fds
-        Sysno::timerfd_create
-        | Sysno::fanotify_init
+        Sysno::fanotify_init
         | Sysno::inotify_init1
         | Sysno::userfaultfd
         | Sysno::perf_event_open
@@ -663,7 +662,26 @@ pub fn handle_syscall(uctx: &mut UserContext) {
 
         Sysno::bpf => sys_bpf(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 
-        Sysno::timer_create | Sysno::timer_gettime | Sysno::timer_settime => Ok(0),
+        Sysno::timer_create => {
+            sys_timer_create(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        }
+        Sysno::timer_delete => sys_timer_delete(uctx.arg0() as _),
+        Sysno::timer_getoverrun => sys_timer_getoverrun(uctx.arg0() as _),
+        Sysno::timer_gettime => sys_timer_gettime(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::timer_settime => sys_timer_settime(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
+        Sysno::timerfd_create => sys_timerfd_create(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::timerfd_gettime => sys_timerfd_gettime(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::timerfd_settime => sys_timerfd_settime(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
 
         _ => {
             warn!("Unimplemented syscall: {sysno}");
