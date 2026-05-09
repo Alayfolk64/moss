@@ -3,7 +3,7 @@
 use alloc::{borrow::ToOwned, collections::binary_heap::BinaryHeap, sync::Arc};
 use core::{mem, time::Duration};
 
-use axhal::time::{NANOS_PER_SEC, TimeValue, monotonic_time_nanos, wall_time};
+use axhal::time::{NANOS_PER_SEC, TimeValue, monotonic_time, monotonic_time_nanos};
 use axtask::{
     WeakAxTaskRef, current,
     future::{block_on, timeout_at},
@@ -54,11 +54,11 @@ lazy_static! {
 #[derive(Eq, PartialEq, Debug, Clone, Copy, FromRepr)]
 pub enum ITimerType {
     /// 统计系统实际运行时间
-    Real = 0,
+    Real    = 0,
     /// 统计用户态运行时间
     Virtual = 1,
     /// 统计进程的所有用户态/内核态运行时间
-    Prof = 2,
+    Prof    = 2,
 }
 
 impl ITimerType {
@@ -104,7 +104,7 @@ impl ITimer {
 
     pub fn renew_timer(&self) {
         if self.remained_ns > 0 {
-            let deadline = wall_time() + Duration::from_nanos(self.remained_ns as u64);
+            let deadline = monotonic_time() + Duration::from_nanos(self.remained_ns as u64);
             let mut guard = ALARM_LIST.lock();
             let should_wake = guard.peek().is_none_or(|it| it.deadline > deadline);
             guard.push(Entry {
@@ -239,7 +239,7 @@ async fn alarm_task() {
             continue;
         };
 
-        let now = wall_time();
+        let now = monotonic_time();
         if entry.deadline <= now {
             let entry_deadline = entry.deadline;
             if let Some(task) = entry.task.upgrade() {

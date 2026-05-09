@@ -225,6 +225,8 @@ pub struct ProcessData {
 
     /// The futex table.
     futex_table: Arc<FutexTable>,
+    /// Accumulated child CPU time in USER_HZ ticks.
+    pub child_cpu_time: SpinNoIrq<(u64, u64)>,
 
     /// The default mask for file permissions.
     umask: AtomicU32,
@@ -266,6 +268,7 @@ impl ProcessData {
             )),
 
             futex_table: Arc::new(FutexTable::new()),
+            child_cpu_time: SpinNoIrq::new((0, 0)),
 
             umask: AtomicU32::new(0o022),
             uid: AtomicU32::new(0),

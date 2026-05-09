@@ -17,6 +17,7 @@ use kernel_guard::NoPreempt;
 use linux_raw_sys::general::*;
 use scope_local::ActiveScope;
 use spin::RwLock;
+use starry_signal::Signo;
 
 use crate::{
     file::{
@@ -29,7 +30,6 @@ use crate::{
     syscall::sys::{sys_getegid, sys_geteuid},
     task::AsThread,
 };
-use starry_signal::Signo;
 
 /// Convert open flags to [`OpenOptions`].
 fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32)) -> OpenOptions {

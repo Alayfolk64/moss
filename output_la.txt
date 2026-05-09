@@ -1,0 +1,2511 @@
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = loongarch64
+platform = loongarch64-qemu-virt
+target = loongarch64-unknown-none-softfloat
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-05-09 12:07:30.004634790 UTC
+
+sh: can't execute '[[-e': No such file or directory
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrw-rw-rw-    1 root     root          40 Jan  1  1970 [1;36mld-linux-loongarch-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-loongarch-lp64d.so.1[m
+lrw-rw-rw-    1 root     root          17 Jan  1  1970 [1;36mld-musl-loongarch-lp64d.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrw-rw-rw-    1 root     root          17 Jan  1  1970 [1;36mlibc.so[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 4K     
+-rw-r--r--    1 root     root          50 Jan  1  1970 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+LTP_CASES=accept01 accept02 accept03 accept4_01 access01 access02 access03 access04 abort01 abs01
+HUSH_VERSION=1.33.1
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START lmbench-musl ####
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE abort01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+abort01.c:84: TINFO: Raising rlim_max to 524288
+abort01.c:60: TFAIL: abort() failed to dump core
+abort01.c:65: TPASS: abort() raised SIGIOT
+
+Summary:
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE abort01 : 0
+2026-05-09-12-07-33
+RUN LTP CASE accept01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+[37m[  4.874837 0:32 axnet::tcp:341] [33m[AxErrorKind::InvalidInput] not listening[m
+[m[37m[  4.879465 0:32 axnet::tcp:341] [33m[AxErrorKind::InvalidInput] not listening[m
+[m[37m[  4.881496 0:32 axnet::tcp:341] [33m[AxErrorKind::InvalidInput] not listening[m
+[maccept01.c:92: TPASS: bad file descriptor : EBADF (9)
+accept01.c:92: TPASS: invalid socket buffer : EINVAL (22)
+accept01.c:92: TPASS: invalid salen : EINVAL (22)
+accept01.c:92: TPASS: no queued connections : EINVAL (22)
+accept01.c:92: TPASS: UDP accept : EOPNOTSUPP (95)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept01 : 0
+2026-05-09-12-07-36
+RUN LTP CASE accept02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+accept02.c:131: TINFO: Starting listener on port: 49153
+accept02.c:75: TPASS: Multicast group was not copied: EADDRNOTAVAIL (99)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept02 : 0
+2026-05-09-12-07-38
+RUN LTP CASE accept03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+accept03.c:48: TPASS: accept() on file : ENOTSOCK (88)
+accept03.c:48: TFAIL: accept() on O_PATH file expected EBADF: ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on directory : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on /dev/zero : ENOTSOCK (88)
+[37m[  9.991062 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fanotify_init[m
+[m[37m[  9.992363 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: inotify_init1[m
+[m[37m[  9.993318 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: userfaultfd[m
+[m[37m[  9.993896 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: perf_event_open[m
+[m[37m[  9.994477 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: io_uring_setup[m
+[m[37m[  9.996792 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fsopen[m
+[m[37m[  9.997612 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: fspick[m
+[m[37m[  9.998353 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: open_tree[m
+[m[37m[ 10.002212 0:52 starry_kernel::syscall::fs::io:41] [33mDummy fd created: memfd_secret[m
+[maccept03.c:48: TPASS: accept() on /proc/self/maps : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pipe read end : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pipe write end : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on epoll : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on eventfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on signalfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on timerfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on pidfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fanotify : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on inotify : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on userfaultfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on perf event : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on io uring : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on bpf map : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fsopen : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on fspick : ENOTSOCK (88)
+accept03.c:48: TFAIL: accept() on open_tree expected EBADF: ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on memfd : ENOTSOCK (88)
+accept03.c:48: TPASS: accept() on memfd secret : ENOTSOCK (88)
+
+Summary:
+passed   21
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept03 : 0
+2026-05-09-12-07-41
+RUN LTP CASE accept4_01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+accept4_01.c:71: TINFO: Testing variant: libc accept4()
+accept4_01.c:78: TINFO: server listening on: 49155
+accept4_01.c:151: TPASS: Close-on-exec 0, nonblock 0
+accept4_01.c:151: TPASS: Close-on-exec 1, nonblock 0
+accept4_01.c:151: TPASS: Close-on-exec 0, nonblock 1
+accept4_01.c:151: TPASS: Close-on-exec 1, nonblock 1
+accept4_01.c:71: TINFO: Testing variant: __NR_accept4 syscall
+accept4_01.c:78: TINFO: server listening on: 49160
+accept4_01.c:151: TPASS: Close-on-exec 0, nonblock 0
+accept4_01.c:151: TPASS: Close-on-exec 1, nonblock 0
+accept4_01.c:151: TPASS: Close-on-exec 0, nonblock 1
+accept4_01.c:151: TPASS: Close-on-exec 1, nonblock 1
+accept4_01.c:71: TINFO: Testing variant: __NR_socketcall SYS_ACCEPT4 syscall
+accept4_01.c:78: TINFO: server listening on: 49165
+accept4_01.c:43: TCONF: syscall(-1) __NR_socketcall not supported on your arch
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE accept4_01 : 0
+2026-05-09-12-07-44
+RUN LTP CASE access01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as nobody passed
+access01.c:242: TPASS: access(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: TPASS: access(accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
+Test timeouted, sending SIGKILL!
+
+Summary:
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access01 : 0
+2026-05-09-12-08-01
+RUN LTP CASE access02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access02.c:139: TPASS: access(file_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as nobody behaviour is correct.
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+2026-05-09-12-08-07
+RUN LTP CASE access03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+2026-05-09-12-08-11
+RUN LTP CASE access04
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_acceLBIai/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access04.c:68: TPASS: access as root : EINVAL (22)
+access04.c:68: TPASS: access as nobody : EINVAL (22)
+access04.c:68: TPASS: access as root : ENOENT (2)
+access04.c:68: TPASS: access as nobody : ENOENT (2)
+access04.c:68: TPASS: access as root : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as nobody : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as root : ENOTDIR (20)
+access04.c:68: TPASS: access as nobody : ENOTDIR (20)
+access04.c:68: TPASS: access as root : ELOOP (40)
+access04.c:68: TPASS: access as nobody : ELOOP (40)
+access04.c:68: TPASS: access as root : EROFS (30)
+access04.c:68: TPASS: access as nobody : EROFS (30)
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_acceLBIai) failed: unlink(/tmp/LTP_acceLBIai) failed; errno=21: EISDIR
+FAIL LTP CASE access04 : 0
+2026-05-09-12-08-14
+RUN LTP CASE adjtimex01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+adjtimex01.c:24: TPASS: adjtimex() with mode 0x403f 
+adjtimex01.c:33: TPASS: adjtimex() with mode 0x8001 
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex01 : 0
+2026-05-09-12-08-17
+RUN LTP CASE adjtimex02
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+adjtimex02.c:111: TINFO: Testing variant: libc adjtimex()
+adjtimex02.c:100: TPASS: adjtimex() error : EPERM (1)
+adjtimex02.c:95: TCONF: EFAULT is skipped for libc variant
+adjtimex02.c:100: TPASS: adjtimex() error : EINVAL (22)
+adjtimex02.c:100: TPASS: adjtimex() error : EINVAL (22)
+adjtimex02.c:111: TINFO: Testing variant: __NR_adjtimex syscall
+adjtimex02.c:100: TPASS: adjtimex() error : EPERM (1)
+adjtimex02.c:100: TPASS: adjtimex() error : EFAULT (14)
+adjtimex02.c:100: TPASS: adjtimex() error : EINVAL (22)
+adjtimex02.c:100: TPASS: adjtimex() error : EINVAL (22)
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE adjtimex02 : 0
+2026-05-09-12-08-19
+RUN LTP CASE adjtimex03
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:53: TINFO: expecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: TINFO: tai : 0x00000000
+adjtimex03.c:73: TPASS: Data leak not observed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex03 : 0
+2026-05-09-12-08-22
+RUN LTP CASE alarm02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+alarm02.c:36: TPASS: alarm(2147483647) passed
+alarm02.c:38: TPASS: alarm(0) passed
+alarm02.c:36: TPASS: alarm(2147483647) passed
+alarm02.c:38: TPASS: alarm(0) passed
+alarm02.c:36: TPASS: alarm(1073741823) passed
+alarm02.c:38: TPASS: alarm(0) passed
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm02 : 0
+2026-05-09-12-08-24
+RUN LTP CASE alarm03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+alarm03.c:30: TPASS: alarm(0) in parent process passed
+alarm03.c:26: TPASS: alarm(0) in child process passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm03 : 0
+2026-05-09-12-08-27
+RUN LTP CASE alarm05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+alarm05.c:28: TPASS: alarm(10) passed
+alarm05.c:30: TPASS: alarm(1) passed
+alarm05.c:32: TPASS: alarms_fired == 1 (1)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm05 : 0
+2026-05-09-12-08-31
+RUN LTP CASE alarm06
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+alarm06.c:35: TPASS: alarm(0) passed
+alarm06.c:40: TPASS: alarms_received == 0 (0)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm06 : 0
+2026-05-09-12-08-36
+RUN LTP CASE alarm07
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+alarm07.c:36: TPASS: alarm_cnt == 1 (1)
+alarm07.c:32: TPASS: alarm_cnt == 0 (0)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm07 : 0
+2026-05-09-12-08-42
+RUN LTP CASE bind01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+bind01.c:60: TPASS: invalid salen : EINVAL (22)
+bind01.c:60: TPASS: invalid socket : ENOTSOCK (88)
+bind01.c:63: TPASS: INADDR_ANYPORT passed
+bind01.c:60: TPASS: UNIX-domain of current directory : EAFNOSUPPORT (97)
+bind01.c:60: TPASS: non-local address : EADDRNOTAVAIL (99)
+bind01.c:60: TPASS: sockfd is not a valid file descriptor : EBADF (9)
+bind01.c:60: TPASS: a component of addr prefix is not a directory : ENOTDIR (20)
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind01 : 0
+2026-05-09-12-08-44
+RUN LTP CASE bind02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+bind02.c:52: TINFO: Switching credentials to user: nobody, group: nobody
+bind02.c:39: TPASS: bind() : EACCES (13)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind02 : 0
+2026-05-09-12-08-46
+RUN LTP CASE bind03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+bind03.c:31: TPASS: re-bind() socket : EINVAL (22)
+bind03.c:38: TPASS: bind() with bound pathname : EADDRINUSE (98)
+bind03.c:49: TPASS: check exist of SNAME_B : ENOENT (2)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind03 : 0
+2026-05-09-12-08-48
+RUN LTP CASE bind04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+bind04.c:117: TINFO: Testing AF_UNIX pathname stream
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing AF_UNIX pathname seqpacket
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing AF_UNIX abstract stream
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing AF_UNIX abstract seqpacket
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv4 loop TCP variant 1
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv4 loop TCP variant 2
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv4 loop SCTP
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv4 any TCP variant 1
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv4 any TCP variant 2
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv4 any SCTP
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv6 loop TCP variant 1
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv6 loop TCP variant 2
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv6 loop SCTP
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv6 any TCP variant 1
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv6 any TCP variant 2
+bind04.c:149: TPASS: Communication successful
+bind04.c:117: TINFO: Testing IPv6 any SCTP
+bind04.c:149: TPASS: Communication successful
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind04 : 0
+2026-05-09-12-08-55
+RUN LTP CASE bind05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+bind05.c:131: TINFO: Testing AF_UNIX pathname datagram
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing AF_UNIX abstract datagram
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv4 loop UDP variant 1
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv4 loop UDP variant 2
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv4 loop UDP-Lite
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv4 any UDP variant 1
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv4 any UDP variant 2
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv4 any UDP-Lite
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv6 loop UDP variant 1
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv6 loop UDP variant 2
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv6 loop UDP-Lite
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv6 any UDP variant 1
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv6 any UDP variant 2
+bind05.c:167: TPASS: Communication successful
+bind05.c:131: TINFO: Testing IPv6 any UDP-Lite
+bind05.c:167: TPASS: Communication successful
+
+Summary:
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind05 : 0
+2026-05-09-12-09-01
+RUN LTP CASE capget01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_capability.c:29: TINFO: Dropping CAP_NET_RAW(13)
+capget01.c:35: TPASS: capget() with LINUX_CAPABILITY_VERSION_1 passed
+capget01.c:41: TPASS: capget() doesn't get CAP_NET_RAW as expected in PE
+capget01.c:35: TPASS: capget() with LINUX_CAPABILITY_VERSION_2 passed
+capget01.c:41: TPASS: capget() doesn't get CAP_NET_RAW as expected in PE
+capget01.c:35: TPASS: capget() with LINUX_CAPABILITY_VERSION_3 passed
+capget01.c:41: TPASS: capget() doesn't get CAP_NET_RAW as expected in PE
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget01 : 0
+2026-05-09-12-09-03
+RUN LTP CASE capget02
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+capget02.c:57: TPASS: capget() with bad address header : EFAULT (14)
+capget02.c:57: TPASS: capget() with bad address data : EFAULT (14)
+capget02.c:57: TPASS: capget() with bad version : EINVAL (22)
+capget02.c:57: TPASS: capget() with bad pid : EINVAL (22)
+capget02.c:57: TPASS: capget() with unused pid : ESRCH (3)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget02 : 0
+2026-05-09-12-09-05
+RUN LTP CASE capset01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+capset01.c:47: TPASS: capset() with LINUX_CAPABILITY_VERSION_1 passed
+capset01.c:47: TPASS: capset() with LINUX_CAPABILITY_VERSION_2 passed
+capset01.c:47: TPASS: capset() with LINUX_CAPABILITY_VERSION_3 passed
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset01 : 0
+2026-05-09-12-09-08
+RUN LTP CASE capset02
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+capset02.c:71: TPASS: capset() with bad address header : EFAULT (14)
+capset02.c:71: TPASS: capset() with bad address data : EFAULT (14)
+capset02.c:71: TPASS: capset() with bad version : EINVAL (22)
+capset02.c:71: TPASS: capset() with bad value data(when pE is not in pP) : EPERM (1)
+capset02.c:71: TPASS: capset() with bad value data(when pP is not in old pP) : EPERM (1)
+capset02.c:71: TPASS: capset() with bad value data(when pI is not in bounding set or old pI) : EPERM (1)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset02 : 0
+2026-05-09-12-09-10
+RUN LTP CASE capset03
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+capset03.c:30: TINFO: Test bad value data(when pI is not old pP or old pI without CAP_SETPCAP)
+capset03.c:32: TPASS: capset() : EPERM (1)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset03 : 0
+2026-05-09-12-09-12
+RUN LTP CASE capset04
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+capset04.c:33: TINFO: Test capset() for a different process
+capset04.c:37: TPASS: capset() : EPERM (1)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset04 : 0
+2026-05-09-12-09-14
+RUN LTP CASE chdir01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_chdFhJLBG/mntpoint fstyp=tmpfs flags=0
+chdir01.c:119: TINFO: Testing 'testfile'
+chdir01.c:111: TPASS: root: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: TPASS: nobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: TINFO: Testing 'keep_out'
+chdir01.c:111: TPASS: root: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:98: TFAIL: nobody: chdir("keep_out") returned unexpected value 0: SUCCESS (0)
+chdir01.c:119: TINFO: Testing 'subdir'
+chdir01.c:111: TPASS: root: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: TPASS: nobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: TINFO: Testing '.'
+chdir01.c:111: TPASS: root: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: TPASS: nobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: TINFO: Testing '..'
+chdir01.c:111: TPASS: root: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: TPASS: nobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: TINFO: Testing '/'
+chdir01.c:111: TPASS: root: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: TPASS: nobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: TINFO: Testing 'does_not_exist'
+chdir01.c:111: TPASS: root: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: TPASS: nobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: TINFO: Testing 'symloop'
+chdir01.c:111: TPASS: root: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: TPASS: nobody: chdir("symloop") returned correct value: ELOOP (40)
+
+Summary:
+passed   15
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir01 : 0
+2026-05-09-12-09-17
+RUN LTP CASE chdir04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chdir04.c:29: TPASS: chdir() : ENAMETOOLONG (36)
+chdir04.c:29: TPASS: chdir() : ENOENT (2)
+chdir04.c:29: TPASS: chdir() : EFAULT (14)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir04 : 0
+2026-05-09-12-09-19
+RUN LTP CASE chmod01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chmod01.c:60: TINFO: Testing variant: verify permissions of file
+chmod01.c:40: TPASS: chmod(testfile, 0000) passed
+chmod01.c:50: TPASS: stat(testfile) mode=0000
+chmod01.c:40: TPASS: chmod(testfile, 0007) passed
+chmod01.c:50: TPASS: stat(testfile) mode=0007
+chmod01.c:40: TPASS: chmod(testfile, 0070) passed
+chmod01.c:50: TPASS: stat(testfile) mode=0070
+chmod01.c:40: TPASS: chmod(testfile, 0700) passed
+chmod01.c:50: TPASS: stat(testfile) mode=0700
+chmod01.c:40: TPASS: chmod(testfile, 0777) passed
+chmod01.c:50: TPASS: stat(testfile) mode=0777
+chmod01.c:40: TPASS: chmod(testfile, 2777) passed
+chmod01.c:50: TPASS: stat(testfile) mode=2777
+chmod01.c:40: TPASS: chmod(testfile, 4777) passed
+chmod01.c:50: TPASS: stat(testfile) mode=4777
+chmod01.c:40: TPASS: chmod(testfile, 6777) passed
+chmod01.c:50: TPASS: stat(testfile) mode=6777
+chmod01.c:60: TINFO: Testing variant: verify permissions of directory
+chmod01.c:40: TPASS: chmod(testdir_1, 0000) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=0000
+chmod01.c:40: TPASS: chmod(testdir_1, 0007) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=0007
+chmod01.c:40: TPASS: chmod(testdir_1, 0070) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=0070
+chmod01.c:40: TPASS: chmod(testdir_1, 0700) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=0700
+chmod01.c:40: TPASS: chmod(testdir_1, 0777) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=0777
+chmod01.c:40: TPASS: chmod(testdir_1, 2777) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=2777
+chmod01.c:40: TPASS: chmod(testdir_1, 4777) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=4777
+chmod01.c:40: TPASS: chmod(testdir_1, 6777) passed
+chmod01.c:50: TPASS: stat(testdir_1) mode=6777
+
+Summary:
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod01 : 0
+2026-05-09-12-09-21
+RUN LTP CASE chmod03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chmod03.c:42: TPASS: chmod(testfile, 1777) passed
+chmod03.c:54: TPASS: stat(testfile) mode=101777
+chmod03.c:42: TPASS: chmod(testdir_3, 1777) passed
+chmod03.c:54: TPASS: stat(testdir_3) mode=41777
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod03 : 0
+2026-05-09-12-09-24
+RUN LTP CASE chmod06
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_chmLJBmBO/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chmod06.c:81: TFAIL: chmod succeeded unexpectedly
+chmod06.c:81: TFAIL: chmod succeeded unexpectedly
+chmod06.c:86: TPASS: chmod failed as expected: EFAULT (14)
+chmod06.c:86: TPASS: chmod failed as expected: EFAULT (14)
+chmod06.c:86: TPASS: chmod failed as expected: ENAMETOOLONG (36)
+chmod06.c:86: TPASS: chmod failed as expected: ENOENT (2)
+chmod06.c:86: TPASS: chmod failed as expected: ENOTDIR (20)
+chmod06.c:81: TFAIL: chmod succeeded unexpectedly
+chmod06.c:86: TPASS: chmod failed as expected: ELOOP (40)
+
+Summary:
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_chmLJBmBO) failed: unlink(/tmp/LTP_chmLJBmBO) failed; errno=21: EISDIR
+FAIL LTP CASE chmod06 : 0
+2026-05-09-12-09-26
+RUN LTP CASE chown01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chown01.c:24: TPASS: chown(chown01_testfile,0,0) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown01 : 0
+2026-05-09-12-09-28
+RUN LTP CASE chown02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chown02.c:46: TPASS: chown(testfile1, 0, 0) passed
+chown02.c:46: TPASS: chown(testfile2, 0, 0) passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown02 : 0
+2026-05-09-12-09-30
+RUN LTP CASE chown03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chown03.c:63: TPASS: chown(chown03_testfile, -1, 65534) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown03 : 0
+2026-05-09-12-09-32
+RUN LTP CASE chown04
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_choOKdloI/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chown04.c:77: TFAIL: chown() without permissions succeeded
+chown04.c:77: TFAIL: chown() without full permissions of the path prefix succeeded
+chown04.c:77: TPASS: chown() with unaccessible pathname points : EFAULT (14)
+chown04.c:77: TPASS: chown() when pathname is too long : ENAMETOOLONG (36)
+chown04.c:77: TPASS: chown() when file does not exist : ENOENT (2)
+chown04.c:77: TPASS: chown() when the path prefix is not a directory : ENOTDIR (20)
+chown04.c:77: TPASS: chown() with too many symbolic links : ELOOP (40)
+chown04.c:77: TFAIL: chown() when the named file resides on a read-only filesystem succeeded
+
+Summary:
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_choOKdloI) failed: unlink(/tmp/LTP_choOKdloI) failed; errno=21: EISDIR
+FAIL LTP CASE chown04 : 0
+2026-05-09-12-09-35
+RUN LTP CASE chown05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chown05.c:42: TPASS: chown(testfile, 700, 701), change owner/group ids passed
+chown05.c:42: TPASS: chown(testfile, 702, -1), change owner id only passed
+chown05.c:42: TPASS: chown(testfile, 703, 701), change owner id only passed
+chown05.c:42: TPASS: chown(testfile, -1, 704), change group id only passed
+chown05.c:42: TPASS: chown(testfile, 703, 705), change group id only passed
+chown05.c:42: TPASS: chown(testfile, -1, -1), no change passed
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown05 : 0
+2026-05-09-12-09-37
+RUN LTP CASE chroot02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chroot02.c:30: TPASS: chroot(/tmp/LTP_chrnjpeog) passed
+chroot02.c:34: TPASS: stat(/chroot02_testfile) passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chroot02 : 0
+2026-05-09-12-09-39
+RUN LTP CASE chroot03
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+chroot03.c:54: TPASS: chroot(longer than VFS_MAXNAMELEN) : ENAMETOOLONG (36)
+chroot03.c:54: TPASS: chroot(not a directory) : ENOTDIR (20)
+chroot03.c:54: TPASS: chroot(does not exists) : ENOENT (2)
+chroot03.c:54: TPASS: chroot(an invalid address) : EFAULT (14)
+chroot03.c:54: TPASS: chroot(symlink loop) : ELOOP (40)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chroot03 : 0
+2026-05-09-12-09-41
+RUN LTP CASE clock_adjtime01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clock_adjtime01.c:186: TINFO: Testing variant: syscall with old kernel spec
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 576125(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 32769
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 577767(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 578127(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=8001)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 580055(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 40961
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 580426(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 580523(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=a001)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581074(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 16447
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581112(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581146(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=403f)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581229(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 1
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581508(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581602(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=1)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 581909(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 2
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582123(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582157(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=2)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582394(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 4
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582541(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582578(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=4)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582729(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 8
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582865(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 582899(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=8)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 583047(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 32
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 583190(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 583233(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=20)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 583445(us)
+clock_adjtime.h:163: TINFO: SET
+             mode: 16384
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 583676(us)
+clock_adjtime.h:163: TINFO: VERIFY
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328582(s) 583713(us)
+clock_adjtime01.c:177: TPASS: clock_adjtime(): success (mode=4000)
+[37m[132.759381 0:548 starry_kernel::syscall:687] [33mUnimplemented syscall: clock_settime[m
+[m
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_clocks.c:107: TCONF: clock_settime() not available
+tst_wallclock.c:64: TBROK: tst_clock_settime() realtime failed: ENOSYS (38)
+
+Summary:
+passed   9
+failed   0
+broken   1
+skipped  1
+warnings 0
+FAIL LTP CASE clock_adjtime01 : 0
+2026-05-09-12-09-43
+RUN LTP CASE clock_adjtime02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clock_adjtime02.c:197: TINFO: Testing variant: syscall with old kernel spec
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 715562(us)
+clock_adjtime.h:163: TINFO: TEST
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 715562(us)
+clock_adjtime02.c:184: TPASS: clock_adjtime(): failed as expected (mode=0x0, uid=0)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 719770(us)
+clock_adjtime.h:163: TINFO: TEST
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 719770(us)
+clock_adjtime02.c:184: TPASS: clock_adjtime(): failed as expected (mode=0x0, uid=0)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 720589(us)
+clock_adjtime02.c:184: TPASS: clock_adjtime(): failed as expected (mode=0x403f, uid=0)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 721325(us)
+clock_adjtime.h:163: TINFO: TEST
+             mode: 16384
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 8999
+         raw time: 1778328584(s) 721325(us)
+clock_adjtime02.c:184: TPASS: clock_adjtime(): failed as expected (mode=0x4000, uid=0)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 721806(us)
+clock_adjtime.h:163: TINFO: TEST
+             mode: 16384
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 11001
+         raw time: 1778328584(s) 721806(us)
+clock_adjtime02.c:184: TPASS: clock_adjtime(): failed as expected (mode=0x4000, uid=0)
+clock_adjtime.h:163: TINFO: GET
+             mode: 0
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 722106(us)
+clock_adjtime.h:163: TINFO: TEST
+             mode: 16447
+           offset: 0
+        frequency: 0
+         maxerror: 0
+         esterror: 0
+           status: 0 (0x0)
+    time_constant: 0
+        precision: 1
+        tolerance: 0
+             tick: 10000
+         raw time: 1778328584(s) 722106(us)
+clock_adjtime02.c:184: TPASS: clock_adjtime(): failed as expected (mode=0x403f, uid=65534)
+[37m[134.850758 0:557 starry_kernel::syscall:687] [33mUnimplemented syscall: clock_settime[m
+[m
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_clocks.c:107: TCONF: clock_settime() not available
+tst_wallclock.c:64: TBROK: tst_clock_settime() realtime failed: ENOSYS (38)
+
+Summary:
+passed   6
+failed   0
+broken   1
+skipped  1
+warnings 0
+FAIL LTP CASE clock_adjtime02 : 0
+2026-05-09-12-09-46
+RUN LTP CASE clock_getres01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+[37m[136.907187 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 2[m
+[m[37m[136.907881 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 3[m
+[m[37m[136.908200 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 4[m
+[m[37m[136.908397 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 5[m
+[m[37m[136.908584 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 6[m
+[m[37m[136.908787 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 7[m
+[m[37m[136.908985 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 8[m
+[m[37m[136.909191 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 9[m
+[m[37m[136.909375 0:568 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock -1[m
+[mclock_getres01.c:62: TINFO: Testing variant: vDSO or syscall with libc spec
+clock_getres01.c:88: TPASS: clock_getres(REALTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(MONOTONIC, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(PROCESS_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(THREAD_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_RAW, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_ALARM, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME_ALARM, ...) succeeded
+clock_getres01.c:77: TFAIL: clock_getres(-1, ...) failed: SUCCESS (0)
+[37m[137.064309 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 2[m
+[m[37m[137.064582 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 3[m
+[m[37m[137.064783 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 4[m
+[m[37m[137.064975 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 5[m
+[m[37m[137.065206 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 6[m
+[m[37m[137.065400 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 7[m
+[m[37m[137.065671 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 8[m
+[m[37m[137.065883 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 9[m
+[m[37m[137.066089 0:569 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock -1[m
+[mclock_getres01.c:62: TINFO: Testing variant: vDSO or syscall with libc spec with NULL res
+clock_getres01.c:88: TPASS: clock_getres(REALTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(MONOTONIC, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(PROCESS_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(THREAD_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_RAW, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_ALARM, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME_ALARM, ...) succeeded
+clock_getres01.c:77: TFAIL: clock_getres(-1, ...) failed: SUCCESS (0)
+[37m[137.223702 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 2[m
+[m[37m[137.223922 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 3[m
+[m[37m[137.224132 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 4[m
+[m[37m[137.224316 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 5[m
+[m[37m[137.224508 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 6[m
+[m[37m[137.224693 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 7[m
+[m[37m[137.224882 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 8[m
+[m[37m[137.225228 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 9[m
+[m[37m[137.225421 0:570 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock -1[m
+[mclock_getres01.c:62: TINFO: Testing variant: syscall with old kernel spec
+clock_getres01.c:88: TPASS: clock_getres(REALTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(MONOTONIC, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(PROCESS_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(THREAD_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_RAW, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_ALARM, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME_ALARM, ...) succeeded
+clock_getres01.c:77: TFAIL: clock_getres(-1, ...) failed: SUCCESS (0)
+[37m[137.383441 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 2[m
+[m[37m[137.383663 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 3[m
+[m[37m[137.383851 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 4[m
+[m[37m[137.384041 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 5[m
+[m[37m[137.384232 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 6[m
+[m[37m[137.384415 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 7[m
+[m[37m[137.384594 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 8[m
+[m[37m[137.384831 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock 9[m
+[m[37m[137.385041 0:571 starry_kernel::syscall::time:169] [33mCalled sys_clock_getres for unsupported clock -1[m
+[mclock_getres01.c:62: TINFO: Testing variant: syscall with old kernel spec with NULL res
+clock_getres01.c:88: TPASS: clock_getres(REALTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(MONOTONIC, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(PROCESS_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(THREAD_CPUTIME_ID, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_RAW, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_MONOTONIC_COARSE, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_REALTIME_ALARM, ...) succeeded
+clock_getres01.c:88: TPASS: clock_getres(CLOCK_BOOTTIME_ALARM, ...) succeeded
+clock_getres01.c:77: TFAIL: clock_getres(-1, ...) failed: SUCCESS (0)
+
+Summary:
+passed   40
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_getres01 : 0
+2026-05-09-12-09-48
+RUN LTP CASE clock_gettime01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clock_gettime01.c:78: TINFO: Testing variant: vDSO or syscall with libc spec
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_REALTIME passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_PROCESS_CPUTIME_ID passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_THREAD_CPUTIME_ID passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_REALTIME_COARSE passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC_COARSE passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC_RAW passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_BOOTTIME passed
+clock_gettime01.c:78: TINFO: Testing variant: syscall with old kernel spec
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_REALTIME passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_PROCESS_CPUTIME_ID passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_THREAD_CPUTIME_ID passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_REALTIME_COARSE passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC_COARSE passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC_RAW passed
+clock_gettime01.c:111: TPASS: clock_gettime(2): clock CLOCK_BOOTTIME passed
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_gettime01 : 0
+2026-05-09-12-09-50
+RUN LTP CASE clock_gettime02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+[37m[141.743349 0:590 starry_kernel::syscall::time:131] [33mCalled sys_clock_gettime for unsupported clock 16[m
+[m[37m[141.745180 0:590 starry_kernel::syscall::time:131] [33mCalled sys_clock_gettime for unsupported clock 17[m
+[mclock_gettime02.c:102: TINFO: Testing variant: 0: syscall with old kernel spec
+clock_gettime02.c:123: TFAIL: clock_gettime(2): clock INVALID/UNKNOWN CLOCK passed unexpectedly
+clock_gettime02.c:123: TFAIL: clock_gettime(2): clock INVALID/UNKNOWN CLOCK passed unexpectedly
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_REALTIME failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_PROCESS_CPUTIME_ID failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_THREAD_CPUTIME_ID failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_REALTIME_COARSE failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC_COARSE failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_MONOTONIC_RAW failed as expected: EFAULT (14)
+clock_gettime02.c:130: TPASS: clock_gettime(2): clock CLOCK_BOOTTIME failed as expected: EFAULT (14)
+
+Summary:
+passed   8
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_gettime02 : 0
+2026-05-09-12-09-53
+RUN LTP CASE clock_nanosleep01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clock_nanosleep01.c:124: TINFO: Testing variant: vDSO or syscall with libc spec
+clock_nanosleep01.c:139: TINFO: case NORMAL
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINVAL (22)
+clock_nanosleep01.c:139: TINFO: case NORMAL
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINVAL (22)
+clock_nanosleep01.c:139: TINFO: case NORMAL
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINVAL (22)
+clock_nanosleep01.c:139: TINFO: case SEND_SIGINT
+clock_nanosleep01.c:208: TPASS: Timespec updated correctly
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINTR (4)
+clock_nanosleep01.c:139: TINFO: case BAD_TS_ADDR_REQ
+clock_nanosleep01.c:143: TCONF: The libc wrapper may dereference req or rem
+clock_nanosleep01.c:139: TINFO: case BAD_TS_ADDR_REM
+clock_nanosleep01.c:143: TCONF: The libc wrapper may dereference req or rem
+[37m[144.904720 0:601 starry_kernel::syscall::task::schedule:74] [33mUnsupported clock_id: 3[m
+[mclock_nanosleep01.c:124: TINFO: Testing variant: syscall with old kernel spec
+clock_nanosleep01.c:139: TINFO: case NORMAL
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINVAL (22)
+clock_nanosleep01.c:139: TINFO: case NORMAL
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINVAL (22)
+clock_nanosleep01.c:139: TINFO: case NORMAL
+clock_nanosleep01.c:212: TFAIL: returned -1, expected -1, expected errno: EOPNOTSUPP (95): EINVAL (22)
+clock_nanosleep01.c:139: TINFO: case SEND_SIGINT
+clock_nanosleep01.c:208: TPASS: Timespec updated correctly
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EINTR (4)
+clock_nanosleep01.c:139: TINFO: case BAD_TS_ADDR_REQ
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EFAULT (14)
+clock_nanosleep01.c:139: TINFO: case BAD_TS_ADDR_REM
+clock_nanosleep01.c:218: TPASS: clock_nanosleep() failed with: EFAULT (14)
+
+Summary:
+passed   11
+failed   1
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE clock_nanosleep01 : 0
+2026-05-09-12-09-57
+RUN LTP CASE clock_nanosleep04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clock_nanosleep04.c:33: TINFO: Testing variant: vDSO or syscall with libc spec
+clock_nanosleep04.c:57: TPASS: clock_nanosleep(2) passed for clock CLOCK_MONOTONIC
+clock_nanosleep04.c:57: TPASS: clock_nanosleep(2) passed for clock CLOCK_REALTIME
+clock_nanosleep04.c:33: TINFO: Testing variant: syscall with old kernel spec
+clock_nanosleep04.c:57: TPASS: clock_nanosleep(2) passed for clock CLOCK_MONOTONIC
+clock_nanosleep04.c:57: TPASS: clock_nanosleep(2) passed for clock CLOCK_REALTIME
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_nanosleep04 : 0
+2026-05-09-12-10-00
+RUN LTP CASE clone01
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone01.c:37: TPASS: clone returned 623
+clone01.c:43: TPASS: Child exited with 0
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone01 : 0
+2026-05-09-12-10-02
+RUN LTP CASE clone02
+clone02     1  TPASS  :  Test Passed
+clone02     2  TPASS  :  Test Passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone02 : 0
+2026-05-09-12-10-05
+RUN LTP CASE clone03
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone03.c:38: TPASS: pid(648) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone03 : 0
+2026-05-09-12-10-07
+RUN LTP CASE clone04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone04.c:40: TPASS: NULL stack : EINVAL (22)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone04 : 0
+2026-05-09-12-10-10
+RUN LTP CASE clone06
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone06.c:38: TPASS: The environment variables of the child and the parent are the same 
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone06 : 0
+2026-05-09-12-10-12
+RUN LTP CASE clone07
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone07.c:42: TPASS: Using return in child will not cause abnormal exit
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone07 : 0
+2026-05-09-12-10-14
+RUN LTP CASE clone08
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone08.c:62: TINFO: running CLONE_PARENT
+clone08.c:85: TBROK: CLONE_PARENT clone() failed: EINVAL (22)
+clone08.c:62: TINFO: running CLONE_CHILD_SETTID
+clone08.c:124: TPASS: clone() correctly set ctid
+clone08.c:62: TINFO: running CLONE_PARENT_SETTID
+clone08.c:134: TPASS: clone() correctly set ptid
+clone08.c:62: TINFO: running CLONE_THREAD
+clone08.c:85: TBROK: CLONE_THREAD clone() failed: EINVAL (22)
+
+Summary:
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE clone08 : 0
+2026-05-09-12-10-17
+RUN LTP CASE clone301
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+clone301.c:163: TPASS: Parent got correct signal SIGCHLD
+clone301.c:163: TPASS: Parent got correct signal SIGUSR2
+[37m[168.458236 0:699 starry_kernel::syscall::task::clone:132] [33msys_clone/sys_clone3: namespace flags detected, stub support only[m
+[mclone301.c:163: TPASS: Parent got correct signal SIGCHLD
+clone301.c:163: TPASS: Parent got correct signal SIGCHLD
+clone301.c:96: TPASS: Child got correct signal SIGUSR1
+clone301.c:103: TPASS: Child got correct si_value
+clone301.c:163: TPASS: Parent got correct signal SIGCHLD
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone301 : 0
+2026-05-09-12-10-20
+RUN LTP CASE clone302
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+[37m[170.867288 0:713 starry_kernel::syscall::task::clone3:77] [33msys_clone3: size 0 too small, minimum is 64[m
+[m[37m[170.868350 0:713 starry_kernel::syscall::task::clone3:77] [33msys_clone3: size 63 too small, minimum is 64[m
+[mclone302.c:63: TPASS: sizeof(struct clone_args_minimal) == 64 (64)
+clone302.c:104: TPASS: invalid args: clone3() failed as expected: EFAULT (14)
+clone302.c:104: TPASS: zero size: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: short size: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: extra size: clone3() failed as expected: EFAULT (14)
+clone302.c:104: TPASS: sighand-no-VM: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: thread-no-sighand: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: fs-newns: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: invalid pidfd: clone3() failed as expected: EFAULT (14)
+clone302.c:104: TPASS: invalid signal: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: zero-stack-size: clone3() failed as expected: EINVAL (22)
+clone302.c:104: TPASS: invalid-stack: clone3() failed as expected: EINVAL (22)
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone302 : 0
+2026-05-09-12-10-22
+RUN LTP CASE close01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+close01.c:50: TPASS: close a file fd passed
+close01.c:50: TPASS: close a pipe fd passed
+close01.c:50: TPASS: close a socket fd passed
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close01 : 0
+2026-05-09-12-10-24
+RUN LTP CASE close02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+close02.c:20: TPASS: close(-1) : EBADF (9)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close02 : 0
+2026-05-09-12-10-26
+RUN LTP CASE close_range01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_clognJDOk/mnt fstyp=tmpfs flags=0
+tst_capability.c:29: TINFO: Dropping CAP_SYS_ADMIN(21)
+close_range01.c:136: TINFO: Plain close range
+close_range01.c:190: TPASS: No kernel taints
+close_range01.c:140: TINFO: Set UNSHARE and close range
+close_range01.c:190: TPASS: No kernel taints
+close_range01.c:144: TINFO: Set CLOEXEC on range
+close_range01.c:190: TPASS: No kernel taints
+close_range01.c:148: TINFO: Set UNSHARE and CLOEXEC on range
+close_range01.c:190: TPASS: No kernel taints
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close_range01 : 0
+2026-05-09-12-10-29
+RUN LTP CASE close_range02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+close_range02.c:52: TPASS: close_range(3, 100, 0) passed
+close_range02.c:54: TPASS: fcntl(3, F_GETFD) : EBADF (9)
+close_range02.c:56: TPASS: fcntl(100, F_GETFD) : EBADF (9)
+close_range02.c:59: TPASS: close_range(4, 3, 0) : EINVAL (22)
+close_range02.c:62: TPASS: close_range(3, ~0U, ~0U) : EINVAL (22)
+close_range02.c:65: TPASS: close_range(~0U, ~0U, 0) passed
+close_range02.c:71: TPASS: close_range(3, 3, CLOSE_RANGE_CLOEXEC): SUCCESS (0)
+close_range02.c:79: TPASS: FD_CLOEXEC was set on 3
+close_range02.c:88: TPASS: close_range(3, 3, CLOSE_RANGE_UNSHARE): SUCCESS (0)
+close_range02.c:95: TPASS: fcntl(3, F_GETFD) : EBADF (9)
+close_range02.c:102: TPASS: 3 is open passed
+
+Summary:
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close_range02 : 0
+2026-05-09-12-10-31
+RUN LTP CASE confstr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 14
+confstr01.c:75: TPASS: confstr PATH = '/bin:/usr/bin'
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 0
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 0
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_ILP32_OFF32_CFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_ILP32_OFF32_LDFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_ILP32_OFF32_LIBS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_ILP32_OFFBIG_CFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_ILP32_OFFBIG_LDFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_ILP32_OFFBIG_LIBS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_LP64_OFF64_CFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_LP64_OFF64_LDFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_LP64_OFF64_LIBS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_LPBIG_OFFBIG_CFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_LPBIG_OFFBIG_LDFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_LPBIG_OFFBIG_LIBS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_THREADS_CFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_THREADS_LDFLAGS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr POSIX_V7_WIDTH_RESTRICTED_ENVS = ''
+confstr01.c:61: TPASS: confstr(test_cases[i].value, NULL, (size_t)0) returned 1
+confstr01.c:75: TPASS: confstr V7_ENV = ''
+
+Summary:
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE confstr01 : 0
+2026-05-09-12-10-33
+RUN LTP CASE connect01
+[37m[184.168158 0:771 axnet::tcp:301] [33m[AxErrorKind::ConnectionRefused] unaddressable[m
+[mconnect01    1  TPASS  :  bad file descriptor successful
+connect01    2  TPASS  :  invalid socket buffer successful
+connect01    3  TPASS  :  invalid salen successful
+connect01    4  TPASS  :  invalid socket successful
+connect01    5  TBROK  :  connect01.c:226: connect(3, 0.0.0.0:49194, 16) failed: errno=ECONNREFUSED(111): Connection refused
+connect01    6  TBROK  :  connect01.c:226: Remaining cases broken
+
+Summary:
+passed   4
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE connect01 : 0
+2026-05-09-12-10-36
+RUN LTP CASE copy_file_range01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 20s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_copKKEJCn/mnt_point fstyp=tmpfs flags=0
+copy_file_range.h:36: TINFO: Testing libc copy_file_range()
+copy_file_range01.c:206: TPASS: non cross-device copy_file_range completed all 144 copy jobs successfully!
+copy_file_range01.c:206: TPASS: cross-device copy_file_range completed all 144 copy jobs successfully!
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_copKKEJCn/mnt_point fstyp=tmpfs flags=0
+copy_file_range.h:39: TINFO: Testing __NR_copy_file_range syscall
+copy_file_range01.c:206: TPASS: non cross-device copy_file_range completed all 144 copy jobs successfully!
+copy_file_range01.c:206: TPASS: cross-device copy_file_range completed all 144 copy jobs successfully!
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE copy_file_range01 : 0
+2026-05-09-12-10-40
+RUN LTP CASE creat01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+creat01.c:50: TPASS: creat() truncated file to 0 bytes
+creat01.c:55: TPASS: file was created and written to successfully
+creat01.c:60: TPASS: read failed expectedly: EBADF (9)
+creat01.c:50: TPASS: creat() truncated file to 0 bytes
+creat01.c:55: TPASS: file was created and written to successfully
+creat01.c:60: TPASS: read failed expectedly: EBADF (9)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat01 : 0
+2026-05-09-12-10-42
+RUN LTP CASE creat03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+creat03.c:36: TINFO: Created file has mode = 0100654
+creat03.c:41: TPASS: save text bit cleared
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat03 : 0
+2026-05-09-12-10-44
+RUN LTP CASE creat05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+creat05.c:49: TINFO: getdtablesize() = 1024
+creat05.c:59: TINFO: Opened additional #1021 fds
+creat05.c:36: TPASS: creat() failed with EMFILE
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_creEBGFBm) failed: remove(/tmp/LTP_creEBGFBm) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE creat05 : 0
+2026-05-09-12-10-46
+RUN LTP CASE creat06
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_crenEejoD/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+creat06.c:101: TPASS: got expected failure: EISDIR (21)
+creat06.c:101: TPASS: got expected failure: ENAMETOOLONG (36)
+creat06.c:101: TPASS: got expected failure: ENOENT (2)
+creat06.c:101: TPASS: got expected failure: ENOTDIR (20)
+creat06.c:101: TPASS: got expected failure: EFAULT (14)
+creat06.c:96: TFAIL: call succeeded unexpectedly
+creat06.c:101: TPASS: got expected failure: ELOOP (40)
+creat06.c:96: TFAIL: call succeeded unexpectedly
+
+Summary:
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_crenEejoD) failed: unlink(/tmp/LTP_crenEejoD) failed; errno=21: EISDIR
+FAIL LTP CASE creat06 : 0
+2026-05-09-12-10-48
+RUN LTP CASE dup01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup01.c:24: TPASS: dup(fd) returned fd 4
+dup01.c:27: TPASS: buf1.st_ino == buf2.st_ino (906)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup01 : 0
+2026-05-09-12-10-51
+RUN LTP CASE dup02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup02.c:29: TPASS: dup(-1) : EBADF (9)
+dup02.c:29: TPASS: dup(1500) : EBADF (9)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup02 : 0
+2026-05-09-12-10-53
+RUN LTP CASE dup03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup03.c:22: TPASS: dup(3) : EMFILE (24)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup03 : 0
+2026-05-09-12-10-55
+RUN LTP CASE dup04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup04.c:24: TPASS: dup(3) read end of the pipe returned fd 5
+dup04.c:27: TPASS: dup(4) write end of the pipe returned fd 5
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup04 : 0
+2026-05-09-12-10-57
+RUN LTP CASE dup06
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup06.c:64: TPASS: Test passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup06 : 0
+2026-05-09-12-10-59
+RUN LTP CASE dup07
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup07.c:44: TPASS: Passed in read only mode
+dup07.c:44: TPASS: Passed in write only mode
+dup07.c:44: TPASS: Passed in read/write mode
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup07 : 0
+2026-05-09-12-11-02
+RUN LTP CASE dup201
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup201.c:47: TPASS: dup2(-1, 5) : EBADF (9)
+dup201.c:47: TPASS: dup2(1024, 5) : EBADF (9)
+dup201.c:47: TPASS: dup2(0, -1) : EBADF (9)
+dup201.c:47: TPASS: dup2(0, 1024) : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup201 : 0
+2026-05-09-12-11-04
+RUN LTP CASE dup202
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup202.c:104: TPASS: original(100444) and duped(100444) are the same mode
+dup202.c:104: TPASS: original(100222) and duped(100222) are the same mode
+dup202.c:104: TPASS: original(100666) and duped(100666) are the same mode
+dup202.c:93: TINFO: original mode 0777, new mode 0444 after chmod
+dup202.c:104: TPASS: original(100444) and duped(100444) are the same mode
+dup202.c:93: TINFO: original mode 0777, new mode 0222 after chmod
+dup202.c:104: TPASS: original(100222) and duped(100222) are the same mode
+dup202.c:93: TINFO: original mode 0777, new mode 0666 after chmod
+dup202.c:104: TPASS: original(100666) and duped(100666) are the same mode
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup202 : 0
+2026-05-09-12-11-06
+RUN LTP CASE dup203
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup203.c:40: TINFO: Test duping over an open fd
+dup203.c:74: TPASS: test the content of file is correct
+dup203.c:81: TPASS: test the FD_CLOEXEC flag is correct
+dup203.c:40: TINFO: Test duping over a close fd
+dup203.c:74: TPASS: test the content of file is correct
+dup203.c:81: TPASS: test the FD_CLOEXEC flag is correct
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup203 : 0
+2026-05-09-12-11-08
+RUN LTP CASE dup204
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup204.c:38: TPASS: dup2(fd[i], nfd[i]) passed
+dup204.c:45: TPASS: oldbuf.st_ino == newbuf.st_ino (1)
+dup204.c:38: TPASS: dup2(fd[i], nfd[i]) passed
+dup204.c:45: TPASS: oldbuf.st_ino == newbuf.st_ino (1)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup204 : 0
+2026-05-09-12-11-11
+RUN LTP CASE dup205
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup205.c:69: TPASS: Test passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup205 : 0
+2026-05-09-12-11-13
+RUN LTP CASE dup206
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup206.c:29: TPASS: dup2(3, 3) returns newfd(3)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup206 : 0
+2026-05-09-12-11-15
+RUN LTP CASE dup207
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup207.c:55: TINFO: Test offset with lseek before dup2
+dup207.c:71: TPASS: Get expected buf bcdefg
+dup207.c:55: TINFO: Test offset with lseek after dup2
+dup207.c:71: TPASS: Get expected buf cdefg
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup207 : 0
+2026-05-09-12-11-18
+RUN LTP CASE dup3_01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup3_01.c:56: TPASS: dup3(1, 4, 0) set close-on-exec flag
+dup3_01.c:49: TPASS: dup3(1, 4, O_CLOEXEC) set close-on-exec flag
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup3_01 : 0
+2026-05-09-12-11-20
+RUN LTP CASE dup3_02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+dup3_02.c:41: TPASS: dup3(3, 3, 524288) : EINVAL (22)
+dup3_02.c:41: TPASS: dup3(3, 3, 0) : EINVAL (22)
+dup3_02.c:41: TPASS: dup3(3, 5, -1) : EINVAL (22)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup3_02 : 0
+2026-05-09-12-11-22
+RUN LTP CASE epoll-ltp
+epoll01     0  TINFO  :  testing if epoll() system call works
+epoll01     0  TINFO  :  gettimeofday() works
+epoll01     0  TINFO  :  random number seeded with gettimeofday() [seed = 299568] works
+epoll01     0  TINFO  :  Testing epoll_create
+epoll01     1  TPASS  :  epoll_create with negative set size
+epoll01     2  TPASS  :  epoll_create with large set size (size = 2147483647)
+epoll01     3  TPASS  :  epoll_create with large set size (size = 2147483646)
+epoll01     4  TPASS  :  epoll_create with large set size (size = 2147483645)
+epoll01     5  TPASS  :  epoll_create with large set size (size = 2147483644)
+epoll01     6  TPASS  :  epoll_create with large set size (size = 2147483643)
+epoll01     7  TPASS  :  epoll_create with large set size (size = 2147483642)
+epoll01     8  TPASS  :  epoll_create with large set size (size = 2147483641)
+epoll01     9  TPASS  :  epoll_create with large set size (size = 2147483640)
+epoll01    10  TPASS  :  epoll_create with large set size (size = 2147483639)
+epoll01    11  TPASS  :  epoll_create with large set size (size = 2147483638)
+epoll01    12  TPASS  :  epoll_create with large set size (size = 2147483637)
+epoll01    13  TPASS  :  epoll_create with large set size (size = 2147483636)
+epoll01    14  TPASS  :  epoll_create with large set size (size = 2147483635)
+epoll01    15  TPASS  :  epoll_create with large set size (size = 2147483634)
+epoll01    16  TPASS  :  epoll_create with large set size (size = 2147483633)
+epoll01    17  TPASS  :  epoll_create with large set size (size = 2147483632)
+epoll01    18  TPASS  :  epoll_create with random large set size (size = 1652682281)
+epoll01    19  TPASS  :  epoll_create with random large set size (size = 884617862)
+epoll01    20  TPASS  :  epoll_create with random large set size (size = 2017575976)
+epoll01    21  TPASS  :  epoll_create with random large set size (size = 1929669806)
+epoll01    22  TPASS  :  epoll_create with random large set size (size = 95117172)
+epoll01    23  TPASS  :  epoll_create with random large set size (size = 1749992541)
+epoll01    24  TPASS  :  epoll_create with random large set size (size = 70621682)
+epoll01    25  TPASS  :  epoll_create with random large set size (size = 826761990)
+epoll01    26  TPASS  :  epoll_create with random large set size (size = 1133253403)
+epoll01    27  TPASS  :  epoll_create with random large set size (size = 1803971144)
+epoll01    28  TPASS  :  epoll_create with random large set size (size = 1393055465)
+epoll01    29  TPASS  :  epoll_create with random large set size (size = 18065165)
+epoll01    30  TPASS  :  epoll_create with random large set size (size = 1085099488)
+epoll01    31  TPASS  :  epoll_create with random large set size (size = 487343154)
+epoll01    32  TPASS  :  epoll_create with random large set size (size = 1536837882)
+epoll01    33  TPASS  :  epoll_create with random large set size (size = 800345244)
+epoll01     0  TINFO  :  Summary: Of 33 tests, epoll_create failed 0 (100% passed).
+epoll01     0  TINFO  :  Testing epoll_ctl
+QEMU: Terminated
+
