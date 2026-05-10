@@ -38,6 +38,16 @@ pub fn cleanup_task_tables() {
     SESSION_TABLE.write().cleanup();
 }
 
+/// Add a process group to the global table.
+pub fn add_process_group_to_table(pg: &Arc<ProcessGroup>) {
+    PROCESS_GROUP_TABLE.write().insert(pg.pgid(), pg);
+}
+
+/// Add a session to the global table.
+pub fn add_session_to_table(session: &Arc<Session>) {
+    SESSION_TABLE.write().insert(session.sid(), session);
+}
+
 /// Add the task, the thread and possibly its process, process group and session
 /// to the corresponding tables.
 pub fn add_task_to_table(task: &AxTaskRef) {

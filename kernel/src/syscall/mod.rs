@@ -20,6 +20,12 @@ pub use self::{
     task::*, time::*,
 };
 
+pub const SYSCALL_RESTART: isize = isize::MIN;
+
+fn split_offset(low: usize, high: usize) -> i64 {
+    (((high as u64) << 32) | ((low as u64) & 0xffff_ffff)) as i64
+}
+
 pub fn handle_syscall(uctx: &mut UserContext) {
     let Some(sysno) = Sysno::new(uctx.sysno()) else {
         warn!("Invalid syscall number: {}", uctx.sysno());
@@ -173,27 +179,27 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg0() as _,
             uctx.arg1() as _,
             uctx.arg2() as _,
-            uctx.arg3() as _,
+            split_offset(uctx.arg3(), uctx.arg4()) as _,
         ),
         Sysno::pwritev => sys_pwritev(
             uctx.arg0() as _,
             uctx.arg1() as _,
             uctx.arg2() as _,
-            uctx.arg3() as _,
+            split_offset(uctx.arg3(), uctx.arg4()) as _,
         ),
         Sysno::preadv2 => sys_preadv2(
             uctx.arg0() as _,
             uctx.arg1() as _,
             uctx.arg2() as _,
-            uctx.arg3() as _,
-            uctx.arg4() as _,
+            split_offset(uctx.arg3(), uctx.arg4()) as _,
+            uctx.arg5() as _,
         ),
         Sysno::pwritev2 => sys_pwritev2(
             uctx.arg0() as _,
             uctx.arg1() as _,
             uctx.arg2() as _,
-            uctx.arg3() as _,
-            uctx.arg4() as _,
+            split_offset(uctx.arg3(), uctx.arg4()) as _,
+            uctx.arg5() as _,
         ),
         Sysno::sendfile => sys_sendfile(
             uctx.arg0() as _,
@@ -442,7 +448,12 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::fork => sys_fork(uctx),
         Sysno::exit => sys_exit(uctx.arg0() as _),
         Sysno::exit_group => sys_exit_group(uctx.arg0() as _),
-        Sysno::wait4 => sys_waitpid(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::wait4 => sys_waitpid(
+            uctx,
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+        ),
         Sysno::waitid => sys_waitid(
             uctx.arg0() as _,
             uctx.arg1() as _,
@@ -690,5 +701,9 @@ pub fn handle_syscall(uctx: &mut UserContext) {
     };
     debug!("Syscall {sysno} return {result:?}");
 
-    uctx.set_retval(result.unwrap_or_else(|err| -LinuxError::from(err).code() as _) as _);
+    match result {
+        Ok(SYSCALL_RESTART) => {}
+        Ok(ret) => uctx.set_retval(ret as _),
+        Err(err) => uctx.set_retval(-LinuxError::from(err).code() as _),
+    }
 }

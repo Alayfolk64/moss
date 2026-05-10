@@ -2,6 +2,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::{future::poll_fn, mem, task::Poll};
 
 use axerrno::{AxError, AxResult, LinuxError};
+use axhal::uspace::UserContext;
 use axtask::{
     current,
     future::{block_on, interruptible},
@@ -19,8 +20,19 @@ use starry_vm::{VmMutPtr, VmPtr};
 use super::{ptrace_has_wait_target, ptrace_take_wait_event};
 use crate::{
     file::{FileLike, PidFd},
+    syscall::SYSCALL_RESTART,
     task::{AsThread, ProcessWaitStatus, get_process_data},
 };
+
+fn restart_syscall(uctx: &mut UserContext) {
+    #[cfg(target_arch = "x86_64")]
+    const SYSCALL_INSN_SIZE: usize = 2;
+    #[cfg(not(target_arch = "x86_64"))]
+    const SYSCALL_INSN_SIZE: usize = 4;
+
+    let ip = uctx.ip();
+    uctx.set_ip(ip.saturating_sub(SYSCALL_INSN_SIZE));
+}
 
 bitflags! {
     #[derive(Debug, Clone, Copy)]
@@ -310,7 +322,12 @@ impl WaitPid {
     }
 }
 
-pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isize> {
+pub fn sys_waitpid(
+    uctx: &mut UserContext,
+    pid: i32,
+    exit_code: *mut i32,
+    options: u32,
+) -> AxResult<isize> {
     let options = validate_waitpid_options(options)?;
     info!("sys_waitpid <= pid: {pid:?}, options: {options:?}");
     let raw_pid = pid;
@@ -414,8 +431,9 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
                     .filter_map(Signo::from_repr)
                     .any(|signo| pending.has(signo) && proc_data.signal.can_restart(signo));
                 if restartable {
-                    debug!("sys_waitpid: interrupted by restartable signal, retrying");
-                    continue;
+                    debug!("sys_waitpid: interrupted by restartable signal, restarting");
+                    restart_syscall(uctx);
+                    return Ok(SYSCALL_RESTART);
                 }
 
                 // Spurious wakeup / already-consumed interrupt, keep waiting.
@@ -439,7 +457,8 @@ pub fn sys_waitpid(pid: i32, exit_code: *mut i32, options: u32) -> AxResult<isiz
                     .filter(|&signo| pending.has(signo))
                     .all(|signo| proc_data.signal.can_restart(signo));
                 if all_restartable {
-                    continue;
+                    restart_syscall(uctx);
+                    return Ok(SYSCALL_RESTART);
                 }
 
                 return Err(AxError::Interrupted);

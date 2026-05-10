@@ -4,7 +4,7 @@ use core::{
     task::Context,
 };
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileFlags, OpenOptions};
 use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
@@ -156,10 +156,10 @@ pub fn sys_fadvise64(
 }
 
 pub fn sys_pread64(fd: c_int, buf: *mut u8, len: usize, offset: __kernel_off_t) -> AxResult<isize> {
-    let f = File::from_fd(fd)?;
     if offset < 0 {
         return Err(AxError::InvalidInput);
     }
+    let f = positioned_file_from_fd(fd)?;
     let read = f.inner().read_at(VmBytesMut::new(buf, len), offset as _)?;
     Ok(read as _)
 }
@@ -170,12 +170,30 @@ pub fn sys_pwrite64(
     len: usize,
     offset: __kernel_off_t,
 ) -> AxResult<isize> {
+    if offset < 0 {
+        return Err(AxError::InvalidInput);
+    }
+    let f = positioned_file_from_fd(fd)?;
     if len == 0 {
         return Ok(0);
     }
-    let f = File::from_fd(fd)?;
-    let write = f.inner().write_at(VmBytes::new(buf, len), offset as _)?;
+    let inner = f.inner();
+    let write = if let Ok(file) = inner.access(FileFlags::APPEND) {
+        file.append(VmBytes::new(buf, len))?.0
+    } else {
+        inner.write_at(VmBytes::new(buf, len), offset as _)?
+    };
     Ok(write as _)
+}
+
+fn positioned_file_from_fd(fd: c_int) -> AxResult<Arc<File>> {
+    File::from_fd(fd).map_err(|err| {
+        if err == AxError::BrokenPipe {
+            AxError::from(LinuxError::ESPIPE)
+        } else {
+            err
+        }
+    })
 }
 
 pub fn sys_preadv(
@@ -184,6 +202,9 @@ pub fn sys_preadv(
     iovcnt: usize,
     offset: __kernel_off_t,
 ) -> AxResult<isize> {
+    if offset < 0 {
+        return Err(AxError::InvalidInput);
+    }
     sys_preadv2(fd, iov, iovcnt, offset, 0)
 }
 
@@ -193,6 +214,9 @@ pub fn sys_pwritev(
     iovcnt: usize,
     offset: __kernel_off_t,
 ) -> AxResult<isize> {
+    if offset < 0 {
+        return Err(AxError::InvalidInput);
+    }
     sys_pwritev2(fd, iov, iovcnt, offset, 0)
 }
 
@@ -201,13 +225,21 @@ pub fn sys_preadv2(
     iov: *const IoVec,
     iovcnt: usize,
     offset: __kernel_off_t,
-    _flags: u32,
+    flags: u32,
 ) -> AxResult<isize> {
-    debug!("sys_preadv2 <= fd: {fd}, iovcnt: {iovcnt}, offset: {offset}, flags: {_flags}");
-    let f = File::from_fd(fd)?;
-    f.inner()
-        .read_at(IoVectorBuf::new(iov, iovcnt)?.into_io(), offset as _)
-        .map(|n| n as _)
+    debug!("sys_preadv2 <= fd: {fd}, iovcnt: {iovcnt}, offset: {offset}, flags: {flags}");
+    if flags != 0 {
+        return Err(AxError::from(LinuxError::EOPNOTSUPP));
+    }
+    let f = positioned_file_from_fd(fd)?;
+    let iov = IoVectorBuf::new(iov, iovcnt)?.into_io();
+    if offset == -1 {
+        f.inner().read(iov).map(|n| n as _)
+    } else if offset < -1 {
+        Err(AxError::InvalidInput)
+    } else {
+        f.inner().read_at(iov, offset as _).map(|n| n as _)
+    }
 }
 
 pub fn sys_pwritev2(
@@ -215,13 +247,26 @@ pub fn sys_pwritev2(
     iov: *const IoVec,
     iovcnt: usize,
     offset: __kernel_off_t,
-    _flags: u32,
+    flags: u32,
 ) -> AxResult<isize> {
-    debug!("sys_pwritev2 <= fd: {fd}, iovcnt: {iovcnt}, offset: {offset}, flags: {_flags}");
-    let f = File::from_fd(fd)?;
-    f.inner()
-        .read_at(IoVectorBuf::new(iov, iovcnt)?.into_io(), offset as _)
-        .map(|n| n as _)
+    debug!("sys_pwritev2 <= fd: {fd}, iovcnt: {iovcnt}, offset: {offset}, flags: {flags}");
+    if flags != 0 {
+        return Err(AxError::from(LinuxError::EOPNOTSUPP));
+    }
+    let f = positioned_file_from_fd(fd)?;
+    let iov = IoVectorBuf::new(iov, iovcnt)?.into_io();
+    if offset == -1 {
+        f.inner().write(iov).map(|n| n as _)
+    } else if offset < -1 {
+        Err(AxError::InvalidInput)
+    } else {
+        let inner = f.inner();
+        if let Ok(file) = inner.access(FileFlags::APPEND) {
+            file.append(iov).map(|(n, _)| n as _)
+        } else {
+            inner.write_at(iov, offset as _).map(|n| n as _)
+        }
+    }
 }
 
 enum SendFile {
