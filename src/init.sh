@@ -990,16 +990,16 @@ run_ltp() {
         pwrite03_64
         pwrite04
         pwrite04_64
-        # pwritev01
-        # pwritev01_64
-        # pwritev02
-        # pwritev02_64
-        # pwritev03
-        # pwritev03_64
-        # pwritev201
-        # pwritev201_64
-        # pwritev202
-        # pwritev202_64
+        pwritev01
+        pwritev01_64
+        pwritev02
+        pwritev02_64
+        pwritev03
+        pwritev03_64
+        pwritev201
+        pwritev201_64
+        pwritev202
+        pwritev202_64
         # quotactl01
         # quotactl02
         # quotactl03
