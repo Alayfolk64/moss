@@ -639,7 +639,7 @@ impl CachedFile {
         Ok(())
     }
 
-    pub fn sync(&self, data_only: bool) -> VfsResult<()> {
+    fn writeback_cached_pages(&self) -> VfsResult<()> {
         if self.in_memory {
             return Ok(());
         }
@@ -648,6 +648,15 @@ impl CachedFile {
         while let Some((pn, mut page)) = guard.pop_lru() {
             self.evict_cache(file, pn, &mut page)?;
         }
+        Ok(())
+    }
+
+    pub fn sync(&self, data_only: bool) -> VfsResult<()> {
+        if self.in_memory {
+            return Ok(());
+        }
+        self.writeback_cached_pages()?;
+        let file = self.inner.entry().as_file()?;
         file.sync(data_only)?;
         Ok(())
     }
@@ -664,8 +673,8 @@ impl Drop for CachedFile {
             // need to drop it.
             return;
         }
-        if let Err(err) = self.sync(false) {
-            warn!("Failed to sync file on drop: {err:?}");
+        if let Err(err) = self.writeback_cached_pages() {
+            warn!("Failed to write back cached file pages on drop: {err:?}");
         }
     }
 }
