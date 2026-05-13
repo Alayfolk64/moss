@@ -373,10 +373,19 @@ pub fn sys_sendfile(out_fd: c_int, in_fd: c_int, offset: *mut u64, len: usize) -
         len
     );
 
+    if let Ok(file) = File::from_fd(in_fd) {
+        file.inner().access(FileFlags::READ)?;
+    }
+    if let Ok(file) = File::from_fd(out_fd) {
+        file.inner().access(FileFlags::WRITE)?;
+    }
+
     let src = if !offset.is_null() {
-        if offset.vm_read()? > u32::MAX as u64 {
+        let off = offset.vm_read()?;
+        if off > i64::MAX as u64 {
             return Err(AxError::InvalidInput);
         }
+        offset.vm_write(off)?;
         SendFile::Offset(File::from_fd(in_fd)?, offset)
     } else {
         SendFile::Direct(get_file_like(in_fd)?)

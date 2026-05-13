@@ -1119,22 +1119,22 @@ run_ltp() {
         # # semop05
         # # send01
         # # send02
-        # # sendfile02
-        # # sendfile02_64
-        # # sendfile03
-        # # sendfile03_64
-        # # sendfile04
-        # # sendfile04_64
-        # # sendfile05
-        # # sendfile05_64
-        # # sendfile06
-        # # sendfile06_64
-        # # sendfile07
-        # # sendfile07_64
-        # # sendfile08
-        # # sendfile08_64
-        # # sendfile09
-        # # sendfile09_64
+        sendfile02
+        sendfile02_64
+        sendfile03
+        sendfile03_64
+        sendfile04
+        sendfile04_64
+        sendfile05
+        sendfile05_64
+        sendfile06
+        sendfile06_64
+        sendfile07
+        sendfile07_64
+        sendfile08
+        sendfile08_64
+        sendfile09
+        sendfile09_64
         # # sendmmsg01
         # sendmmsg02
         # # sendmsg01
@@ -1336,57 +1336,57 @@ run_ltp() {
         # statfs01_64
         # statfs02
         # statfs02_64
-        # # statfs03
-        # # statfs03_64
+        # statfs03
+        # statfs03_64
         # statvfs01
         # statvfs02
-        # # statx01
-        # # statx02
-        # # statx03
-        # # statx04
-        # # statx05
-        # # statx06
-        # # statx07
-        # # statx08
-        # # statx09
-        # # statx10
-        # # statx11
-        # # statx12
-        # # stime01
-        # # stime02
+        # statx01
+        # statx02
+        # statx03
+        # statx04
+        # statx05
+        # statx06
+        # statx07
+        # statx08
+        # statx09
+        # statx10
+        # statx11
+        # statx12
+        # stime01
+        # stime02
         # string01
-        # # swapoff01
-        # # swapoff02
-        # # swapon01
-        # # swapon02
-        # # swapon03
+        # swapoff01
+        # swapoff02
+        # swapon01
+        # swapon02
+        # swapon03
         # symlink01
         # symlink02
         # symlink03
         # symlink04
-        # # symlinkat01
-        # # sync01
-        sync_file_range01
-        sync_file_range02
-        syncfs01
+        # symlinkat01
+        # sync01
+        # sync_file_range01
+        # sync_file_range02
+        # syncfs01
         # syscall01
         # sysconf01
-        # # sysctl01
-        # # sysctl03
-        # # sysctl04
-        # # sysfs01
-        # # sysfs02
-        # # sysfs03
-        # # sysfs04
-        # # sysfs05
+        # sysctl01
+        # sysctl03
+        # sysctl04
+        # sysfs01
+        # sysfs02
+        # sysfs03
+        # sysfs04
+        # sysfs05
         # sysinfo01
         # sysinfo02
-        # # sysinfo03
-        # # syslog11
-        # # syslog12
-        # # tee01
-        # # tee02
-        # # test_ioctl
+        # sysinfo03
+        # syslog11
+        # syslog12
+        # tee01
+        # tee02
+        # test_ioctl
         # tgkill01
         # # tgkill02
         # tgkill03
