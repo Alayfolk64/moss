@@ -634,6 +634,27 @@ fn release_posix_locks_for_fd(fd: c_int) {
     release_file_lease_for_file_like(&file_like);
 }
 
+pub fn close_all_files_for_current_process() {
+    let file_likes = {
+        let fd_table = FD_TABLE.read();
+        fd_table
+            .ids()
+            .filter_map(|fd| fd_table.get(fd).map(|file_desc| file_desc.inner.clone()))
+            .collect::<Vec<_>>()
+    };
+
+    for file_like in &file_likes {
+        release_posix_locks_for_file_like(file_like);
+        release_file_lease_for_file_like(file_like);
+    }
+
+    let mut fd_table = FD_TABLE.write();
+    let fds = fd_table.ids().collect::<Vec<_>>();
+    for fd in fds {
+        fd_table.remove(fd);
+    }
+}
+
 pub fn release_posix_locks_for_pid(pid: u32) {
     let mut map = POSIX_LOCKS.write();
     map.retain(|_, locks| {

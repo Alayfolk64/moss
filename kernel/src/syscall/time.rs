@@ -18,7 +18,7 @@ use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::{
     file::{FileLike, TimerFd, add_file_like, timerfd::KernelTimerSpec},
-    task::{AsThread, ITimerType, send_signal_to_process},
+    task::{AsThread, ITimerType, get_process_data, get_task, send_signal_to_process},
     time::TimeValueLike,
 };
 
@@ -123,9 +123,12 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
         | CLOCK_MONOTONIC_COARSE
         | CLOCK_BOOTTIME
         | CLOCK_BOOTTIME_ALARM => monotonic_time(),
-        CLOCK_PROCESS_CPUTIME_ID | CLOCK_THREAD_CPUTIME_ID => {
+        CLOCK_PROCESS_CPUTIME_ID => {
+            process_cpu_time(current().as_thread().proc_data.proc.pid()).unwrap_or(TimeValue::ZERO)
+        }
+        CLOCK_THREAD_CPUTIME_ID => {
             let (utime, stime) = current().as_thread().time.borrow().output();
-            utime + stime
+            time_value_add(utime, stime)
         }
         _ => {
             warn!("Called sys_clock_gettime for unsupported clock {clock_id}");
@@ -271,7 +274,8 @@ pub fn sys_timer_create(
     let signo = parse_sigevent(evp)?;
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let id = POSIX_TIMERS.lock().create(pid, clock_id, signo);
+    let tid = curr.id().as_u64() as Pid;
+    let id = POSIX_TIMERS.lock().create(pid, tid, clock_id, signo);
     if let Err(err) = timerid.vm_write(id) {
         POSIX_TIMERS.lock().delete(pid, id);
         return Err(err.into());
@@ -306,8 +310,8 @@ pub fn sys_timer_gettime(timerid: i32, curr_value: *mut itimerspec) -> AxResult<
     let spec = POSIX_TIMERS
         .lock()
         .get(pid, timerid)
-        .map(PosixTimer::gettime)
-        .ok_or(AxError::InvalidInput)?;
+        .ok_or(AxError::InvalidInput)
+        .and_then(PosixTimer::gettime)?;
     write_itimerspec(curr_value, spec)?;
     Ok(0)
 }
@@ -407,6 +411,8 @@ fn write_itimerspec(ptr: *mut itimerspec, spec: KernelTimerSpec) -> AxResult<()>
 
 #[derive(Clone, Copy)]
 struct PosixTimer {
+    owner_pid: Pid,
+    owner_tid: Pid,
     clock_id: u32,
     signo: Option<Signo>,
     interval: TimeValue,
@@ -416,14 +422,16 @@ struct PosixTimer {
 }
 
 impl PosixTimer {
-    fn gettime(&self) -> KernelTimerSpec {
-        KernelTimerSpec {
+    fn gettime(&self) -> AxResult<KernelTimerSpec> {
+        let now = posix_timer_clock_now(self.clock_id, self.owner_pid, self.owner_tid)
+            .ok_or(AxError::NoSuchProcess)?;
+        Ok(KernelTimerSpec {
             interval: self.interval,
             value: self
                 .deadline
-                .map(|deadline| deadline.saturating_sub(timer_clock_now(self.clock_id)))
+                .map(|deadline| deadline.saturating_sub(now))
                 .unwrap_or(TimeValue::ZERO),
-        }
+        })
     }
 }
 
@@ -434,13 +442,15 @@ struct PosixTimerTable {
 }
 
 impl PosixTimerTable {
-    fn create(&mut self, pid: Pid, clock_id: u32, signo: Option<Signo>) -> i32 {
+    fn create(&mut self, pid: Pid, tid: Pid, clock_id: u32, signo: Option<Signo>) -> i32 {
         let next = self.next_id.entry(pid).or_default();
         let id = *next;
         *next += 1;
         self.timers.insert(
             (pid, id),
             PosixTimer {
+                owner_pid: pid,
+                owner_tid: tid,
                 clock_id,
                 signo,
                 interval: TimeValue::ZERO,
@@ -471,8 +481,9 @@ impl PosixTimerTable {
             .timers
             .get_mut(&(pid, id))
             .ok_or(AxError::InvalidInput)?;
-        let now = timer_clock_now(timer.clock_id);
-        let old = timer.gettime();
+        let now = posix_timer_clock_now(timer.clock_id, timer.owner_pid, timer.owner_tid)
+            .ok_or(AxError::NoSuchProcess)?;
+        let old = timer.gettime()?;
         timer.generation = timer.generation.wrapping_add(1);
         timer.interval = spec.interval;
         timer.overrun = if abstime && !spec.interval.is_zero() && spec.value < now {
@@ -512,12 +523,26 @@ fn posix_timer_worker(pid: Pid, timerid: i32, mut deadline: TimeValue, generatio
             .lock()
             .get(pid, timerid)
             .filter(|timer| timer.generation == generation)
-            .map(|timer| timer.clock_id)
+            .map(|timer| (timer.clock_id, timer.owner_pid, timer.owner_tid))
         else {
             return;
         };
+        let (clock_id, owner_pid, owner_tid) = clock_id;
 
-        while timer_clock_now(clock_id) < deadline {
+        loop {
+            let Some(now) = posix_timer_clock_now(clock_id, owner_pid, owner_tid) else {
+                return;
+            };
+            if now >= deadline {
+                break;
+            }
+            if !POSIX_TIMERS
+                .lock()
+                .get(pid, timerid)
+                .is_some_and(|timer| timer.generation == generation)
+            {
+                return;
+            }
             yield_now();
         }
 
@@ -529,7 +554,10 @@ fn posix_timer_worker(pid: Pid, timerid: i32, mut deadline: TimeValue, generatio
             if timer.generation != generation {
                 return;
             }
-            let now = timer_clock_now(timer.clock_id);
+            let Some(now) = posix_timer_clock_now(timer.clock_id, timer.owner_pid, timer.owner_tid)
+            else {
+                return;
+            };
             let missed = if timer.interval.is_zero() {
                 1
             } else {
@@ -587,11 +615,37 @@ fn valid_timerfd_clock(clock_id: u32) -> bool {
     )
 }
 
-fn timer_clock_now(clock_id: u32) -> TimeValue {
+fn posix_timer_clock_now(clock_id: u32, pid: Pid, tid: Pid) -> Option<TimeValue> {
     match clock_id {
-        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => wall_time(),
-        _ => monotonic_time(),
+        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => Some(wall_time()),
+        CLOCK_PROCESS_CPUTIME_ID => process_cpu_time(pid),
+        CLOCK_THREAD_CPUTIME_ID => thread_cpu_time(tid),
+        _ => Some(monotonic_time()),
     }
+}
+
+fn task_cpu_time(task: &axtask::AxTaskRef) -> TimeValue {
+    let (utime, stime) = task.as_thread().time.borrow().output();
+    time_value_add(utime, stime)
+}
+
+fn thread_cpu_time(tid: Pid) -> Option<TimeValue> {
+    get_task(tid).ok().map(|task| task_cpu_time(&task))
+}
+
+fn process_cpu_time(pid: Pid) -> Option<TimeValue> {
+    let proc_data = get_process_data(pid).ok()?;
+    let mut total = TimeValue::ZERO;
+    for tid in proc_data.proc.threads() {
+        if let Some(cpu_time) = thread_cpu_time(tid) {
+            total = time_value_add(total, cpu_time);
+        }
+    }
+    Some(total)
+}
+
+fn time_value_add(lhs: TimeValue, rhs: TimeValue) -> TimeValue {
+    lhs.checked_add(rhs).unwrap_or(TimeValue::MAX)
 }
 
 fn duration_mul(duration: TimeValue, count: u128) -> TimeValue {

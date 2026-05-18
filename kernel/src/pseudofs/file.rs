@@ -55,6 +55,26 @@ where
     }
 }
 
+pub struct StaticFile {
+    data: &'static [u8],
+}
+
+impl StaticFile {
+    pub const fn new(data: &'static [u8]) -> Self {
+        Self { data }
+    }
+}
+
+impl SimpleFileOps for StaticFile {
+    fn read_all(&self) -> VfsResult<Cow<'_, [u8]>> {
+        Ok(Cow::Borrowed(self.data))
+    }
+
+    fn write_all(&self, _data: &[u8]) -> VfsResult<()> {
+        Err(VfsError::BadFileDescriptor)
+    }
+}
+
 impl<F, R> SimpleFileOps for F
 where
     F: Fn() -> VfsResult<R> + Send + Sync + 'static,

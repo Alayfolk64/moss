@@ -1,4 +1,8 @@
-use core::time::Duration;
+use core::{
+    mem::{MaybeUninit, size_of},
+    slice,
+    time::Duration,
+};
 
 use axerrno::{AxError, AxResult};
 use axpoll::IoEvents;
@@ -8,6 +12,7 @@ use linux_raw_sys::general::{
     EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, epoll_event, timespec,
 };
 use starry_signal::SignalSet;
+use starry_vm::vm_read_slice;
 
 use crate::{
     file::{
@@ -36,6 +41,18 @@ pub fn sys_epoll_create1(flags: u32) -> AxResult<isize> {
         .map(|fd| fd as isize)
 }
 
+fn read_epoll_event(event: UserConstPtr<epoll_event>) -> AxResult<epoll_event> {
+    let mut raw = MaybeUninit::<epoll_event>::uninit();
+    let bytes = unsafe {
+        slice::from_raw_parts_mut(
+            raw.as_mut_ptr().cast::<MaybeUninit<u8>>(),
+            size_of::<epoll_event>(),
+        )
+    };
+    vm_read_slice(event.address().as_usize() as *const u8, bytes)?;
+    Ok(unsafe { raw.assume_init() })
+}
+
 pub fn sys_epoll_ctl(
     epfd: i32,
     op: u32,
@@ -46,7 +63,7 @@ pub fn sys_epoll_ctl(
     debug!("sys_epoll_ctl <= epfd: {epfd}, op: {op}, fd: {fd}");
 
     let parse_event = || -> AxResult<(EpollEvent, EpollFlags)> {
-        let event = event.get_as_ref()?;
+        let event = read_epoll_event(event)?;
         let events = IoEvents::from_bits_truncate(event.events);
         let flags =
             EpollFlags::from_bits(event.events & !events.bits()).ok_or(AxError::InvalidInput)?;

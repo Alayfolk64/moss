@@ -57,6 +57,7 @@ qemu = [
     "starry-kernel/net",
 ]
 shell-init = []
+timerfd-debug-init = []
 smp = ["axfeat/smp"]
 
 vf2 = ["axfeat/driver-sdmmc"]
