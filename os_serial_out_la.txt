@@ -17,7 +17,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-13 13:31:09.001308760 UTC
+Boot at 2026-05-18 03:40:35.005026190 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -95,7 +95,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile02 : 0
-2026-05-13-13-31-13
+2026-05-18-03-40-40
 RUN LTP CASE sendfile02_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -109,7 +109,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile02_64 : 0
-2026-05-13-13-31-15
+2026-05-18-03-40-43
 RUN LTP CASE sendfile03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -125,7 +125,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile03 : 0
-2026-05-13-13-31-19
+2026-05-18-03-40-46
 RUN LTP CASE sendfile03_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -141,7 +141,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile03_64 : 0
-2026-05-13-13-31-21
+2026-05-18-03-40-49
 RUN LTP CASE sendfile04
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -158,7 +158,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile04 : 0
-2026-05-13-13-31-23
+2026-05-18-03-40-51
 RUN LTP CASE sendfile04_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -175,7 +175,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile04_64 : 0
-2026-05-13-13-31-25
+2026-05-18-03-40-54
 RUN LTP CASE sendfile05
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -188,7 +188,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile05 : 0
-2026-05-13-13-31-28
+2026-05-18-03-40-57
 RUN LTP CASE sendfile05_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -201,7 +201,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile05_64 : 0
-2026-05-13-13-31-31
+2026-05-18-03-41-00
 RUN LTP CASE sendfile06
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -214,7 +214,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile06 : 0
-2026-05-13-13-31-33
+2026-05-18-03-41-03
 RUN LTP CASE sendfile06_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -227,37 +227,33 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile06_64 : 0
-2026-05-13-13-31-36
+2026-05-18-03-41-06
 RUN LTP CASE sendfile07
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-Test timeouted, sending SIGKILL!
-tst_test.c:1671: TINFO: If you are running on slow machine, try exporting LTP_TIMEOUT_MUL > 1
-tst_test.c:1673: TBROK: Test killed! (timeout?)
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile07 : 0
-2026-05-13-13-31-55
+2026-05-18-03-41-10
 RUN LTP CASE sendfile07_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-Test timeouted, sending SIGKILL!
-tst_test.c:1671: TINFO: If you are running on slow machine, try exporting LTP_TIMEOUT_MUL > 1
-tst_test.c:1673: TBROK: Test killed! (timeout?)
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile07_64 : 0
-2026-05-13-13-32-14
+2026-05-18-03-41-14
 RUN LTP CASE sendfile08
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -270,7 +266,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile08 : 0
-2026-05-13-13-32-16
+2026-05-18-03-41-17
 RUN LTP CASE sendfile08_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -283,7 +279,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile08_64 : 0
-2026-05-13-13-32-20
+2026-05-18-03-41-20
 RUN LTP CASE sendfile09
 tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -297,7 +293,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE sendfile09 : 0
-2026-05-13-13-32-22
+2026-05-18-03-41-23
 RUN LTP CASE sendfile09_64
 tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -311,7 +307,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE sendfile09_64 : 0
-2026-05-13-13-32-24
+2026-05-18-03-41-26
 #### OS COMP TEST GROUP END ltp-musl ####
 prepare musl runtime
 '/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
@@ -350,7 +346,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile02 : 0
-2026-05-13-13-32-29
+2026-05-18-03-41-32
 RUN LTP CASE sendfile02_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -364,7 +360,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile02_64 : 0
-2026-05-13-13-32-31
+2026-05-18-03-41-35
 RUN LTP CASE sendfile03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -380,7 +376,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile03 : 0
-2026-05-13-13-32-34
+2026-05-18-03-41-38
 RUN LTP CASE sendfile03_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -396,7 +392,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile03_64 : 0
-2026-05-13-13-32-36
+2026-05-18-03-41-41
 RUN LTP CASE sendfile04
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -413,7 +409,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile04 : 0
-2026-05-13-13-32-39
+2026-05-18-03-41-44
 RUN LTP CASE sendfile04_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -430,7 +426,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile04_64 : 0
-2026-05-13-13-32-42
+2026-05-18-03-41-48
 RUN LTP CASE sendfile05
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -443,7 +439,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile05 : 0
-2026-05-13-13-32-44
+2026-05-18-03-41-51
 RUN LTP CASE sendfile05_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -456,7 +452,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile05_64 : 0
-2026-05-13-13-32-48
+2026-05-18-03-41-54
 RUN LTP CASE sendfile06
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -469,7 +465,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile06 : 0
-2026-05-13-13-32-50
+2026-05-18-03-41-58
 RUN LTP CASE sendfile06_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -482,37 +478,33 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile06_64 : 0
-2026-05-13-13-32-53
+2026-05-18-03-42-01
 RUN LTP CASE sendfile07
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-Test timeouted, sending SIGKILL!
-tst_test.c:1671: TINFO: If you are running on slow machine, try exporting LTP_TIMEOUT_MUL > 1
-tst_test.c:1673: TBROK: Test killed! (timeout?)
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile07 : 0
-2026-05-13-13-33-13
+2026-05-18-03-42-05
 RUN LTP CASE sendfile07_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-Test timeouted, sending SIGKILL!
-tst_test.c:1671: TINFO: If you are running on slow machine, try exporting LTP_TIMEOUT_MUL > 1
-tst_test.c:1673: TBROK: Test killed! (timeout?)
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile07_64 : 0
-2026-05-13-13-33-31
+2026-05-18-03-42-10
 RUN LTP CASE sendfile08
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -525,7 +517,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile08 : 0
-2026-05-13-13-33-34
+2026-05-18-03-42-13
 RUN LTP CASE sendfile08_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -538,7 +530,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile08_64 : 0
-2026-05-13-13-33-37
+2026-05-18-03-42-17
 RUN LTP CASE sendfile09
 tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -552,7 +544,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE sendfile09 : 0
-2026-05-13-13-33-40
+2026-05-18-03-42-20
 RUN LTP CASE sendfile09_64
 tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -566,7 +558,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE sendfile09_64 : 0
-2026-05-13-13-33-42
+2026-05-18-03-42-24
 #### OS COMP TEST GROUP END ltp-glibc ####
 
 

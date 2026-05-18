@@ -78,7 +78,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-13 13:31:09.001502500 UTC
+Boot at 2026-05-18 03:40:32.002722200 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -159,7 +159,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile02 : 0
-2026-05-13-13-31-11
+2026-05-18-03-40-35
 RUN LTP CASE sendfile02_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -173,7 +173,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile02_64 : 0
-2026-05-13-13-31-12
+2026-05-18-03-40-36
 RUN LTP CASE sendfile03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -189,7 +189,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile03 : 0
-2026-05-13-13-31-12
+2026-05-18-03-40-37
 RUN LTP CASE sendfile03_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -205,7 +205,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile03_64 : 0
-2026-05-13-13-31-12
+2026-05-18-03-40-37
 RUN LTP CASE sendfile04
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -222,7 +222,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile04 : 0
-2026-05-13-13-31-13
+2026-05-18-03-40-38
 RUN LTP CASE sendfile04_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -239,7 +239,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile04_64 : 0
-2026-05-13-13-31-14
+2026-05-18-03-40-39
 RUN LTP CASE sendfile05
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -252,7 +252,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile05 : 0
-2026-05-13-13-31-14
+2026-05-18-03-40-39
 RUN LTP CASE sendfile05_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -265,7 +265,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile05_64 : 0
-2026-05-13-13-31-14
+2026-05-18-03-40-40
 RUN LTP CASE sendfile06
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -278,7 +278,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile06 : 0
-2026-05-13-13-31-15
+2026-05-18-03-40-41
 RUN LTP CASE sendfile06_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -291,13 +291,338 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sendfile06_64 : 0
-2026-05-13-13-31-15
+2026-05-18-03-40-41
 RUN LTP CASE sendfile07
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-panicked at library/alloc/src/alloc.rs:437:13:
-memory allocation of 2488 bytes failed
-<backtrace disabled>
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
 
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07 : 0
+2026-05-18-03-40-43
+RUN LTP CASE sendfile07_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07_64 : 0
+2026-05-18-03-40-45
+RUN LTP CASE sendfile08
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08 : 0
+2026-05-18-03-40-46
+RUN LTP CASE sendfile08_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08_64 : 0
+2026-05-18-03-40-46
+RUN LTP CASE sendfile09
+tst_kernel.c:90: TINFO: uname.machine=riscv64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 01m 59s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendfile09 : 0
+2026-05-18-03-40-48
+RUN LTP CASE sendfile09_64
+tst_kernel.c:90: TINFO: uname.machine=riscv64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 01m 59s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendfile09_64 : 0
+2026-05-18-03-40-50
+#### OS COMP TEST GROUP END ltp-musl ####
+prepare musl runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE sendfile02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile02.c:80: TPASS: sendfile() with with offset = 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 2
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile02 : 0
+2026-05-18-03-40-54
+RUN LTP CASE sendfile02_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile02.c:80: TPASS: sendfile() with with offset = 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 2
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile02_64 : 0
+2026-05-18-03-40-57
+RUN LTP CASE sendfile03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_RDONLY : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with in_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_WRONLY : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03 : 0
+2026-05-18-03-40-59
+RUN LTP CASE sendfile03_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_RDONLY : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with in_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_WRONLY : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03_64 : 0
+2026-05-18-03-41-02
+RUN LTP CASE sendfile04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=0 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=1 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=4 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=5 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_unmapped_buffer, protection=3 : EFAULT (14)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04 : 0
+2026-05-18-03-41-04
+RUN LTP CASE sendfile04_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=0 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=1 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=4 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=5 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_unmapped_buffer, protection=3 : EFAULT (14)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04_64 : 0
+2026-05-18-03-41-07
+RUN LTP CASE sendfile05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile05.c:41: TPASS: sendfile(out, in, &offset, ..) with offset=-1 : EINVAL (22)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05 : 0
+2026-05-18-03-41-09
+RUN LTP CASE sendfile05_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile05.c:41: TPASS: sendfile(out, in, &offset, ..) with offset=-1 : EINVAL (22)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05_64 : 0
+2026-05-18-03-41-12
+RUN LTP CASE sendfile06
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile06.c:61: TPASS: sendfile() with offset=NULL
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06 : 0
+2026-05-18-03-41-14
+RUN LTP CASE sendfile06_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile06.c:61: TPASS: sendfile() with offset=NULL
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06_64 : 0
+2026-05-18-03-41-17
+RUN LTP CASE sendfile07
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07 : 0
+2026-05-18-03-41-21
+RUN LTP CASE sendfile07_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07_64 : 0
+2026-05-18-03-41-26
+RUN LTP CASE sendfile08
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08 : 0
+2026-05-18-03-41-29
+RUN LTP CASE sendfile08_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08_64 : 0
+2026-05-18-03-41-31
+RUN LTP CASE sendfile09
+tst_kernel.c:90: TINFO: uname.machine=riscv64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 02m 15s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendfile09 : 0
+2026-05-18-03-41-34
+RUN LTP CASE sendfile09_64
+tst_kernel.c:90: TINFO: uname.machine=riscv64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 02m 15s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendfile09_64 : 0
+2026-05-18-03-41-36
+#### OS COMP TEST GROUP END ltp-glibc ####
 
 

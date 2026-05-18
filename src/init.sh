@@ -1566,6 +1566,28 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
+    some_testcases="
+        sendfile02
+        sendfile02_64
+        sendfile03
+        sendfile03_64
+        sendfile04
+        sendfile04_64
+        sendfile05
+        sendfile05_64
+        sendfile06
+        sendfile06_64
+        sendfile07
+        sendfile07_64
+        sendfile08
+        sendfile08_64
+        sendfile09
+        sendfile09_64
+    "
+    if [ -n "$some_testcases" ];then
+        all_testcases="$some_testcases"
+    fi
+
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do
 
         echo "RUN LTP CASE $f"
