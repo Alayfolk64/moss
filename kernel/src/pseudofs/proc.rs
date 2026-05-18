@@ -23,7 +23,7 @@ use crate::{
     file::FD_TABLE,
     pseudofs::{
         DirMaker, DirMapping, NodeOpsMux, RwFile, SimpleDir, SimpleDirOps, SimpleFile,
-        SimpleFileOperation, SimpleFs,
+        SimpleFileOperation, SimpleFs, StaticFile,
     },
     task::{AsThread, TaskStat, get_task, tasks},
 };
@@ -443,7 +443,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                     }),
                 ),
             );
-            kernel.add("tainted", SimpleFile::new_regular(fs.clone(), || Ok("0\n")));
+            kernel.add(
+                "tainted",
+                SimpleFile::new_regular(fs.clone(), StaticFile::new(b"0\n")),
+            );
             kernel.add(
                 "core_pattern",
                 SimpleFile::new_regular(fs.clone(), || Ok("core\n")),

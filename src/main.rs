@@ -6,9 +6,11 @@ extern crate alloc;
 
 use alloc::{borrow::ToOwned, vec::Vec};
 
-#[cfg(feature = "shell-init")]
+#[cfg(feature = "timerfd-debug-init")]
+pub const INIT_SCRIPT: &str = include_str!("init_timerfd_debug.sh");
+#[cfg(all(not(feature = "timerfd-debug-init"), feature = "shell-init"))]
 pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
-#[cfg(not(feature = "shell-init"))]
+#[cfg(all(not(feature = "timerfd-debug-init"), not(feature = "shell-init")))]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
 pub const LTP_CASES_RAW: &str = include_str!("ltp.txt");
 

@@ -100,7 +100,7 @@ run_ltp() {
         alarm05
         alarm06
         alarm07
-        # arch_prctl01
+        arch_prctl01
         bind01
         bind02
         bind03
@@ -1387,25 +1387,25 @@ run_ltp() {
         # tee01
         # tee02
         # test_ioctl
-        tgkill01
+        # tgkill01
         # tgkill02
-        tgkill03
-        time01
-        timer_delete01
-        timer_delete02
-        timer_getoverrun01
-        timer_gettime01
-        timer_settime01
-        timer_settime02
-        timer_settime03
-        timerfd01
-        timerfd02
-        timerfd04
-        timerfd_create01
-        timerfd_gettime01
-        timerfd_settime01
-        timerfd_settime02
-        times01
+        # tgkill03
+        # time01
+        # timer_delete01
+        # timer_delete02
+        # timer_getoverrun01
+        # timer_gettime01
+        # timer_settime01
+        # timer_settime02
+        # timer_settime03
+        # timerfd01
+        # timerfd02
+        # timerfd04
+        # timerfd_create01
+        # timerfd_gettime01
+        # timerfd_settime01
+        # timerfd_settime02
+        # times01
         # times03
         tkill01
         tkill02

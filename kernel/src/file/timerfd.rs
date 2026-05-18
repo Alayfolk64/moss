@@ -5,7 +5,7 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult};
-use axhal::time::TimeValue;
+use axhal::time::{TimeValue, wall_time};
 use axpoll::{IoEvents, PollSet, Pollable};
 use axtask::future::{block_on, poll_io, timeout_at};
 use event_listener::{Event, listener};
@@ -82,19 +82,25 @@ impl TimerFd {
                 .unwrap_or(TimeValue::ZERO),
         };
 
+        let old_deadline = state.deadline;
         state.generation = state.generation.wrapping_add(1);
         state.interval = spec.interval;
         state.deadline = if spec.disarmed() {
             None
         } else if abstime {
-            Some(adjust_timerfd_absolute_deadline(now, spec.value))
+            Some(spec.value)
         } else {
             Some(now.checked_add(spec.value).unwrap_or(TimeValue::MAX))
         };
+        let new_deadline = state.deadline;
         drop(state);
 
-        self.update_event.notify(1);
-        self.arm();
+        if old_deadline.is_some() && self.worker_running.load(Ordering::Acquire) {
+            self.update_event.notify(1);
+        }
+        if new_deadline.is_some() {
+            self.arm();
+        }
         old
     }
 
@@ -253,27 +259,6 @@ fn stop_timerfd_task(timerfd: &Arc<TimerFd>) {
     }
 }
 
-fn adjust_timerfd_absolute_deadline(now: TimeValue, deadline: TimeValue) -> TimeValue {
-    let ten_secs = TimeValue::from_secs(10);
-    let sleep_slop = TimeValue::from_millis(40);
-    if deadline >= now {
-        let diff = deadline - now;
-        if diff >= ten_secs.saturating_sub(TimeValue::from_secs(1))
-            && diff <= ten_secs + TimeValue::from_secs(1)
-        {
-            return now + sleep_slop;
-        }
-    } else {
-        let diff = now - deadline;
-        if diff >= ten_secs.saturating_sub(TimeValue::from_secs(1))
-            && diff <= ten_secs + TimeValue::from_secs(1)
-        {
-            return now + sleep_slop;
-        }
-    }
-    deadline
-}
-
 fn timer_clock_now(clock_id: u32) -> TimeValue {
     match clock_id {
         CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => axhal::time::wall_time(),
@@ -282,16 +267,9 @@ fn timer_clock_now(clock_id: u32) -> TimeValue {
 }
 
 fn timerfd_wait_deadline(clock_id: u32, deadline: TimeValue) -> TimeValue {
-    match clock_id {
-        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => {
-            let now = axhal::time::wall_time();
-            let remaining = deadline.saturating_sub(now);
-            axhal::time::monotonic_time()
-                .checked_add(remaining)
-                .unwrap_or(TimeValue::MAX)
-        }
-        _ => deadline,
-    }
+    wall_time()
+        .checked_add(deadline.saturating_sub(timer_clock_now(clock_id)))
+        .unwrap_or(TimeValue::MAX)
 }
 
 fn duration_mul(duration: TimeValue, count: u128) -> TimeValue {

@@ -1,11 +1,11 @@
 //! Time management module.
 
-use alloc::{borrow::ToOwned, collections::binary_heap::BinaryHeap, sync::Arc};
-use core::{mem, time::Duration};
+use alloc::{borrow::ToOwned, collections::BTreeMap, sync::Arc};
+use core::time::Duration;
 
-use axhal::time::{NANOS_PER_SEC, TimeValue, monotonic_time, monotonic_time_nanos};
+use axhal::time::{NANOS_PER_SEC, TimeValue, monotonic_time, monotonic_time_nanos, wall_time};
 use axtask::{
-    WeakAxTaskRef, current,
+    AxTaskRef, WeakAxTaskRef, current,
     future::{block_on, timeout_at},
 };
 use event_listener::{Event, listener};
@@ -14,7 +14,7 @@ use spin::Mutex;
 use starry_signal::Signo;
 use strum::FromRepr;
 
-use crate::task::poll_timer;
+use crate::task::{AsThread, poll_timer};
 
 fn time_value_from_nanos(nanos: usize) -> TimeValue {
     let secs = nanos as u64 / NANOS_PER_SEC;
@@ -22,29 +22,48 @@ fn time_value_from_nanos(nanos: usize) -> TimeValue {
     TimeValue::new(secs, nsecs as u32)
 }
 
-struct Entry {
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct TimerKey {
     deadline: Duration,
+    seq: u64,
+}
+
+#[derive(Clone)]
+struct Entry {
     task: WeakAxTaskRef,
+    ty: ITimerType,
 }
-impl PartialEq for Entry {
-    fn eq(&self, other: &Self) -> bool {
-        self.deadline == other.deadline
+
+struct AlarmRuntime {
+    next_seq: u64,
+    timers: BTreeMap<TimerKey, Entry>,
+}
+
+impl AlarmRuntime {
+    const fn new() -> Self {
+        Self {
+            next_seq: 0,
+            timers: BTreeMap::new(),
+        }
     }
-}
-impl Eq for Entry {}
-impl PartialOrd for Entry {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        Some(self.cmp(other))
+
+    fn insert(&mut self, deadline: Duration, task: WeakAxTaskRef, ty: ITimerType) -> TimerKey {
+        let key = TimerKey {
+            deadline,
+            seq: self.next_seq,
+        };
+        self.next_seq = self.next_seq.wrapping_add(1);
+        self.timers.insert(key, Entry { task, ty });
+        key
     }
-}
-impl Ord for Entry {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        other.deadline.cmp(&self.deadline)
+
+    fn remove(&mut self, key: TimerKey) {
+        self.timers.remove(&key);
     }
 }
 
 lazy_static! {
-    static ref ALARM_LIST: Mutex<BinaryHeap<Entry>> = Mutex::new(BinaryHeap::new());
+    static ref ALARM_RUNTIME: Mutex<AlarmRuntime> = Mutex::new(AlarmRuntime::new());
     static ref EVENT_NEW_TIMER: Event = Event::new();
 }
 
@@ -76,19 +95,30 @@ impl ITimerType {
 struct ITimer {
     interval_ns: usize,
     remained_ns: usize,
+    active_key: Option<TimerKey>,
 }
 
 impl ITimer {
-    pub fn new(interval_ns: usize, remained_ns: usize) -> Self {
-        let result = Self {
-            interval_ns,
-            remained_ns,
-        };
-        result.renew_timer();
-        result
+    pub fn set(
+        &mut self,
+        ty: ITimerType,
+        interval_ns: usize,
+        remained_ns: usize,
+    ) -> (TimeValue, TimeValue) {
+        let old = (
+            time_value_from_nanos(self.interval_ns),
+            time_value_from_nanos(self.remained_ns),
+        );
+        self.cancel_timer();
+        self.interval_ns = interval_ns;
+        self.remained_ns = remained_ns;
+        let owner = current().clone();
+        self.arm_timer(&owner, ty);
+        EVENT_NEW_TIMER.notify(1);
+        old
     }
 
-    pub fn update(&mut self, delta: usize) -> bool {
+    pub fn update(&mut self, owner: &AxTaskRef, ty: ITimerType, delta: usize) -> bool {
         if self.remained_ns == 0 {
             return false;
         }
@@ -97,24 +127,27 @@ impl ITimer {
             false
         } else {
             self.remained_ns = self.interval_ns;
-            self.renew_timer();
+            self.arm_timer(owner, ty);
             true
         }
     }
 
-    pub fn renew_timer(&self) {
+    fn cancel_timer(&mut self) {
+        if let Some(key) = self.active_key.take() {
+            ALARM_RUNTIME.lock().remove(key);
+        }
+    }
+
+    fn arm_timer(&mut self, owner: &AxTaskRef, ty: ITimerType) {
+        self.cancel_timer();
         if self.remained_ns > 0 {
             let deadline = monotonic_time() + Duration::from_nanos(self.remained_ns as u64);
-            let mut guard = ALARM_LIST.lock();
-            let should_wake = guard.peek().is_none_or(|it| it.deadline > deadline);
-            guard.push(Entry {
+            self.active_key = Some(ALARM_RUNTIME.lock().insert(
                 deadline,
-                task: Arc::downgrade(&current()),
-            });
-            drop(guard);
-            if should_wake {
-                EVENT_NEW_TIMER.notify(1);
-            }
+                Arc::downgrade(owner),
+                ty,
+            ));
+            EVENT_NEW_TIMER.notify(1);
         }
     }
 }
@@ -166,22 +199,22 @@ impl TimeManager {
 
     /// Polls the time manager to update the timers and emit signals if
     /// necessary.
-    pub fn poll(&mut self, emitter: impl Fn(Signo)) {
+    pub fn poll(&mut self, owner: &AxTaskRef, emitter: impl Fn(Signo)) {
         let now_ns = monotonic_time_nanos() as usize;
         let delta = now_ns - self.last_wall_ns;
         match self.state {
             TimerState::User => {
                 self.utime_ns += delta;
-                self.update_itimer(ITimerType::Virtual, delta, &emitter);
-                self.update_itimer(ITimerType::Prof, delta, &emitter);
+                self.update_itimer(owner, ITimerType::Virtual, delta, &emitter);
+                self.update_itimer(owner, ITimerType::Prof, delta, &emitter);
             }
             TimerState::Kernel => {
                 self.stime_ns += delta;
-                self.update_itimer(ITimerType::Prof, delta, &emitter);
+                self.update_itimer(owner, ITimerType::Prof, delta, &emitter);
             }
             TimerState::None => {}
         }
-        self.update_itimer(ITimerType::Real, delta, &emitter);
+        self.update_itimer(owner, ITimerType::Real, delta, &emitter);
         self.last_wall_ns = now_ns;
     }
 
@@ -198,14 +231,7 @@ impl TimeManager {
         interval_ns: usize,
         remained_ns: usize,
     ) -> (TimeValue, TimeValue) {
-        let old = mem::replace(
-            &mut self.itimers[ty as usize],
-            ITimer::new(interval_ns, remained_ns),
-        );
-        (
-            time_value_from_nanos(old.interval_ns),
-            time_value_from_nanos(old.remained_ns),
-        )
+        self.itimers[ty as usize].set(ty, interval_ns, remained_ns)
     }
 
     /// Gets the current interval and remaining time.
@@ -217,21 +243,47 @@ impl TimeManager {
         )
     }
 
-    fn update_itimer(&mut self, ty: ITimerType, delta: usize, emitter: impl Fn(Signo)) {
-        if self.itimers[ty as usize].update(delta) {
+    fn update_itimer(
+        &mut self,
+        owner: &AxTaskRef,
+        ty: ITimerType,
+        delta: usize,
+        emitter: impl Fn(Signo),
+    ) {
+        if self.itimers[ty as usize].update(owner, ty, delta) {
             emitter(ty.signo());
         }
     }
+
+    fn entry_is_current(&self, key: TimerKey, entry: &Entry) -> bool {
+        let timer = &self.itimers[entry.ty as usize];
+        timer.remained_ns > 0 && timer.active_key == Some(key)
+    }
+}
+
+fn entry_is_current_for_task(task: &AxTaskRef, key: TimerKey, entry: &Entry) -> bool {
+    let Some(thr) = task.try_as_thread() else {
+        return false;
+    };
+    let Ok(time) = thr.time.try_borrow() else {
+        return true;
+    };
+    time.entry_is_current(key, entry)
 }
 
 async fn alarm_task() {
     loop {
-        let guard = ALARM_LIST.lock();
-        let Some(entry) = guard.peek() else {
+        let mut guard = ALARM_RUNTIME.lock();
+        let Some((key, entry)) = guard
+            .timers
+            .iter()
+            .next()
+            .map(|(key, entry)| (*key, entry.clone()))
+        else {
             drop(guard);
             listener!(EVENT_NEW_TIMER => listener);
 
-            if !ALARM_LIST.lock().is_empty() {
+            if !ALARM_RUNTIME.lock().timers.is_empty() {
                 continue;
             }
             listener.await;
@@ -239,29 +291,42 @@ async fn alarm_task() {
             continue;
         };
 
+        let Some(task) = entry.task.upgrade() else {
+            guard.remove(key);
+            continue;
+        };
+        if !entry_is_current_for_task(&task, key, &entry) {
+            guard.remove(key);
+            continue;
+        }
+
         let now = monotonic_time();
-        if entry.deadline <= now {
-            let entry_deadline = entry.deadline;
-            if let Some(task) = entry.task.upgrade() {
-                drop(guard);
+        if key.deadline <= now {
+            let Some(entry) = guard.timers.remove(&key) else {
+                continue;
+            };
+            drop(guard);
+            if let Some(task) = entry.task.upgrade()
+                && entry_is_current_for_task(&task, key, &entry)
+            {
                 poll_timer(&task);
-            } else {
-                drop(guard);
             }
-            let mut guard = ALARM_LIST.lock();
-            assert!(guard.pop().is_some_and(|it| it.deadline == entry_deadline));
         } else {
-            let deadline = entry.deadline;
+            let deadline = key.deadline;
+            let timeout_deadline = wall_time()
+                .checked_add(deadline.saturating_sub(now))
+                .unwrap_or(TimeValue::MAX);
             drop(guard);
             listener!(EVENT_NEW_TIMER => listener);
-            if ALARM_LIST
+            if ALARM_RUNTIME
                 .lock()
-                .peek()
-                .is_none_or(|it| it.deadline != deadline)
+                .timers
+                .first_key_value()
+                .is_none_or(|(it, _)| *it != key)
             {
                 continue;
             }
-            let _ = timeout_at(Some(deadline), listener).await;
+            let _ = timeout_at(Some(timeout_deadline), listener).await;
         }
     }
 }

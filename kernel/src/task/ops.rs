@@ -5,7 +5,7 @@ use alloc::{
 use core::{ffi::c_long, sync::atomic::Ordering};
 
 use axerrno::{AxError, AxResult};
-use axtask::{AxTaskRef, TaskInner, WeakAxTaskRef, current};
+use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use bytemuck::AnyBitPattern;
 use linux_raw_sys::general::ROBUST_LIST_LIMIT;
 use spin::RwLock;
@@ -120,7 +120,7 @@ pub fn get_session(sid: Pid) -> AxResult<Arc<Session>> {
 }
 
 /// Poll the timer
-pub fn poll_timer(task: &TaskInner) {
+pub fn poll_timer(task: &AxTaskRef) {
     let Some(thr) = task.try_as_thread() else {
         return;
     };
@@ -128,13 +128,13 @@ pub fn poll_timer(task: &TaskInner) {
         // reentrant borrow, likely IRQ
         return;
     };
-    time.poll(|signo| {
+    time.poll(task, |signo| {
         send_signal_thread_inner(task, thr, SignalInfo::new_kernel(signo));
     });
 }
 
 /// Sets the timer state.
-pub fn set_timer_state(task: &TaskInner, state: TimerState) {
+pub fn set_timer_state(task: &AxTaskRef, state: TimerState) {
     let Some(thr) = task.try_as_thread() else {
         return;
     };
@@ -142,7 +142,7 @@ pub fn set_timer_state(task: &TaskInner, state: TimerState) {
         // reentrant borrow, likely IRQ
         return;
     };
-    time.poll(|signo| {
+    time.poll(task, |signo| {
         send_signal_thread_inner(task, thr, SignalInfo::new_kernel(signo));
     });
     time.set_state(state);
@@ -233,6 +233,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
     let process = &thr.proc_data.proc;
     if process.exit_thread(curr.id().as_u64() as Pid, exit_code) {
         let (utime, stime) = thr.time.borrow().output();
+        crate::syscall::close_all_files_for_current_process();
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());
