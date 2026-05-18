@@ -714,17 +714,17 @@ run_ltp() {
         # mkdir09
         mkdirat01
         mkdirat02
-        # mknod01
-        # mknod02
-        # mknod03
-        # mknod04
-        # mknod05
-        # mknod06
-        # mknod07
-        # mknod08
-        # mknod09
-        # mknodat01
-        # mknodat02
+        mknod01
+        mknod02
+        mknod03
+        mknod04
+        mknod05
+        mknod06
+        mknod07
+        mknod08
+        mknod09
+        mknodat01
+        mknodat02
         mlock01
         # mlock02
         mlock03
@@ -1331,18 +1331,18 @@ run_ltp() {
         # statfs03_64
         statvfs01
         statvfs02
-        # statx01
-        # statx02
-        # statx03
-        # statx04
-        # statx05
-        # statx06
-        # statx07
-        # statx08
-        # statx09
-        # statx10
-        # statx11
-        # statx12
+        statx01
+        statx02
+        statx03
+        statx04
+        statx05
+        statx06
+        statx07
+        statx08
+        statx09
+        statx10
+        statx11
+        statx12
         # stime01
         # stime02
         string01
@@ -1557,30 +1557,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        statx01
-        statx02
-        statx03
-        statx04
-        statx05
-        statx06
-        statx07
-        statx08
-        statx09
-        statx10
-        statx11
-        statx12
-        mknod01
-        mknod02
-        mknod03
-        mknod04
-        mknod05
-        mknod06
-        mknod07
-        mknod08
-        mknod09
-        mknodat01
-        mknodat02"
+    some_testcases=""
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
@@ -1615,19 +1592,20 @@ skip_group() {
 }
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=0
-busybox=0
+basic=1
+busybox=1
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=0
+libctest=1
 lmbench=0
 ltp=1
 lua=0
 netperf=0
 
 cd /musl
+# chmod +x ./run-all.sh
 musl_runtime
 if [ "$basic" = 1 ]; then
     ./basic_testcode.sh
@@ -1696,6 +1674,7 @@ else
 fi
 
 cd /glibc
+chmod +x ./run-all.sh
 glibc_runtime
 if [ "$basic" = 1 ]; then
     ./basic_testcode.sh
