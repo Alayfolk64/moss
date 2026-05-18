@@ -217,7 +217,10 @@ impl ElfLoader {
 
     fn load(&mut self, uspace: &mut AddrSpace, path: &str) -> AxResult<LoadResult> {
         let loc = resolve_exec_path(path)?;
+        self.load_location(uspace, loc)
+    }
 
+    fn load_location(&mut self, uspace: &mut AddrSpace, loc: Location) -> AxResult<LoadResult> {
         if !self.0.touch(|e| e.borrow_cache().location().ptr_eq(&loc)) {
             match ElfCacheEntry::load(loc)? {
                 Ok(e) => {
@@ -312,19 +315,46 @@ pub fn load_user_app(
     args: &[String],
     envs: &[String],
 ) -> AxResult<(VirtAddr, VirtAddr)> {
+    load_user_app_from_source(uspace, path, None, true, args, envs)
+}
+
+pub fn load_user_app_from_location(
+    uspace: &mut AddrSpace,
+    loc: Location,
+    path: &str,
+    args: &[String],
+    envs: &[String],
+) -> AxResult<(VirtAddr, VirtAddr)> {
+    load_user_app_from_source(uspace, Some(path), Some(loc), false, args, envs)
+}
+
+fn load_user_app_from_source(
+    uspace: &mut AddrSpace,
+    path: Option<&str>,
+    loc: Option<Location>,
+    shell_suffix_fallback: bool,
+    args: &[String],
+    envs: &[String],
+) -> AxResult<(VirtAddr, VirtAddr)> {
     let path = path
         .or_else(|| args.first().map(String::as_str))
         .ok_or(AxError::InvalidInput)?;
 
     // FIXME: impl `/proc/self/exe` to let busybox retry running
-    if path.ends_with(".sh") {
+    if shell_suffix_fallback && path.ends_with(".sh") {
         let new_args: Vec<String> = iter::once("/bin/sh".to_owned())
             .chain(args.iter().cloned())
             .collect();
         return load_user_app(uspace, None, &new_args, envs);
     }
 
-    let (entry, auxv) = match { ELF_LOADER.lock().load(uspace, path)? } {
+    let load_result = if let Some(loc) = loc {
+        ELF_LOADER.lock().load_location(uspace, loc)?
+    } else {
+        ELF_LOADER.lock().load(uspace, path)?
+    };
+
+    let (entry, auxv) = match load_result {
         Ok((entry, auxv)) => (entry, auxv),
         Err(data) => {
             if data.starts_with(b"#!") {

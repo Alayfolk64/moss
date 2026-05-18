@@ -3,20 +3,21 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::ffi::c_char;
+use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{Location, NodeType};
 use axhal::uspace::UserContext;
 use axtask::current;
+use linux_raw_sys::general::{AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW};
 use starry_vm::vm_load_until_nul;
 
 use super::ptrace_on_exec;
 use crate::{
     config::USER_HEAP_BASE,
-    file::{FD_TABLE, File},
-    mm::{load_user_app, vm_load_string},
+    file::{FD_TABLE, File, resolve_at},
+    mm::{load_user_app, load_user_app_from_location, vm_load_string},
     task::{AsThread, processes},
 };
 
@@ -80,7 +81,63 @@ pub fn sys_execve(
 ) -> AxResult<isize> {
     let path = vm_load_string(path)?;
     let exec_loc = FS_CONTEXT.lock().resolve(&path).ok();
+    execve_common(uctx, path, exec_loc, None, argv, envp)
+}
 
+pub fn sys_execveat(
+    uctx: &mut UserContext,
+    dirfd: c_int,
+    path: *const c_char,
+    argv: *const *const c_char,
+    envp: *const *const c_char,
+    flags: u32,
+) -> AxResult<isize> {
+    const SUPPORTED_FLAGS: u32 = AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW;
+
+    if flags & !SUPPORTED_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let requested_path = vm_load_string(path)?;
+    let exec_loc = if requested_path.starts_with('/') {
+        let mut fs = FS_CONTEXT.lock();
+        if flags & AT_SYMLINK_NOFOLLOW != 0 {
+            fs.resolve_no_follow(&requested_path)?
+        } else {
+            fs.resolve(&requested_path)?
+        }
+    } else {
+        resolve_at(dirfd, Some(requested_path.as_str()), flags)?
+            .into_file()
+            .ok_or(AxError::PermissionDenied)?
+    };
+    if flags & AT_SYMLINK_NOFOLLOW != 0 && exec_loc.metadata()?.node_type == NodeType::Symlink {
+        return Err(AxError::FilesystemLoop);
+    }
+
+    let path = if requested_path.starts_with('/') {
+        requested_path
+    } else {
+        exec_loc.absolute_path()?.to_string()
+    };
+    execve_common(
+        uctx,
+        path,
+        Some(exec_loc.clone()),
+        Some(exec_loc),
+        argv,
+        envp,
+    )
+}
+
+fn execve_common(
+    uctx: &mut UserContext,
+    path: String,
+    exec_loc: Option<Location>,
+    load_loc: Option<Location>,
+    argv: *const *const c_char,
+    envp: *const *const c_char,
+) -> AxResult<isize> {
     let mut args = if argv.is_null() {
         // Handle NULL argv (treat as empty array)
         Vec::new()
@@ -125,11 +182,18 @@ pub fn sys_execve(
     }
 
     let mut aspace = proc_data.aspace.lock();
-    let (entry_point, user_stack_base) =
-        load_user_app(&mut aspace, Some(path.as_str()), &args, &envs)?;
+    let (entry_point, user_stack_base) = if let Some(load_loc) = load_loc {
+        load_user_app_from_location(&mut aspace, load_loc, path.as_str(), &args, &envs)?
+    } else {
+        load_user_app(&mut aspace, Some(path.as_str()), &args, &envs)?
+    };
     drop(aspace);
 
-    let loc = FS_CONTEXT.lock().resolve(&path)?;
+    let loc = if let Some(exec_loc) = exec_loc {
+        exec_loc
+    } else {
+        FS_CONTEXT.lock().resolve(&path)?
+    };
     curr.set_name(loc.name());
 
     *proc_data.exe_path.write() = loc.absolute_path()?.to_string();

@@ -1,45 +1,44 @@
 if ! /glibc/busybox test -d /bin; then
-    echo @@@@@@@@@@ setup @@@@@@@@@@
-
     /glibc/busybox mkdir -v /bin
-    /glibc/busybox --install -s /bin
-    export PATH=/bin
-
-    mkdir -v /lib
-    if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
-        ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-        ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
-    elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
-        ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
-        ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
-        ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
-    fi
-    ln -v -s /lib /lib64
-
-    mkdir -v /usr
-    ln -v -s /lib /usr/lib64
-
-    cd /
-    mkdir -v var
-    cd var
-    mkdir -v tmp log
-
-    cd /
-    mkdir -v etc
-    echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
-    echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
-    echo "root:x:0:" >>/etc/group
-    echo "nobody:x:65534:" >>/etc/group
-    echo "nameserver 8.8.8.8" >/etc/resolv.conf
-
-    mkdir -vp /lib/modules/10.0.0/build
-    echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
-    echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
-    echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
 fi
 
+/glibc/busybox --install -s /bin
+export PATH=/bin:$PATH
+
+mkdir -v /lib
+if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+    ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+    ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+fi
+ln -v -s /lib /lib64
+
+mkdir -v /usr
+ln -v -s /lib /usr/lib64
+
+cd /
+mkdir -v var
+cd var
+mkdir -v tmp log
+
+cd /
+mkdir -v etc
+echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
+echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
+echo "root:x:0:" >>/etc/group
+echo "nobody:x:65534:" >>/etc/group
+echo "nameserver 8.8.8.8" >/etc/resolv.conf
+
+mkdir -vp /lib/modules/10.0.0/build
+echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
+echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
+echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
+
 ARCH=RISCV
-if [[-e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
@@ -83,15 +82,7 @@ run_ltp() {
         access01
         access02
         access03
-        access04
-        # acct01
-        # acct02
-        # acct02_helper
-        # add_key01
-        # add_key02
-        # add_key03
-        # add_key04
-        # add_key05
+        access04 
         adjtimex01
         adjtimex02
         adjtimex03
@@ -209,7 +200,6 @@ run_ltp() {
         dup207
         dup3_01
         dup3_02
-        # endian_switch01
         epoll-ltp
         epoll_create01
         epoll_create02
@@ -237,34 +227,24 @@ run_ltp() {
         eventfd03
         eventfd04
         eventfd05
-        # eventfd06
+        eventfd06
         eventfd2_01
         eventfd2_02
         eventfd2_03
         execl01
-        # execl01_child
         execle01
-        # execle01_child
         execlp01
-        # execlp01_child
         execv01
-        # execv01_child
         execve01
-        # execve01_child
         execve02
         execve03
         execve04
         execve05
         execve06
-        # execve06_child
-        # execve_child
-        # execveat01
-        # execveat02
-        # execveat03
-        # execveat_child
-        # execveat_errno
+        execveat01
+        execveat02
+        execveat03
         execvp01
-        # execvp01_child
         exit01
         exit02
         exit_group01
@@ -1340,18 +1320,18 @@ run_ltp() {
         # statfs03_64
         statvfs01
         statvfs02
-        # statx01
-        # statx02
-        # statx03
-        # statx04
-        # statx05
-        # statx06
-        # statx07
-        # statx08
-        # statx09
-        # statx10
-        # statx11
-        # statx12
+        statx01
+        statx02
+        statx03
+        statx04
+        statx05
+        statx06
+        statx07
+        statx08
+        statx09
+        statx10
+        statx11
+        statx12
         # stime01
         # stime02
         string01
@@ -1565,6 +1545,13 @@ run_ltp() {
     }
 
     cd ltp/testcases/bin
+
+    some_testcases=""
+    if [ -n "$some_testcases" ];then
+        all_testcases="$some_testcases"
+    fi
+
+
 
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do
 

@@ -3,8 +3,7 @@ use axtask::current;
 use starry_process::Pid;
 
 use crate::task::{
-    AsThread, add_process_group_to_table, add_session_to_table, get_process_data,
-    get_process_group,
+    AsThread, add_process_group_to_table, add_session_to_table, get_process_data, get_process_group,
 };
 
 pub fn sys_getsid(pid: Pid) -> AxResult<isize> {
