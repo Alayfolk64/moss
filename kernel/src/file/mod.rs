@@ -21,8 +21,10 @@ use axtask::current;
 use downcast_rs::{DowncastSync, impl_downcast};
 use flatten_objects::FlattenObjects;
 use linux_raw_sys::general::{
-    F_OWNER_PGRP, F_OWNER_PID, F_OWNER_TID, O_NONBLOCK, RLIMIT_NOFILE, STATX_BASIC_STATS,
-    STATX_BTIME, stat, statx, statx_timestamp,
+    F_OWNER_PGRP, F_OWNER_PID, F_OWNER_TID, O_NONBLOCK, RLIMIT_NOFILE, S_IFBLK, S_IFMT,
+    STATX_ATTR_APPEND, STATX_ATTR_COMPRESSED, STATX_ATTR_IMMUTABLE, STATX_ATTR_MOUNT_ROOT,
+    STATX_ATTR_NODUMP, STATX_BASIC_STATS, STATX_BTIME, STATX_DIOALIGN, stat, statx,
+    statx_timestamp,
 };
 use spin::RwLock;
 use starry_signal::{SignalInfo, Signo};
@@ -34,7 +36,9 @@ pub use self::{
         BPF_MAP_TYPE_ARRAY, BPF_MAP_TYPE_HASH, BPF_MAP_TYPE_RINGBUF, BpfMap, BpfProgram,
         BpfProgramKind,
     },
-    fs::{Directory, File, resolve_at, with_fs},
+    fs::{
+        Directory, File, inode_flags, register_special_node, resolve_at, set_inode_flags, with_fs,
+    },
     pidfd::PidFd,
     pipe::Pipe,
     timerfd::TimerFd,
@@ -56,6 +60,8 @@ pub struct Kstat {
     pub blksize: u32,
     pub blocks: u64,
     pub rdev: DeviceId,
+    pub attributes: u64,
+    pub attributes_mask: u64,
     pub atime: Duration,
     pub btime: Duration,
     pub mtime: Duration,
@@ -75,6 +81,8 @@ impl Default for Kstat {
             blksize: 4096,
             blocks: 0,
             rdev: DeviceId::default(),
+            attributes: 0,
+            attributes_mask: 0,
             atime: Duration::default(),
             btime: Duration::default(),
             mtime: Duration::default(),
@@ -114,7 +122,13 @@ impl From<Kstat> for statx {
         // SAFETY: valid for statx
         let mut statx: statx = unsafe { core::mem::zeroed() };
         statx.stx_mask = STATX_BASIC_STATS | STATX_BTIME;
+        if value.mode & S_IFMT == S_IFBLK {
+            statx.stx_mask |= STATX_DIOALIGN;
+            statx.stx_dio_mem_align = 1;
+            statx.stx_dio_offset_align = 512;
+        }
         statx.stx_blksize = value.blksize as _;
+        statx.stx_attributes = value.attributes;
         statx.stx_nlink = value.nlink as _;
         statx.stx_uid = value.uid as _;
         statx.stx_gid = value.gid as _;
@@ -122,6 +136,12 @@ impl From<Kstat> for statx {
         statx.stx_ino = value.ino as _;
         statx.stx_size = value.size as _;
         statx.stx_blocks = value.blocks as _;
+        statx.stx_attributes_mask = value.attributes_mask
+            | (STATX_ATTR_COMPRESSED
+                | STATX_ATTR_IMMUTABLE
+                | STATX_ATTR_APPEND
+                | STATX_ATTR_NODUMP
+                | STATX_ATTR_MOUNT_ROOT) as u64;
         statx.stx_rdev_major = value.rdev.major();
         statx.stx_rdev_minor = value.rdev.minor();
 
