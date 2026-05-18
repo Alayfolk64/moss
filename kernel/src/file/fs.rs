@@ -93,6 +93,7 @@ pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
         blocks: metadata.blocks,
         rdev: metadata.rdev,
         atime: metadata.atime,
+        btime: metadata.ctime,
         mtime: metadata.mtime,
         ctime: metadata.ctime,
     }

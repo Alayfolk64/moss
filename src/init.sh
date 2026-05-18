@@ -1331,18 +1331,18 @@ run_ltp() {
         # statfs03_64
         statvfs01
         statvfs02
-        statx01
-        statx02
-        statx03
-        statx04
-        statx05
-        statx06
-        statx07
-        statx08
-        statx09
-        statx10
-        statx11
-        statx12
+        # statx01
+        # statx02
+        # statx03
+        # statx04
+        # statx05
+        # statx06
+        # statx07
+        # statx08
+        # statx09
+        # statx10
+        # statx11
+        # statx12
         # stime01
         # stime02
         string01

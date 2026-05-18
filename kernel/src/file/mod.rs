@@ -21,7 +21,8 @@ use axtask::current;
 use downcast_rs::{DowncastSync, impl_downcast};
 use flatten_objects::FlattenObjects;
 use linux_raw_sys::general::{
-    F_OWNER_PGRP, F_OWNER_PID, F_OWNER_TID, O_NONBLOCK, RLIMIT_NOFILE, stat, statx, statx_timestamp,
+    F_OWNER_PGRP, F_OWNER_PID, F_OWNER_TID, O_NONBLOCK, RLIMIT_NOFILE, STATX_BASIC_STATS,
+    STATX_BTIME, stat, statx, statx_timestamp,
 };
 use spin::RwLock;
 use starry_signal::{SignalInfo, Signo};
@@ -56,6 +57,7 @@ pub struct Kstat {
     pub blocks: u64,
     pub rdev: DeviceId,
     pub atime: Duration,
+    pub btime: Duration,
     pub mtime: Duration,
     pub ctime: Duration,
 }
@@ -74,6 +76,7 @@ impl Default for Kstat {
             blocks: 0,
             rdev: DeviceId::default(),
             atime: Duration::default(),
+            btime: Duration::default(),
             mtime: Duration::default(),
             ctime: Duration::default(),
         }
@@ -110,8 +113,8 @@ impl From<Kstat> for statx {
     fn from(value: Kstat) -> Self {
         // SAFETY: valid for statx
         let mut statx: statx = unsafe { core::mem::zeroed() };
+        statx.stx_mask = STATX_BASIC_STATS | STATX_BTIME;
         statx.stx_blksize = value.blksize as _;
-        statx.stx_attributes = value.mode as _;
         statx.stx_nlink = value.nlink as _;
         statx.stx_uid = value.uid as _;
         statx.stx_gid = value.gid as _;
@@ -130,6 +133,7 @@ impl From<Kstat> for statx {
             }
         }
         statx.stx_atime = time_to_statx(&value.atime);
+        statx.stx_btime = time_to_statx(&value.btime);
         statx.stx_ctime = time_to_statx(&value.ctime);
         statx.stx_mtime = time_to_statx(&value.mtime);
 
