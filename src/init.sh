@@ -1605,7 +1605,8 @@ lua=0
 netperf=0
 
 cd /musl
-# chmod +x ./run-all.sh
+chmod +x /basic/run-all.sh
+
 musl_runtime
 if [ "$basic" = 1 ]; then
     ./basic_testcode.sh
@@ -1674,7 +1675,8 @@ else
 fi
 
 cd /glibc
-chmod +x ./run-all.sh
+chmod +x /basic/run-all.sh
+
 glibc_runtime
 if [ "$basic" = 1 ]; then
     ./basic_testcode.sh
