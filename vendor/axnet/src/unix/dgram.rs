@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::task::Context;
 
-use async_channel::TryRecvError;
+use async_channel::{TryRecvError, TrySendError};
 use async_trait::async_trait;
 use axerrno::{AxError, AxResult};
 use axio::{Read, Write};
@@ -15,6 +15,8 @@ use crate::{
     options::{Configurable, GetSocketOption, SetSocketOption, UnixCredentials},
     unix::{Transport, TransportOps, UnixSocketAddr, with_slot},
 };
+
+const SOCKETPAIR_QUEUE_SIZE: usize = 64 * 1024;
 
 struct Packet {
     data: Vec<u8>,
@@ -77,8 +79,8 @@ impl DgramTransport {
     }
 
     pub fn new_pair(pid: u32) -> (Self, Self) {
-        let (tx1, rx1) = async_channel::unbounded();
-        let (tx2, rx2) = async_channel::unbounded();
+        let (tx1, rx1) = async_channel::bounded(SOCKETPAIR_QUEUE_SIZE);
+        let (tx2, rx2) = async_channel::bounded(SOCKETPAIR_QUEUE_SIZE);
         let poll1 = Arc::new(PollSet::new());
         let poll2 = Arc::new(PollSet::new());
         let transport1 = DgramTransport::new_connected(
@@ -204,9 +206,10 @@ impl TransportOps for DgramTransport {
                 }
             })?;
         } else if let Some(chan) = connected.as_ref() {
-            chan.data_tx
-                .try_send(packet)
-                .map_err(|_| AxError::BrokenPipe)?;
+            chan.data_tx.try_send(packet).map_err(|err| match err {
+                TrySendError::Full(_) => AxError::WouldBlock,
+                TrySendError::Closed(_) => AxError::BrokenPipe,
+            })?;
             chan.poll_update.wake();
         } else {
             return Err(AxError::NotConnected);
@@ -230,6 +233,9 @@ impl TransportOps for DgramTransport {
                     return Ok(0);
                 }
             };
+            if let Some((_, poll)) = guard.as_ref() {
+                poll.wake();
+            }
             let count = dst.write(&data)?;
             if count < data.len() {
                 warn!("UDP message truncated: {} -> {} bytes", data.len(), count);
@@ -253,9 +259,14 @@ impl TransportOps for DgramTransport {
 
 impl Pollable for DgramTransport {
     fn poll(&self) -> IoEvents {
-        let mut events = IoEvents::OUT;
+        let mut events = IoEvents::empty();
         if let Some((rx, _)) = self.data_rx.lock().as_ref() {
             events.set(IoEvents::IN, !rx.is_empty());
+        }
+        if let Some(chan) = self.connected.read().as_ref() {
+            events.set(IoEvents::OUT, !chan.data_tx.is_full());
+        } else {
+            events.set(IoEvents::OUT, true);
         }
         events
     }
@@ -265,6 +276,11 @@ impl Pollable for DgramTransport {
             && events.contains(IoEvents::IN)
         {
             poll.register(context.waker());
+        }
+        if let Some(chan) = self.connected.read().as_ref()
+            && events.contains(IoEvents::OUT)
+        {
+            chan.poll_update.register(context.waker());
         }
     }
 }

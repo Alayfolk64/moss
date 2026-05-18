@@ -17,7 +17,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-10 08:45:06.001550110 UTC
+Boot at 2026-05-18 03:40:35.005026190 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -82,324 +82,11 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-musl ####
 #### OS COMP TEST GROUP END netperf-musl ####
 #### OS COMP TEST GROUP START ltp-musl ####
-RUN LTP CASE pwrite01
+RUN LTP CASE sendfile02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01 : 0
-2026-05-10-08-45-11
-RUN LTP CASE pwrite01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01_64 : 0
-2026-05-10-08-45-13
-RUN LTP CASE pwrite02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02 : 0
-2026-05-10-08-45-16
-RUN LTP CASE pwrite02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02_64 : 0
-2026-05-10-08-45-20
-RUN LTP CASE pwrite03
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03 : 0
-2026-05-10-08-45-22
-RUN LTP CASE pwrite03_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03_64 : 0
-2026-05-10-08-45-25
-RUN LTP CASE pwrite04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04 : 0
-2026-05-10-08-45-28
-RUN LTP CASE pwrite04_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04_64 : 0
-2026-05-10-08-45-31
-RUN LTP CASE pwritev01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01 : 0
-2026-05-10-08-45-33
-RUN LTP CASE pwritev01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01_64 : 0
-2026-05-10-08-45-36
-RUN LTP CASE pwritev02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02 : 0
-2026-05-10-08-45-38
-RUN LTP CASE pwritev02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02_64 : 0
-2026-05-10-08-45-41
-RUN LTP CASE pwritev03
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_pwrJMIbOO/mntpoint fstyp=tmpfs flags=0
-[37m[ 35.924675 0:142 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[ 35.925128 0:142 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,(( ((0U)<<30) | (((0x12))<<8) | ((104)) | ((0)<<16) )),...) failed: ENOTTY (25)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03 : 0
-2026-05-10-08-45-43
-RUN LTP CASE pwritev03_64
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_pwrCBmpfO/mntpoint fstyp=tmpfs flags=0
-[37m[ 37.987625 0:151 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[ 37.987825 0:151 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,(( ((0U)<<30) | (((0x12))<<8) | ((104)) | ((0)<<16) )),...) failed: ENOTTY (25)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03_64 : 0
-2026-05-10-08-45-45
-RUN LTP CASE pwritev201
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201 : 0
-2026-05-10-08-45-48
-RUN LTP CASE pwritev201_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201_64 : 0
-2026-05-10-08-45-49
-RUN LTP CASE pwritev202
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202 : 0
-2026-05-10-08-45-52
-RUN LTP CASE pwritev202_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202_64 : 0
-2026-05-10-08-45-54
-RUN LTP CASE write01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write01.c:40: TPASS: write() passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write01 : 0
-2026-05-10-08-45-56
-RUN LTP CASE write02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write02.c:20: TPASS: write(fd, NULL, 0) returned 0
-write02.c:22: TPASS: Expect: write(fd, NULL, 0) == 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 2
 
 Summary:
 passed   2
@@ -407,56 +94,13 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE write02 : 0
-2026-05-10-08-45-58
-RUN LTP CASE write03
+FAIL LTP CASE sendfile02 : 0
+2026-05-18-03-40-40
+RUN LTP CASE sendfile02_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write03.c:49: TPASS: failure of write() did not corrupt the file
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write03 : 0
-2026-05-10-08-46-00
-RUN LTP CASE write04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 55.590215 0:223 starry_kernel::syscall:698] [33mUnimplemented syscall: mknodat[m
-[mwrite04.c:42: TBROK: mknod() failed: ENOSYS (38)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE write04 : 0
-2026-05-10-08-46-02
-RUN LTP CASE write05
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EBADF (9)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EFAULT (14)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EPIPE (32)
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write05 : 0
-2026-05-10-08-46-04
-RUN LTP CASE write06
-tst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write06.c:59: TPASS: Offset is correct after write 3072
-write06.c:65: TPASS: Correct file size after append 3072
+sendfile02.c:80: TPASS: sendfile() with with offset = 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 2
 
 Summary:
 passed   2
@@ -464,28 +108,78 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE write06 : 0
-2026-05-10-08-46-07
-RUN LTP CASE writev01
+FAIL LTP CASE sendfile02_64 : 0
+2026-05-18-03-40-43
+RUN LTP CASE sendfile03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-writev01.c:124: TPASS: invalid iov_len, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:124: TPASS: invalid fd, expected: -1 (EBADF), got: -1 (EBADF)
-writev01.c:124: TPASS: invalid iovcnt, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:129: TPASS: zero iovcnt, expected: 0, got: 0
-writev01.c:129: TPASS: NULL and zero length iovec, expected: 64, got: 64
-writev01.c:124: TPASS: write to closed pipe, expected: -1 (EPIPE), got: -1 (EPIPE)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_RDONLY : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with in_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_WRONLY : EBADF (9)
 
 Summary:
-passed   6
+passed   4
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE writev01 : 0
-2026-05-10-08-46-09
-RUN LTP CASE writev02
-writev02    1  TPASS  :  Received EFAULT as expected
+FAIL LTP CASE sendfile03 : 0
+2026-05-18-03-40-46
+RUN LTP CASE sendfile03_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_RDONLY : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with in_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_WRONLY : EBADF (9)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03_64 : 0
+2026-05-18-03-40-49
+RUN LTP CASE sendfile04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=0 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=1 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=4 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=5 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_unmapped_buffer, protection=3 : EFAULT (14)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04 : 0
+2026-05-18-03-40-51
+RUN LTP CASE sendfile04_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=0 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=1 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=4 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=5 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_unmapped_buffer, protection=3 : EFAULT (14)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04_64 : 0
+2026-05-18-03-40-54
+RUN LTP CASE sendfile05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile05.c:41: TPASS: sendfile(out, in, &offset, ..) with offset=-1 : EINVAL (22)
 
 Summary:
 passed   1
@@ -493,10 +187,104 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE writev02 : 0
-2026-05-10-08-46-12
-RUN LTP CASE writev03
-tst_test.c:1242: TCONF: Test needs at least 2 CPUs online
+FAIL LTP CASE sendfile05 : 0
+2026-05-18-03-40-57
+RUN LTP CASE sendfile05_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile05.c:41: TPASS: sendfile(out, in, &offset, ..) with offset=-1 : EINVAL (22)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05_64 : 0
+2026-05-18-03-41-00
+RUN LTP CASE sendfile06
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile06.c:61: TPASS: sendfile() with offset=NULL
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06 : 0
+2026-05-18-03-41-03
+RUN LTP CASE sendfile06_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile06.c:61: TPASS: sendfile() with offset=NULL
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06_64 : 0
+2026-05-18-03-41-06
+RUN LTP CASE sendfile07
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07 : 0
+2026-05-18-03-41-10
+RUN LTP CASE sendfile07_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07_64 : 0
+2026-05-18-03-41-14
+RUN LTP CASE sendfile08
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08 : 0
+2026-05-18-03-41-17
+RUN LTP CASE sendfile08_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08_64 : 0
+2026-05-18-03-41-20
+RUN LTP CASE sendfile09
+tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 02m 15s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
 
 Summary:
 passed   0
@@ -504,63 +292,22 @@ failed   0
 broken   0
 skipped  1
 warnings 0
-FAIL LTP CASE writev03 : 0
-2026-05-10-08-46-14
-RUN LTP CASE writev05
-writev05    1  TPASS  :  Received EFAULT as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev05 : 0
-2026-05-10-08-46-18
-RUN LTP CASE writev06
-writev06    1  TPASS  :  writev returned 2 as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev06 : 0
-2026-05-10-08-46-21
-RUN LTP CASE writev07
+FAIL LTP CASE sendfile09 : 0
+2026-05-18-03-41-23
+RUN LTP CASE sendfile09_64
+tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
 tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-writev07.c:56: TINFO: starting test with initial file offset: 0 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 65 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4096 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4097 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=20c64ec83a9f
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3ac974796e5d
+tst_test.c:1617: TINFO: Timeout per run is 0h 02m 15s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
 
 Summary:
-passed   6
-failed   2
+passed   0
+failed   0
 broken   0
-skipped  0
+skipped  1
 warnings 0
-FAIL LTP CASE writev07 : 0
-2026-05-10-08-46-23
+FAIL LTP CASE sendfile09_64 : 0
+2026-05-18-03-41-26
 #### OS COMP TEST GROUP END ltp-musl ####
 prepare musl runtime
 '/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
@@ -586,324 +333,11 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-glibc ####
 #### OS COMP TEST GROUP END netperf-glibc ####
 #### OS COMP TEST GROUP START ltp-glibc ####
-RUN LTP CASE pwrite01
+RUN LTP CASE sendfile02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01 : 0
-2026-05-10-08-46-28
-RUN LTP CASE pwrite01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01_64 : 0
-2026-05-10-08-46-30
-RUN LTP CASE pwrite02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02 : 0
-2026-05-10-08-46-32
-RUN LTP CASE pwrite02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02_64 : 0
-2026-05-10-08-46-34
-RUN LTP CASE pwrite03
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03 : 0
-2026-05-10-08-46-37
-RUN LTP CASE pwrite03_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03_64 : 0
-2026-05-10-08-46-39
-RUN LTP CASE pwrite04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04 : 0
-2026-05-10-08-46-42
-RUN LTP CASE pwrite04_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04_64 : 0
-2026-05-10-08-46-44
-RUN LTP CASE pwritev01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01 : 0
-2026-05-10-08-46-46
-RUN LTP CASE pwritev01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01_64 : 0
-2026-05-10-08-46-49
-RUN LTP CASE pwritev02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02 : 0
-2026-05-10-08-46-51
-RUN LTP CASE pwritev02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02_64 : 0
-2026-05-10-08-46-53
-RUN LTP CASE pwritev03
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-[37m[108.549020 0:436 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[108.549298 0:436 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,((((0U) << (((0+8)+8)+14)) | (((0x12)) << (0+8)) | (((104)) << 0) | ((0) << ((0+8)+8)))),...) failed: ENOTTY (25)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03 : 0
-2026-05-10-08-46-56
-RUN LTP CASE pwritev03_64
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-[37m[111.874127 0:445 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[111.874411 0:445 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,((((0U) << (((0+8)+8)+14)) | (((0x12)) << (0+8)) | (((104)) << 0) | ((0) << ((0+8)+8)))),...) failed: ENOTTY (25)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03_64 : 0
-2026-05-10-08-46-59
-RUN LTP CASE pwritev201
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201 : 0
-2026-05-10-08-47-02
-RUN LTP CASE pwritev201_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201_64 : 0
-2026-05-10-08-47-04
-RUN LTP CASE pwritev202
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202 : 0
-2026-05-10-08-47-07
-RUN LTP CASE pwritev202_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202_64 : 0
-2026-05-10-08-47-10
-RUN LTP CASE write01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write01.c:40: TPASS: write() passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write01 : 0
-2026-05-10-08-47-13
-RUN LTP CASE write02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write02.c:20: TPASS: write(fd, NULL, 0) returned 0
-write02.c:22: TPASS: Expect: write(fd, NULL, 0) == 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 2
 
 Summary:
 passed   2
@@ -911,56 +345,13 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE write02 : 0
-2026-05-10-08-47-15
-RUN LTP CASE write03
+FAIL LTP CASE sendfile02 : 0
+2026-05-18-03-41-32
+RUN LTP CASE sendfile02_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write03.c:49: TPASS: failure of write() did not corrupt the file
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write03 : 0
-2026-05-10-08-47-18
-RUN LTP CASE write04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[133.934798 0:517 starry_kernel::syscall:698] [33mUnimplemented syscall: mknodat[m
-[mwrite04.c:42: TBROK: mknod() failed: ENOSYS (38)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE write04 : 0
-2026-05-10-08-47-21
-RUN LTP CASE write05
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EBADF (9)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EFAULT (14)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EPIPE (32)
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write05 : 0
-2026-05-10-08-47-24
-RUN LTP CASE write06
-tst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write06.c:59: TPASS: Offset is correct after write 3072
-write06.c:65: TPASS: Correct file size after append 3072
+sendfile02.c:80: TPASS: sendfile() with with offset = 0
+sendfile02.c:80: TPASS: sendfile() with with offset = 2
 
 Summary:
 passed   2
@@ -968,129 +359,206 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE write06 : 0
-2026-05-10-08-47-27
-RUN LTP CASE writev01
+FAIL LTP CASE sendfile02_64 : 0
+2026-05-18-03-41-35
+RUN LTP CASE sendfile03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-writev01.c:124: TPASS: invalid iov_len, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:124: TPASS: invalid fd, expected: -1 (EBADF), got: -1 (EBADF)
-writev01.c:124: TPASS: invalid iovcnt, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:129: TPASS: zero iovcnt, expected: 0, got: 0
-writev01.c:129: TPASS: NULL and zero length iovec, expected: 64, got: 64
-writev01.c:124: TPASS: write to closed pipe, expected: -1 (EPIPE), got: -1 (EPIPE)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_RDONLY : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with in_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_WRONLY : EBADF (9)
 
 Summary:
-passed   6
+passed   4
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE writev01 : 0
-2026-05-10-08-47-30
-RUN LTP CASE writev02
-writev02    1  TPASS  :  Received EFAULT as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev02 : 0
-2026-05-10-08-47-34
-RUN LTP CASE writev03
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 01m 30s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-../../../../include/tst_fuzzy_sync.h:640: TINFO: Stopped sampling at 376 (out of 1024) samples, sampling time reached 50% of the total time limit
-../../../../include/tst_fuzzy_sync.h:307: TINFO: loop = 376, delay_bias = 0
-../../../../include/tst_fuzzy_sync.h:295: TINFO: start_a - start_b: { avg = 335276ns, avg_dev = 83299ns, dev_ratio = 0.25 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - start_a  : { avg = 67349ns, avg_dev = 13169ns, dev_ratio = 0.20 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_b - start_b  : { avg = 287061ns, avg_dev = 68505ns, dev_ratio = 0.24 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - end_b    : { avg = 115565ns, avg_dev = 28778ns, dev_ratio = 0.25 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: spins            : { avg =     1  , avg_dev =     0  , dev_ratio = 0.00 }
-../../../../include/tst_fuzzy_sync.h:494: TINFO: Reached deviation ratios < 0.10, introducing randomness
-../../../../include/tst_fuzzy_sync.h:497: TINFO: Delay range is [-2, 0]
-../../../../include/tst_fuzzy_sync.h:307: TINFO: loop = 510, delay_bias = 0
-../../../../include/tst_fuzzy_sync.h:295: TINFO: start_a - start_b: { avg = 231615ns, avg_dev = 21385ns, dev_ratio = 0.09 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - start_a  : { avg = 52024ns, avg_dev =  4077ns, dev_ratio = 0.08 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_b - start_b  : { avg = 200338ns, avg_dev = 18545ns, dev_ratio = 0.09 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - end_b    : { avg = 83301ns, avg_dev =  6846ns, dev_ratio = 0.08 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: spins            : { avg =     1  , avg_dev =     0  , dev_ratio = 0.00 }
-../../../../include/tst_fuzzy_sync.h:648: TINFO: Exceeded execution time, requesting exit
-writev03.c:119: TPASS: writev() handles page fault-in correctly
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev03 : 0
-2026-05-10-08-48-52
-RUN LTP CASE writev05
-writev05    1  TPASS  :  Received EFAULT as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev05 : 0
-2026-05-10-08-48-55
-RUN LTP CASE writev06
-writev06    1  TPASS  :  writev returned 2 as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev06 : 0
-2026-05-10-08-48-59
-RUN LTP CASE writev07
+FAIL LTP CASE sendfile03 : 0
+2026-05-18-03-41-38
+RUN LTP CASE sendfile03_64
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-writev07.c:56: TINFO: starting test with initial file offset: 0 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 65 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4096 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4097 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=20c64ec83a9f
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3ac974796e5d
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_RDONLY : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with in_fd=-1 : EBADF (9)
+sendfile03.c:53: TPASS: sendfile(..) with out_fd=O_WRONLY : EBADF (9)
 
 Summary:
-passed   6
-failed   2
+passed   4
+failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE writev07 : 0
-2026-05-10-08-49-01
+FAIL LTP CASE sendfile03_64 : 0
+2026-05-18-03-41-41
+RUN LTP CASE sendfile04
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=0 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=1 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=4 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=5 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_unmapped_buffer, protection=3 : EFAULT (14)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04 : 0
+2026-05-18-03-41-44
+RUN LTP CASE sendfile04_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=0 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=1 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=4 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_mapped_buffer, protection=5 : EFAULT (14)
+sendfile04.c:62: TPASS: sendfile(..) with pass_unmapped_buffer, protection=3 : EFAULT (14)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04_64 : 0
+2026-05-18-03-41-48
+RUN LTP CASE sendfile05
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile05.c:41: TPASS: sendfile(out, in, &offset, ..) with offset=-1 : EINVAL (22)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05 : 0
+2026-05-18-03-41-51
+RUN LTP CASE sendfile05_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile05.c:41: TPASS: sendfile(out, in, &offset, ..) with offset=-1 : EINVAL (22)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05_64 : 0
+2026-05-18-03-41-54
+RUN LTP CASE sendfile06
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile06.c:61: TPASS: sendfile() with offset=NULL
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06 : 0
+2026-05-18-03-41-58
+RUN LTP CASE sendfile06_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile06.c:61: TPASS: sendfile() with offset=NULL
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06_64 : 0
+2026-05-18-03-42-01
+RUN LTP CASE sendfile07
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07 : 0
+2026-05-18-03-42-05
+RUN LTP CASE sendfile07_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile07.c:59: TPASS: sendfile(out_fd, in_fd, NULL, 1) with blocked out_fd : EAGAIN/EWOULDBLOCK (11)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07_64 : 0
+2026-05-18-03-42-10
+RUN LTP CASE sendfile08
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08 : 0
+2026-05-18-03-42-13
+RUN LTP CASE sendfile08_64
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+sendfile08.c:44: TPASS: sendfile() copies data correctly
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08_64 : 0
+2026-05-18-03-42-17
+RUN LTP CASE sendfile09
+tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 02m 15s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendfile09 : 0
+2026-05-18-03-42-20
+RUN LTP CASE sendfile09_64
+tst_kernel.c:90: TINFO: uname.machine=loongarch64 kernel is 64bit
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 02m 15s
+sendfile09.c:46: TCONF: Test on large file needs 5G free space
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendfile09_64 : 0
+2026-05-18-03-42-24
 #### OS COMP TEST GROUP END ltp-glibc ####
 
 

@@ -139,6 +139,31 @@ pub fn sys_fdatasync(fd: c_int) -> AxResult<isize> {
     Ok(0)
 }
 
+pub fn sys_sync_file_range(
+    fd: c_int,
+    offset: __kernel_off_t,
+    nbytes: __kernel_off_t,
+    flags: u32,
+) -> AxResult<isize> {
+    const SYNC_FILE_RANGE_WAIT_BEFORE: u32 = 1;
+    const SYNC_FILE_RANGE_WRITE: u32 = 2;
+    const SYNC_FILE_RANGE_WAIT_AFTER: u32 = 4;
+    const SYNC_FILE_RANGE_VALID_FLAGS: u32 =
+        SYNC_FILE_RANGE_WAIT_BEFORE | SYNC_FILE_RANGE_WRITE | SYNC_FILE_RANGE_WAIT_AFTER;
+
+    debug!("sys_sync_file_range <= fd: {fd}, offset: {offset}, nbytes: {nbytes}, flags: {flags}");
+    if offset < 0 || nbytes < 0 || flags & !SYNC_FILE_RANGE_VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if Pipe::from_fd(fd).is_ok() {
+        return Err(AxError::from(LinuxError::ESPIPE));
+    }
+
+    let f = File::from_fd(fd)?;
+    f.inner().sync(false)?;
+    Ok(0)
+}
+
 pub fn sys_fadvise64(
     fd: c_int,
     offset: __kernel_off_t,
@@ -348,10 +373,19 @@ pub fn sys_sendfile(out_fd: c_int, in_fd: c_int, offset: *mut u64, len: usize) -
         len
     );
 
+    if let Ok(file) = File::from_fd(in_fd) {
+        file.inner().access(FileFlags::READ)?;
+    }
+    if let Ok(file) = File::from_fd(out_fd) {
+        file.inner().access(FileFlags::WRITE)?;
+    }
+
     let src = if !offset.is_null() {
-        if offset.vm_read()? > u32::MAX as u64 {
+        let off = offset.vm_read()?;
+        if off > i64::MAX as u64 {
             return Err(AxError::InvalidInput);
         }
+        offset.vm_write(off)?;
         SendFile::Offset(File::from_fd(in_fd)?, offset)
     } else {
         SendFile::Direct(get_file_like(in_fd)?)
