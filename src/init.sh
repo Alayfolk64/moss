@@ -258,30 +258,11 @@ run_ltp() {
         fallocate04
         # fallocate05
         # fallocate06
-        # fanotify01
-        # fanotify02
-        # fanotify03
         fanotify04
-        # fanotify05
-        # fanotify06
-        # fanotify07
         fanotify08
-        # fanotify09
-        # fanotify10
-        # fanotify11
-        # fanotify12
-        # fanotify13
-        # fanotify14
-        # fanotify15
-        # fanotify16
-        # fanotify17
-        # fanotify18
-        # fanotify19
-        # fanotify20
-        # fanotify21
-        # fanotify22
-        # fanotify23
-        # fanotify_child
+        fanotify14
+        fanotify18
+        fanotify20
         fchdir01
         fchdir02
         # fchdir03

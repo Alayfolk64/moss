@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-18 16:42:39.004562300 UTC
+Boot at 2026-05-18 17:23:59.004421800 UTC
 
 mkdir: can't create directory '/lib': File exists
 '/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
@@ -149,210 +149,293 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-musl ####
 #### OS COMP TEST GROUP END netperf-musl ####
 #### OS COMP TEST GROUP START ltp-musl ####
-RUN LTP CASE execl01
-tst_test.c:1274: TINFO: Set ulimit resource: 3 rlim_cur: 18446744073709551615 rlim_max: 18446744073709551615
+RUN LTP CASE fanotify04
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execl01_child.c:20: TPASS: execl01_child executed
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | FAN_MARK_ONLYDIR, FAN_OPEN, AT_FDCWD, '.') succeeded
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | FAN_MARK_ONLYDIR, FAN_OPEN, AT_FDCWD, 'fname_33') failed
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW, FAN_OPEN, AT_FDCWD, 'symlink_33') succeeded
+fanotify04.c:154: TPASS: No event as expected
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | 0, FAN_OPEN, AT_FDCWD, 'symlink_33') succeeded
+fanotify04.c:106: TBROK: read(3,0x29c80,24) failed, returned -1: EAGAIN/EWOULDBLOCK (11)
 
 Summary:
-passed   1
+passed   5
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify04 : 0
+2026-05-18-17-24-03
+RUN LTP CASE fanotify08
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fanotify08.c:39: TPASS: not set close_on_exec
+fanotify08.c:39: TPASS: set close_on_exec
+
+Summary:
+passed   2
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE execl01 : 0
-2026-05-18-16-42-43
-RUN LTP CASE execle01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execle01_child.c:34: TPASS: execle01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execle01 : 0
-2026-05-18-16-42-44
-RUN LTP CASE execlp01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execlp01_child.c:20: TPASS: execlp01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execlp01 : 0
-2026-05-18-16-42-45
-RUN LTP CASE execv01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execv01_child.c:23: TPASS: execv01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execv01 : 0
-2026-05-18-16-42-45
-RUN LTP CASE execve01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve01_child.c:34: TPASS: execve01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve01 : 0
-2026-05-18-16-42-46
-RUN LTP CASE execve02
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve02.c:54: TPASS: execve() failed expectedly: EACCES (13)
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve02 : 0
-2026-05-18-16-42-47
-RUN LTP CASE execve03
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve03.c:124: TPASS: execve failed as expected: ENAMETOOLONG (36)
-execve03.c:124: TPASS: execve failed as expected: ENOENT (2)
-execve03.c:124: TPASS: execve failed as expected: ENOTDIR (20)
-execve03.c:124: TPASS: execve failed as expected: EFAULT (14)
-execve03.c:124: TPASS: execve failed as expected: EACCES (13)
-execve03.c:124: TPASS: execve failed as expected: ENOEXEC (8)
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve03 : 0
-2026-05-18-16-42-48
-RUN LTP CASE execve04
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve04.c:52: TPASS: execve failed as expected: ETXTBSY (26)
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve04 : 0
-2026-05-18-16-42-49
-RUN LTP CASE execve05
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-
-Summary:
-passed   8
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve05 : 0
-2026-05-18-16-42-50
-RUN LTP CASE execve06
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve06_child.c:24: TPASS: argv[0] was filled in by kernel
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve06 : 0
-2026-05-18-16-42-51
-RUN LTP CASE execveat01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execveat_child.c:17: TPASS: execveat_child run as expected
-execveat_child.c:17: TPASS: execveat_child run as expected
-execveat_child.c:17: TPASS: execveat_child run as expected
-execveat_child.c:17: TPASS: execveat_child run as expected
-
-Summary:
-passed   4
-failed   0
-broken   0
-skipped  0
-warnings 0
-tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_exeFmieFN) failed: unlink(/tmp/LTP_exeFmieFN) failed; errno=21: EISDIR
-FAIL LTP CASE execveat01 : 0
-2026-05-18-16-42-53
-RUN LTP CASE execveat02
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execveat02.c:63: TPASS: execveat() fails as expected: EBADF (9)
-execveat02.c:63: TPASS: execveat() fails as expected: EINVAL (22)
-execveat02.c:63: TPASS: execveat() fails as expected: ELOOP (40)
-execveat02.c:63: TPASS: execveat() fails as expected: ENOTDIR (20)
-
-Summary:
-passed   4
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execveat02 : 0
-2026-05-18-16-42-54
-RUN LTP CASE execveat03
+FAIL LTP CASE fanotify08 : 0
+2026-05-18-17-24-04
+RUN LTP CASE fanotify10
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_exeaPloHI/mntpoint fstyp=tmpfs flags=0
-tst_test.c:1339: TCONF: overlayfs is not configured in this kernel
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fanHnpmKG/fs_mnt fstyp=tmpfs flags=0
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fanotify10.c:673: TINFO: Umounting /tmp/LTP_fanHnpmKG/fs_mnt
+fanotify10.c:674: TINFO: Mounting /dev/loop0 to /tmp/LTP_fanHnpmKG/fs_mnt fstyp=tmpfs flags=0
+fanotify10.c:675: TINFO: Mounting fs_mnt to /tmp/LTP_fanHnpmKG/mntpoint fstyp=none flags=1000
+fanotify10.c:675: TBROK: mount(fs_mnt, mntpoint, none, 4096, 0) failed: ENODEV (19)
+fanotify10.c:937: TWARN: Failed to open FILE '/proc/sys/vm/vfs_cache_pressure' for writing: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir0/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir0) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile0) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir1/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir1) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile1) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir2/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir2) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile2) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir3/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir3) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile3) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir4/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir4) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile4) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir5/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir5) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile5) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir6/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir6) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile6) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir7/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir7) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile7) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir8/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir8) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile8) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir9/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir9) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile9) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir10/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir10) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile10) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir11/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir11) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile11) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir12/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir12) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile12) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir13/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir13) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile13) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir14/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir14) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile14) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir15/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir15) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile15) failed: ENOENT (2)
+fanotify10.c:949: TWARN: unlink(fs_mnt/testdir/testfile) failed: ENOENT (2)
+fanotify10.c:950: TWARN: rmdir(fs_mnt/testdir/testdir2) failed: ENOENT (2)
+fanotify10.c:951: TWARN: rmdir(fs_mnt/testdir) failed: ENOENT (2)
+
+HINT: You _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9bdda4e9cf2d
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=2f02fd3fa13e
 
 Summary:
 passed   0
 failed   0
-broken   0
-skipped  1
-warnings 0
-FAIL LTP CASE execveat03 : 0
-2026-05-18-16-42-55
-RUN LTP CASE execvp01
+broken   1
+skipped  0
+warnings 52
+FAIL LTP CASE fanotify10 : 0
+2026-05-18-17-24-05
+RUN LTP CASE fanotify14
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execvp01_child.c:20: TPASS: execvp01_child executed
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fanikkffl/mntpoint fstyp=tmpfs flags=0
+tst_security.c:112: TINFO: SELinux enforcing: off
+fanotify14.c:248: TINFO: Test case 0: fanotify_init(FAN_CLASS_CONTENT | FAN_REPORT_FID, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 1: fanotify_init(FAN_CLASS_PRE_CONTENT | FAN_REPORT_FID, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 2: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with INODE_EVENTS
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 3: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_FID, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_MOUNT with INODE_EVENTS
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 4: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_NAME, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 5: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_FID | FAN_REPORT_NAME, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 6: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_TARGET_FID | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 7: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_TARGET_FID | FAN_REPORT_DFID_FID, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 8: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_FID, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_RENAME
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 9: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_ONLYDIR with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:248: TINFO: Test case 10: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_DELETE
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 11: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_RENAME
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 12: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_OPEN | FAN_ONDIR
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 13: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_OPEN | FAN_EVENT_ON_CHILD
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 14: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_DELETE
+fanotify14.c:289: TFAIL: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) expected ENOTDIR: EINVAL (22)
+fanotify14.c:248: TINFO: Test case 15: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_RENAME
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 16: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_OPEN | FAN_ONDIR
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 17: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_OPEN | FAN_EVENT_ON_CHILD
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 18: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EISDIR (21)
+fanotify14.c:248: TINFO: Test case 19: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_MOUNT | FAN_MARK_IGNORE with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 20: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_FILESYSTEM | FAN_MARK_IGNORE with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 21: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_MOUNT with anonymous pipe
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 22: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_FILESYSTEM with anonymous pipe
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+
+HINT: You _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=ceaf69f8eadc
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8698e3bab4dd
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=69562eb0bd3e
 
 Summary:
-passed   1
+passed   54
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify14 : 0
+2026-05-18-17-24-06
+RUN LTP CASE fanotify18
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fannEPPig/fs_mnt fstyp=tmpfs flags=0
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fanotify18.c:170: TINFO: Running as privileged user, revoking permissions.
+fanotify18.c:108: TINFO: Test #0 init_flags: missing FAN_REPORT_FID
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #1 init_flags: FAN_CLASS_CONTENT
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #2 init_flags: FAN_CLASS_PRE_CONTENT
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #3 init_flags: FAN_UNLIMITED_QUEUE
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #4 init_flags: FAN_UNLIMITED_MARKS
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #5 init_flags: FAN_REPORT_TID
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #6 init_flags: FAN_CLASS_NOTIF, mark_flags: FAN_MARK_ADD | FAN_MARK_MOUNT
+fanotify18.c:137: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #7 init_flags: FAN_CLASS_NOTIF, mark_flags: FAN_MARK_ADD | FAN_MARK_FILESYSTEM
+fanotify18.c:137: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #8 init_flags: FAN_CLASS_NOTIF, mark_flags: FAN_MARK_ADD, mark_mask: FAN_ALL_EVENTS
+fanotify18.c:150: TPASS: fanotify_init() and fanotify_mark() returned successfully, as expected
+
+Summary:
+passed   9
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE execvp01 : 0
-2026-05-18-16-42-55
+FAIL LTP CASE fanotify18 : 0
+2026-05-18-17-24-07
+RUN LTP CASE fanotify20
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+fanotify20.c:61: TINFO: Test fail on FAN_REPORT_PIDFD | FAN_REPORT_TID
+fanotify20.c:64: TPASS: fd = fanotify_init(tc->flags, 00) : EINVAL (22)
+fanotify20.c:61: TINFO: Test pass on FAN_REPORT_PIDFD | FAN_REPORT_FID | FAN_REPORT_DFID_NAME
+fanotify20.c:64: TPASS: fd = fanotify_init(tc->flags, 00) returned fd 3
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify20 : 0
+2026-05-18-17-24-08
 #### OS COMP TEST GROUP END ltp-musl ####
 prepare musl runtime
 '/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
@@ -378,208 +461,291 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-glibc ####
 #### OS COMP TEST GROUP END netperf-glibc ####
 #### OS COMP TEST GROUP START ltp-glibc ####
-RUN LTP CASE execl01
-tst_test.c:1274: TINFO: Set ulimit resource: 3 rlim_cur: 18446744073709551615 rlim_max: 18446744073709551615
+RUN LTP CASE fanotify04
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execl01_child.c:20: TPASS: execl01_child executed
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | FAN_MARK_ONLYDIR, FAN_OPEN, AT_FDCWD, '.') succeeded
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | FAN_MARK_ONLYDIR, FAN_OPEN, AT_FDCWD, 'fname_92') failed
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW, FAN_OPEN, AT_FDCWD, 'symlink_92') succeeded
+fanotify04.c:154: TPASS: No event as expected
+fanotify04.c:63: TPASS: fanotify_mark (3, FAN_MARK_ADD | 0, FAN_OPEN, AT_FDCWD, 'symlink_92') succeeded
+fanotify04.c:106: TBROK: read(3,0x30560,24) failed, returned -1: EAGAIN/EWOULDBLOCK (11)
 
 Summary:
-passed   1
+passed   5
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify04 : 0
+2026-05-18-17-24-09
+RUN LTP CASE fanotify08
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fanotify08.c:39: TPASS: not set close_on_exec
+fanotify08.c:39: TPASS: set close_on_exec
+
+Summary:
+passed   2
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE execl01 : 0
-2026-05-18-16-42-57
-RUN LTP CASE execle01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execle01_child.c:34: TPASS: execle01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execle01 : 0
-2026-05-18-16-42-58
-RUN LTP CASE execlp01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execlp01_child.c:20: TPASS: execlp01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execlp01 : 0
-2026-05-18-16-42-59
-RUN LTP CASE execv01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execv01_child.c:23: TPASS: execv01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execv01 : 0
-2026-05-18-16-43-00
-RUN LTP CASE execve01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve01_child.c:34: TPASS: execve01_child executed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve01 : 0
-2026-05-18-16-43-01
-RUN LTP CASE execve02
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve02.c:54: TPASS: execve() failed expectedly: EACCES (13)
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve02 : 0
-2026-05-18-16-43-02
-RUN LTP CASE execve03
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve03.c:124: TPASS: execve failed as expected: ENAMETOOLONG (36)
-execve03.c:124: TPASS: execve failed as expected: ENOENT (2)
-execve03.c:124: TPASS: execve failed as expected: ENOTDIR (20)
-execve03.c:124: TPASS: execve failed as expected: EFAULT (14)
-execve03.c:124: TPASS: execve failed as expected: EACCES (13)
-execve03.c:124: TPASS: execve failed as expected: ENOEXEC (8)
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve03 : 0
-2026-05-18-16-43-03
-RUN LTP CASE execve04
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve04.c:52: TPASS: execve failed as expected: ETXTBSY (26)
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve04 : 0
-2026-05-18-16-43-04
-RUN LTP CASE execve05
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-execve_child.c:22: TPASS: argv[1] is canary, expected 'canary'
-
-Summary:
-passed   8
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve05 : 0
-2026-05-18-16-43-06
-RUN LTP CASE execve06
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execve06_child.c:24: TPASS: argv[0] was filled in by kernel
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execve06 : 0
-2026-05-18-16-43-07
-RUN LTP CASE execveat01
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execveat_child.c:17: TPASS: execveat_child run as expected
-execveat_child.c:17: TPASS: execveat_child run as expected
-execveat_child.c:17: TPASS: execveat_child run as expected
-execveat_child.c:17: TPASS: execveat_child run as expected
-
-Summary:
-passed   4
-failed   0
-broken   0
-skipped  0
-warnings 0
-tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_exehN31Kr) failed: unlink(/tmp/LTP_exehN31Kr) failed; errno=21: EISDIR
-FAIL LTP CASE execveat01 : 0
-2026-05-18-16-43-09
-RUN LTP CASE execveat02
-tst_test.c:1733: TINFO: LTP version: LTP-20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execveat02.c:63: TPASS: execveat() fails as expected: EBADF (9)
-execveat02.c:63: TPASS: execveat() fails as expected: EINVAL (22)
-execveat02.c:63: TPASS: execveat() fails as expected: ELOOP (40)
-execveat02.c:63: TPASS: execveat() fails as expected: ENOTDIR (20)
-
-Summary:
-passed   4
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE execveat02 : 0
-2026-05-18-16-43-10
-RUN LTP CASE execveat03
+FAIL LTP CASE fanotify08 : 0
+2026-05-18-17-24-10
+RUN LTP CASE fanotify10
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_exeDwRv2J/mntpoint fstyp=tmpfs flags=0
-tst_test.c:1339: TCONF: overlayfs is not configured in this kernel
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fanvOeKZO/fs_mnt fstyp=tmpfs flags=0
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fanotify10.c:673: TINFO: Umounting /tmp/LTP_fanvOeKZO/fs_mnt
+fanotify10.c:674: TINFO: Mounting /dev/loop0 to /tmp/LTP_fanvOeKZO/fs_mnt fstyp=tmpfs flags=0
+fanotify10.c:675: TINFO: Mounting fs_mnt to /tmp/LTP_fanvOeKZO/mntpoint fstyp=none flags=1000
+fanotify10.c:675: TBROK: mount(fs_mnt, mntpoint, none, 4096, (nil)) failed: ENODEV (19)
+fanotify10.c:937: TWARN: Failed to open FILE '/proc/sys/vm/vfs_cache_pressure' for writing: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir0/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir0) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile0) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir1/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir1) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile1) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir2/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir2) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile2) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir3/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir3) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile3) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir4/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir4) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile4) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir5/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir5) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile5) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir6/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir6) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile6) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir7/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir7) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile7) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir8/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir8) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile8) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir9/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir9) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile9) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir10/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir10) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile10) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir11/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir11) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile11) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir12/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir12) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile12) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir13/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir13) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile13) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir14/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir14) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile14) failed: ENOENT (2)
+fanotify10.c:943: TWARN: unlink(fs_mnt/testdir15/testfile) failed: ENOENT (2)
+fanotify10.c:945: TWARN: rmdir(fs_mnt/testdir15) failed: ENOENT (2)
+fanotify10.c:947: TWARN: unlink(fs_mnt/testdir/testfile15) failed: ENOENT (2)
+fanotify10.c:949: TWARN: unlink(fs_mnt/testdir/testfile) failed: ENOENT (2)
+fanotify10.c:950: TWARN: rmdir(fs_mnt/testdir/testdir2) failed: ENOENT (2)
+fanotify10.c:951: TWARN: rmdir(fs_mnt/testdir) failed: ENOENT (2)
+
+HINT: You _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9bdda4e9cf2d
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=2f02fd3fa13e
 
 Summary:
 passed   0
 failed   0
-broken   0
-skipped  1
-warnings 0
-FAIL LTP CASE execveat03 : 0
-2026-05-18-16-43-11
-RUN LTP CASE execvp01
+broken   1
+skipped  0
+warnings 52
+FAIL LTP CASE fanotify10 : 0
+2026-05-18-17-24-12
+RUN LTP CASE fanotify14
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: LTP-20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-execvp01_child.c:20: TPASS: execvp01_child executed
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fanZdpSwz/mntpoint fstyp=tmpfs flags=0
+tst_security.c:112: TINFO: SELinux enforcing: off
+fanotify14.c:248: TINFO: Test case 0: fanotify_init(FAN_CLASS_CONTENT | FAN_REPORT_FID, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 1: fanotify_init(FAN_CLASS_PRE_CONTENT | FAN_REPORT_FID, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 2: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with INODE_EVENTS
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 3: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_FID, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_MOUNT with INODE_EVENTS
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 4: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_NAME, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 5: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_FID | FAN_REPORT_NAME, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 6: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_TARGET_FID | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 7: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_TARGET_FID | FAN_REPORT_DFID_FID, O_RDONLY)
+fanotify14.c:262: TPASS: fanotify_init(tc->init.flags, O_RDONLY) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 8: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_FID, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_RENAME
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 9: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_ONLYDIR with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:248: TINFO: Test case 10: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_DELETE
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 11: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_RENAME
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 12: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_OPEN | FAN_ONDIR
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 13: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME_TARGET, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_INODE with FAN_OPEN | FAN_EVENT_ON_CHILD
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 14: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_DELETE
+fanotify14.c:289: TFAIL: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) expected ENOTDIR: EINVAL (22)
+fanotify14.c:248: TINFO: Test case 15: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_RENAME
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 16: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_OPEN | FAN_ONDIR
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 17: fanotify_init(FAN_CLASS_NOTIF | FAN_REPORT_DFID_NAME, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE_SURV with FAN_OPEN | FAN_EVENT_ON_CHILD
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : ENOTDIR (20)
+fanotify14.c:301: TPASS: Adding an inode mark on directory did not fail with ENOTDIR error as on non-dir inode
+fanotify14.c:309: TPASS: Adding a filesystem mark on non-dir did not fail with ENOTDIR error as with an inode mark
+fanotify14.c:248: TINFO: Test case 18: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_IGNORE with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EISDIR (21)
+fanotify14.c:248: TINFO: Test case 19: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_MOUNT | FAN_MARK_IGNORE with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 20: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_FILESYSTEM | FAN_MARK_IGNORE with FAN_OPEN
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 21: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_MOUNT with anonymous pipe
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+fanotify14.c:248: TINFO: Test case 22: fanotify_init(FAN_CLASS_NOTIF, O_RDONLY)
+fanotify14.c:265: TPASS: fanotify_init(tc->init.flags, O_RDONLY) returned fd 5
+fanotify14.c:286: TINFO: Testing FAN_MARK_FILESYSTEM with anonymous pipe
+fanotify14.c:289: TPASS: fanotify_mark(fanotify_fd, FAN_MARK_ADD | tc->mark.flags, tc->mask.flags, dirfd, path) : EINVAL (22)
+
+HINT: You _MAY_ be missing kernel fixes:
+
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=ceaf69f8eadc
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=8698e3bab4dd
+https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=69562eb0bd3e
 
 Summary:
-passed   1
+passed   54
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify14 : 0
+2026-05-18-17-24-13
+RUN LTP CASE fanotify18
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fanlT7tfu/fs_mnt fstyp=tmpfs flags=0
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fanotify18.c:170: TINFO: Running as privileged user, revoking permissions.
+fanotify18.c:108: TINFO: Test #0 init_flags: missing FAN_REPORT_FID
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #1 init_flags: FAN_CLASS_CONTENT
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #2 init_flags: FAN_CLASS_PRE_CONTENT
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #3 init_flags: FAN_UNLIMITED_QUEUE
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #4 init_flags: FAN_UNLIMITED_MARKS
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #5 init_flags: FAN_REPORT_TID
+fanotify18.c:118: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #6 init_flags: FAN_CLASS_NOTIF, mark_flags: FAN_MARK_ADD | FAN_MARK_MOUNT
+fanotify18.c:137: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #7 init_flags: FAN_CLASS_NOTIF, mark_flags: FAN_MARK_ADD | FAN_MARK_FILESYSTEM
+fanotify18.c:137: TPASS: Received result EPERM, as expected
+fanotify18.c:108: TINFO: Test #8 init_flags: FAN_CLASS_NOTIF, mark_flags: FAN_MARK_ADD, mark_mask: FAN_ALL_EVENTS
+fanotify18.c:150: TPASS: fanotify_init() and fanotify_mark() returned successfully, as expected
+
+Summary:
+passed   9
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE execvp01 : 0
-2026-05-18-16-43-12
+FAIL LTP CASE fanotify18 : 0
+2026-05-18-17-24-14
+RUN LTP CASE fanotify20
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+fanotify20.c:61: TINFO: Test fail on FAN_REPORT_PIDFD | FAN_REPORT_TID
+fanotify20.c:64: TPASS: fd = fanotify_init(tc->flags, 00) : EINVAL (22)
+fanotify20.c:61: TINFO: Test pass on FAN_REPORT_PIDFD | FAN_REPORT_FID | FAN_REPORT_DFID_NAME
+fanotify20.c:64: TPASS: fd = fanotify_init(tc->flags, 00) returned fd 3
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify20 : 0
+2026-05-18-17-24-15
 #### OS COMP TEST GROUP END ltp-glibc ####
