@@ -2,6 +2,7 @@ use alloc::{
     string::String,
     sync::{Arc, Weak},
     vec,
+    vec::Vec,
 };
 use core::{
     iter, mem,
@@ -112,6 +113,14 @@ impl Location {
     pub fn ioctl(&self, cmd: u32, arg: usize) -> VfsResult<usize>;
 
     pub fn flags(&self) -> NodeFlags;
+
+    pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()>;
+
+    pub fn get_xattr(&self, name: &[u8], buf: &mut [u8]) -> VfsResult<usize>;
+
+    pub fn list_xattr(&self) -> VfsResult<Vec<u8>>;
+
+    pub fn remove_xattr(&self, name: &[u8]) -> VfsResult<()>;
 
     pub fn user_data(&self) -> MutexGuard<'_, TypeMap>;
 }

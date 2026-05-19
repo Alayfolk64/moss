@@ -365,14 +365,14 @@ run_ltp() {
         fdatasync01
         fdatasync02
         # fdatasync03
-        # fgetxattr01
-        # fgetxattr02
-        # fgetxattr03
+        fgetxattr01
+        fgetxattr02
+        fgetxattr03
         # finit_module01
         # finit_module02
-        # flistxattr01
-        # flistxattr02
-        # flistxattr03
+        flistxattr01
+        flistxattr02
+        flistxattr03
         flock01
         # flock02
         flock03
@@ -390,13 +390,13 @@ run_ltp() {
         # fork14
         fork_procs
         fpathconf01
-        # fremovexattr01
-        # fremovexattr02
+        fremovexattr01
+        fremovexattr02
         # fsconfig01
         # fsconfig02
         # fsconfig03
-        # fsetxattr01
-        # fsetxattr02
+        fsetxattr01
+        fsetxattr02
         # fsmount01
         # fsmount02
         # fsopen01
@@ -514,11 +514,11 @@ run_ltp() {
         # getuid01_16
         getuid03
         # getuid03_16
-        # getxattr01
-        # getxattr02
-        # getxattr03
-        # getxattr04
-        # getxattr05
+        getxattr01
+        getxattr02
+        getxattr03
+        getxattr04
+        getxattr05
         # init_module01
         # init_module02
         # inotify01
@@ -612,8 +612,8 @@ run_ltp() {
         lchown03
         # lchown03_16
         # leapsec01
-        # lgetxattr01
-        # lgetxattr02
+        lgetxattr01
+        lgetxattr02
         link02
         link04
         link05
@@ -621,16 +621,16 @@ run_ltp() {
         # linkat01
         linkat02
         listen01
-        # listxattr01
-        # listxattr02
-        # listxattr03
-        # llistxattr01
-        # llistxattr02
-        # llistxattr03
+        listxattr01
+        listxattr02
+        listxattr03
+        llistxattr01
+        llistxattr02
+        llistxattr03
         llseek01
         llseek02
         llseek03
-        # lremovexattr01
+        lremovexattr01
         lseek01
         # lseek02
         lseek07
@@ -990,8 +990,8 @@ run_ltp() {
         # recvmsg03
         # remap_file_pages01
         # remap_file_pages02
-        # removexattr01
-        # removexattr02
+        removexattr01
+        removexattr02
         rename01
         rename03
         rename04
@@ -1200,9 +1200,9 @@ run_ltp() {
         # setuid03_16
         # setuid04
         # setuid04_16
-        # setxattr01
-        # setxattr02
-        # setxattr03
+        setxattr01
+        setxattr02
+        setxattr03
         # sgetmask01
         # shmat01
         # shmat02
@@ -1502,28 +1502,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        setregid01
-        setregid02
-        setregid03
-        setregid04
-        setresgid01
-        setresgid02
-        setresgid03
-        setresgid04
-        setresuid01
-        setresuid02
-        setresuid03
-        setresuid04
-        setresuid05
-        setreuid01
-        setreuid02
-        setreuid03
-        setreuid04
-        setreuid05
-        setreuid06
-        setreuid07
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
@@ -1560,12 +1539,12 @@ skip_group() {
 
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=1
-busybox=0
+busybox=1
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=0
+libctest=1
 lmbench=0
 ltp=1
 lua=0

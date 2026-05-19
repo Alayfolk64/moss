@@ -18,8 +18,7 @@ impl SystemHal for AxHal {
 pub type LwExt4Filesystem = lwext4_rust::Ext4Filesystem<AxHal, Ext4Disk>;
 
 pub fn into_vfs_err(err: Ext4Error) -> VfsError {
-    let linux_error = LinuxError::try_from(err.code).unwrap_or(LinuxError::EIO);
-    VfsError::from(linux_error).canonicalize()
+    LinuxError::try_from(err.code).map_or(VfsError::Io, VfsError::from)
 }
 
 pub fn into_vfs_type(ty: InodeType) -> NodeType {

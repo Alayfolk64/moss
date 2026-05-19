@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, string::String, sync::Arc};
+use alloc::{borrow::ToOwned, string::String, sync::Arc, vec::Vec};
 use core::{any::Any, task::Context};
 
 use axfs_ng_vfs::{
@@ -56,6 +56,42 @@ impl Inode {
             Ok(())
         })
         .map_err(into_vfs_err)
+    }
+
+    pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
+        self.fs
+            .lock()
+            .with_inode_ref(self.ino, |inode| {
+                inode.set_xattr(name, value)?;
+                inode.update_ctime();
+                Ok(())
+            })
+            .map_err(into_vfs_err)
+    }
+
+    pub fn get_xattr(&self, name: &[u8], buf: &mut [u8]) -> VfsResult<usize> {
+        self.fs
+            .lock()
+            .with_inode_ref(self.ino, |inode| inode.get_xattr(name, buf))
+            .map_err(into_vfs_err)
+    }
+
+    pub fn list_xattr(&self) -> VfsResult<Vec<u8>> {
+        self.fs
+            .lock()
+            .with_inode_ref(self.ino, |inode| inode.list_xattr())
+            .map_err(into_vfs_err)
+    }
+
+    pub fn remove_xattr(&self, name: &[u8]) -> VfsResult<()> {
+        self.fs
+            .lock()
+            .with_inode_ref(self.ino, |inode| {
+                inode.remove_xattr(name)?;
+                inode.update_ctime();
+                Ok(())
+            })
+            .map_err(into_vfs_err)
     }
 }
 
@@ -133,6 +169,22 @@ impl NodeOps for Inode {
 
     fn flags(&self) -> NodeFlags {
         NodeFlags::BLOCKING
+    }
+
+    fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
+        Inode::set_xattr(self, name, value)
+    }
+
+    fn get_xattr(&self, name: &[u8], buf: &mut [u8]) -> VfsResult<usize> {
+        Inode::get_xattr(self, name, buf)
+    }
+
+    fn list_xattr(&self) -> VfsResult<Vec<u8>> {
+        Inode::list_xattr(self)
+    }
+
+    fn remove_xattr(&self, name: &[u8]) -> VfsResult<()> {
+        Inode::remove_xattr(self, name)
     }
 }
 
