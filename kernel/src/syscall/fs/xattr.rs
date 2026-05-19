@@ -1,11 +1,12 @@
 use alloc::vec::Vec;
-use core::ffi::c_char;
+use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::{Ext4Inode, FS_CONTEXT};
+use axfs::FS_CONTEXT;
 use axfs_ng_vfs::Location;
 use starry_vm::{vm_load, vm_write_slice};
 
+use crate::file::{Directory, File, get_file_like};
 use crate::mm::vm_load_string;
 
 const XATTR_CREATE: u32 = 1;
@@ -26,16 +27,23 @@ fn resolve_path(path: *const c_char) -> AxResult<Location> {
     FS_CONTEXT.lock().resolve(path).map_err(Into::into)
 }
 
+fn resolve_fd(fd: c_int) -> AxResult<Location> {
+    let file_like = get_file_like(fd)?;
+    if let Some(file) = file_like.downcast_ref::<File>() {
+        Ok(file.inner().backend()?.location().clone())
+    } else if let Some(dir) = file_like.downcast_ref::<Directory>() {
+        Ok(dir.inner().clone())
+    } else {
+        Err(AxError::BadFileDescriptor)
+    }
+}
+
 fn xattr_exists(loc: &Location, name: &[u8]) -> AxResult<bool> {
-    match ext4_inode(loc)?.get_xattr(name, &mut []) {
+    match loc.get_xattr(name, &mut []) {
         Ok(_) => Ok(true),
         Err(err) if LinuxError::from(err) == LinuxError::ENODATA => Ok(false),
         Err(err) => Err(err),
     }
-}
-
-fn ext4_inode(loc: &Location) -> AxResult<alloc::sync::Arc<Ext4Inode>> {
-    loc.entry().downcast::<Ext4Inode>().map_err(Into::into)
 }
 
 fn set_xattr(
@@ -55,11 +63,11 @@ fn set_xattr(
     }
 
     let name = load_xattr_name(name)?;
-    let exists = xattr_exists(loc, &name)?;
-    if flags & XATTR_CREATE != 0 && exists {
-        return Err(AxError::AlreadyExists);
-    }
-    if flags & XATTR_REPLACE != 0 && !exists {
+    if flags & XATTR_CREATE != 0 {
+        if xattr_exists(loc, &name)? {
+            return Err(AxError::AlreadyExists);
+        }
+    } else if flags & XATTR_REPLACE != 0 && !xattr_exists(loc, &name)? {
         return Err(AxError::from(LinuxError::ENODATA));
     }
 
@@ -68,7 +76,7 @@ fn set_xattr(
     } else {
         vm_load(value, size)?
     };
-    ext4_inode(loc)?.set_xattr(&name, &value)?;
+    loc.set_xattr(&name, &value)?;
     Ok(0)
 }
 
@@ -79,8 +87,7 @@ fn get_xattr(
     size: usize,
 ) -> AxResult<isize> {
     let name = load_xattr_name(name)?;
-    let inode = ext4_inode(loc)?;
-    let value_len = inode.get_xattr(&name, &mut [])?;
+    let value_len = loc.get_xattr(&name, &mut [])?;
     if size == 0 {
         return Ok(value_len as _);
     }
@@ -89,13 +96,13 @@ fn get_xattr(
     }
 
     let mut buf = alloc::vec![0; value_len];
-    inode.get_xattr(&name, &mut buf)?;
+    loc.get_xattr(&name, &mut buf)?;
     vm_write_slice(value, &buf)?;
     Ok(value_len as _)
 }
 
 fn list_xattr(loc: &Location, list: *mut u8, size: usize) -> AxResult<isize> {
-    let names = ext4_inode(loc)?.list_xattr()?;
+    let names = loc.list_xattr()?;
     if size == 0 {
         return Ok(names.len() as _);
     }
@@ -109,7 +116,7 @@ fn list_xattr(loc: &Location, list: *mut u8, size: usize) -> AxResult<isize> {
 
 fn remove_xattr(loc: &Location, name: *const c_char) -> AxResult<isize> {
     let name = load_xattr_name(name)?;
-    ext4_inode(loc)?.remove_xattr(&name)?;
+    loc.remove_xattr(&name)?;
     Ok(0)
 }
 
@@ -142,4 +149,35 @@ pub fn sys_listxattr(path: *const c_char, list: *mut u8, size: usize) -> AxResul
 pub fn sys_removexattr(path: *const c_char, name: *const c_char) -> AxResult<isize> {
     debug!("sys_removexattr <= path: {path:p}, name: {name:p}");
     remove_xattr(&resolve_path(path)?, name)
+}
+
+pub fn sys_fsetxattr(
+    fd: c_int,
+    name: *const c_char,
+    value: *const u8,
+    size: usize,
+    flags: u32,
+) -> AxResult<isize> {
+    debug!("sys_fsetxattr <= fd: {fd}, name: {name:p}, size: {size}, flags: {flags}");
+    set_xattr(&resolve_fd(fd)?, name, value, size, flags)
+}
+
+pub fn sys_fgetxattr(
+    fd: c_int,
+    name: *const c_char,
+    value: *mut u8,
+    size: usize,
+) -> AxResult<isize> {
+    debug!("sys_fgetxattr <= fd: {fd}, name: {name:p}, size: {size}");
+    get_xattr(&resolve_fd(fd)?, name, value, size)
+}
+
+pub fn sys_flistxattr(fd: c_int, list: *mut u8, size: usize) -> AxResult<isize> {
+    debug!("sys_flistxattr <= fd: {fd}, size: {size}");
+    list_xattr(&resolve_fd(fd)?, list, size)
+}
+
+pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> AxResult<isize> {
+    debug!("sys_fremovexattr <= fd: {fd}, name: {name:p}");
+    remove_xattr(&resolve_fd(fd)?, name)
 }
