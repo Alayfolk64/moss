@@ -486,18 +486,12 @@ run_ltp() {
         getrandom03
         getrandom04
         getrandom05
-        # getresgid01
-        # getresgid01_16
-        # getresgid02
-        # getresgid02_16
-        # getresgid03
-        # getresgid03_16
-        # getresuid01
-        # getresuid01_16
-        # getresuid02
-        # getresuid02_16
-        # getresuid03
-        # getresuid03_16
+        getresgid01
+        getresgid02
+        getresgid03
+        getresuid01
+        getresuid02
+        getresuid03
         getrlimit01
         getrlimit02
         # getrlimit03
@@ -1527,7 +1521,14 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+        getresgid01
+        getresgid02
+        getresgid03
+        getresuid01
+        getresuid02
+        getresuid03
+    "
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi

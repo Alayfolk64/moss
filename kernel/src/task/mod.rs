@@ -232,8 +232,10 @@ pub struct ProcessData {
     umask: AtomicU32,
     uid: AtomicU32,
     euid: AtomicU32,
+    suid: AtomicU32,
     gid: AtomicU32,
     egid: AtomicU32,
+    sgid: AtomicU32,
 }
 
 impl ProcessData {
@@ -273,8 +275,10 @@ impl ProcessData {
             umask: AtomicU32::new(0o022),
             uid: AtomicU32::new(0),
             euid: AtomicU32::new(0),
+            suid: AtomicU32::new(0),
             gid: AtomicU32::new(0),
             egid: AtomicU32::new(0),
+            sgid: AtomicU32::new(0),
         })
     }
 
@@ -317,6 +321,10 @@ impl ProcessData {
         self.euid.load(Ordering::SeqCst)
     }
 
+    pub fn suid(&self) -> u32 {
+        self.suid.load(Ordering::SeqCst)
+    }
+
     pub fn gid(&self) -> u32 {
         self.gid.load(Ordering::SeqCst)
     }
@@ -325,9 +333,14 @@ impl ProcessData {
         self.egid.load(Ordering::SeqCst)
     }
 
+    pub fn sgid(&self) -> u32 {
+        self.sgid.load(Ordering::SeqCst)
+    }
+
     pub fn set_uid(&self, uid: u32) {
         self.uid.store(uid, Ordering::SeqCst);
         self.euid.store(uid, Ordering::SeqCst);
+        self.suid.store(uid, Ordering::SeqCst);
     }
 
     pub fn set_real_uid(&self, uid: u32) {
@@ -338,9 +351,14 @@ impl ProcessData {
         self.euid.store(euid, Ordering::SeqCst);
     }
 
+    pub fn set_suid(&self, suid: u32) {
+        self.suid.store(suid, Ordering::SeqCst);
+    }
+
     pub fn set_gid(&self, gid: u32) {
         self.gid.store(gid, Ordering::SeqCst);
         self.egid.store(gid, Ordering::SeqCst);
+        self.sgid.store(gid, Ordering::SeqCst);
     }
 
     pub fn set_real_gid(&self, gid: u32) {
@@ -349,5 +367,9 @@ impl ProcessData {
 
     pub fn set_egid(&self, egid: u32) {
         self.egid.store(egid, Ordering::SeqCst);
+    }
+
+    pub fn set_sgid(&self, sgid: u32) {
+        self.sgid.store(sgid, Ordering::SeqCst);
     }
 }

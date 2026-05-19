@@ -456,12 +456,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::fork => sys_fork(uctx),
         Sysno::exit => sys_exit(uctx.arg0() as _),
         Sysno::exit_group => sys_exit_group(uctx.arg0() as _),
-        Sysno::wait4 => sys_waitpid(
-            uctx,
-            uctx.arg0() as _,
-            uctx.arg1() as _,
-            uctx.arg2() as _,
-        ),
+        Sysno::wait4 => sys_waitpid(uctx, uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::waitid => sys_waitid(
             uctx.arg0() as _,
             uctx.arg1() as _,
@@ -710,6 +705,9 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg2() as _,
             uctx.arg3() as _,
         ),
+        Sysno::getresgid => sys_getresgid(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::getresuid => sys_getresuid(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::setregid => sys_setregid(uctx.arg0() as _, uctx.arg1() as _),
 
         _ => {
             warn!("Unimplemented syscall: {sysno}");
