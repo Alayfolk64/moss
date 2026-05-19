@@ -72,6 +72,8 @@ axfeat.workspace = true
 starry-kernel.workspace = true
 
 [patch.crates-io]
+axfs = { path = "vendor/axfs" }
+axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
 lwext4_rust = { path = "third_party/lwext4_rust" }
 
 [package.metadata.vendor-filter]

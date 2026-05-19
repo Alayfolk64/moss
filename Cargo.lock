@@ -414,8 +414,6 @@ dependencies = [
 [[package]]
 name = "axfs"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1661cead6d4c09d2b8ea376b44b40d41be68be398c4a4fdff19d8084ebb814a"
 dependencies = [
  "axalloc",
  "axdriver",
@@ -442,8 +440,6 @@ dependencies = [
 [[package]]
 name = "axfs-ng-vfs"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b3fc5c71051e9ae0b29700aa6eb676b7dadb91be3415d2b374cc8d2a2d37c6"
 dependencies = [
  "axerrno 0.2.2",
  "axpoll",

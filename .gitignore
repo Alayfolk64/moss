@@ -26,3 +26,6 @@
 *.img
 *.gz
 *.xz
+/run_rv.sh
+/run_la.sh
+/run_all.sh
