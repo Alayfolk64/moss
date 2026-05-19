@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-19 01:34:01.005540100 UTC
+Boot at 2026-05-19 02:25:01.004918400 UTC
 
 mkdir: can't create directory '/lib': File exists
 '/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
@@ -129,6 +129,187 @@ PWD=/
 prepare musl runtime
 '/lib/libc.so' -> '/musl/lib/libc.so'
 #### OS COMP TEST GROUP START basic-musl ####
+Testing brk :
+========== START test_brk ==========
+Before alloc,heap pos: 1073741824
+After alloc,heap pos: 1073741888
+Alloc again,heap pos: 1073741952
+========== END test_brk ==========
+Testing chdir :
+========== START test_chdir ==========
+chdir ret: 0
+  current working dir : /musl/basic/test_chdir
+========== END test_chdir ==========
+Testing clone :
+========== START test_clone ==========
+  Child says successfully!
+clone process successfully.
+pid:35
+========== END test_clone ==========
+Testing close :
+========== START test_close ==========
+  close 3 success.
+========== END test_close ==========
+Testing dup2 :
+========== START test_dup2 ==========
+  from fd 100
+========== END test_dup2 ==========
+Testing dup :
+========== START test_dup ==========
+  new fd is 3.
+========== END test_dup ==========
+Testing execve :
+========== START test_execve ==========
+  I am test_echo.
+execve success.
+========== END main ==========
+Testing exit :
+========== START test_exit ==========
+exit OK.
+========== END test_exit ==========
+Testing fork :
+========== START test_fork ==========
+  child process.
+  parent process. wstatus:0
+========== END test_fork ==========
+Testing fstat :
+========== START test_fstat ==========
+fstat ret: 0
+fstat: dev: 1, inode: 3155, mode: 33261, nlink: 1, size: 52, atime: 1774330964, mtime: 1774330964, ctime: 1774330964
+========== END test_fstat ==========
+Testing getcwd :
+========== START test_getcwd ==========
+getcwd: /musl/basic successfully!
+========== END test_getcwd ==========
+Testing getdents :
+========== START test_getdents ==========
+open fd:3
+getdents fd:512
+getdents success.
+.
+
+========== END test_getdents ==========
+Testing getpid :
+========== START test_getpid ==========
+getpid success.
+pid = 47
+========== END test_getpid ==========
+Testing getppid :
+========== START test_getppid ==========
+  getppid success. ppid : 31
+========== END test_getppid ==========
+Testing gettimeofday :
+========== START test_gettimeofday ==========
+gettimeofday success.
+start:51713616, end:51713666
+interval: 50
+========== END test_gettimeofday ==========
+Testing mkdir_ :
+========== START test_mkdir ==========
+mkdir ret: -17
+  mkdir success.
+========== END test_mkdir ==========
+Testing mmap :
+========== START test_mmap ==========
+file len: 27
+mmap content:   Hello, mmap successfully!
+========== END test_mmap ==========
+Testing mount :
+========== START test_mount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+mount successfully
+umount return: 0
+========== END test_mount ==========
+Testing munmap :
+========== START test_munmap ==========
+file len: 27
+munmap return: 0
+munmap successfully!
+========== END test_munmap ==========
+Testing openat :
+========== START test_openat ==========
+open dir fd: 3
+openat fd: 4
+openat success.
+========== END test_openat ==========
+Testing open :
+========== START test_open ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_open ==========
+Testing pipe :
+========== START test_pipe ==========
+cpid: 57
+cpid: 0
+  Write to pipe successfully.
+
+========== END test_pipe ==========
+Testing read :
+========== START test_read ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_read ==========
+Testing sleep :
+========== START test_sleep ==========
+sleep success.
+========== END test_sleep ==========
+Testing times :
+========== START test_times ==========
+mytimes success
+{tms_utime:3, tms_stime:4, tms_cutime:0, tms_cstime:0}
+========== END test_times ==========
+Testing umount :
+========== START test_umount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+umount success.
+return: 0
+========== END test_umount ==========
+Testing uname :
+========== START test_uname ==========
+Uname: Linux starry 10.0.0 10.0.0 riscv64 https://github.com/Starry-OS/StarryOS
+========== END test_uname ==========
+Testing unlink :
+========== START test_unlink ==========
+  unlink success!
+========== END test_unlink ==========
+Testing wait :
+========== START test_wait ==========
+This is child process
+wait child success.
+wstatus: 0
+========== END test_wait ==========
+Testing waitpid :
+========== START test_waitpid ==========
+This is child process
+waitpid successfully.
+wstatus: 3
+========== END test_waitpid ==========
+Testing write :
+========== START test_write ==========
+Hello operating system contest.
+========== END test_write ==========
+Testing yield :
+========== START test_yield ==========
+  I am child process: 70. iteration 0.
+  I am child process: 71. iteration 1.
+  I am child process: 72. iteration 2.
+  I am child process: 70. iteration 0.
+  I am child process: 71. iteration 1.
+  I am child process: 72. iteration 2.
+  I am child process: 70. iteration 0.
+  I am child process: 71. iteration 1.
+  I am child process: 72. iteration 2.
+  I am child process: 70. iteration 0.
+  I am child process: 71. iteration 1.
+  I am child process: 72. iteration 2.
+  I am child process: 70. iteration 0.
+  I am child process: 71. iteration 1.
+  I am child process: 72. iteration 2.
+========== END test_yield ==========
 #### OS COMP TEST GROUP END basic-musl ####
 #### OS COMP TEST GROUP START busybox-musl ####
 #### OS COMP TEST GROUP END busybox-musl ####
@@ -149,8 +330,153 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-musl ####
 #### OS COMP TEST GROUP END netperf-musl ####
 #### OS COMP TEST GROUP START ltp-musl ####
-RUN LTP CASE getresgid01
-getresgid01    1  TPASS  :  Functionality of getresgid() successful
+RUN LTP CASE setregid01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid01.c:46: TPASS: Leave real and effective both gids unchanged: passed
+setregid01.c:46: TPASS: Change effective to effective gid: passed
+setregid01.c:46: TPASS: Change real to real gid: passed
+setregid01.c:46: TPASS: Change effective to real gid: passed
+setregid01.c:46: TPASS: Change real and effective both gids to current real gid: passed
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid01 : 0
+2026-05-19-02-25-09
+RUN LTP CASE setregid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid02.c:77: TPASS: setregid(-1, 0) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(-1, 1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(0, -1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(1, -1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(0, 1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(1, 0) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid02 : 0
+2026-05-19-02-25-09
+RUN LTP CASE setregid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid03.c:78: TPASS: setregid(1, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, 1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(2, -1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, -1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(2, -1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(2, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:88: TPASS: setregid(1, -1) failed as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:88: TPASS: setregid(-1, 1) failed as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:88: TPASS: setregid(1, 1) failed as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+
+Summary:
+passed   22
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid03 : 0
+2026-05-19-02-25-10
+RUN LTP CASE setregid04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid04 : 0
+2026-05-19-02-25-11
+RUN LTP CASE setresgid01
+setresgid01    1  TPASS  :  Test for setresgid(-1, -1, -1) successful
+setresgid01    2  TPASS  :  Test for setresgid(-1, -1, nobody) successful
+setresgid01    3  TPASS  :  Test for setresgid(-1, nobody, -1) successful
+setresgid01    4  TPASS  :  Test for setresgid(nobody, -1, -1) successful
+setresgid01    5  TFAIL  :  setresgid01.c:150: Test for setresgid(root, root, root) failed; returned -1 (expected 0), errno 1 (expected 0)
+
+Summary:
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid01 : 0
+2026-05-19-02-25-12
+RUN LTP CASE setresgid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresgid02.c:82: TPASS: setresgid(-1, -1, -1) works as expected
+setresgid02.c:74: TFAIL: setresgid(-1, -1, other) failed: EPERM (1)
+setresgid02.c:74: TFAIL: setresgid(-1, other, -1) failed: EPERM (1)
+setresgid02.c:74: TFAIL: setresgid(other, -1, -1) failed: EPERM (1)
+setresgid02.c:82: TPASS: setresgid(root, root, root) works as expected
+setresgid02.c:82: TPASS: setresgid(root, main, main) works as expected
+
+Summary:
+passed   3
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid02 : 0
+2026-05-19-02-25-13
+RUN LTP CASE setresgid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresgid03.c:66: TPASS: setresgid(-1, -1, other) : EPERM (1)
+setresgid03.c:66: TPASS: setresgid(-1, other, -1) : EPERM (1)
+setresgid03.c:66: TPASS: setresgid(other, -1, -1) : EPERM (1)
+setresgid03.c:66: TPASS: setresgid(other, other, other) : EPERM (1)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid03 : 0
+2026-05-19-02-25-13
+RUN LTP CASE setresgid04
+setresgid04    1  TPASS  :  setresgid succeeded as expected
 
 Summary:
 passed   1
@@ -158,63 +484,224 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresgid01 : 0
-2026-05-19-01-34-05
-RUN LTP CASE getresgid02
-getresgid02    1  TPASS  :  Functionality of getresgid() successful
+FAIL LTP CASE setresgid04 : 0
+2026-05-19-02-25-14
+RUN LTP CASE setresuid01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid01.c:75: TPASS: After setresuid(-1, -1, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, -1, main), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, other, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, -1, root), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, -1, other), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, root, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(main, -1, -1) works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, root, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(root, -1, -1), works as expected
 
 Summary:
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresgid02 : 0
-2026-05-19-01-34-06
-RUN LTP CASE getresgid03
-getresgid03    1  TPASS  :  Functionality of getresgid() successful
+FAIL LTP CASE setresuid01 : 0
+2026-05-19-02-25-15
+RUN LTP CASE setresuid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid02.c:72: TPASS: setresuid(-1, -1, other) works as expected
+setresuid02.c:72: TPASS: setresuid(-1, nobody -1) works as expected
+setresuid02.c:72: TPASS: setresuid(other, -1 -1) works as expected
+setresuid02.c:72: TPASS: setresuid(nobody, other, nobody) works as expected
 
 Summary:
-passed   1
+passed   4
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresgid03 : 0
-2026-05-19-01-34-08
-RUN LTP CASE getresuid01
-getresuid01    1  TPASS  :  Functionality of getresuid() successful
+FAIL LTP CASE setresuid02 : 0
+2026-05-19-02-25-16
+RUN LTP CASE setresuid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid03.c:61: TPASS: setresuid(other, -1, -1) : EPERM (1)
+setresuid03.c:61: TPASS: setresuid(-1, -1, other) : EPERM (1)
+setresuid03.c:61: TPASS: setresuid(-1, other, -1) : EPERM (1)
 
 Summary:
-passed   1
+passed   3
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresuid01 : 0
-2026-05-19-01-34-09
-RUN LTP CASE getresuid02
-getresuid02    1  TPASS  :  Functionality of getresuid() successful
+FAIL LTP CASE setresuid03 : 0
+2026-05-19-02-25-17
+RUN LTP CASE setresuid04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid04.c:44: TPASS: open(TEMP_FILE, O_RDWR) : EACCES (13)
+setresuid04.c:48: TPASS: open(TEMP_FILE, O_RDWR) : EACCES (13)
+setresuid04.c:56: TPASS: open(TEMP_FILE, O_RDWR) returned fd 4
 
 Summary:
-passed   1
+passed   3
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresuid02 : 0
-2026-05-19-01-34-10
-RUN LTP CASE getresuid03
-getresuid03    1  TPASS  :  Functionality of getresuid() successful
+FAIL LTP CASE setresuid04 : 0
+2026-05-19-02-25-17
+RUN LTP CASE setresuid05
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid05.c:33: TPASS: SETRESUID(-1, ltpuser->pw_uid, -1) passed
+setresuid05.c:38: TPASS: ltpuser->pw_uid == buf.st_uid (65534)
 
 Summary:
-passed   1
+passed   2
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresuid03 : 0
-2026-05-19-01-34-11
+FAIL LTP CASE setresuid05 : 0
+2026-05-19-02-25-18
+RUN LTP CASE setreuid01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid01.c:29: TPASS: SETREUID(-1, -1) passed
+setreuid01.c:30: TPASS: SETREUID(-1, euid) passed
+setreuid01.c:31: TPASS: SETREUID(ruid, -1) passed
+setreuid01.c:32: TPASS: SETREUID(-1, ruid) passed
+setreuid01.c:33: TPASS: SETREUID(euid, -1) passed
+setreuid01.c:34: TPASS: SETREUID(euid, euid) passed
+setreuid01.c:35: TPASS: SETREUID(ruid, ruid) passed
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid01 : 0
+2026-05-19-02-25-19
+RUN LTP CASE setreuid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid02.c:78: TPASS: setreuid(-1, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(nobody, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(root, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(-1, nobody) works as expected
+setreuid02.c:78: TPASS: setreuid(-1, root) works as expected
+setreuid02.c:78: TPASS: setreuid(other, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(root, -1) works as expected
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid02 : 0
+2026-05-19-02-25-19
+RUN LTP CASE setreuid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid03.c:88: TPASS: setreuid(nobody, nobody) passed
+setreuid03.c:88: TPASS: setreuid(-1, nobody) passed
+setreuid03.c:88: TPASS: setreuid(nobody, -1) passed
+setreuid03.c:88: TPASS: setreuid(-1, -1) passed
+setreuid03.c:85: TPASS: setreuid(-1, root) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, -1) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, root) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, nobody) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, other) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, root) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, -1) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, other) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, nobody) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(nobody, other) : EPERM (1)
+
+Summary:
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid03 : 0
+2026-05-19-02-25-20
+RUN LTP CASE setreuid04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid04.c:36: TPASS: SETREUID(nobody_uid, nobody_uid) passed
+setreuid04.c:38: TPASS: GETUID() == nobody_uid (65534)
+setreuid04.c:39: TPASS: GETEUID() == nobody_uid (65534)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid04 : 0
+2026-05-19-02-25-21
+RUN LTP CASE setreuid05
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid05.c:91: TPASS: setreuid(nobody, root) passed
+setreuid05.c:91: TPASS: setreuid(-1, nobody) passed
+setreuid05.c:91: TPASS: setreuid(-1, root) passed
+setreuid05.c:91: TPASS: setreuid(main, -1) passed
+setreuid05.c:91: TPASS: setreuid(-1, other) passed
+setreuid05.c:88: TPASS: setreuid(-1, root) : EPERM (1)
+setreuid05.c:88: TPASS: setreuid(-1, nobody) : EPERM (1)
+setreuid05.c:91: TPASS: setreuid(-1, main) passed
+setreuid05.c:91: TPASS: setreuid(-1, other) passed
+setreuid05.c:91: TPASS: setreuid(other, main) passed
+setreuid05.c:91: TPASS: setreuid(-1, other) passed
+setreuid05.c:91: TPASS: setreuid(-1, main) passed
+setreuid05.c:91: TPASS: setreuid(main, -1) passed
+setreuid05.c:88: TPASS: setreuid(-1, other) : EPERM (1)
+
+Summary:
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid05 : 0
+2026-05-19-02-25-22
+RUN LTP CASE setreuid06
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid06.c:40: TPASS: setreuid(-1, 1) : EPERM (1)
+setreuid06.c:42: TPASS: setreuid(1, -1) : EPERM (1)
+setreuid06.c:44: TPASS: setreuid(1, 1) : EPERM (1)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid06 : 0
+2026-05-19-02-25-22
+RUN LTP CASE setreuid07
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid07.c:45: TPASS: open(TEMPFILE, O_RDWR) : EACCES (13)
+setreuid07.c:49: TPASS: open(TEMPFILE, O_RDWR) : EACCES (13)
+setreuid07.c:55: TPASS: open(TEMPFILE, O_RDWR) returned fd 3
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid07 : 0
+2026-05-19-02-25-23
 #### OS COMP TEST GROUP END ltp-musl ####
 prepare musl runtime
 '/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
@@ -222,6 +709,187 @@ prepare musl runtime
 '/lib/libc.so' -> '/lib/libc.so.6'
 '/lib/libm.so' -> '/lib/libm.so.6'
 #### OS COMP TEST GROUP START basic-glibc ####
+Testing brk :
+========== START test_brk ==========
+Before alloc,heap pos: 1073741824
+After alloc,heap pos: 1073741888
+Alloc again,heap pos: 1073741952
+========== END test_brk ==========
+Testing chdir :
+========== START test_chdir ==========
+chdir ret: 0
+  current working dir : /glibc/basic/test_chdir
+========== END test_chdir ==========
+Testing clone :
+========== START test_clone ==========
+  Child says successfully!
+clone process successfully.
+pid:261
+========== END test_clone ==========
+Testing close :
+========== START test_close ==========
+  close 3 success.
+========== END test_close ==========
+Testing dup2 :
+========== START test_dup2 ==========
+  from fd 100
+========== END test_dup2 ==========
+Testing dup :
+========== START test_dup ==========
+  new fd is 3.
+========== END test_dup ==========
+Testing execve :
+========== START test_execve ==========
+  I am test_echo.
+execve success.
+========== END main ==========
+Testing exit :
+========== START test_exit ==========
+exit OK.
+========== END test_exit ==========
+Testing fork :
+========== START test_fork ==========
+  child process.
+  parent process. wstatus:0
+========== END test_fork ==========
+Testing fstat :
+========== START test_fstat ==========
+fstat ret: 0
+fstat: dev: 1, inode: 134191, mode: 33261, nlink: 1, size: 52, atime: 1774330929, mtime: 1774330929, ctime: 1774330929
+========== END test_fstat ==========
+Testing getcwd :
+========== START test_getcwd ==========
+getcwd: /glibc/basic successfully!
+========== END test_getcwd ==========
+Testing getdents :
+========== START test_getdents ==========
+open fd:3
+getdents fd:504
+getdents success.
+.
+
+========== END test_getdents ==========
+Testing getpid :
+========== START test_getpid ==========
+getpid success.
+pid = 273
+========== END test_getpid ==========
+Testing getppid :
+========== START test_getppid ==========
+  getppid success. ppid : 257
+========== END test_getppid ==========
+Testing gettimeofday :
+========== START test_gettimeofday ==========
+gettimeofday success.
+start:51733068, end:51733113
+interval: 45
+========== END test_gettimeofday ==========
+Testing mkdir_ :
+========== START test_mkdir ==========
+mkdir ret: -17
+  mkdir success.
+========== END test_mkdir ==========
+Testing mmap :
+========== START test_mmap ==========
+file len: 27
+mmap content:   Hello, mmap successfully!‡ˆãW-ƒ7,“7
+========== END test_mmap ==========
+Testing mount :
+========== START test_mount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+mount successfully
+umount return: 0
+========== END test_mount ==========
+Testing munmap :
+========== START test_munmap ==========
+file len: 27
+munmap return: 0
+munmap successfully!
+========== END test_munmap ==========
+Testing openat :
+========== START test_openat ==========
+open dir fd: 3
+openat fd: 4
+openat success.
+========== END test_openat ==========
+Testing open :
+========== START test_open ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_open ==========
+Testing pipe :
+========== START test_pipe ==========
+cpid: 283
+cpid: 0
+  Write to pipe successfully.
+
+========== END test_pipe ==========
+Testing read :
+========== START test_read ==========
+Hi, this is a text file.
+syscalls testing success!
+
+========== END test_read ==========
+Testing sleep :
+========== START test_sleep ==========
+sleep success.
+========== END test_sleep ==========
+Testing times :
+========== START test_times ==========
+mytimes success
+{tms_utime:3, tms_stime:3, tms_cutime:0, tms_cstime:0}
+========== END test_times ==========
+Testing umount :
+========== START test_umount ==========
+Mounting dev:/dev/vda2 to ./mnt
+mount return: 0
+umount success.
+return: 0
+========== END test_umount ==========
+Testing uname :
+========== START test_uname ==========
+Uname: Linux starry 10.0.0 10.0.0 riscv64 https://github.com/Starry-OS/StarryOS
+========== END test_uname ==========
+Testing unlink :
+========== START test_unlink ==========
+  unlink success!
+========== END test_unlink ==========
+Testing wait :
+========== START test_wait ==========
+This is child process
+wait child success.
+wstatus: 0
+========== END test_wait ==========
+Testing waitpid :
+========== START test_waitpid ==========
+This is child process
+waitpid successfully.
+wstatus: 3
+========== END test_waitpid ==========
+Testing write :
+========== START test_write ==========
+Hello operating system contest.
+========== END test_write ==========
+Testing yield :
+========== START test_yield ==========
+  I am child process: 296. iteration 0.
+  I am child process: 297. iteration 1.
+  I am child process: 298. iteration 2.
+  I am child process: 296. iteration 0.
+  I am child process: 297. iteration 1.
+  I am child process: 298. iteration 2.
+  I am child process: 296. iteration 0.
+  I am child process: 297. iteration 1.
+  I am child process: 298. iteration 2.
+  I am child process: 296. iteration 0.
+  I am child process: 297. iteration 1.
+  I am child process: 298. iteration 2.
+  I am child process: 296. iteration 0.
+  I am child process: 297. iteration 1.
+  I am child process: 298. iteration 2.
+========== END test_yield ==========
 #### OS COMP TEST GROUP END basic-glibc ####
 #### OS COMP TEST GROUP START busybox-glibc ####
 #### OS COMP TEST GROUP END busybox-glibc ####
@@ -240,8 +908,153 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-glibc ####
 #### OS COMP TEST GROUP END netperf-glibc ####
 #### OS COMP TEST GROUP START ltp-glibc ####
-RUN LTP CASE getresgid01
-getresgid01    1  TPASS  :  Functionality of getresgid() successful
+RUN LTP CASE setregid01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid01.c:46: TPASS: Leave real and effective both gids unchanged: passed
+setregid01.c:46: TPASS: Change effective to effective gid: passed
+setregid01.c:46: TPASS: Change real to real gid: passed
+setregid01.c:46: TPASS: Change effective to real gid: passed
+setregid01.c:46: TPASS: Change real and effective both gids to current real gid: passed
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid01 : 0
+2026-05-19-02-25-28
+RUN LTP CASE setregid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid02.c:77: TPASS: setregid(-1, 0) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(-1, 1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(0, -1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(1, -1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(0, 1) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+setregid02.c:77: TPASS: setregid(1, 0) failed as expected: EPERM (1)
+setregid02.c:65: TPASS: real or effective gid wasn't modified as expected
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid02 : 0
+2026-05-19-02-25-29
+RUN LTP CASE setregid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid03.c:78: TPASS: setregid(1, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, 1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(2, -1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, -1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(-1, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(2, -1) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:78: TPASS: setregid(2, 2) succeeded as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:88: TPASS: setregid(1, -1) failed as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:88: TPASS: setregid(-1, 1) failed as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+setregid03.c:88: TPASS: setregid(1, 1) failed as expected
+setregid03.c:104: TPASS: real or effective gid was modified as expected
+
+Summary:
+passed   22
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid03 : 0
+2026-05-19-02-25-30
+RUN LTP CASE setregid04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+setregid04.c:59: TPASS: real or effective gid was modified as expected
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid04 : 0
+2026-05-19-02-25-31
+RUN LTP CASE setresgid01
+setresgid01    1  TPASS  :  Test for setresgid(-1, -1, -1) successful
+setresgid01    2  TPASS  :  Test for setresgid(-1, -1, nobody) successful
+setresgid01    3  TPASS  :  Test for setresgid(-1, nobody, -1) successful
+setresgid01    4  TPASS  :  Test for setresgid(nobody, -1, -1) successful
+setresgid01    5  TFAIL  :  setresgid01.c:150: Test for setresgid(root, root, root) failed; returned -1 (expected 0), errno 1 (expected 0)
+
+Summary:
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid01 : 0
+2026-05-19-02-25-32
+RUN LTP CASE setresgid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresgid02.c:82: TPASS: setresgid(-1, -1, -1) works as expected
+setresgid02.c:74: TFAIL: setresgid(-1, -1, other) failed: EPERM (1)
+setresgid02.c:74: TFAIL: setresgid(-1, other, -1) failed: EPERM (1)
+setresgid02.c:74: TFAIL: setresgid(other, -1, -1) failed: EPERM (1)
+setresgid02.c:82: TPASS: setresgid(root, root, root) works as expected
+setresgid02.c:82: TPASS: setresgid(root, main, main) works as expected
+
+Summary:
+passed   3
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid02 : 0
+2026-05-19-02-25-33
+RUN LTP CASE setresgid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresgid03.c:66: TPASS: setresgid(-1, -1, other) : EPERM (1)
+setresgid03.c:66: TPASS: setresgid(-1, other, -1) : EPERM (1)
+setresgid03.c:66: TPASS: setresgid(other, -1, -1) : EPERM (1)
+setresgid03.c:66: TPASS: setresgid(other, other, other) : EPERM (1)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid03 : 0
+2026-05-19-02-25-33
+RUN LTP CASE setresgid04
+setresgid04    1  TPASS  :  setresgid succeeded as expected
 
 Summary:
 passed   1
@@ -249,61 +1062,222 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresgid01 : 0
-2026-05-19-01-34-13
-RUN LTP CASE getresgid02
-getresgid02    1  TPASS  :  Functionality of getresgid() successful
+FAIL LTP CASE setresgid04 : 0
+2026-05-19-02-25-35
+RUN LTP CASE setresuid01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid01.c:75: TPASS: After setresuid(-1, -1, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, -1, main), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, other, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, -1, root), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, -1, other), works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, root, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(main, -1, -1) works as expected
+setresuid01.c:75: TPASS: After setresuid(-1, root, -1), works as expected
+setresuid01.c:75: TPASS: After setresuid(root, -1, -1), works as expected
 
 Summary:
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresgid02 : 0
-2026-05-19-01-34-14
-RUN LTP CASE getresgid03
-getresgid03    1  TPASS  :  Functionality of getresgid() successful
+FAIL LTP CASE setresuid01 : 0
+2026-05-19-02-25-35
+RUN LTP CASE setresuid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid02.c:72: TPASS: setresuid(-1, -1, other) works as expected
+setresuid02.c:72: TPASS: setresuid(-1, nobody -1) works as expected
+setresuid02.c:72: TPASS: setresuid(other, -1 -1) works as expected
+setresuid02.c:72: TPASS: setresuid(nobody, other, nobody) works as expected
 
 Summary:
-passed   1
+passed   4
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresgid03 : 0
-2026-05-19-01-34-15
-RUN LTP CASE getresuid01
-getresuid01    1  TPASS  :  Functionality of getresuid() successful
+FAIL LTP CASE setresuid02 : 0
+2026-05-19-02-25-36
+RUN LTP CASE setresuid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid03.c:61: TPASS: setresuid(other, -1, -1) : EPERM (1)
+setresuid03.c:61: TPASS: setresuid(-1, -1, other) : EPERM (1)
+setresuid03.c:61: TPASS: setresuid(-1, other, -1) : EPERM (1)
 
 Summary:
-passed   1
+passed   3
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresuid01 : 0
-2026-05-19-01-34-16
-RUN LTP CASE getresuid02
-getresuid02    1  TPASS  :  Functionality of getresuid() successful
+FAIL LTP CASE setresuid03 : 0
+2026-05-19-02-25-37
+RUN LTP CASE setresuid04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid04.c:44: TPASS: open(TEMP_FILE, O_RDWR) : EACCES (13)
+setresuid04.c:48: TPASS: open(TEMP_FILE, O_RDWR) : EACCES (13)
+setresuid04.c:56: TPASS: open(TEMP_FILE, O_RDWR) returned fd 4
 
 Summary:
-passed   1
+passed   3
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresuid02 : 0
-2026-05-19-01-34-17
-RUN LTP CASE getresuid03
-getresuid03    1  TPASS  :  Functionality of getresuid() successful
+FAIL LTP CASE setresuid04 : 0
+2026-05-19-02-25-38
+RUN LTP CASE setresuid05
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setresuid05.c:33: TPASS: SETRESUID(-1, ltpuser->pw_uid, -1) passed
+setresuid05.c:38: TPASS: ltpuser->pw_uid == buf.st_uid (65534)
 
 Summary:
-passed   1
+passed   2
 failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE getresuid03 : 0
-2026-05-19-01-34-19
+FAIL LTP CASE setresuid05 : 0
+2026-05-19-02-25-39
+RUN LTP CASE setreuid01
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid01.c:29: TPASS: SETREUID(-1, -1) passed
+setreuid01.c:30: TPASS: SETREUID(-1, euid) passed
+setreuid01.c:31: TPASS: SETREUID(ruid, -1) passed
+setreuid01.c:32: TPASS: SETREUID(-1, ruid) passed
+setreuid01.c:33: TPASS: SETREUID(euid, -1) passed
+setreuid01.c:34: TPASS: SETREUID(euid, euid) passed
+setreuid01.c:35: TPASS: SETREUID(ruid, ruid) passed
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid01 : 0
+2026-05-19-02-25-40
+RUN LTP CASE setreuid02
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid02.c:78: TPASS: setreuid(-1, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(nobody, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(root, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(-1, nobody) works as expected
+setreuid02.c:78: TPASS: setreuid(-1, root) works as expected
+setreuid02.c:78: TPASS: setreuid(other, -1) works as expected
+setreuid02.c:78: TPASS: setreuid(root, -1) works as expected
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid02 : 0
+2026-05-19-02-25-41
+RUN LTP CASE setreuid03
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid03.c:88: TPASS: setreuid(nobody, nobody) passed
+setreuid03.c:88: TPASS: setreuid(-1, nobody) passed
+setreuid03.c:88: TPASS: setreuid(nobody, -1) passed
+setreuid03.c:88: TPASS: setreuid(-1, -1) passed
+setreuid03.c:85: TPASS: setreuid(-1, root) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, -1) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, root) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, nobody) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(root, other) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, root) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, -1) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, other) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(other, nobody) : EPERM (1)
+setreuid03.c:85: TPASS: setreuid(nobody, other) : EPERM (1)
+
+Summary:
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid03 : 0
+2026-05-19-02-25-41
+RUN LTP CASE setreuid04
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid04.c:36: TPASS: SETREUID(nobody_uid, nobody_uid) passed
+setreuid04.c:38: TPASS: GETUID() == nobody_uid (65534)
+setreuid04.c:39: TPASS: GETEUID() == nobody_uid (65534)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid04 : 0
+2026-05-19-02-25-42
+RUN LTP CASE setreuid05
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid05.c:91: TPASS: setreuid(nobody, root) passed
+setreuid05.c:91: TPASS: setreuid(-1, nobody) passed
+setreuid05.c:91: TPASS: setreuid(-1, root) passed
+setreuid05.c:91: TPASS: setreuid(main, -1) passed
+setreuid05.c:91: TPASS: setreuid(-1, other) passed
+setreuid05.c:88: TPASS: setreuid(-1, root) : EPERM (1)
+setreuid05.c:88: TPASS: setreuid(-1, nobody) : EPERM (1)
+setreuid05.c:91: TPASS: setreuid(-1, main) passed
+setreuid05.c:91: TPASS: setreuid(-1, other) passed
+setreuid05.c:91: TPASS: setreuid(other, main) passed
+setreuid05.c:91: TPASS: setreuid(-1, other) passed
+setreuid05.c:91: TPASS: setreuid(-1, main) passed
+setreuid05.c:91: TPASS: setreuid(main, -1) passed
+setreuid05.c:88: TPASS: setreuid(-1, other) : EPERM (1)
+
+Summary:
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid05 : 0
+2026-05-19-02-25-43
+RUN LTP CASE setreuid06
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid06.c:40: TPASS: setreuid(-1, 1) : EPERM (1)
+setreuid06.c:42: TPASS: setreuid(1, -1) : EPERM (1)
+setreuid06.c:44: TPASS: setreuid(1, 1) : EPERM (1)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid06 : 0
+2026-05-19-02-25-44
+RUN LTP CASE setreuid07
+tst_test.c:1733: TINFO: LTP version: LTP-20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setreuid07.c:45: TPASS: open(TEMPFILE, O_RDWR) : EACCES (13)
+setreuid07.c:49: TPASS: open(TEMPFILE, O_RDWR) : EACCES (13)
+setreuid07.c:55: TPASS: open(TEMPFILE, O_RDWR) returned fd 3
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid07 : 0
+2026-05-19-02-25-45
 #### OS COMP TEST GROUP END ltp-glibc ####
