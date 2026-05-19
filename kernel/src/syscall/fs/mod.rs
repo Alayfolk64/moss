@@ -1,5 +1,6 @@
 mod ctl;
 mod event;
+mod fanotify;
 mod fd_ops;
 mod io;
 mod memfd;
@@ -10,5 +11,6 @@ mod signalfd;
 mod stat;
 
 pub use self::{
-    ctl::*, event::*, fd_ops::*, io::*, memfd::*, mount::*, pidfd::*, pipe::*, signalfd::*, stat::*,
+    ctl::*, event::*, fanotify::*, fd_ops::*, io::*, memfd::*, mount::*, pidfd::*, pipe::*,
+    signalfd::*, stat::*,
 };
