@@ -5,27 +5,29 @@ fi
 /glibc/busybox --install -s /bin
 export PATH=/bin:$PATH
 
-mkdir -v /lib
+mkdir -vp /lib
 if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+    rm -f /lib/ld-musl-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
     ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
 elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
+    rm -f /lib/ld-musl-riscv64.so.1 /lib/ld-musl-riscv64-sf.so.1 /lib/ld-linux-riscv64-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
     ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
 fi
+rm -rf /lib64
 ln -v -s /lib /lib64
 
-mkdir -v /usr
+mkdir -vp /usr
+rm -rf /usr/lib64
 ln -v -s /lib /usr/lib64
 
 cd /
-mkdir -v var
-cd var
-mkdir -v tmp log
+mkdir -vp /var/tmp /var/log
 
 cd /
-mkdir -v etc
+mkdir -vp /etc
 echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
 echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
 echo "root:x:0:" >>/etc/group
@@ -1551,7 +1553,7 @@ lua=0
 netperf=0
 
 cd /musl
-chmod +x /basic/run-all.sh
+chmod +x ./basic/run-all.sh
 
 musl_runtime
 if [ "$basic" = 1 ]; then
@@ -1621,7 +1623,7 @@ else
 fi
 
 cd /glibc
-chmod +x /basic/run-all.sh
+chmod +x ./basic/run-all.sh
 
 glibc_runtime
 if [ "$basic" = 1 ]; then

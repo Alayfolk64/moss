@@ -1,0 +1,1731 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-05-19 11:13:01.005217700 UTC
+
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+rm: can't remove '/usr/lib64': Not a directory
+'/usr/lib64/lib' -> '/lib'
+ln: /usr/lib64/lib: File exists
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrw-rw-rw-    1 root     root          38 Jan  1  1970 [1;36mld-linux-riscv64-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-riscv64-lp64d.so.1[m
+lrw-rw-rw-    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64-sf.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrw-rw-rw-    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrw-rw-rw-    1 root     root           4 Jan  1  1970 [1;36mlib[m -> [1;34m/lib[m
+lrw-rw-rw-    1 root     root          17 Jan  1  1970 [1;36mlibc.so[m -> [1;32m/musl/lib/libc.so[m
+d---------    1 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 4K     
+-rw-r--r--    1 root     root          50 Jan  1  1970 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+LTP_CASES=accept01 accept02 accept03 accept4_01 access01 access02 access03 access04 abort01 abs01
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START lmbench-musl ####
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE access01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as nobody passed
+access01.c:242: TPASS: access(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: TPASS: access(accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
+
+Summary:
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access01 : 0
+2026-05-19-11-13-04
+RUN LTP CASE access02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+access02.c:139: TPASS: access(file_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as nobody behaviour is correct.
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+2026-05-19-11-13-06
+RUN LTP CASE access03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+2026-05-19-11-13-06
+RUN LTP CASE access04
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_accJABpEa/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+access04.c:68: TPASS: access as root : EINVAL (22)
+access04.c:68: TPASS: access as nobody : EINVAL (22)
+access04.c:68: TPASS: access as root : ENOENT (2)
+access04.c:68: TPASS: access as nobody : ENOENT (2)
+access04.c:68: TPASS: access as root : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as nobody : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as root : ENOTDIR (20)
+access04.c:68: TPASS: access as nobody : ENOTDIR (20)
+access04.c:68: TPASS: access as root : ELOOP (40)
+access04.c:68: TPASS: access as nobody : ELOOP (40)
+access04.c:68: TPASS: access as root : EROFS (30)
+access04.c:68: TPASS: access as nobody : EROFS (30)
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_accJABpEa) failed: unlink(/tmp/LTP_accJABpEa) failed; errno=21: EISDIR
+FAIL LTP CASE access04 : 0
+2026-05-19-11-13-07
+RUN LTP CASE fgetxattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fgenHiIpN/mntpoint fstyp=tmpfs flags=0
+fgetxattr01.c:102: TPASS: fgetxattr(2) passed: ENODATA (61)
+fgetxattr01.c:102: TPASS: fgetxattr(2) passed: ERANGE (34)
+fgetxattr01.c:88: TPASS: fgetxattr(2) passed
+fgetxattr01.c:98: TPASS: got the right value
+fgetxattr01.c:102: TPASS: fgetxattr(2) passed: SUCCESS (0)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr01 : 0
+2026-05-19-11-13-07
+RUN LTP CASE fgetxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+fgetxattr02.c:173: TPASS: fgetxattr(2) on testfile passed
+fgetxattr02.c:187: TPASS: fgetxattr(2) on testfile got the right value
+fgetxattr02.c:192: TPASS: fgetxattr(2) on testfile passed: SUCCESS (0)
+fgetxattr02.c:173: TPASS: fgetxattr(2) on testdir passed
+fgetxattr02.c:187: TPASS: fgetxattr(2) on testdir got the right value
+fgetxattr02.c:192: TPASS: fgetxattr(2) on testdir passed: SUCCESS (0)
+fgetxattr02.c:173: TPASS: fgetxattr(2) on symlink passed
+fgetxattr02.c:187: TPASS: fgetxattr(2) on symlink got the right value
+fgetxattr02.c:192: TPASS: fgetxattr(2) on symlink passed: SUCCESS (0)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on fifo passed: ENODATA (61)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on chr passed: ENODATA (61)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on blk passed: ENODATA (61)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on sock passed: ENODATA (61)
+
+Summary:
+passed   13
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr02 : 0
+2026-05-19-11-13-08
+RUN LTP CASE fgetxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+fgetxattr03.c:41: TPASS: fgetxattr(2) returned correct value
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr03 : 0
+2026-05-19-11-13-08
+RUN LTP CASE flistxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+flistxattr01.c:64: TPASS: flistxattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr01 : 0
+2026-05-19-11-13-09
+RUN LTP CASE flistxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+flistxattr02.c:66: TPASS: flistxattr() failed as expected: ERANGE (34)
+flistxattr02.c:66: TPASS: flistxattr() failed as expected: EBADF (9)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr02 : 0
+2026-05-19-11-13-09
+RUN LTP CASE flistxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+flistxattr03.c:53: TPASS: flistxattr() succeed with suitable buffer
+flistxattr03.c:53: TPASS: flistxattr() succeed with suitable buffer
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr03 : 0
+2026-05-19-11-13-10
+RUN LTP CASE fremovexattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_frefaKFhf/mntpoint fstyp=tmpfs flags=0
+fremovexattr01.c:66: TPASS: fremovexattr(2) removed attribute as expected
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr01 : 0
+2026-05-19-11-13-10
+RUN LTP CASE fremovexattr02
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_freFkpieM/mntpoint fstyp=tmpfs flags=0
+fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: ENODATA (61)
+fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: EBADF (9)
+fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: EFAULT (14)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+2026-05-19-11-13-11
+RUN LTP CASE fsetxattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fseNIkgNG/mntpoint fstyp=tmpfs flags=0
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EINVAL (22)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ENODATA (61)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ERANGE (34)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: E2BIG (7)
+fsetxattr01.c:164: TPASS: fsetxattr(2) passed
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EEXIST (17)
+fsetxattr01.c:164: TPASS: fsetxattr(2) passed
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ERANGE (34)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EFAULT (14)
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fsetxattr01 : 0
+2026-05-19-11-13-12
+RUN LTP CASE fsetxattr02
+tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
+tst_test.c:1229: TCONF: brd driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 2
+FAIL LTP CASE fsetxattr02 : 0
+2026-05-19-11-13-12
+RUN LTP CASE getxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+getxattr01.c:49: TPASS: getxattr(filename, tc->key, tc->value, tc->size) : ENODATA (61)
+getxattr01.c:49: TPASS: getxattr(filename, tc->key, tc->value, tc->size) : ERANGE (34)
+getxattr01.c:54: TPASS: getxattr(filename, tc->key, tc->value, tc->size) passed
+getxattr01.c:61: TPASS: getxattr() retrieved expected value
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr01 : 0
+2026-05-19-11-13-13
+RUN LTP CASE getxattr02
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getFcihAB/mntpoint fstyp=tmpfs flags=0
+getxattr02.c:85: TPASS: get attr from fifo: expected return value: ENODATA (61)
+getxattr02.c:85: TPASS: get attr from char special: expected return value: ENODATA (61)
+getxattr02.c:85: TPASS: get attr from block special: expected return value: ENODATA (61)
+getxattr02.c:85: TPASS: get attr from UNIX domain socket: expected return value: ENODATA (61)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr02 : 0
+2026-05-19-11-13-14
+RUN LTP CASE getxattr03
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getbEimGh/mntpoint fstyp=tmpfs flags=0
+getxattr03.c:28: TPASS: getxattr(FNAME, XATTR_TEST_KEY, NULL, 0) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr03 : 0
+2026-05-19-11-13-15
+RUN LTP CASE getxattr04
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1106: TINFO: Formatting /dev/loop0 with xfs opts='' extra opts=''
+tst_cmd.c:75: TCONF: Couldn't find 'mkfs.xfs' in $PATH at tst_cmd.c:75
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getxattr04 : 0
+2026-05-19-11-13-16
+RUN LTP CASE getxattr05
+tst_test.c:1175: TCONF: <sys/xattr.h> or <sys/acl.h> does not exist.
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getxattr05 : 0
+2026-05-19-11-13-16
+RUN LTP CASE listxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+listxattr01.c:63: TPASS: listxattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr01 : 0
+2026-05-19-11-13-17
+RUN LTP CASE listxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+listxattr02.c:67: TPASS: listxattr() failed as expected: ERANGE (34)
+listxattr02.c:67: TPASS: listxattr() failed as expected: ENOENT (2)
+listxattr02.c:67: TPASS: listxattr() failed as expected: EFAULT (14)
+listxattr02.c:67: TPASS: listxattr() failed as expected: ENAMETOOLONG (36)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr02 : 0
+2026-05-19-11-13-17
+RUN LTP CASE listxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+listxattr03.c:54: TPASS: listxattr() succeed with suitable buffer
+listxattr03.c:54: TPASS: listxattr() succeed with suitable buffer
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr03 : 0
+2026-05-19-11-13-18
+RUN LTP CASE llistxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+llistxattr01.c:71: TPASS: llistxattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr01 : 0
+2026-05-19-11-13-18
+RUN LTP CASE llistxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ERANGE (34)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENOENT (2)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: EFAULT (14)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENAMETOOLONG (36)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr02 : 0
+2026-05-19-11-13-20
+RUN LTP CASE llistxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr03 : 0
+2026-05-19-11-13-20
+RUN LTP CASE lgetxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+lgetxattr01.c:77: TPASS: lgetxattr() got expected value
+lgetxattr01.c:90: TPASS: lgetxattr() failed as expected: ENODATA (61)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr01 : 0
+2026-05-19-11-13-21
+RUN LTP CASE lgetxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ENODATA (61)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ERANGE (34)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: EFAULT (14)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr02 : 0
+2026-05-19-11-13-21
+RUN LTP CASE setxattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_setjDGeij/mntpoint fstyp=tmpfs flags=0
+setxattr01.c:176: TPASS: setxattr(2) failed: EINVAL (22)
+setxattr01.c:176: TPASS: setxattr(2) failed: ENODATA (61)
+setxattr01.c:176: TPASS: setxattr(2) failed: ERANGE (34)
+setxattr01.c:176: TPASS: setxattr(2) failed: E2BIG (7)
+setxattr01.c:154: TPASS: setxattr(2) passed
+setxattr01.c:176: TPASS: setxattr(2) failed: EEXIST (17)
+setxattr01.c:154: TPASS: setxattr(2) passed
+setxattr01.c:176: TPASS: setxattr(2) failed: ERANGE (34)
+setxattr01.c:176: TPASS: setxattr(2) failed: EFAULT (14)
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr01 : 0
+2026-05-19-11-13-22
+RUN LTP CASE setxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+setxattr02.c:150: TPASS: setxattr(2) on testfile passed
+setxattr02.c:150: TPASS: setxattr(2) on testdir passed
+setxattr02.c:175: TPASS: setxattr(2) on symlink failed: EEXIST (17)
+setxattr02.c:175: TPASS: setxattr(2) on fifo failed: EPERM (1)
+setxattr02.c:175: TPASS: setxattr(2) on chr failed: EPERM (1)
+setxattr02.c:175: TPASS: setxattr(2) on blk failed: EPERM (1)
+setxattr02.c:175: TPASS: setxattr(2) on sock failed: EPERM (1)
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr02 : 0
+2026-05-19-11-13-23
+RUN LTP CASE setxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+setxattr03.c:98: TPASS: Set attr to immutable file: EPERM (1)
+setxattr03.c:98: TPASS: Set attr to append-only file: EPERM (1)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr03 : 0
+2026-05-19-11-13-23
+RUN LTP CASE removexattr01
+removexattr01    1  TPASS  :  removexattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr01 : 0
+2026-05-19-11-13-24
+RUN LTP CASE removexattr02
+removexattr02    1  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENODATA(61): No data available
+removexattr02    2  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENOENT(2): No such file or directory
+removexattr02    3  TPASS  :  removexattr() failed as expected: TEST_ERRNO=EFAULT(14): Bad address
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr02 : 0
+2026-05-19-11-13-25
+RUN LTP CASE lremovexattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_lreneEcGb/mntpoint fstyp=tmpfs flags=0
+lremovexattr01.c:107: TPASS: lremovexattr(2) removed attribute as expected
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lremovexattr01 : 0
+2026-05-19-11-13-25
+#### OS COMP TEST GROUP END ltp-musl ####
+prepare musl runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE access01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK) as nobody passed
+access01.c:242: TPASS: access(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: TPASS: access(accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: TPASS: access(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: TPASS: access(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
+
+Summary:
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access01 : 0
+2026-05-19-11-13-28
+RUN LTP CASE access02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access02.c:139: TPASS: access(file_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: TPASS: access(symlink_x, X_OK) as nobody behaviour is correct.
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+2026-05-19-11-13-30
+RUN LTP CASE access03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+access03.c:37: TPASS: invalid address as root : EFAULT (14)
+access03.c:46: TPASS: invalid address as nobody : EFAULT (14)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+2026-05-19-11-13-31
+RUN LTP CASE access04
+tst_buffers.c:57: TINFO: Test is using guarded buffers
+tst_test.c:1017: TINFO: Mounting (null) to /tmp/LTP_accLIN2ti/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+access04.c:68: TPASS: access as root : EINVAL (22)
+access04.c:68: TPASS: access as nobody : EINVAL (22)
+access04.c:68: TPASS: access as root : ENOENT (2)
+access04.c:68: TPASS: access as nobody : ENOENT (2)
+access04.c:68: TPASS: access as root : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as nobody : ENAMETOOLONG (36)
+access04.c:68: TPASS: access as root : ENOTDIR (20)
+access04.c:68: TPASS: access as nobody : ENOTDIR (20)
+access04.c:68: TPASS: access as root : ELOOP (40)
+access04.c:68: TPASS: access as nobody : ELOOP (40)
+access04.c:68: TPASS: access as root : EROFS (30)
+access04.c:68: TPASS: access as nobody : EROFS (30)
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: TWARN: tst_rmdir: rmobj(/tmp/LTP_accLIN2ti) failed: unlink(/tmp/LTP_accLIN2ti) failed; errno=21: EISDIR
+FAIL LTP CASE access04 : 0
+2026-05-19-11-13-31
+RUN LTP CASE fgetxattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fge7R8H2U/mntpoint fstyp=tmpfs flags=0
+fgetxattr01.c:102: TPASS: fgetxattr(2) passed: ENODATA (61)
+fgetxattr01.c:102: TPASS: fgetxattr(2) passed: ERANGE (34)
+fgetxattr01.c:88: TPASS: fgetxattr(2) passed
+fgetxattr01.c:98: TPASS: got the right value
+fgetxattr01.c:102: TPASS: fgetxattr(2) passed: SUCCESS (0)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr01 : 0
+2026-05-19-11-13-32
+RUN LTP CASE fgetxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fgetxattr02.c:173: TPASS: fgetxattr(2) on testfile passed
+fgetxattr02.c:187: TPASS: fgetxattr(2) on testfile got the right value
+fgetxattr02.c:192: TPASS: fgetxattr(2) on testfile passed: SUCCESS (0)
+fgetxattr02.c:173: TPASS: fgetxattr(2) on testdir passed
+fgetxattr02.c:187: TPASS: fgetxattr(2) on testdir got the right value
+fgetxattr02.c:192: TPASS: fgetxattr(2) on testdir passed: SUCCESS (0)
+fgetxattr02.c:173: TPASS: fgetxattr(2) on symlink passed
+fgetxattr02.c:187: TPASS: fgetxattr(2) on symlink got the right value
+fgetxattr02.c:192: TPASS: fgetxattr(2) on symlink passed: SUCCESS (0)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on fifo passed: ENODATA (61)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on chr passed: ENODATA (61)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on blk passed: ENODATA (61)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on sock passed: ENODATA (61)
+
+Summary:
+passed   13
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr02 : 0
+2026-05-19-11-13-32
+RUN LTP CASE fgetxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+fgetxattr03.c:41: TPASS: fgetxattr(2) returned correct value
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr03 : 0
+2026-05-19-11-13-33
+RUN LTP CASE flistxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+flistxattr01.c:64: TPASS: flistxattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr01 : 0
+2026-05-19-11-13-34
+RUN LTP CASE flistxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+flistxattr02.c:66: TPASS: flistxattr() failed as expected: ERANGE (34)
+flistxattr02.c:66: TPASS: flistxattr() failed as expected: EBADF (9)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr02 : 0
+2026-05-19-11-13-34
+RUN LTP CASE flistxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+flistxattr03.c:53: TPASS: flistxattr() succeed with suitable buffer
+flistxattr03.c:53: TPASS: flistxattr() succeed with suitable buffer
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr03 : 0
+2026-05-19-11-13-35
+RUN LTP CASE fremovexattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_frer0atsl/mntpoint fstyp=tmpfs flags=0
+fremovexattr01.c:66: TPASS: fremovexattr(2) removed attribute as expected
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr01 : 0
+2026-05-19-11-13-36
+RUN LTP CASE fremovexattr02
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fre5uc9vm/mntpoint fstyp=tmpfs flags=0
+fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: ENODATA (61)
+fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: EBADF (9)
+fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: EFAULT (14)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+2026-05-19-11-13-36
+RUN LTP CASE fsetxattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fsexHtvyH/mntpoint fstyp=tmpfs flags=0
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EINVAL (22)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ENODATA (61)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ERANGE (34)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: E2BIG (7)
+fsetxattr01.c:164: TPASS: fsetxattr(2) passed
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EEXIST (17)
+fsetxattr01.c:164: TPASS: fsetxattr(2) passed
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ERANGE (34)
+fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EFAULT (14)
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fsetxattr01 : 0
+2026-05-19-11-13-37
+RUN LTP CASE fsetxattr02
+tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
+tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
+tst_test.c:1229: TCONF: brd driver not available
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 2
+FAIL LTP CASE fsetxattr02 : 0
+2026-05-19-11-13-38
+RUN LTP CASE getxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+getxattr01.c:49: TPASS: getxattr(filename, tc->key, tc->value, tc->size) : ENODATA (61)
+getxattr01.c:49: TPASS: getxattr(filename, tc->key, tc->value, tc->size) : ERANGE (34)
+getxattr01.c:54: TPASS: getxattr(filename, tc->key, tc->value, tc->size) passed
+getxattr01.c:61: TPASS: getxattr() retrieved expected value
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr01 : 0
+2026-05-19-11-13-38
+RUN LTP CASE getxattr02
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getbijAxq/mntpoint fstyp=tmpfs flags=0
+getxattr02.c:85: TPASS: get attr from fifo: expected return value: ENODATA (61)
+getxattr02.c:85: TPASS: get attr from char special: expected return value: ENODATA (61)
+getxattr02.c:85: TPASS: get attr from block special: expected return value: ENODATA (61)
+getxattr02.c:85: TPASS: get attr from UNIX domain socket: expected return value: ENODATA (61)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr02 : 0
+2026-05-19-11-13-40
+RUN LTP CASE getxattr03
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_geth7Sw9A/mntpoint fstyp=tmpfs flags=0
+getxattr03.c:28: TPASS: getxattr(FNAME, XATTR_TEST_KEY, NULL, 0) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr03 : 0
+2026-05-19-11-13-42
+RUN LTP CASE getxattr04
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1106: TINFO: Formatting /dev/loop0 with xfs opts='' extra opts=''
+tst_cmd.c:75: TCONF: Couldn't find 'mkfs.xfs' in $PATH at tst_cmd.c:75
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getxattr04 : 0
+2026-05-19-11-13-42
+RUN LTP CASE getxattr05
+tst_test.c:1175: TCONF: <sys/xattr.h> or <sys/acl.h> does not exist.
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getxattr05 : 0
+2026-05-19-11-13-44
+RUN LTP CASE listxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+listxattr01.c:63: TPASS: listxattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr01 : 0
+2026-05-19-11-13-44
+RUN LTP CASE listxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+listxattr02.c:67: TPASS: listxattr() failed as expected: ERANGE (34)
+listxattr02.c:67: TPASS: listxattr() failed as expected: ENOENT (2)
+listxattr02.c:67: TPASS: listxattr() failed as expected: EFAULT (14)
+listxattr02.c:67: TPASS: listxattr() failed as expected: ENAMETOOLONG (36)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr02 : 0
+2026-05-19-11-13-45
+RUN LTP CASE listxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+listxattr03.c:54: TPASS: listxattr() succeed with suitable buffer
+listxattr03.c:54: TPASS: listxattr() succeed with suitable buffer
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr03 : 0
+2026-05-19-11-13-47
+RUN LTP CASE llistxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+llistxattr01.c:71: TPASS: llistxattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr01 : 0
+2026-05-19-11-13-48
+RUN LTP CASE llistxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ERANGE (34)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENOENT (2)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: EFAULT (14)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENAMETOOLONG (36)
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr02 : 0
+2026-05-19-11-13-49
+RUN LTP CASE llistxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr03 : 0
+2026-05-19-11-13-50
+RUN LTP CASE lgetxattr01
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+lgetxattr01.c:77: TPASS: lgetxattr() got expected value
+lgetxattr01.c:90: TPASS: lgetxattr() failed as expected: ENODATA (61)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr01 : 0
+2026-05-19-11-13-50
+RUN LTP CASE lgetxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ENODATA (61)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ERANGE (34)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: EFAULT (14)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr02 : 0
+2026-05-19-11-13-51
+RUN LTP CASE setxattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_setFN56IE/mntpoint fstyp=tmpfs flags=0
+setxattr01.c:176: TPASS: setxattr(2) failed: EINVAL (22)
+setxattr01.c:176: TPASS: setxattr(2) failed: ENODATA (61)
+setxattr01.c:176: TPASS: setxattr(2) failed: ERANGE (34)
+setxattr01.c:176: TPASS: setxattr(2) failed: E2BIG (7)
+setxattr01.c:154: TPASS: setxattr(2) passed
+setxattr01.c:176: TPASS: setxattr(2) failed: EEXIST (17)
+setxattr01.c:154: TPASS: setxattr(2) passed
+setxattr01.c:176: TPASS: setxattr(2) failed: ERANGE (34)
+setxattr01.c:176: TPASS: setxattr(2) failed: EFAULT (14)
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr01 : 0
+2026-05-19-11-13-51
+RUN LTP CASE setxattr02
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setxattr02.c:150: TPASS: setxattr(2) on testfile passed
+setxattr02.c:150: TPASS: setxattr(2) on testdir passed
+setxattr02.c:175: TPASS: setxattr(2) on symlink failed: EEXIST (17)
+setxattr02.c:175: TPASS: setxattr(2) on fifo failed: EPERM (1)
+setxattr02.c:175: TPASS: setxattr(2) on chr failed: EPERM (1)
+setxattr02.c:175: TPASS: setxattr(2) on blk failed: EPERM (1)
+setxattr02.c:175: TPASS: setxattr(2) on sock failed: EPERM (1)
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr02 : 0
+2026-05-19-11-13-52
+RUN LTP CASE setxattr03
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+setxattr03.c:98: TPASS: Set attr to immutable file: EPERM (1)
+setxattr03.c:98: TPASS: Set attr to append-only file: EPERM (1)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr03 : 0
+2026-05-19-11-13-53
+RUN LTP CASE removexattr01
+removexattr01    1  TPASS  :  removexattr() succeeded
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr01 : 0
+2026-05-19-11-13-54
+RUN LTP CASE removexattr02
+removexattr02    1  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENODATA(61): No data available
+removexattr02    2  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENOENT(2): No such file or directory
+removexattr02    3  TPASS  :  removexattr() failed as expected: TEST_ERRNO=EFAULT(14): Bad address
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr02 : 0
+2026-05-19-11-13-55
+RUN LTP CASE lremovexattr01
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1733: TINFO: LTP version: 20240524
+tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
+tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
+tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
+tst_test.c:1693: TINFO: === Testing on tmpfs ===
+tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
+tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_lredB4OMX/mntpoint fstyp=tmpfs flags=0
+lremovexattr01.c:107: TPASS: lremovexattr(2) removed attribute as expected
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lremovexattr01 : 0
+2026-05-19-11-13-56
+#### OS COMP TEST GROUP END ltp-glibc ####
