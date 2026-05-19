@@ -11,11 +11,12 @@ mod tmp;
 use alloc::sync::Arc;
 
 use axerrno::LinuxResult;
-use axfs::{FS_CONTEXT, FsContext};
+use axfs::{FS_CONTEXT, File, FsContext};
 use axfs_ng_vfs::{
     DirNodeOps, FileNodeOps, Filesystem, NodePermission, WeakDirEntry,
     path::{Path, PathBuf},
 };
+use axio::Write;
 pub use tmp::MemoryFs;
 
 pub use self::{device::*, dir::*, file::*, fs::*};
@@ -57,6 +58,15 @@ fn mount_at(fs: &FsContext, path: &str, mount_fs: Filesystem) -> LinuxResult<()>
     Ok(())
 }
 
+fn create_static_file(fs: &FsContext, path: &str, data: &[u8]) -> LinuxResult<()> {
+    if fs.resolve(path).is_err() {
+        let file = File::create(fs, path)?;
+        let mut file = &file;
+        file.write_all(data)?;
+    }
+    Ok(())
+}
+
 /// Mount all filesystems
 pub fn mount_all() -> LinuxResult<()> {
     info!("Initialize pseudofs...");
@@ -77,6 +87,16 @@ pub fn mount_all() -> LinuxResult<()> {
     }
     path.push("subsystem");
     fs.symlink("whatever", &path)?;
+
+    let mut path = PathBuf::new();
+    for comp in Path::new("/sys/block/loop0/queue").components() {
+        path.push(comp.as_str());
+        if fs.resolve(&path).is_err() {
+            fs.create_dir(&path, DIR_PERMISSION)?;
+        }
+    }
+    create_static_file(&fs, "/sys/block/loop0/queue/logical_block_size", b"512\n")?;
+    create_static_file(&fs, "/sys/block/loop0/queue/dma_alignment", b"0\n")?;
     drop(fs);
 
     #[cfg(feature = "dev-log")]

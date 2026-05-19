@@ -5,8 +5,9 @@ use axfs::FS_CONTEXT;
 use axfs_ng_vfs::Location;
 use axtask::current;
 use linux_raw_sys::general::{
-    __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, MS_RDONLY, R_OK, W_OK, X_OK,
-    stat, statfs, statx,
+    __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
+    AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_NOFOLLOW, MS_RDONLY, R_OK, STATX__RESERVED,
+    W_OK, X_OK, stat, statfs, statx,
 };
 use starry_vm::{VmMutPtr, VmPtr};
 
@@ -63,7 +64,7 @@ pub fn sys_statx(
     dirfd: c_int,
     path: *const c_char,
     flags: u32,
-    _mask: u32,
+    mask: u32,
     statxbuf: *mut statx,
 ) -> AxResult<isize> {
     // `statx()` uses pathname, dirfd, and flags to identify the target
@@ -92,6 +93,15 @@ pub fn sys_statx(
     //        and the AT_EMPTY_PATH flag is specified in flags (see
     //        below), then the target file is the one referred to by the
     //        file descriptor dirfd.
+
+    let valid_flags = AT_EMPTY_PATH | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW | AT_STATX_SYNC_TYPE;
+    let sync_flags = flags & AT_STATX_SYNC_TYPE;
+    if flags & !valid_flags != 0
+        || !matches!(sync_flags, 0 | AT_STATX_FORCE_SYNC | AT_STATX_DONT_SYNC)
+        || mask & STATX__RESERVED != 0
+    {
+        return Err(AxError::InvalidInput);
+    }
 
     let path = path.nullable().map(vm_load_string).transpose()?;
     debug!("sys_statx <= dirfd: {dirfd}, path: {path:?}, flags: {flags}");

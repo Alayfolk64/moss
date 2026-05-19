@@ -16,6 +16,9 @@ mod fs;
 mod highlevel;
 pub use highlevel::*;
 
+#[cfg(feature = "ext4")]
+pub use fs::ext4::Inode as Ext4Inode;
+
 pub fn new_filesystem_from_block_device(dev: AxBlockDevice) -> axfs_ng_vfs::VfsResult<axfs_ng_vfs::Filesystem> {
     fs::new_default(dev)
 }

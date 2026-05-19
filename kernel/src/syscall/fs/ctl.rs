@@ -1,4 +1,4 @@
-use alloc::{ffi::CString, vec, vec::Vec};
+use alloc::{ffi::CString, string::ToString, vec, vec::Vec};
 use core::{
     ffi::{c_char, c_int},
     mem::offset_of,
@@ -7,17 +7,20 @@ use core::{
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FsContext};
-use axfs_ng_vfs::{MetadataUpdate, NodePermission, NodeType, path::Path};
+use axfs_ng_vfs::{DeviceId, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::wall_time;
 use axtask::current;
 use linux_raw_sys::{
     general::*,
-    ioctl::{FIONBIO, TCGETA, TCGETS, TCGETS2, TIOCGWINSZ},
+    ioctl::{FIONBIO, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS, TCGETA, TCGETS, TCGETS2, TIOCGWINSZ},
 };
-use starry_vm::{VmPtr, vm_write_slice};
+use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use crate::{
-    file::{Directory, File, FileLike, get_file_like, resolve_at, with_fs},
+    file::{
+        Directory, File, FileLike, get_file_like, inode_flags, register_special_node, resolve_at,
+        set_inode_flags, with_fs,
+    },
     mm::vm_load_string,
     task::AsThread,
     time::TimeValueLike,
@@ -34,6 +37,15 @@ pub fn sys_ioctl(fd: i32, cmd: u32, arg: usize) -> AxResult<isize> {
             return Err(AxError::InvalidInput);
         }
         f.set_nonblocking(val != 0)?;
+        return Ok(0);
+    }
+    if cmd == FS_IOC_GETFLAGS {
+        (arg as *mut u32).vm_write(inode_flags(f.path().as_ref()))?;
+        return Ok(0);
+    }
+    if cmd == FS_IOC_SETFLAGS {
+        let flags = (arg as *const u32).vm_read()?;
+        set_inode_flags(f.path().to_string(), flags);
         return Ok(0);
     }
     f.ioctl(cmd, arg)
@@ -97,6 +109,105 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
         fs.create_dir(path, mode)?;
         Ok(0)
     })
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn sys_mknod(path: *const c_char, mode: u32, dev: u64) -> AxResult<isize> {
+    sys_mknodat(AT_FDCWD, path, mode, dev)
+}
+
+fn dev_id_from_raw(dev: u64) -> DeviceId {
+    let major = ((dev >> 8) & 0x0000_0fff) | ((dev >> 32) & 0xffff_f000);
+    let minor = (dev & 0x0000_00ff) | ((dev >> 12) & 0xffff_ff00);
+    DeviceId::new(major as _, minor as _)
+}
+
+pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxResult<isize> {
+    let path = vm_load_string(path)?;
+    debug!("sys_mknodat <= dirfd: {dirfd}, path: {path:?}, mode: {mode:#o}, dev: {dev:#x}");
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
+
+    let node_type = match mode & S_IFMT {
+        0 | S_IFREG => NodeType::RegularFile,
+        S_IFIFO => NodeType::Fifo,
+        S_IFCHR => NodeType::CharacterDevice,
+        S_IFBLK => NodeType::BlockDevice,
+        S_IFSOCK => NodeType::Socket,
+        _ => return Err(AxError::InvalidInput),
+    };
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let mode = mode & !proc_data.umask();
+    let permission = NodePermission::from_bits_truncate(mode as u16);
+    let special = matches!(node_type, NodeType::CharacterDevice | NodeType::BlockDevice);
+    let euid = proc_data.euid();
+    let egid = proc_data.egid();
+
+    if special && euid != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+
+    let loc = with_fs(dirfd, |fs| {
+        let (dir, name) = fs.resolve_nonexistent(Path::new(path.as_str()))?;
+        let dir_stat = dir.metadata()?;
+        if dir.filesystem().stat()?.mount_flags & MS_RDONLY != 0 {
+            return Err(AxError::ReadOnlyFilesystem);
+        }
+        if euid != 0
+            && !can_write_dir(
+                dir_stat.mode.bits() as u32,
+                dir_stat.uid,
+                dir_stat.gid,
+                euid,
+                egid,
+            )
+        {
+            return Err(AxError::PermissionDenied);
+        }
+        let gid = if dir_stat.mode.contains(NodePermission::SET_GID) {
+            dir_stat.gid
+        } else {
+            egid
+        };
+        match dir.create(name, node_type, permission) {
+            Ok(loc) => {
+                loc.update_metadata(MetadataUpdate {
+                    owner: Some((euid, gid)),
+                    ..Default::default()
+                })?;
+                Ok(loc)
+            }
+            Err(_) if special => {
+                let loc = dir.create(name, NodeType::RegularFile, permission)?;
+                loc.update_metadata(MetadataUpdate {
+                    owner: Some((euid, gid)),
+                    ..Default::default()
+                })?;
+                Ok(loc)
+            }
+            Err(err) => Err(err.into()),
+        }
+    })?;
+
+    if special && let Ok(path) = loc.absolute_path() {
+        register_special_node(path.to_string(), mode, dev_id_from_raw(dev));
+    }
+
+    Ok(0)
+}
+
+fn can_write_dir(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
+    let shift = if euid == uid {
+        6
+    } else if egid == gid {
+        3
+    } else {
+        0
+    };
+    let required = 0o3 << shift;
+    mode & required == required
 }
 
 // Directory buffer for getdents64 syscall

@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, string::ToString, sync::Arc};
+use alloc::{borrow::Cow, collections::BTreeMap, string::String, string::ToString, sync::Arc};
 use core::{
     ffi::c_int,
     hint::likely,
@@ -13,11 +13,37 @@ use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::future::{block_on, poll_io};
 use linux_raw_sys::general::{
-    AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, O_APPEND, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY,
+    AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, FS_APPEND_FL, FS_COMPR_FL, FS_IMMUTABLE_FL,
+    FS_NODUMP_FL, O_APPEND, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY, STATX_ATTR_MOUNT_ROOT,
 };
+use spin::RwLock;
 
 use super::{FileLike, Kstat, get_file_like};
 use crate::file::{IoDst, IoSrc};
+
+#[derive(Clone, Copy)]
+struct SpecialNodeMetadata {
+    mode: u32,
+    rdev: axfs_ng_vfs::DeviceId,
+}
+
+static SPECIAL_NODES: RwLock<BTreeMap<String, SpecialNodeMetadata>> = RwLock::new(BTreeMap::new());
+static INODE_FLAGS: RwLock<BTreeMap<String, u32>> = RwLock::new(BTreeMap::new());
+
+pub fn register_special_node(path: String, mode: u32, rdev: axfs_ng_vfs::DeviceId) {
+    SPECIAL_NODES
+        .write()
+        .insert(path, SpecialNodeMetadata { mode, rdev });
+}
+
+pub fn inode_flags(path: &str) -> u32 {
+    *INODE_FLAGS.read().get(path).unwrap_or(&0)
+}
+
+pub fn set_inode_flags(path: String, flags: u32) {
+    const SUPPORTED: u32 = FS_COMPR_FL | FS_IMMUTABLE_FL | FS_APPEND_FL | FS_NODUMP_FL;
+    INODE_FLAGS.write().insert(path, flags & SUPPORTED);
+}
 
 pub fn with_fs<R>(dirfd: c_int, f: impl FnOnce(&mut FsContext) -> AxResult<R>) -> AxResult<R> {
     let mut fs = FS_CONTEXT.lock();
@@ -44,7 +70,23 @@ impl ResolveAtResult {
 
     pub fn stat(&self) -> AxResult<Kstat> {
         match self {
-            Self::File(file) => file.metadata().map(|it| metadata_to_kstat(&it)),
+            Self::File(file) => {
+                let mut stat = file.metadata().map(|it| metadata_to_kstat(&it))?;
+                if let Ok(path) = file.absolute_path()
+                    && let Some(special) = SPECIAL_NODES.read().get(path.as_str()).copied()
+                {
+                    stat.mode = special.mode;
+                    stat.rdev = special.rdev;
+                }
+                if let Ok(path) = file.absolute_path() {
+                    let path = path.as_str();
+                    stat.attributes |= inode_flags(path) as u64;
+                    if file.is_root_of_mount() {
+                        stat.attributes |= STATX_ATTR_MOUNT_ROOT as u64;
+                    }
+                }
+                Ok(stat)
+            }
             Self::Other(file_like) => file_like.stat(),
         }
     }
@@ -92,7 +134,10 @@ pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
         blksize: metadata.block_size as _,
         blocks: metadata.blocks,
         rdev: metadata.rdev,
+        attributes: 0,
+        attributes_mask: 0,
         atime: metadata.atime,
+        btime: metadata.ctime,
         mtime: metadata.mtime,
         ctime: metadata.ctime,
     }

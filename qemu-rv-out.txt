@@ -77,7 +77,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-10 08:07:16.001682600 UTC
+Boot at 2026-05-18 06:11:28.002994200 UTC
 
 @@@@@@@@@@ setup @@@@@@@@@@
 created directory: '/bin'
@@ -125,8 +125,203 @@ PWD=/
 prepare musl runtime
 '/lib/libc.so' -> '/musl/lib/libc.so'
 #### OS COMP TEST GROUP START basic-musl ####
+./basic_testcode.sh: line 3: ./run-all.sh: Permission denied
 #### OS COMP TEST GROUP END basic-musl ####
 #### OS COMP TEST GROUP START busybox-musl ####
+#### independent command test
+testcase busybox echo "#### independent command test" success
+testcase busybox ash -c exit success
+testcase busybox sh -c exit success
+bbb
+testcase busybox basename /aaa/bbb success
+      May 2026
+Su Mo Tu We Th Fr Sa
+                1  2
+ 3  4  5  6  7  8  9
+10 11 12 13 14 15 16
+17 18 19 20 21 22 23
+24 25 26 27 28 29 30
+31
+testcase busybox cal success
+[H[Jtestcase busybox clear success
+Mon May 18 06:11:31 UTC 2026
+testcase busybox date success
+Filesystem           1K-blocks      Used Available Use% Mounted on
+proc                        50         0        50   0% /proc
+testcase busybox df success
+/aaa
+testcase busybox dirname /aaa/bbb success
+testcase busybox dmesg success
+4	./basic/mnt
+1956	./basic
+952	./lib
+200	./ltp/bin
+392	./ltp/runtest
+12	./ltp/scenario_groups
+40	./ltp/testscripts
+76	./ltp/testcases/bin/ftrace_stress
+2652	./ltp/testcases/bin/datafiles
+1453044	./ltp/testcases/bin
+24	./ltp/testcases/data/ar01
+96	./ltp/testcases/data/file01
+24	./ltp/testcases/data/ld01
+76	./ltp/testcases/data/ldd01
+60	./ltp/testcases/data/nm01
+12	./ltp/testcases/data/unzip01
+12	./ltp/testcases/data/binfmt_misc02
+8	./ltp/testcases/data/ima_kexec
+12	./ltp/testcases/data/ima_keys
+12	./ltp/testcases/data/ima_policy
+8	./ltp/testcases/data/ima_selinux
+12	./ltp/testcases/data/lvm
+12	./ltp/testcases/data/mc_member
+372	./ltp/testcases/data
+1453420	./ltp/testcases
+208	./ltp/libkirk
+528	./ltp/metadata
+1454984	./ltp
+1464884	.
+testcase busybox du success
+2
+testcase busybox expr 1 + 1 success
+testcase busybox false success
+testcase busybox true success
+/bin/ls
+testcase busybox which ls success
+Linux
+testcase busybox uname success
+ 06:11:32 up 0 min,  0 users,  load average: 0.00, 0.00, 0.00
+testcase busybox uptime success
+abcntestcase busybox printf "abcn" success
+PID   USER     TIME  COMMAND
+    6 root      0:02 /musl/busybox sh -c if ! /glibc/busybox test -d /bin; then
+   32 root      0:00 ./busybox_testcode.sh
+   35 root      0:01 ./busybox_testcode.sh
+   54 root      0:00 ./busybox ps
+testcase busybox ps success
+/musl
+testcase busybox pwd success
+              total        used        free      shared  buff/cache   available
+Mem:              0 18014398494685956           0           0    14796028    18768344
+Swap:             0           0           0
+testcase busybox free success
+Mon May 18 06:11:32 2026  0.000000 seconds
+testcase busybox hwclock success
+testcase busybox sh -c 'sleep 5' & ./busybox kill $! success
+[1;32marithoh[m                 [1;32miperf3[m                  [1;34mltp[m
+[1;34mbasic[m                   [1;32miperf_testcode.sh[m       [1;32mltp_testcode.sh[m
+[1;32mbasic_testcode.sh[m       [1;32mlat_cmd[m                 [1;32mlua[m
+[1;32mbusy[m                    [1;32mlat_connect[m             [1;32mlua_testcode.sh[m
+[1;32mbusybox[m                 [1;32mlat_ctx[m                 [1;32mmax_min.lua[m
+[0;0mbusybox_cmd.txt[m         [1;32mlat_dram_page[m           [1;32mmemsize[m
+[1;32mbusybox_testcode.sh[m     [1;32mlat_fcntl[m               [1;32mmhz[m
+[1;32mbw_file_rd[m              [1;32mlat_fifo[m                [1;32mmsleep[m
+[1;32mbw_mem[m                  [1;32mlat_fs[m                  [0;0mmulti.sh[m
+[1;32mbw_mmap_rd[m              [1;32mlat_http[m                [1;32mnetperf[m
+[1;32mbw_pipe[m                 [1;32mlat_mem_rd[m              [1;32mnetperf_testcode.sh[m
+[1;32mbw_tcp[m                  [1;32mlat_mmap[m                [1;32mnetserver[m
+[1;32mbw_unix[m                 [1;32mlat_ops[m                 [1;32mpar_mem[m
+[1;32mcache[m                   [1;32mlat_pagefault[m           [1;32mpar_ops[m
+[1;32mclock[m                   [1;32mlat_pipe[m                [1;32mpipe[m
+[1;32mcontext1[m                [1;32mlat_pmake[m               [1;32mrandom.lua[m
+[1;32mcyclictest[m              [1;32mlat_proc[m                [1;32mregister[m
+[1;32mcyclictest_testcode.sh[m  [1;32mlat_rand[m                [1;32mremove.lua[m
+[1;32mdate.lua[m                [1;32mlat_rpc[m                 [1;32mrhttp[m
+[1;32mdhry2[m                   [1;32mlat_select[m              [1;32mround_num.lua[m
+[1;32mdhry2reg[m                [1;32mlat_sem[m                 [1;32mrun-dynamic.sh[m
+[1;32mdisk[m                    [1;32mlat_sig[m                 [1;32mrun-static.sh[m
+[1;32mdlopen_dso.so[m           [1;32mlat_syscall[m             [1;32mruntest.exe[m
+[1;32mdouble[m                  [1;32mlat_tcp[m                 [1;32mseek[m
+[1;32menough[m                  [1;32mlat_udp[m                 [1;32mshort[m
+[1;32mentry-dynamic.exe[m       [1;32mlat_unix[m                [1;32msin30.lua[m
+[1;32mentry-static.exe[m        [1;32mlat_unix_connect[m        [1;32msort.lua[m
+[1;32mexecl[m                   [1;32mlat_usleep[m              [1;32mspawn[m
+[1;32mfile_io.lua[m             [1;34mlib[m                     [1;32mstream[m
+[1;32mfloat[m                   [1;32mlibc-bench[m              [1;32mstrings.lua[m
+[1;32mflushdisk[m               [1;32mlibcbench_testcode.sh[m   [1;32msyscall[m
+[1;32mfstime[m                  [1;32mlibctest_testcode.sh[m    [1;32mtest.sh[m
+[1;32mgetopt[m                  [1;32mline[m                    [1;32mtiming_o[m
+[0;0mgfx-x11[m                 [1;32mlmbench[m                 [1;32mtlb[m
+[1;32mhackbench[m               [1;32mlmbench_all[m             [1;32mtls_get_new-dtv_dso.so[m
+[1;32mhanoi[m                   [1;32mlmbench_testcode.sh[m     [0;0mtst.sh[m
+[1;32mhello[m                   [1;32mlmdd[m                    [0;0munixbench.logo[m
+[0;0mindex.base[m              [1;32mlmhttp[m                  [1;32munixbench_testcode.sh[m
+[1;32mint[m                     [1;32mlong[m                    [1;32mwhetstone-double[m
+[1;32miozone[m                  [1;32mloop_o[m
+[1;32miozone_testcode.sh[m      [1;32mlooper[m
+testcase busybox ls success
+testcase busybox sleep 1 success
+#### file opration test
+testcase busybox echo "#### file opration test" success
+testcase busybox touch test.txt success
+testcase busybox echo "hello world" > test.txt success
+hello world
+testcase busybox cat test.txt success
+l
+testcase busybox cut -c 3 test.txt success
+0000000 062550 066154 020157 067567 066162 005144
+0000014
+testcase busybox od test.txt success
+hello world
+testcase busybox head test.txt success
+hello world
+testcase busybox tail test.txt success
+00000000  68 65 6c 6c 6f 20 77 6f  72 6c 64 0a              |hello world.|
+0000000c
+testcase busybox hexdump -C test.txt success
+6f5902ac237024bdd0c176cb93063dc4  test.txt
+testcase busybox md5sum test.txt success
+testcase busybox echo "ccccccc" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+testcase busybox echo "aaaaaaa" >> test.txt success
+testcase busybox echo "2222222" >> test.txt success
+testcase busybox echo "1111111" >> test.txt success
+testcase busybox echo "bbbbbbb" >> test.txt success
+1111111
+2222222
+aaaaaaa
+bbbbbbb
+ccccccc
+hello world
+testcase busybox sort test.txt | ./busybox uniq success
+  File: test.txt
+  Size: 60        	Blocks: 8          IO Block: 4096   regular file
+Device: 1h/1d	Inode: 3635        Links: 1
+Access: (0644/-rw-r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 1970-01-01 00:00:00.000000000 +0000
+Modify: 1970-01-01 00:00:00.000000000 +0000
+Change: 1970-01-01 00:00:00.000000000 +0000
+testcase busybox stat test.txt success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox strings test.txt success
+        7         8        60 test.txt
+testcase busybox wc test.txt success
+testcase busybox [ -f test.txt ] success
+hello world
+ccccccc
+bbbbbbb
+aaaaaaa
+2222222
+1111111
+bbbbbbb
+testcase busybox more test.txt success
+testcase busybox rm test.txt success
+testcase busybox mkdir test_dir success
+testcase busybox mv test_dir test success
+testcase busybox rmdir test success
+echo "hello world" > test.txt
+grep hello busybox_cmd.txt
+testcase busybox grep hello busybox_cmd.txt success
+testcase busybox cp busybox_cmd.txt busybox_cmd.bak success
+testcase busybox rm busybox_cmd.bak success
+./busybox_cmd.txt
+testcase busybox find -name "busybox_cmd.txt" success
 #### OS COMP TEST GROUP END busybox-musl ####
 #### OS COMP TEST GROUP START cyclictest-musl ####
 #### OS COMP TEST GROUP END cyclictest-musl ####
@@ -137,6 +332,659 @@ prepare musl runtime
 #### OS COMP TEST GROUP START libcbench-musl ####
 #### OS COMP TEST GROUP END libcbench-musl ####
 #### OS COMP TEST GROUP START libctest-musl ####
+========== START entry-static.exe argv ==========
+Pass!
+========== END entry-static.exe argv ==========
+========== START entry-static.exe basename ==========
+Pass!
+========== END entry-static.exe basename ==========
+========== START entry-static.exe clocale_mbfuncs ==========
+Pass!
+========== END entry-static.exe clocale_mbfuncs ==========
+========== START entry-static.exe clock_gettime ==========
+Pass!
+========== END entry-static.exe clock_gettime ==========
+========== START entry-static.exe dirname ==========
+Pass!
+========== END entry-static.exe dirname ==========
+========== START entry-static.exe env ==========
+Pass!
+========== END entry-static.exe env ==========
+========== START entry-static.exe fdopen ==========
+Pass!
+========== END entry-static.exe fdopen ==========
+========== START entry-static.exe fnmatch ==========
+Pass!
+========== END entry-static.exe fnmatch ==========
+========== START entry-static.exe fscanf ==========
+Pass!
+========== END entry-static.exe fscanf ==========
+========== START entry-static.exe fwscanf ==========
+Pass!
+========== END entry-static.exe fwscanf ==========
+========== START entry-static.exe iconv_open ==========
+Pass!
+========== END entry-static.exe iconv_open ==========
+========== START entry-static.exe inet_pton ==========
+Pass!
+========== END entry-static.exe inet_pton ==========
+========== START entry-static.exe mbc ==========
+Pass!
+========== END entry-static.exe mbc ==========
+========== START entry-static.exe memstream ==========
+Pass!
+========== END entry-static.exe memstream ==========
+========== START entry-static.exe pthread_cancel_points ==========
+Pass!
+========== END entry-static.exe pthread_cancel_points ==========
+========== START entry-static.exe pthread_cancel ==========
+Pass!
+========== END entry-static.exe pthread_cancel ==========
+========== START entry-static.exe pthread_cond ==========
+Pass!
+========== END entry-static.exe pthread_cond ==========
+========== START entry-static.exe pthread_tsd ==========
+Pass!
+========== END entry-static.exe pthread_tsd ==========
+========== START entry-static.exe qsort ==========
+Pass!
+========== END entry-static.exe qsort ==========
+========== START entry-static.exe random ==========
+Pass!
+========== END entry-static.exe random ==========
+========== START entry-static.exe search_hsearch ==========
+Pass!
+========== END entry-static.exe search_hsearch ==========
+========== START entry-static.exe search_insque ==========
+Pass!
+========== END entry-static.exe search_insque ==========
+========== START entry-static.exe search_lsearch ==========
+Pass!
+========== END entry-static.exe search_lsearch ==========
+========== START entry-static.exe search_tsearch ==========
+Pass!
+========== END entry-static.exe search_tsearch ==========
+========== START entry-static.exe setjmp ==========
+Pass!
+========== END entry-static.exe setjmp ==========
+========== START entry-static.exe snprintf ==========
+Pass!
+========== END entry-static.exe snprintf ==========
+========== START entry-static.exe socket ==========
+Pass!
+========== END entry-static.exe socket ==========
+========== START entry-static.exe sscanf ==========
+Pass!
+========== END entry-static.exe sscanf ==========
+========== START entry-static.exe sscanf_long ==========
+Pass!
+========== END entry-static.exe sscanf_long ==========
+========== START entry-static.exe stat ==========
+Pass!
+========== END entry-static.exe stat ==========
+========== START entry-static.exe strftime ==========
+Pass!
+========== END entry-static.exe strftime ==========
+========== START entry-static.exe string ==========
+Pass!
+========== END entry-static.exe string ==========
+========== START entry-static.exe string_memcpy ==========
+Pass!
+========== END entry-static.exe string_memcpy ==========
+========== START entry-static.exe string_memmem ==========
+Pass!
+========== END entry-static.exe string_memmem ==========
+========== START entry-static.exe string_memset ==========
+Pass!
+========== END entry-static.exe string_memset ==========
+========== START entry-static.exe string_strchr ==========
+Pass!
+========== END entry-static.exe string_strchr ==========
+========== START entry-static.exe string_strcspn ==========
+Pass!
+========== END entry-static.exe string_strcspn ==========
+========== START entry-static.exe string_strstr ==========
+Pass!
+========== END entry-static.exe string_strstr ==========
+========== START entry-static.exe strptime ==========
+Pass!
+========== END entry-static.exe strptime ==========
+========== START entry-static.exe strtod ==========
+Pass!
+========== END entry-static.exe strtod ==========
+========== START entry-static.exe strtod_simple ==========
+Pass!
+========== END entry-static.exe strtod_simple ==========
+========== START entry-static.exe strtof ==========
+Pass!
+========== END entry-static.exe strtof ==========
+========== START entry-static.exe strtol ==========
+Pass!
+========== END entry-static.exe strtol ==========
+========== START entry-static.exe strtold ==========
+Pass!
+========== END entry-static.exe strtold ==========
+========== START entry-static.exe swprintf ==========
+Pass!
+========== END entry-static.exe swprintf ==========
+========== START entry-static.exe tgmath ==========
+Pass!
+========== END entry-static.exe tgmath ==========
+========== START entry-static.exe time ==========
+Pass!
+========== END entry-static.exe time ==========
+========== START entry-static.exe tls_align ==========
+Pass!
+========== END entry-static.exe tls_align ==========
+========== START entry-static.exe udiv ==========
+Pass!
+========== END entry-static.exe udiv ==========
+========== START entry-static.exe ungetc ==========
+Pass!
+========== END entry-static.exe ungetc ==========
+========== START entry-static.exe utime ==========
+Pass!
+========== END entry-static.exe utime ==========
+========== START entry-static.exe wcsstr ==========
+Pass!
+========== END entry-static.exe wcsstr ==========
+========== START entry-static.exe wcstol ==========
+Pass!
+========== END entry-static.exe wcstol ==========
+========== START entry-static.exe daemon_failure ==========
+Pass!
+========== END entry-static.exe daemon_failure ==========
+========== START entry-static.exe dn_expand_empty ==========
+Pass!
+========== END entry-static.exe dn_expand_empty ==========
+========== START entry-static.exe dn_expand_ptr_0 ==========
+Pass!
+========== END entry-static.exe dn_expand_ptr_0 ==========
+========== START entry-static.exe fflush_exit ==========
+Pass!
+========== END entry-static.exe fflush_exit ==========
+========== START entry-static.exe fgets_eof ==========
+Pass!
+========== END entry-static.exe fgets_eof ==========
+========== START entry-static.exe fgetwc_buffering ==========
+Pass!
+========== END entry-static.exe fgetwc_buffering ==========
+========== START entry-static.exe fpclassify_invalid_ld80 ==========
+Pass!
+========== END entry-static.exe fpclassify_invalid_ld80 ==========
+========== START entry-static.exe ftello_unflushed_append ==========
+Pass!
+========== END entry-static.exe ftello_unflushed_append ==========
+========== START entry-static.exe getpwnam_r_crash ==========
+Pass!
+========== END entry-static.exe getpwnam_r_crash ==========
+========== START entry-static.exe getpwnam_r_errno ==========
+Pass!
+========== END entry-static.exe getpwnam_r_errno ==========
+========== START entry-static.exe iconv_roundtrips ==========
+Pass!
+========== END entry-static.exe iconv_roundtrips ==========
+========== START entry-static.exe inet_ntop_v4mapped ==========
+Pass!
+========== END entry-static.exe inet_ntop_v4mapped ==========
+========== START entry-static.exe inet_pton_empty_last_field ==========
+Pass!
+========== END entry-static.exe inet_pton_empty_last_field ==========
+========== START entry-static.exe iswspace_null ==========
+Pass!
+========== END entry-static.exe iswspace_null ==========
+========== START entry-static.exe lrand48_signextend ==========
+Pass!
+========== END entry-static.exe lrand48_signextend ==========
+========== START entry-static.exe lseek_large ==========
+Pass!
+========== END entry-static.exe lseek_large ==========
+========== START entry-static.exe malloc_0 ==========
+Pass!
+========== END entry-static.exe malloc_0 ==========
+========== START entry-static.exe mbsrtowcs_overflow ==========
+Pass!
+========== END entry-static.exe mbsrtowcs_overflow ==========
+========== START entry-static.exe memmem_oob_read ==========
+Pass!
+========== END entry-static.exe memmem_oob_read ==========
+========== START entry-static.exe memmem_oob ==========
+Pass!
+========== END entry-static.exe memmem_oob ==========
+========== START entry-static.exe mkdtemp_failure ==========
+Pass!
+========== END entry-static.exe mkdtemp_failure ==========
+========== START entry-static.exe mkstemp_failure ==========
+Pass!
+========== END entry-static.exe mkstemp_failure ==========
+========== START entry-static.exe printf_1e9_oob ==========
+Pass!
+========== END entry-static.exe printf_1e9_oob ==========
+========== START entry-static.exe printf_fmt_g_round ==========
+Pass!
+========== END entry-static.exe printf_fmt_g_round ==========
+========== START entry-static.exe printf_fmt_g_zeros ==========
+Pass!
+========== END entry-static.exe printf_fmt_g_zeros ==========
+========== START entry-static.exe printf_fmt_n ==========
+Pass!
+========== END entry-static.exe printf_fmt_n ==========
+========== START entry-static.exe pthread_robust_detach ==========
+[37m[ 14.296296 0:278 starry_kernel::task::ops:230] [33mexit robust list failed: AxErrorKind::BadAddress[m
+[mPass!
+========== END entry-static.exe pthread_robust_detach ==========
+========== START entry-static.exe pthread_cancel_sem_wait ==========
+Pass!
+========== END entry-static.exe pthread_cancel_sem_wait ==========
+========== START entry-static.exe pthread_cond_smasher ==========
+Pass!
+========== END entry-static.exe pthread_cond_smasher ==========
+========== START entry-static.exe pthread_condattr_setclock ==========
+Pass!
+========== END entry-static.exe pthread_condattr_setclock ==========
+========== START entry-static.exe pthread_exit_cancel ==========
+Pass!
+========== END entry-static.exe pthread_exit_cancel ==========
+========== START entry-static.exe pthread_once_deadlock ==========
+Pass!
+========== END entry-static.exe pthread_once_deadlock ==========
+========== START entry-static.exe pthread_rwlock_ebusy ==========
+Pass!
+========== END entry-static.exe pthread_rwlock_ebusy ==========
+========== START entry-static.exe putenv_doublefree ==========
+Pass!
+========== END entry-static.exe putenv_doublefree ==========
+========== START entry-static.exe regex_backref_0 ==========
+Pass!
+========== END entry-static.exe regex_backref_0 ==========
+========== START entry-static.exe regex_bracket_icase ==========
+Pass!
+========== END entry-static.exe regex_bracket_icase ==========
+========== START entry-static.exe regex_ere_backref ==========
+Pass!
+========== END entry-static.exe regex_ere_backref ==========
+========== START entry-static.exe regex_escaped_high_byte ==========
+Pass!
+========== END entry-static.exe regex_escaped_high_byte ==========
+========== START entry-static.exe regex_negated_range ==========
+Pass!
+========== END entry-static.exe regex_negated_range ==========
+========== START entry-static.exe regexec_nosub ==========
+Pass!
+========== END entry-static.exe regexec_nosub ==========
+========== START entry-static.exe rewind_clear_error ==========
+Pass!
+========== END entry-static.exe rewind_clear_error ==========
+========== START entry-static.exe rlimit_open_files ==========
+Pass!
+========== END entry-static.exe rlimit_open_files ==========
+========== START entry-static.exe scanf_bytes_consumed ==========
+Pass!
+========== END entry-static.exe scanf_bytes_consumed ==========
+========== START entry-static.exe scanf_match_literal_eof ==========
+Pass!
+========== END entry-static.exe scanf_match_literal_eof ==========
+========== START entry-static.exe scanf_nullbyte_char ==========
+Pass!
+========== END entry-static.exe scanf_nullbyte_char ==========
+========== START entry-static.exe setvbuf_unget ==========
+Pass!
+========== END entry-static.exe setvbuf_unget ==========
+========== START entry-static.exe sigprocmask_internal ==========
+Pass!
+========== END entry-static.exe sigprocmask_internal ==========
+========== START entry-static.exe sscanf_eof ==========
+Pass!
+========== END entry-static.exe sscanf_eof ==========
+========== START entry-static.exe statvfs ==========
+Pass!
+========== END entry-static.exe statvfs ==========
+========== START entry-static.exe strverscmp ==========
+Pass!
+========== END entry-static.exe strverscmp ==========
+========== START entry-static.exe syscall_sign_extend ==========
+Pass!
+========== END entry-static.exe syscall_sign_extend ==========
+========== START entry-static.exe uselocale_0 ==========
+Pass!
+========== END entry-static.exe uselocale_0 ==========
+========== START entry-static.exe wcsncpy_read_overflow ==========
+Pass!
+========== END entry-static.exe wcsncpy_read_overflow ==========
+========== START entry-static.exe wcsstr_false_negative ==========
+Pass!
+========== END entry-static.exe wcsstr_false_negative ==========
+========== START entry-dynamic.exe argv ==========
+Pass!
+========== END entry-dynamic.exe argv ==========
+========== START entry-dynamic.exe basename ==========
+Pass!
+========== END entry-dynamic.exe basename ==========
+========== START entry-dynamic.exe clocale_mbfuncs ==========
+Pass!
+========== END entry-dynamic.exe clocale_mbfuncs ==========
+========== START entry-dynamic.exe clock_gettime ==========
+Pass!
+========== END entry-dynamic.exe clock_gettime ==========
+========== START entry-dynamic.exe dirname ==========
+Pass!
+========== END entry-dynamic.exe dirname ==========
+========== START entry-dynamic.exe dlopen ==========
+Pass!
+========== END entry-dynamic.exe dlopen ==========
+========== START entry-dynamic.exe env ==========
+Pass!
+========== END entry-dynamic.exe env ==========
+========== START entry-dynamic.exe fdopen ==========
+Pass!
+========== END entry-dynamic.exe fdopen ==========
+========== START entry-dynamic.exe fnmatch ==========
+Pass!
+========== END entry-dynamic.exe fnmatch ==========
+========== START entry-dynamic.exe fscanf ==========
+Pass!
+========== END entry-dynamic.exe fscanf ==========
+========== START entry-dynamic.exe fwscanf ==========
+Pass!
+========== END entry-dynamic.exe fwscanf ==========
+========== START entry-dynamic.exe iconv_open ==========
+Pass!
+========== END entry-dynamic.exe iconv_open ==========
+========== START entry-dynamic.exe inet_pton ==========
+Pass!
+========== END entry-dynamic.exe inet_pton ==========
+========== START entry-dynamic.exe mbc ==========
+Pass!
+========== END entry-dynamic.exe mbc ==========
+========== START entry-dynamic.exe memstream ==========
+Pass!
+========== END entry-dynamic.exe memstream ==========
+========== START entry-dynamic.exe pthread_cancel_points ==========
+Pass!
+========== END entry-dynamic.exe pthread_cancel_points ==========
+========== START entry-dynamic.exe pthread_cancel ==========
+Pass!
+========== END entry-dynamic.exe pthread_cancel ==========
+========== START entry-dynamic.exe pthread_cond ==========
+Pass!
+========== END entry-dynamic.exe pthread_cond ==========
+========== START entry-dynamic.exe pthread_tsd ==========
+Pass!
+========== END entry-dynamic.exe pthread_tsd ==========
+========== START entry-dynamic.exe qsort ==========
+Pass!
+========== END entry-dynamic.exe qsort ==========
+========== START entry-dynamic.exe random ==========
+Pass!
+========== END entry-dynamic.exe random ==========
+========== START entry-dynamic.exe search_hsearch ==========
+Pass!
+========== END entry-dynamic.exe search_hsearch ==========
+========== START entry-dynamic.exe search_insque ==========
+Pass!
+========== END entry-dynamic.exe search_insque ==========
+========== START entry-dynamic.exe search_lsearch ==========
+Pass!
+========== END entry-dynamic.exe search_lsearch ==========
+========== START entry-dynamic.exe search_tsearch ==========
+Pass!
+========== END entry-dynamic.exe search_tsearch ==========
+========== START entry-dynamic.exe sem_init ==========
+Pass!
+========== END entry-dynamic.exe sem_init ==========
+========== START entry-dynamic.exe setjmp ==========
+Pass!
+========== END entry-dynamic.exe setjmp ==========
+========== START entry-dynamic.exe snprintf ==========
+Pass!
+========== END entry-dynamic.exe snprintf ==========
+========== START entry-dynamic.exe socket ==========
+Pass!
+========== END entry-dynamic.exe socket ==========
+========== START entry-dynamic.exe sscanf ==========
+Pass!
+========== END entry-dynamic.exe sscanf ==========
+========== START entry-dynamic.exe sscanf_long ==========
+Pass!
+========== END entry-dynamic.exe sscanf_long ==========
+========== START entry-dynamic.exe stat ==========
+Pass!
+========== END entry-dynamic.exe stat ==========
+========== START entry-dynamic.exe strftime ==========
+Pass!
+========== END entry-dynamic.exe strftime ==========
+========== START entry-dynamic.exe string ==========
+Pass!
+========== END entry-dynamic.exe string ==========
+========== START entry-dynamic.exe string_memcpy ==========
+Pass!
+========== END entry-dynamic.exe string_memcpy ==========
+========== START entry-dynamic.exe string_memmem ==========
+Pass!
+========== END entry-dynamic.exe string_memmem ==========
+========== START entry-dynamic.exe string_memset ==========
+Pass!
+========== END entry-dynamic.exe string_memset ==========
+========== START entry-dynamic.exe string_strchr ==========
+Pass!
+========== END entry-dynamic.exe string_strchr ==========
+========== START entry-dynamic.exe string_strcspn ==========
+Pass!
+========== END entry-dynamic.exe string_strcspn ==========
+========== START entry-dynamic.exe string_strstr ==========
+Pass!
+========== END entry-dynamic.exe string_strstr ==========
+========== START entry-dynamic.exe strptime ==========
+Pass!
+========== END entry-dynamic.exe strptime ==========
+========== START entry-dynamic.exe strtod ==========
+Pass!
+========== END entry-dynamic.exe strtod ==========
+========== START entry-dynamic.exe strtod_simple ==========
+Pass!
+========== END entry-dynamic.exe strtod_simple ==========
+========== START entry-dynamic.exe strtof ==========
+Pass!
+========== END entry-dynamic.exe strtof ==========
+========== START entry-dynamic.exe strtol ==========
+Pass!
+========== END entry-dynamic.exe strtol ==========
+========== START entry-dynamic.exe strtold ==========
+Pass!
+========== END entry-dynamic.exe strtold ==========
+========== START entry-dynamic.exe swprintf ==========
+Pass!
+========== END entry-dynamic.exe swprintf ==========
+========== START entry-dynamic.exe tgmath ==========
+Pass!
+========== END entry-dynamic.exe tgmath ==========
+========== START entry-dynamic.exe time ==========
+Pass!
+========== END entry-dynamic.exe time ==========
+========== START entry-dynamic.exe tls_init ==========
+Pass!
+========== END entry-dynamic.exe tls_init ==========
+========== START entry-dynamic.exe tls_local_exec ==========
+Pass!
+========== END entry-dynamic.exe tls_local_exec ==========
+========== START entry-dynamic.exe udiv ==========
+Pass!
+========== END entry-dynamic.exe udiv ==========
+========== START entry-dynamic.exe ungetc ==========
+Pass!
+========== END entry-dynamic.exe ungetc ==========
+========== START entry-dynamic.exe utime ==========
+Pass!
+========== END entry-dynamic.exe utime ==========
+========== START entry-dynamic.exe wcsstr ==========
+Pass!
+========== END entry-dynamic.exe wcsstr ==========
+========== START entry-dynamic.exe wcstol ==========
+Pass!
+========== END entry-dynamic.exe wcstol ==========
+========== START entry-dynamic.exe daemon_failure ==========
+Pass!
+========== END entry-dynamic.exe daemon_failure ==========
+========== START entry-dynamic.exe dn_expand_empty ==========
+Pass!
+========== END entry-dynamic.exe dn_expand_empty ==========
+========== START entry-dynamic.exe dn_expand_ptr_0 ==========
+Pass!
+========== END entry-dynamic.exe dn_expand_ptr_0 ==========
+========== START entry-dynamic.exe fflush_exit ==========
+Pass!
+========== END entry-dynamic.exe fflush_exit ==========
+========== START entry-dynamic.exe fgets_eof ==========
+Pass!
+========== END entry-dynamic.exe fgets_eof ==========
+========== START entry-dynamic.exe fgetwc_buffering ==========
+Pass!
+========== END entry-dynamic.exe fgetwc_buffering ==========
+========== START entry-dynamic.exe fpclassify_invalid_ld80 ==========
+Pass!
+========== END entry-dynamic.exe fpclassify_invalid_ld80 ==========
+========== START entry-dynamic.exe ftello_unflushed_append ==========
+Pass!
+========== END entry-dynamic.exe ftello_unflushed_append ==========
+========== START entry-dynamic.exe getpwnam_r_crash ==========
+Pass!
+========== END entry-dynamic.exe getpwnam_r_crash ==========
+========== START entry-dynamic.exe getpwnam_r_errno ==========
+Pass!
+========== END entry-dynamic.exe getpwnam_r_errno ==========
+========== START entry-dynamic.exe iconv_roundtrips ==========
+Pass!
+========== END entry-dynamic.exe iconv_roundtrips ==========
+========== START entry-dynamic.exe inet_ntop_v4mapped ==========
+Pass!
+========== END entry-dynamic.exe inet_ntop_v4mapped ==========
+========== START entry-dynamic.exe inet_pton_empty_last_field ==========
+Pass!
+========== END entry-dynamic.exe inet_pton_empty_last_field ==========
+========== START entry-dynamic.exe iswspace_null ==========
+Pass!
+========== END entry-dynamic.exe iswspace_null ==========
+========== START entry-dynamic.exe lrand48_signextend ==========
+Pass!
+========== END entry-dynamic.exe lrand48_signextend ==========
+========== START entry-dynamic.exe lseek_large ==========
+Pass!
+========== END entry-dynamic.exe lseek_large ==========
+========== START entry-dynamic.exe malloc_0 ==========
+Pass!
+========== END entry-dynamic.exe malloc_0 ==========
+========== START entry-dynamic.exe mbsrtowcs_overflow ==========
+Pass!
+========== END entry-dynamic.exe mbsrtowcs_overflow ==========
+========== START entry-dynamic.exe memmem_oob_read ==========
+Pass!
+========== END entry-dynamic.exe memmem_oob_read ==========
+========== START entry-dynamic.exe memmem_oob ==========
+Pass!
+========== END entry-dynamic.exe memmem_oob ==========
+========== START entry-dynamic.exe mkdtemp_failure ==========
+Pass!
+========== END entry-dynamic.exe mkdtemp_failure ==========
+========== START entry-dynamic.exe mkstemp_failure ==========
+Pass!
+========== END entry-dynamic.exe mkstemp_failure ==========
+========== START entry-dynamic.exe printf_1e9_oob ==========
+Pass!
+========== END entry-dynamic.exe printf_1e9_oob ==========
+========== START entry-dynamic.exe printf_fmt_g_round ==========
+Pass!
+========== END entry-dynamic.exe printf_fmt_g_round ==========
+========== START entry-dynamic.exe printf_fmt_g_zeros ==========
+Pass!
+========== END entry-dynamic.exe printf_fmt_g_zeros ==========
+========== START entry-dynamic.exe printf_fmt_n ==========
+Pass!
+========== END entry-dynamic.exe printf_fmt_n ==========
+========== START entry-dynamic.exe pthread_robust_detach ==========
+[37m[ 25.731936 0:557 starry_kernel::task::ops:230] [33mexit robust list failed: AxErrorKind::BadAddress[m
+[mPass!
+========== END entry-dynamic.exe pthread_robust_detach ==========
+========== START entry-dynamic.exe pthread_cond_smasher ==========
+Pass!
+========== END entry-dynamic.exe pthread_cond_smasher ==========
+========== START entry-dynamic.exe pthread_condattr_setclock ==========
+Pass!
+========== END entry-dynamic.exe pthread_condattr_setclock ==========
+========== START entry-dynamic.exe pthread_exit_cancel ==========
+Pass!
+========== END entry-dynamic.exe pthread_exit_cancel ==========
+========== START entry-dynamic.exe pthread_once_deadlock ==========
+Pass!
+========== END entry-dynamic.exe pthread_once_deadlock ==========
+========== START entry-dynamic.exe pthread_rwlock_ebusy ==========
+Pass!
+========== END entry-dynamic.exe pthread_rwlock_ebusy ==========
+========== START entry-dynamic.exe putenv_doublefree ==========
+Pass!
+========== END entry-dynamic.exe putenv_doublefree ==========
+========== START entry-dynamic.exe regex_backref_0 ==========
+Pass!
+========== END entry-dynamic.exe regex_backref_0 ==========
+========== START entry-dynamic.exe regex_bracket_icase ==========
+Pass!
+========== END entry-dynamic.exe regex_bracket_icase ==========
+========== START entry-dynamic.exe regex_ere_backref ==========
+Pass!
+========== END entry-dynamic.exe regex_ere_backref ==========
+========== START entry-dynamic.exe regex_escaped_high_byte ==========
+Pass!
+========== END entry-dynamic.exe regex_escaped_high_byte ==========
+========== START entry-dynamic.exe regex_negated_range ==========
+Pass!
+========== END entry-dynamic.exe regex_negated_range ==========
+========== START entry-dynamic.exe regexec_nosub ==========
+Pass!
+========== END entry-dynamic.exe regexec_nosub ==========
+========== START entry-dynamic.exe rewind_clear_error ==========
+Pass!
+========== END entry-dynamic.exe rewind_clear_error ==========
+========== START entry-dynamic.exe rlimit_open_files ==========
+Pass!
+========== END entry-dynamic.exe rlimit_open_files ==========
+========== START entry-dynamic.exe scanf_bytes_consumed ==========
+Pass!
+========== END entry-dynamic.exe scanf_bytes_consumed ==========
+========== START entry-dynamic.exe scanf_match_literal_eof ==========
+Pass!
+========== END entry-dynamic.exe scanf_match_literal_eof ==========
+========== START entry-dynamic.exe scanf_nullbyte_char ==========
+Pass!
+========== END entry-dynamic.exe scanf_nullbyte_char ==========
+========== START entry-dynamic.exe setvbuf_unget ==========
+Pass!
+========== END entry-dynamic.exe setvbuf_unget ==========
+========== START entry-dynamic.exe sigprocmask_internal ==========
+Pass!
+========== END entry-dynamic.exe sigprocmask_internal ==========
+========== START entry-dynamic.exe sscanf_eof ==========
+Pass!
+========== END entry-dynamic.exe sscanf_eof ==========
+========== START entry-dynamic.exe statvfs ==========
+Pass!
+========== END entry-dynamic.exe statvfs ==========
+========== START entry-dynamic.exe strverscmp ==========
+Pass!
+========== END entry-dynamic.exe strverscmp ==========
+========== START entry-dynamic.exe syscall_sign_extend ==========
+Pass!
+========== END entry-dynamic.exe syscall_sign_extend ==========
+========== START entry-dynamic.exe tls_get_new_dtv ==========
+Pass!
+========== END entry-dynamic.exe tls_get_new_dtv ==========
+========== START entry-dynamic.exe uselocale_0 ==========
+Pass!
+========== END entry-dynamic.exe uselocale_0 ==========
+========== START entry-dynamic.exe wcsncpy_read_overflow ==========
+Pass!
+========== END entry-dynamic.exe wcsncpy_read_overflow ==========
+========== START entry-dynamic.exe wcsstr_false_negative ==========
+Pass!
+========== END entry-dynamic.exe wcsstr_false_negative ==========
 #### OS COMP TEST GROUP END libctest-musl ####
 #### OS COMP TEST GROUP START lmbench-musl ####
 #### OS COMP TEST GROUP END lmbench-musl ####
@@ -145,40 +993,28 @@ prepare musl runtime
 #### OS COMP TEST GROUP START netperf-musl ####
 #### OS COMP TEST GROUP END netperf-musl ####
 #### OS COMP TEST GROUP START ltp-musl ####
-RUN LTP CASE pwrite01
+RUN LTP CASE statx01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
+[37m[ 28.772890 0:647 starry_kernel::syscall:704] [33mUnimplemented syscall: mknodat[m
+[mstatx01.c:210: TBROK: mknod() failed: ENOSYS (38)
 
 Summary:
-passed   1
+passed   0
 failed   0
-broken   0
+broken   1
 skipped  0
 warnings 0
-FAIL LTP CASE pwrite01 : 0
-2026-05-10-08-07-18
-RUN LTP CASE pwrite01_64
+FAIL LTP CASE statx01 : 0
+2026-05-18-06-11-56
+RUN LTP CASE statx02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01_64 : 0
-2026-05-10-08-07-19
-RUN LTP CASE pwrite02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
+statx02.c:46: TPASS: statx(file_fd, "", AT_EMPTY_PATH, 0, &buf)
+statx02.c:53: TPASS: stx_size(14) is correct
+statx02.c:70: TPASS: statx(AT_FDCWD, test_temp, 0, 0, &fbuf)
+statx02.c:79: TPASS: statx(AT_FDCWD, test_temp_ln, AT_SYMLINK_NOFOLLOW, 0,&lbuf)
+statx02.c:88: TPASS: Statx symlink flag worked as expected
 
 Summary:
 passed   5
@@ -186,117 +1022,18 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE pwrite02 : 0
-2026-05-10-08-07-20
-RUN LTP CASE pwrite02_64
+FAIL LTP CASE statx02 : 0
+2026-05-18-06-11-57
+RUN LTP CASE statx03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02_64 : 0
-2026-05-10-08-07-20
-RUN LTP CASE pwrite03
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03 : 0
-2026-05-10-08-07-20
-RUN LTP CASE pwrite03_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03_64 : 0
-2026-05-10-08-07-21
-RUN LTP CASE pwrite04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04 : 0
-2026-05-10-08-07-21
-RUN LTP CASE pwrite04_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04_64 : 0
-2026-05-10-08-07-22
-RUN LTP CASE pwritev01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01 : 0
-2026-05-10-08-07-23
-RUN LTP CASE pwritev01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01_64 : 0
-2026-05-10-08-07-23
-RUN LTP CASE pwritev02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
+statx03.c:82: TPASS: statx() failed with: EBADF (9)
+statx03.c:82: TPASS: statx() failed with: EFAULT (14)
+statx03.c:82: TPASS: statx() failed with: EINVAL (22)
+statx03.c:82: TPASS: statx() failed with: EINVAL (22)
+statx03.c:82: TPASS: statx() failed with: ENOENT (2)
+statx03.c:82: TPASS: statx() failed with: ENOTDIR (20)
+statx03.c:82: TPASS: statx() failed with: ENAMETOOLONG (36)
 
 Summary:
 passed   7
@@ -304,28 +1041,9 @@ failed   0
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE pwritev02 : 0
-2026-05-10-08-07-24
-RUN LTP CASE pwritev02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02_64 : 0
-2026-05-10-08-07-24
-RUN LTP CASE pwritev03
+FAIL LTP CASE statx03 : 0
+2026-05-18-06-11-58
+RUN LTP CASE statx04
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
@@ -335,231 +1053,9 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_pwrdgNkmi/mntpoint fstyp=tmpfs flags=0
-[37m[  8.894015 0:130 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[  8.894556 0:130 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,(( ((0U)<<30) | (((0x12))<<8) | ((104)) | ((0)<<16) )),...) failed: ENOTTY (25)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03 : 0
-2026-05-10-08-07-25
-RUN LTP CASE pwritev03_64
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_pwrhjOlOF/mntpoint fstyp=tmpfs flags=0
-[37m[  9.673235 0:138 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[  9.673459 0:138 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,(( ((0U)<<30) | (((0x12))<<8) | ((104)) | ((0)<<16) )),...) failed: ENOTTY (25)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03_64 : 0
-2026-05-10-08-07-26
-RUN LTP CASE pwritev201
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201 : 0
-2026-05-10-08-07-26
-RUN LTP CASE pwritev201_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201_64 : 0
-2026-05-10-08-07-27
-RUN LTP CASE pwritev202
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202 : 0
-2026-05-10-08-07-27
-RUN LTP CASE pwritev202_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202_64 : 0
-2026-05-10-08-07-28
-RUN LTP CASE write01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-write01.c:40: TPASS: write() passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write01 : 0
-2026-05-10-08-07-28
-RUN LTP CASE write02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-write02.c:20: TPASS: write(fd, NULL, 0) returned 0
-write02.c:22: TPASS: Expect: write(fd, NULL, 0) == 0
-
-Summary:
-passed   2
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write02 : 0
-2026-05-10-08-07-29
-RUN LTP CASE write03
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-write03.c:49: TPASS: failure of write() did not corrupt the file
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write03 : 0
-2026-05-10-08-07-30
-RUN LTP CASE write04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-[37m[ 15.053398 0:202 starry_kernel::syscall:698] [33mUnimplemented syscall: mknodat[m
-[mwrite04.c:42: TBROK: mknod() failed: ENOSYS (38)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE write04 : 0
-2026-05-10-08-07-31
-RUN LTP CASE write05
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EBADF (9)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EFAULT (14)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EPIPE (32)
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write05 : 0
-2026-05-10-08-07-31
-RUN LTP CASE write06
-tst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-write06.c:59: TPASS: Offset is correct after write 3072
-write06.c:65: TPASS: Correct file size after append 3072
-
-Summary:
-passed   2
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write06 : 0
-2026-05-10-08-07-32
-RUN LTP CASE writev01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-writev01.c:124: TPASS: invalid iov_len, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:124: TPASS: invalid fd, expected: -1 (EBADF), got: -1 (EBADF)
-writev01.c:124: TPASS: invalid iovcnt, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:129: TPASS: zero iovcnt, expected: 0, got: 0
-writev01.c:129: TPASS: NULL and zero length iovec, expected: 64, got: 64
-writev01.c:124: TPASS: write to closed pipe, expected: -1 (EPIPE), got: -1 (EPIPE)
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev01 : 0
-2026-05-10-08-07-32
-RUN LTP CASE writev02
-writev02    1  TPASS  :  Received EFAULT as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev02 : 0
-2026-05-10-08-07-33
-RUN LTP CASE writev03
-tst_test.c:1242: TCONF: Test needs at least 2 CPUs online
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_stapIEnoa/mntpoint fstyp=tmpfs flags=0
+[37m[ 30.703394 0:671 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 2148034049 for fd: 3[m
+[mstatx04.c:91: TCONF: Inode attributes not supported: ENOTTY (25)
 
 Summary:
 passed   0
@@ -567,591 +1063,105 @@ failed   0
 broken   0
 skipped  1
 warnings 0
-FAIL LTP CASE writev03 : 0
-2026-05-10-08-07-34
-RUN LTP CASE writev05
-writev05    1  TPASS  :  Received EFAULT as expected
+FAIL LTP CASE statx04 : 0
+2026-05-18-06-11-59
+RUN LTP CASE statx05
+tst_cmd.c:257: TCONF: Couldn't find 'mkfs.ext4' in $PATH
 
 Summary:
-passed   1
+passed   0
 failed   0
 broken   0
-skipped  0
+skipped  1
 warnings 0
-FAIL LTP CASE writev05 : 0
-2026-05-10-08-07-35
-RUN LTP CASE writev06
-writev06    1  TPASS  :  writev returned 2 as expected
+FAIL LTP CASE statx05 : 0
+2026-05-18-06-12-00
+RUN LTP CASE statx06
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
+tst_test.c:1106: TINFO: Formatting /dev/loop0 with ext4 opts='-I 256' extra opts=''
+tst_cmd.c:75: TCONF: Couldn't find 'mkfs.ext4' in $PATH at tst_cmd.c:75
 
 Summary:
-passed   1
+passed   0
 failed   0
 broken   0
-skipped  0
+skipped  1
 warnings 0
-FAIL LTP CASE writev06 : 0
-2026-05-10-08-07-35
-RUN LTP CASE writev07
+FAIL LTP CASE statx06 : 0
+2026-05-18-06-12-00
+RUN LTP CASE statx07
+tst_cmd.c:257: TCONF: Couldn't find 'exportfs' in $PATH
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE statx07 : 0
+2026-05-18-06-12-01
+RUN LTP CASE statx08
+tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
-writev07.c:56: TINFO: starting test with initial file offset: 0 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 65 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4096 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4097 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=20c64ec83a9f
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3ac974796e5d
-
-Summary:
-passed   6
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev07 : 0
-2026-05-10-08-07-36
-#### OS COMP TEST GROUP END ltp-musl ####
-prepare musl runtime
-'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
-'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
-'/lib/libc.so' -> '/lib/libc.so.6'
-'/lib/libm.so' -> '/lib/libm.so.6'
-#### OS COMP TEST GROUP START basic-glibc ####
-#### OS COMP TEST GROUP END basic-glibc ####
-#### OS COMP TEST GROUP START busybox-glibc ####
-#### OS COMP TEST GROUP END busybox-glibc ####
-#### OS COMP TEST GROUP START cyclictest-glibc ####
-#### OS COMP TEST GROUP END cyclictest-glibc ####
-#### OS COMP TEST GROUP START iozone-glibc ####
-#### OS COMP TEST GROUP END iozone-glibc ####
-#### OS COMP TEST GROUP START iperf-glibc ####
-#### OS COMP TEST GROUP END iperf-glibc ####
-#### OS COMP TEST GROUP START libcbench-glibc ####
-#### OS COMP TEST GROUP END libcbench-glibc ####
-#### OS COMP TEST GROUP START lmbench-glibc ####
-#### OS COMP TEST GROUP END lmbench-glibc ####
-#### OS COMP TEST GROUP START lua-glibc ####
-#### OS COMP TEST GROUP END lua-glibc ####
-#### OS COMP TEST GROUP START netperf-glibc ####
-#### OS COMP TEST GROUP END netperf-glibc ####
-#### OS COMP TEST GROUP START ltp-glibc ####
-RUN LTP CASE pwrite01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01 : 0
-2026-05-10-08-07-39
-RUN LTP CASE pwrite01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite01.c:60: TPASS: Functionality of pwrite() successful
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite01_64 : 0
-2026-05-10-08-07-41
-RUN LTP CASE pwrite02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02 : 0
-2026-05-10-08-07-44
-RUN LTP CASE pwrite02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite02.c:73: TPASS: pwrite(4, 1024, 0) : ESPIPE (29)
-pwrite02.c:73: TPASS: pwrite(5, 1024, -1) : EINVAL (22)
-pwrite02.c:73: TPASS: pwrite(-1, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(6, 1024, 0) : EBADF (9)
-pwrite02.c:73: TPASS: pwrite(5, 1024, 0) : EFAULT (14)
-
-Summary:
-passed   5
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite02_64 : 0
-2026-05-10-08-07-46
-RUN LTP CASE pwrite03
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03 : 0
-2026-05-10-08-07-48
-RUN LTP CASE pwrite03_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite03.c:20: TPASS: pwrite(3, NULL, 0) == 0 passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite03_64 : 0
-2026-05-10-08-07-49
-RUN LTP CASE pwrite04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04 : 0
-2026-05-10-08-07-51
-RUN LTP CASE pwrite04_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwrite04.c:65: TPASS: O_APPEND test passed.
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwrite04_64 : 0
-2026-05-10-08-07-54
-RUN LTP CASE pwritev01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01 : 0
-2026-05-10-08-07-56
-RUN LTP CASE pwritev01_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev01.c:85: TPASS: writev() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev01_64 : 0
-2026-05-10-08-07-58
-RUN LTP CASE pwritev02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02 : 0
-2026-05-10-08-08-01
-RUN LTP CASE pwritev02_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EINVAL (22)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EFAULT (14)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: EBADF (9)
-pwritev02.c:75: TPASS: pwritev() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev02_64 : 0
-2026-05-10-08-08-03
-RUN LTP CASE pwritev03
-tst_device.c:135: TINFO: Found free device '/dev/loop0'
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
 tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
 tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-[37m[ 48.422836 0:394 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[ 48.423079 0:394 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,((((0U) << (((0+8)+8)+14)) | (((0x12)) << (0+8)) | (((104)) << 0) | ((0) << ((0+8)+8)))),...) failed: ENOTTY (25)
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_stahaFLmJ/mntpoint fstyp=tmpfs flags=0
+statx08.c:136: TCONF: filesystem doesn't support FS_COMPR_FL
+statx08.c:140: TCONF: filesystem doesn't support FS_APPEND_FL
+statx08.c:144: TCONF: filesystem doesn't support FS_IMMUTABLE_FL
+statx08.c:148: TCONF: filesystem doesn't support FS_NODUMP_FL
+statx08.c:151: TCONF: filesystem doesn't support the above any attr, skip it
 
 Summary:
 passed   0
 failed   0
-broken   1
-skipped  0
+broken   0
+skipped  5
 warnings 0
-FAIL LTP CASE pwritev03 : 0
-2026-05-10-08-08-05
-RUN LTP CASE pwritev03_64
+FAIL LTP CASE statx08 : 0
+2026-05-18-06-12-02
+RUN LTP CASE statx09
+tst_kconfig.c:88: TINFO: Parsing kernel config '/lib/modules/10.0.0/build/.config'
+tst_kconfig.c:531: TINFO: Constraint 'CONFIG_FS_VERITY' not satisfied!
+tst_kconfig.c:477: TINFO: Variables:
+tst_kconfig.c:486: TINFO:  CONFIG_FS_VERITY Undefined
+tst_test.c:1192: TCONF: Aborting due to unsuitable kernel config, see above!
+
+Summary:
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE statx09 : 0
+2026-05-18-06-12-03
+RUN LTP CASE statx10
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s
 tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
 tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
 tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-[37m[ 50.727672 0:402 starry_kernel::pseudofs::dev::r#loop:144] [33munknown ioctl for loop device: 4712[m
-[m[37m[ 50.727913 0:402 starry_kernel::syscall::fs::ctl:48] [33mUnsupported ioctl command: 4712 for fd: 3[m
-[mpwritev03.c:98: TBROK: ioctl(3,((((0U) << (((0+8)+8)+14)) | (((0x12)) << (0+8)) | (((104)) << 0) | ((0) << ((0+8)+8)))),...) failed: ENOTTY (25)
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_staPgihHP/mnt_point fstyp=tmpfs flags=0
+statx10.c:71: TCONF: This test only supports ext4 and xfs
 
 Summary:
 passed   0
 failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev03_64 : 0
-2026-05-10-08-08-07
-RUN LTP CASE pwritev201
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
 broken   0
-skipped  0
+skipped  1
 warnings 0
-FAIL LTP CASE pwritev201 : 0
-2026-05-10-08-08-09
-RUN LTP CASE pwritev201_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-pwritev201.c:98: TPASS: pwritev2() wrote 64 bytes successfully with content 'a' expectedly 
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev201_64 : 0
-2026-05-10-08-08-11
-RUN LTP CASE pwritev202
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202 : 0
-2026-05-10-08-08-14
-RUN LTP CASE pwritev202_64
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EINVAL (22)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EOPNOTSUPP (95)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EFAULT (14)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: EBADF (9)
-pwritev202.c:81: TPASS: pwritev2() failed as expected: ESPIPE (29)
-
-Summary:
-passed   7
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE pwritev202_64 : 0
-2026-05-10-08-08-16
-RUN LTP CASE write01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write01.c:40: TPASS: write() passed
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write01 : 0
-2026-05-10-08-08-18
-RUN LTP CASE write02
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write02.c:20: TPASS: write(fd, NULL, 0) returned 0
-write02.c:22: TPASS: Expect: write(fd, NULL, 0) == 0
-
-Summary:
-passed   2
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write02 : 0
-2026-05-10-08-08-21
-RUN LTP CASE write03
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write03.c:49: TPASS: failure of write() did not corrupt the file
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write03 : 0
-2026-05-10-08-08-23
-RUN LTP CASE write04
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 68.785526 0:466 starry_kernel::syscall:698] [33mUnimplemented syscall: mknodat[m
-[mwrite04.c:42: TBROK: mknod() failed: ENOSYS (38)
-
-Summary:
-passed   0
-failed   0
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE write04 : 0
-2026-05-10-08-08-25
-RUN LTP CASE write05
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EBADF (9)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EFAULT (14)
-write05.c:62: TPASS: write(*tc->fd, *tc->buf, tc->size) : EPIPE (32)
-
-Summary:
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write05 : 0
-2026-05-10-08-08-28
-RUN LTP CASE write06
-tst_buffers.c:57: TINFO: Test is using guarded buffers
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-write06.c:59: TPASS: Offset is correct after write 3072
-write06.c:65: TPASS: Correct file size after append 3072
-
-Summary:
-passed   2
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE write06 : 0
-2026-05-10-08-08-30
-RUN LTP CASE writev01
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-writev01.c:124: TPASS: invalid iov_len, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:124: TPASS: invalid fd, expected: -1 (EBADF), got: -1 (EBADF)
-writev01.c:124: TPASS: invalid iovcnt, expected: -1 (EINVAL), got: -1 (EINVAL)
-writev01.c:129: TPASS: zero iovcnt, expected: 0, got: 0
-writev01.c:129: TPASS: NULL and zero length iovec, expected: 64, got: 64
-writev01.c:124: TPASS: write to closed pipe, expected: -1 (EPIPE), got: -1 (EPIPE)
-
-Summary:
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev01 : 0
-2026-05-10-08-08-32
-RUN LTP CASE writev02
-writev02    1  TPASS  :  Received EFAULT as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev02 : 0
-2026-05-10-08-08-35
-RUN LTP CASE writev03
+FAIL LTP CASE statx10 : 0
+2026-05-18-06-12-03
+RUN LTP CASE statx11
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 01m 30s
-tst_supported_fs_types.c:161: TINFO: WARNING: testing only tmpfs
-tst_supported_fs_types.c:97: TINFO: Kernel supports tmpfs
-tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
-tst_test.c:1693: TINFO: === Testing on tmpfs ===
-tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
-tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-../../../../include/tst_fuzzy_sync.h:640: TINFO: Stopped sampling at 379 (out of 1024) samples, sampling time reached 50% of the total time limit
-../../../../include/tst_fuzzy_sync.h:307: TINFO: loop = 379, delay_bias = 0
-../../../../include/tst_fuzzy_sync.h:295: TINFO: start_a - start_b: { avg = 238810ns, avg_dev = 28230ns, dev_ratio = 0.12 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - start_a  : { avg = 64703ns, avg_dev =  9305ns, dev_ratio = 0.14 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_b - start_b  : { avg = 196804ns, avg_dev = 26773ns, dev_ratio = 0.14 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - end_b    : { avg = 106708ns, avg_dev = 12504ns, dev_ratio = 0.12 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: spins            : { avg =     1  , avg_dev =     0  , dev_ratio = 0.00 }
-../../../../include/tst_fuzzy_sync.h:494: TINFO: Reached deviation ratios < 0.10, introducing randomness
-../../../../include/tst_fuzzy_sync.h:497: TINFO: Delay range is [-1, 0]
-../../../../include/tst_fuzzy_sync.h:307: TINFO: loop = 438, delay_bias = 0
-../../../../include/tst_fuzzy_sync.h:295: TINFO: start_a - start_b: { avg = 230761ns, avg_dev = 20138ns, dev_ratio = 0.09 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - start_a  : { avg = 67744ns, avg_dev =  5271ns, dev_ratio = 0.08 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_b - start_b  : { avg = 188381ns, avg_dev = 17653ns, dev_ratio = 0.09 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: end_a - end_b    : { avg = 110124ns, avg_dev =  6691ns, dev_ratio = 0.06 }
-../../../../include/tst_fuzzy_sync.h:295: TINFO: spins            : { avg =     1  , avg_dev =     0  , dev_ratio = 0.00 }
-../../../../include/tst_fuzzy_sync.h:648: TINFO: Exceeded execution time, requesting exit
-writev03.c:119: TPASS: writev() handles page fault-in correctly
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev03 : 0
-2026-05-10-08-09-53
-RUN LTP CASE writev05
-writev05    1  TPASS  :  Received EFAULT as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev05 : 0
-2026-05-10-08-09-56
-RUN LTP CASE writev06
-writev06    1  TPASS  :  writev returned 2 as expected
-
-Summary:
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev06 : 0
-2026-05-10-08-09-58
-RUN LTP CASE writev07
-tst_test.c:1733: TINFO: LTP version: 20240524
-tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-writev07.c:56: TINFO: starting test with initial file offset: 0 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 65 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:84: TFAIL: file was written to
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4096 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-writev07.c:56: TINFO: starting test with initial file offset: 4097 
-writev07.c:79: TINFO: got EFAULT
-writev07.c:86: TPASS: file stayed untouched
-writev07.c:90: TPASS: offset stayed unchanged
-
-HINT: You _MAY_ be missing kernel fixes:
-
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=20c64ec83a9f
-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3ac974796e5d
-
-Summary:
-passed   6
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev07 : 0
-2026-05-10-08-10-00
-#### OS COMP TEST GROUP END ltp-glibc ####
+tst_test.c:1617: TINFO: Timeout per run is 1193046h 28m 15s

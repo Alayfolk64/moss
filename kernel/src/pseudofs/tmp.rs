@@ -1,6 +1,7 @@
-use alloc::{borrow::ToOwned, string::String, sync::Arc};
+use alloc::{borrow::ToOwned, string::String, sync::Arc, vec::Vec};
 use core::{any::Any, borrow::Borrow, cmp::Ordering, task::Context, time::Duration};
 
+use axerrno::LinuxError;
 use axfs_ng_vfs::{
     DeviceId, DirEntry, DirEntrySink, DirNode, DirNodeOps, FileNode, FileNodeOps, Filesystem,
     FilesystemOps, Metadata, MetadataUpdate, NodeFlags, NodeOps, NodePermission, NodeType,
@@ -139,6 +140,7 @@ struct Inode {
     ino: u64,
     metadata: Mutex<Metadata>,
     content: NodeContent,
+    xattrs: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl Inode {
@@ -175,6 +177,7 @@ impl Inode {
             ino,
             metadata: Mutex::new(metadata),
             content,
+            xattrs: Mutex::default(),
         });
         entry.insert(result.clone());
         drop(inodes);
@@ -308,6 +311,46 @@ impl NodeOps for MemoryNode {
 
     fn flags(&self) -> NodeFlags {
         NodeFlags::ALWAYS_CACHE
+    }
+
+    fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
+        match self.inode.metadata.lock().node_type {
+            NodeType::RegularFile | NodeType::Directory | NodeType::Symlink => {}
+            _ => return Err(VfsError::OperationNotPermitted),
+        }
+        self.inode.xattrs.lock().insert(name.to_vec(), value.to_vec());
+        Ok(())
+    }
+
+    fn get_xattr(&self, name: &[u8], buf: &mut [u8]) -> VfsResult<usize> {
+        let xattrs = self.inode.xattrs.lock();
+        let value = xattrs
+            .get(name)
+            .ok_or(VfsError::from(LinuxError::ENODATA))?;
+        let copy_len = buf.len().min(value.len());
+        if copy_len != 0 {
+            buf[..copy_len].copy_from_slice(&value[..copy_len]);
+        }
+        Ok(value.len())
+    }
+
+    fn list_xattr(&self) -> VfsResult<Vec<u8>> {
+        let xattrs = self.inode.xattrs.lock();
+        let mut names = Vec::new();
+        for name in xattrs.keys() {
+            names.extend_from_slice(name);
+            names.push(0);
+        }
+        Ok(names)
+    }
+
+    fn remove_xattr(&self, name: &[u8]) -> VfsResult<()> {
+        self.inode
+            .xattrs
+            .lock()
+            .remove(name)
+            .map(|_| ())
+            .ok_or(VfsError::from(LinuxError::ENODATA))
     }
 }
 

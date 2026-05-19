@@ -9,8 +9,9 @@ mod pidfd;
 mod pipe;
 mod signalfd;
 mod stat;
+mod xattr;
 
 pub use self::{
     ctl::*, event::*, fanotify::*, fd_ops::*, io::*, memfd::*, mount::*, pidfd::*, pipe::*,
-    signalfd::*, stat::*,
+    signalfd::*, stat::*, xattr::*,
 };

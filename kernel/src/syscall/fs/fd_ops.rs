@@ -124,7 +124,9 @@ fn check_open_access(dirfd: c_int, path: &str, flags: u32, (uid, gid): (u32, u32
             Some(loc) => loc,
             None => return Ok(()),
         },
-        Err(AxError::NotFound) if flags & O_CREAT != 0 => return Ok(()),
+        Err(err) if flags & O_CREAT != 0 && err.canonicalize() == AxError::NotFound => {
+            return Ok(());
+        }
         Err(err) => return Err(err),
     };
     let metadata = loc.metadata()?;
@@ -228,7 +230,7 @@ pub fn sys_openat(
                 Ok(result) => {
                     return add_to_fd(result, flags_u32).map(|fd| fd as isize);
                 }
-                Err(AxError::NotFound) => {}
+                Err(err) if err.canonicalize() == AxError::NotFound => {}
                 Err(err) => return Err(err),
             }
         }

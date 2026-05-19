@@ -44,6 +44,14 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         #[cfg(target_arch = "x86_64")]
         Sysno::mkdir => sys_mkdir(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::mkdirat => sys_mkdirat(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        #[cfg(target_arch = "x86_64")]
+        Sysno::mknod => sys_mknod(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::mknodat => sys_mknodat(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
         Sysno::getdents64 => sys_getdents64(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         #[cfg(target_arch = "x86_64")]
         Sysno::link => sys_link(uctx.arg0() as _, uctx.arg1() as _),
@@ -81,6 +89,57 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         ),
         Sysno::sync => sys_sync(),
         Sysno::syncfs => sys_syncfs(uctx.arg0() as _),
+        Sysno::setxattr => sys_setxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
+        Sysno::getxattr => sys_getxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
+        Sysno::listxattr => {
+            sys_listxattr(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        },
+        Sysno::removexattr => sys_removexattr(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::lsetxattr => sys_lsetxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
+        Sysno::lgetxattr => sys_lgetxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
+        Sysno::llistxattr => {
+            sys_llistxattr(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        },
+        Sysno::lremovexattr => sys_lremovexattr(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::fsetxattr => sys_fsetxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
+        Sysno::fgetxattr => sys_fgetxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
+        Sysno::flistxattr => {
+            sys_flistxattr(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        },
+        Sysno::fremovexattr => sys_fremovexattr(uctx.arg0() as _, uctx.arg1() as _),
 
         // file ops
         #[cfg(target_arch = "x86_64")]

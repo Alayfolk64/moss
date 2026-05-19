@@ -87,6 +87,26 @@ pub trait NodeOps: Send + Sync + 'static {
     fn flags(&self) -> NodeFlags {
         NodeFlags::empty()
     }
+
+    /// Sets an extended attribute on the node.
+    fn set_xattr(&self, _name: &[u8], _value: &[u8]) -> VfsResult<()> {
+        Err(VfsError::OperationNotSupported)
+    }
+
+    /// Gets an extended attribute from the node.
+    fn get_xattr(&self, _name: &[u8], _buf: &mut [u8]) -> VfsResult<usize> {
+        Err(VfsError::OperationNotSupported)
+    }
+
+    /// Lists extended attribute names for the node.
+    fn list_xattr(&self) -> VfsResult<Vec<u8>> {
+        Err(VfsError::OperationNotSupported)
+    }
+
+    /// Removes an extended attribute from the node.
+    fn remove_xattr(&self, _name: &[u8]) -> VfsResult<()> {
+        Err(VfsError::OperationNotSupported)
+    }
 }
 
 enum Node {
@@ -236,6 +256,14 @@ impl DirEntry {
     pub fn flags(&self) -> NodeFlags;
 
     pub fn sync(&self, data_only: bool) -> VfsResult<()>;
+
+    pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()>;
+
+    pub fn get_xattr(&self, name: &[u8], buf: &mut [u8]) -> VfsResult<usize>;
+
+    pub fn list_xattr(&self) -> VfsResult<Vec<u8>>;
+
+    pub fn remove_xattr(&self, name: &[u8]) -> VfsResult<()>;
 }
 
 impl DirEntry {
