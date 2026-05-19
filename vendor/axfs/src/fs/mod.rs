@@ -2,7 +2,7 @@
 mod fat;
 
 #[cfg(feature = "ext4")]
-mod ext4;
+pub mod ext4;
 
 use axdriver::AxBlockDevice;
 use axfs_ng_vfs::{Filesystem, VfsResult};

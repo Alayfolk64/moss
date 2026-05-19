@@ -170,22 +170,6 @@ impl NodeOps for Inode {
     fn flags(&self) -> NodeFlags {
         NodeFlags::BLOCKING
     }
-
-    fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
-        Inode::set_xattr(self, name, value)
-    }
-
-    fn get_xattr(&self, name: &[u8], buf: &mut [u8]) -> VfsResult<usize> {
-        Inode::get_xattr(self, name, buf)
-    }
-
-    fn list_xattr(&self) -> VfsResult<Vec<u8>> {
-        Inode::list_xattr(self)
-    }
-
-    fn remove_xattr(&self, name: &[u8]) -> VfsResult<()> {
-        Inode::remove_xattr(self, name)
-    }
 }
 
 impl FileNodeOps for Inode {

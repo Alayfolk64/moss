@@ -1,7 +1,8 @@
 use alloc::{
     string::String,
     sync::{Arc, Weak},
-    vec::{self, Vec},
+    vec,
+    vec::Vec,
 };
 use core::{
     iter, mem,

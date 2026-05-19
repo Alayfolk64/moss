@@ -89,6 +89,23 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         ),
         Sysno::sync => sys_sync(),
         Sysno::syncfs => sys_syncfs(uctx.arg0() as _),
+        Sysno::setxattr => sys_setxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
+        Sysno::getxattr => sys_getxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
+        Sysno::listxattr => {
+            sys_listxattr(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        },
+        Sysno::removexattr => sys_removexattr(uctx.arg0() as _, uctx.arg1() as _),
 
         // file ops
         #[cfg(target_arch = "x86_64")]

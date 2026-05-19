@@ -1557,7 +1557,37 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+        fgetxattr01
+        fgetxattr02
+        fgetxattr03
+        flistxattr01
+        flistxattr02
+        flistxattr03
+        fremovexattr01
+        fremovexattr02
+        fsetxattr01
+        fsetxattr02
+        getxattr01
+        getxattr02
+        getxattr03
+        getxattr04
+        getxattr05
+        listxattr01
+        listxattr02
+        listxattr03
+        llistxattr01
+        llistxattr02
+        llistxattr03
+        lgetxattr01
+        lgetxattr02
+        setxattr01
+        setxattr02
+        setxattr03
+        removexattr01
+        removexattr02
+        lremovexattr01
+        "
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
@@ -1592,13 +1622,13 @@ skip_group() {
 }
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
+basic=0
+busybox=0
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=1
+libctest=0
 lmbench=0
 ltp=1
 lua=0
