@@ -16,7 +16,7 @@ log_level = warn
 backtrace = false
 smp = 1
 
-Boot at 2026-05-19 07:39:00.001857160 UTC
+Boot at 2026-05-19 08:46:47.003538110 UTC
 
 sh: can't execute '[[-e': No such file or directory
 @@@@@@@@@@ files @@@@@@@@@@
@@ -80,7 +80,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fgehJioIo/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fgeFDbdfF/mntpoint fstyp=tmpfs flags=0
 fgetxattr01.c:102: TPASS: fgetxattr(2) passed: ENODATA (61)
 fgetxattr01.c:102: TPASS: fgetxattr(2) passed: ERANGE (34)
 fgetxattr01.c:88: TPASS: fgetxattr(2) passed
@@ -94,7 +94,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fgetxattr01 : 0
-2026-05-19-07-39-02
+2026-05-19-08-46-48
 RUN LTP CASE fgetxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -110,16 +110,16 @@ fgetxattr02.c:192: TPASS: fgetxattr(2) on symlink passed: SUCCESS (0)
 fgetxattr02.c:192: TPASS: fgetxattr(2) on fifo passed: ENODATA (61)
 fgetxattr02.c:192: TPASS: fgetxattr(2) on chr passed: ENODATA (61)
 fgetxattr02.c:192: TPASS: fgetxattr(2) on blk passed: ENODATA (61)
-fgetxattr02.c:197: TFAIL: fgetxattr(2) failed on sock: EBADF (9)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on sock passed: ENODATA (61)
 
 Summary:
-passed   12
-failed   1
+passed   13
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fgetxattr02 : 0
-2026-05-19-07-39-03
+2026-05-19-08-46-50
 RUN LTP CASE fgetxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -132,7 +132,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fgetxattr03 : 0
-2026-05-19-07-39-04
+2026-05-19-08-46-50
 RUN LTP CASE flistxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -145,7 +145,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE flistxattr01 : 0
-2026-05-19-07-39-06
+2026-05-19-08-46-51
 RUN LTP CASE flistxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -159,7 +159,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE flistxattr02 : 0
-2026-05-19-07-39-07
+2026-05-19-08-46-51
 RUN LTP CASE flistxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -173,7 +173,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE flistxattr03 : 0
-2026-05-19-07-39-08
+2026-05-19-08-46-52
 RUN LTP CASE fremovexattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -184,7 +184,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_frefjCjNJ/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_freJjCMiB/mntpoint fstyp=tmpfs flags=0
 fremovexattr01.c:66: TPASS: fremovexattr(2) removed attribute as expected
 
 Summary:
@@ -194,7 +194,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr01 : 0
-2026-05-19-07-39-09
+2026-05-19-08-46-52
 RUN LTP CASE fremovexattr02
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -205,7 +205,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_frelHNiiK/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_frepFOFGg/mntpoint fstyp=tmpfs flags=0
 fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: ENODATA (61)
 fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: EBADF (9)
 fremovexattr02.c:72: TPASS: fremovexattr(2) failed expectedly: EFAULT (14)
@@ -217,7 +217,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr02 : 0
-2026-05-19-07-39-10
+2026-05-19-08-46-53
 RUN LTP CASE fsetxattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -228,7 +228,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fseBgNPlM/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_fseGJkMcH/mntpoint fstyp=tmpfs flags=0
 fsetxattr01.c:186: TPASS: fsetxattr(2) failed: EINVAL (22)
 fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ENODATA (61)
 fsetxattr01.c:186: TPASS: fsetxattr(2) failed: ERANGE (34)
@@ -246,7 +246,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fsetxattr01 : 0
-2026-05-19-07-39-11
+2026-05-19-08-46-53
 RUN LTP CASE fsetxattr02
 tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
 tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
@@ -259,7 +259,7 @@ broken   0
 skipped  1
 warnings 2
 FAIL LTP CASE fsetxattr02 : 0
-2026-05-19-07-39-12
+2026-05-19-08-46-54
 RUN LTP CASE getxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -275,7 +275,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE getxattr01 : 0
-2026-05-19-07-39-13
+2026-05-19-08-46-55
 RUN LTP CASE getxattr02
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -286,7 +286,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getOIiIkp/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getBHKGNC/mntpoint fstyp=tmpfs flags=0
 getxattr02.c:85: TPASS: get attr from fifo: expected return value: ENODATA (61)
 getxattr02.c:85: TPASS: get attr from char special: expected return value: ENODATA (61)
 getxattr02.c:85: TPASS: get attr from block special: expected return value: ENODATA (61)
@@ -299,7 +299,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE getxattr02 : 0
-2026-05-19-07-39-15
+2026-05-19-08-46-55
 RUN LTP CASE getxattr03
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -310,7 +310,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getCkKgAE/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_getFIMkDi/mntpoint fstyp=tmpfs flags=0
 getxattr03.c:28: TPASS: getxattr(FNAME, XATTR_TEST_KEY, NULL, 0) passed
 
 Summary:
@@ -320,7 +320,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE getxattr03 : 0
-2026-05-19-07-39-16
+2026-05-19-08-46-56
 RUN LTP CASE getxattr04
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1106: TINFO: Formatting /dev/loop0 with xfs opts='' extra opts=''
@@ -333,7 +333,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE getxattr04 : 0
-2026-05-19-07-39-17
+2026-05-19-08-46-57
 RUN LTP CASE getxattr05
 tst_test.c:1175: TCONF: <sys/xattr.h> or <sys/acl.h> does not exist.
 
@@ -344,7 +344,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE getxattr05 : 0
-2026-05-19-07-39-18
+2026-05-19-08-46-57
 RUN LTP CASE listxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -357,23 +357,23 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE listxattr01 : 0
-2026-05-19-07-39-19
+2026-05-19-08-46-58
 RUN LTP CASE listxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 listxattr02.c:67: TPASS: listxattr() failed as expected: ERANGE (34)
-listxattr02.c:56: TFAIL: listxattr() succeeded unexpectedly (returned 0)
+listxattr02.c:67: TPASS: listxattr() failed as expected: ENOENT (2)
 listxattr02.c:67: TPASS: listxattr() failed as expected: EFAULT (14)
 listxattr02.c:67: TPASS: listxattr() failed as expected: ENAMETOOLONG (36)
 
 Summary:
-passed   3
-failed   1
+passed   4
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE listxattr02 : 0
-2026-05-19-07-39-20
+2026-05-19-08-46-58
 RUN LTP CASE listxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -387,77 +387,79 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE listxattr03 : 0
-2026-05-19-07-39-21
+2026-05-19-08-46-59
 RUN LTP CASE llistxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 22.426942 0:192 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mllistxattr01.c:80: TBROK: lsetxattr(testfile, security.ltptest1, 0x120029ab8, 4, 1) failed: ENOSYS (38)
+llistxattr01.c:71: TPASS: llistxattr() succeeded
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llistxattr01 : 0
-2026-05-19-07-39-22
+2026-05-19-08-47-00
 RUN LTP CASE llistxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 23.376247 0:201 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mllistxattr02.c:84: TBROK: lsetxattr(symlink, security.ltptest, 0x120029a10, 4, 1) failed: ENOSYS (38)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ERANGE (34)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENOENT (2)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: EFAULT (14)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENAMETOOLONG (36)
 
 Summary:
-passed   0
+passed   4
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llistxattr02 : 0
-2026-05-19-07-39-23
+2026-05-19-08-47-01
 RUN LTP CASE llistxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 24.425932 0:210 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mllistxattr03.c:66: TBROK: lsetxattr(testfile2, security.ltptest, 0x1200299f8, 4, 1) failed: ENOSYS (38)
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
 
 Summary:
-passed   0
+passed   2
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llistxattr03 : 0
-2026-05-19-07-39-24
+2026-05-19-08-47-01
 RUN LTP CASE lgetxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 25.353922 0:219 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mlgetxattr01.c:46: TBROK: lsetxattr(security.ltptest1) failed: ENOSYS (38)
+lgetxattr01.c:77: TPASS: lgetxattr() got expected value
+lgetxattr01.c:90: TPASS: lgetxattr() failed as expected: ENODATA (61)
 
 Summary:
-passed   0
+passed   2
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE lgetxattr01 : 0
-2026-05-19-07-39-26
+2026-05-19-08-47-02
 RUN LTP CASE lgetxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 26.582484 0:228 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mlgetxattr02.c:80: TBROK: lsetxattr(security.ltptest) failed: ENOSYS (38)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ENODATA (61)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ERANGE (34)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: EFAULT (14)
 
 Summary:
-passed   0
+passed   3
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE lgetxattr02 : 0
-2026-05-19-07-39-27
+2026-05-19-08-47-02
 RUN LTP CASE setxattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -468,7 +470,7 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_setgNDPGE/mntpoint fstyp=tmpfs flags=0
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_setmBgKKh/mntpoint fstyp=tmpfs flags=0
 setxattr01.c:176: TPASS: setxattr(2) failed: EINVAL (22)
 setxattr01.c:176: TPASS: setxattr(2) failed: ENODATA (61)
 setxattr01.c:176: TPASS: setxattr(2) failed: ERANGE (34)
@@ -486,7 +488,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE setxattr01 : 0
-2026-05-19-07-39-28
+2026-05-19-08-47-03
 RUN LTP CASE setxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -505,21 +507,21 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE setxattr02 : 0
-2026-05-19-07-39-29
+2026-05-19-08-47-04
 RUN LTP CASE setxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-setxattr03.c:88: TFAIL: Set attr to immutable file succeeded unexpectedly
-setxattr03.c:88: TFAIL: Set attr to append-only file succeeded unexpectedly
+setxattr03.c:98: TPASS: Set attr to immutable file: EPERM (1)
+setxattr03.c:98: TPASS: Set attr to append-only file: EPERM (1)
 
 Summary:
-passed   0
-failed   2
+passed   2
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE setxattr03 : 0
-2026-05-19-07-39-30
+2026-05-19-08-47-04
 RUN LTP CASE removexattr01
 removexattr01    1  TPASS  :  removexattr() succeeded
 
@@ -530,20 +532,20 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE removexattr01 : 0
-2026-05-19-07-39-31
+2026-05-19-08-47-05
 RUN LTP CASE removexattr02
 removexattr02    1  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENODATA(61): No data available
-removexattr02    2  TFAIL  :  removexattr02.c:99: removexattr() failed unexpectedly, expected ENOENT: TEST_ERRNO=ENODATA(61): No data available
+removexattr02    2  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENOENT(2): No such file or directory
 removexattr02    3  TPASS  :  removexattr() failed as expected: TEST_ERRNO=EFAULT(14): Bad address
 
 Summary:
-passed   2
-failed   1
+passed   3
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE removexattr02 : 0
-2026-05-19-07-39-33
+2026-05-19-08-47-06
 RUN LTP CASE lremovexattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -554,18 +556,17 @@ tst_supported_fs_types.c:49: TINFO: mkfs is not needed for tmpfs
 tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
-tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_lrenfKDoI/mntpoint fstyp=tmpfs flags=0
-[37m[ 33.745556 0:290 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mlremovexattr01.c:59: TBROK: lsetxattr(mntpoint/lremovexattr01symlink, trusted.key1, 0x120021ea0, 13, 1) failed: ENOSYS (38)
+tst_test.c:1120: TINFO: Mounting ltp-tmpfs to /tmp/LTP_lreGdhADF/mntpoint fstyp=tmpfs flags=0
+lremovexattr01.c:107: TPASS: lremovexattr(2) removed attribute as expected
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE lremovexattr01 : 0
-2026-05-19-07-39-34
+2026-05-19-08-47-06
 #### OS COMP TEST GROUP END ltp-musl ####
 chmod: /basic/run-all.sh: No such file or directory
 prepare musl runtime
@@ -616,7 +617,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fgetxattr01 : 0
-2026-05-19-07-39-37
+2026-05-19-08-47-08
 RUN LTP CASE fgetxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -632,16 +633,16 @@ fgetxattr02.c:192: TPASS: fgetxattr(2) on symlink passed: SUCCESS (0)
 fgetxattr02.c:192: TPASS: fgetxattr(2) on fifo passed: ENODATA (61)
 fgetxattr02.c:192: TPASS: fgetxattr(2) on chr passed: ENODATA (61)
 fgetxattr02.c:192: TPASS: fgetxattr(2) on blk passed: ENODATA (61)
-fgetxattr02.c:197: TFAIL: fgetxattr(2) failed on sock: EBADF (9)
+fgetxattr02.c:192: TPASS: fgetxattr(2) on sock passed: ENODATA (61)
 
 Summary:
-passed   12
-failed   1
+passed   13
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fgetxattr02 : 0
-2026-05-19-07-39-38
+2026-05-19-08-47-09
 RUN LTP CASE fgetxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -654,7 +655,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fgetxattr03 : 0
-2026-05-19-07-39-39
+2026-05-19-08-47-09
 RUN LTP CASE flistxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -667,7 +668,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE flistxattr01 : 0
-2026-05-19-07-39-40
+2026-05-19-08-47-10
 RUN LTP CASE flistxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -681,7 +682,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE flistxattr02 : 0
-2026-05-19-07-39-41
+2026-05-19-08-47-11
 RUN LTP CASE flistxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -695,7 +696,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE flistxattr03 : 0
-2026-05-19-07-39-42
+2026-05-19-08-47-11
 RUN LTP CASE fremovexattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -716,7 +717,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr01 : 0
-2026-05-19-07-39-44
+2026-05-19-08-47-12
 RUN LTP CASE fremovexattr02
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -739,7 +740,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr02 : 0
-2026-05-19-07-39-45
+2026-05-19-08-47-13
 RUN LTP CASE fsetxattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -768,7 +769,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fsetxattr01 : 0
-2026-05-19-07-39-46
+2026-05-19-08-47-14
 RUN LTP CASE fsetxattr02
 tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.dep does not exist or not a file
 tst_kernel.c:126: TWARN: expected file /lib/modules/10.0.0/modules.builtin does not exist or not a file
@@ -781,7 +782,7 @@ broken   0
 skipped  1
 warnings 2
 FAIL LTP CASE fsetxattr02 : 0
-2026-05-19-07-39-48
+2026-05-19-08-47-14
 RUN LTP CASE getxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -797,7 +798,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE getxattr01 : 0
-2026-05-19-07-39-49
+2026-05-19-08-47-15
 RUN LTP CASE getxattr02
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -821,7 +822,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE getxattr02 : 0
-2026-05-19-07-39-50
+2026-05-19-08-47-16
 RUN LTP CASE getxattr03
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -842,7 +843,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE getxattr03 : 0
-2026-05-19-07-39-51
+2026-05-19-08-47-17
 RUN LTP CASE getxattr04
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1106: TINFO: Formatting /dev/loop0 with xfs opts='' extra opts=''
@@ -855,7 +856,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE getxattr04 : 0
-2026-05-19-07-39-52
+2026-05-19-08-47-17
 RUN LTP CASE getxattr05
 tst_test.c:1175: TCONF: <sys/xattr.h> or <sys/acl.h> does not exist.
 
@@ -866,7 +867,7 @@ broken   0
 skipped  1
 warnings 0
 FAIL LTP CASE getxattr05 : 0
-2026-05-19-07-39-54
+2026-05-19-08-47-18
 RUN LTP CASE listxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -879,23 +880,23 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE listxattr01 : 0
-2026-05-19-07-39-55
+2026-05-19-08-47-19
 RUN LTP CASE listxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
 listxattr02.c:67: TPASS: listxattr() failed as expected: ERANGE (34)
-listxattr02.c:56: TFAIL: listxattr() succeeded unexpectedly (returned 0)
+listxattr02.c:67: TPASS: listxattr() failed as expected: ENOENT (2)
 listxattr02.c:67: TPASS: listxattr() failed as expected: EFAULT (14)
 listxattr02.c:67: TPASS: listxattr() failed as expected: ENAMETOOLONG (36)
 
 Summary:
-passed   3
-failed   1
+passed   4
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE listxattr02 : 0
-2026-05-19-07-39-56
+2026-05-19-08-47-20
 RUN LTP CASE listxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -909,77 +910,79 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE listxattr03 : 0
-2026-05-19-07-39-57
+2026-05-19-08-47-20
 RUN LTP CASE llistxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 58.646551 0:477 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mllistxattr01.c:80: TBROK: lsetxattr(testfile, security.ltptest1, 0x2d358, 4, 1) failed: ENOSYS (38)
+llistxattr01.c:71: TPASS: llistxattr() succeeded
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llistxattr01 : 0
-2026-05-19-07-39-59
+2026-05-19-08-47-21
 RUN LTP CASE llistxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 59.802172 0:486 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mllistxattr02.c:84: TBROK: lsetxattr(symlink, security.ltptest, 0x2d348, 4, 1) failed: ENOSYS (38)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ERANGE (34)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENOENT (2)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: EFAULT (14)
+llistxattr02.c:73: TPASS: llistxattr() failed as expected: ENAMETOOLONG (36)
 
 Summary:
-passed   0
+passed   4
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llistxattr02 : 0
-2026-05-19-07-40-00
+2026-05-19-08-47-22
 RUN LTP CASE llistxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 60.867177 0:495 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mllistxattr03.c:66: TBROK: lsetxattr(testfile2, security.ltptest, 0x2d310, 4, 1) failed: ENOSYS (38)
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
+llistxattr03.c:55: TPASS: llistxattr() succeed with suitable buffer
 
 Summary:
-passed   0
+passed   2
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llistxattr03 : 0
-2026-05-19-07-40-01
+2026-05-19-08-47-22
 RUN LTP CASE lgetxattr01
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 62.025672 0:504 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mlgetxattr01.c:46: TBROK: lsetxattr(security.ltptest1) failed: ENOSYS (38)
+lgetxattr01.c:77: TPASS: lgetxattr() got expected value
+lgetxattr01.c:90: TPASS: lgetxattr() failed as expected: ENODATA (61)
 
 Summary:
-passed   0
+passed   2
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE lgetxattr01 : 0
-2026-05-19-07-40-02
+2026-05-19-08-47-23
 RUN LTP CASE lgetxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-[37m[ 63.251880 0:513 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mlgetxattr02.c:80: TBROK: lsetxattr(security.ltptest) failed: ENOSYS (38)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ENODATA (61)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: ERANGE (34)
+lgetxattr02.c:63: TPASS: lgetxattr() failed as expected: EFAULT (14)
 
 Summary:
-passed   0
+passed   3
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE lgetxattr02 : 0
-2026-05-19-07-40-03
+2026-05-19-08-47-24
 RUN LTP CASE setxattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -1008,7 +1011,7 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE setxattr01 : 0
-2026-05-19-07-40-05
+2026-05-19-08-47-24
 RUN LTP CASE setxattr02
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
@@ -1027,21 +1030,21 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE setxattr02 : 0
-2026-05-19-07-40-06
+2026-05-19-08-47-25
 RUN LTP CASE setxattr03
 tst_test.c:1733: TINFO: LTP version: 20240524
 tst_test.c:1617: TINFO: Timeout per run is 0h 00m 15s
-setxattr03.c:88: TFAIL: Set attr to immutable file succeeded unexpectedly
-setxattr03.c:88: TFAIL: Set attr to append-only file succeeded unexpectedly
+setxattr03.c:98: TPASS: Set attr to immutable file: EPERM (1)
+setxattr03.c:98: TPASS: Set attr to append-only file: EPERM (1)
 
 Summary:
-passed   0
-failed   2
+passed   2
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE setxattr03 : 0
-2026-05-19-07-40-07
+2026-05-19-08-47-25
 RUN LTP CASE removexattr01
 removexattr01    1  TPASS  :  removexattr() succeeded
 
@@ -1052,20 +1055,20 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE removexattr01 : 0
-2026-05-19-07-40-09
+2026-05-19-08-47-26
 RUN LTP CASE removexattr02
 removexattr02    1  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENODATA(61): No data available
-removexattr02    2  TFAIL  :  removexattr02.c:99: removexattr() failed unexpectedly, expected ENOENT: TEST_ERRNO=ENODATA(61): No data available
+removexattr02    2  TPASS  :  removexattr() failed as expected: TEST_ERRNO=ENOENT(2): No such file or directory
 removexattr02    3  TPASS  :  removexattr() failed as expected: TEST_ERRNO=EFAULT(14): Bad address
 
 Summary:
-passed   2
-failed   1
+passed   3
+failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE removexattr02 : 0
-2026-05-19-07-40-10
+2026-05-19-08-47-27
 RUN LTP CASE lremovexattr01
 tst_device.c:135: TINFO: Found free device '/dev/loop0'
 tst_test.c:1733: TINFO: LTP version: 20240524
@@ -1077,15 +1080,14 @@ tst_test.c:1693: TINFO: === Testing on tmpfs ===
 tst_test.c:1106: TINFO: Skipping mkfs for TMPFS filesystem
 tst_test.c:1087: TINFO: Limiting tmpfs size to 32MB
 tst_test.c:1120: TINFO: Cannot resolve the absolute path of mntpoint: SUCCESS (0)
-[37m[ 71.498771 0:575 starry_kernel::syscall:746] [33mUnimplemented syscall: lsetxattr[m
-[mlremovexattr01.c:59: TBROK: lsetxattr(mntpoint/lremovexattr01symlink, trusted.key1, 0x257e8, 13, 1) failed: ENOSYS (38)
+lremovexattr01.c:107: TPASS: lremovexattr(2) removed attribute as expected
 
 Summary:
-passed   0
+passed   1
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE lremovexattr01 : 0
-2026-05-19-07-40-12
+2026-05-19-08-47-29
 #### OS COMP TEST GROUP END ltp-glibc ####

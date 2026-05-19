@@ -106,6 +106,23 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             sys_listxattr(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
         },
         Sysno::removexattr => sys_removexattr(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::lsetxattr => sys_lsetxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
+        Sysno::lgetxattr => sys_lgetxattr(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
+        Sysno::llistxattr => {
+            sys_llistxattr(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        },
+        Sysno::lremovexattr => sys_lremovexattr(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::fsetxattr => sys_fsetxattr(
             uctx.arg0() as _,
             uctx.arg1() as _,

@@ -4,9 +4,10 @@ use core::ffi::{c_char, c_int};
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FS_CONTEXT;
 use axfs_ng_vfs::Location;
+use linux_raw_sys::general::{FS_APPEND_FL, FS_IMMUTABLE_FL};
 use starry_vm::{vm_load, vm_write_slice};
 
-use crate::file::{Directory, File, get_file_like};
+use crate::file::{Directory, File, get_file_like, inode_flags};
 use crate::mm::vm_load_string;
 
 const XATTR_CREATE: u32 = 1;
@@ -24,17 +25,35 @@ fn load_xattr_name(name: *const c_char) -> AxResult<Vec<u8>> {
 
 fn resolve_path(path: *const c_char) -> AxResult<Location> {
     let path = vm_load_string(path)?;
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
     FS_CONTEXT.lock().resolve(path).map_err(Into::into)
 }
 
+fn resolve_path_no_follow(path: *const c_char) -> AxResult<Location> {
+    let path = vm_load_string(path)?;
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
+    FS_CONTEXT
+        .lock()
+        .resolve_no_follow(path)
+        .map_err(Into::into)
+}
+
 fn resolve_fd(fd: c_int) -> AxResult<Location> {
+    resolve_fd_optional(fd)?.ok_or(AxError::BadFileDescriptor)
+}
+
+fn resolve_fd_optional(fd: c_int) -> AxResult<Option<Location>> {
     let file_like = get_file_like(fd)?;
     if let Some(file) = file_like.downcast_ref::<File>() {
-        Ok(file.inner().backend()?.location().clone())
+        Ok(Some(file.inner().backend()?.location().clone()))
     } else if let Some(dir) = file_like.downcast_ref::<Directory>() {
-        Ok(dir.inner().clone())
+        Ok(Some(dir.inner().clone()))
     } else {
-        Err(AxError::BadFileDescriptor)
+        Ok(None)
     }
 }
 
@@ -44,6 +63,15 @@ fn xattr_exists(loc: &Location, name: &[u8]) -> AxResult<bool> {
         Err(err) if LinuxError::from(err) == LinuxError::ENODATA => Ok(false),
         Err(err) => Err(err),
     }
+}
+
+fn check_xattr_writable(loc: &Location) -> AxResult<()> {
+    if let Ok(path) = loc.absolute_path() {
+        if inode_flags(path.as_str()) & (FS_IMMUTABLE_FL | FS_APPEND_FL) != 0 {
+            return Err(AxError::OperationNotPermitted);
+        }
+    }
+    Ok(())
 }
 
 fn set_xattr(
@@ -61,8 +89,8 @@ fn set_xattr(
     if size > XATTR_SIZE_MAX {
         return Err(AxError::ArgumentListTooLong);
     }
-
     let name = load_xattr_name(name)?;
+    check_xattr_writable(loc)?;
     if flags & XATTR_CREATE != 0 {
         if xattr_exists(loc, &name)? {
             return Err(AxError::AlreadyExists);
@@ -80,12 +108,7 @@ fn set_xattr(
     Ok(0)
 }
 
-fn get_xattr(
-    loc: &Location,
-    name: *const c_char,
-    value: *mut u8,
-    size: usize,
-) -> AxResult<isize> {
+fn get_xattr(loc: &Location, name: *const c_char, value: *mut u8, size: usize) -> AxResult<isize> {
     let name = load_xattr_name(name)?;
     let value_len = loc.get_xattr(&name, &mut [])?;
     if size == 0 {
@@ -151,6 +174,37 @@ pub fn sys_removexattr(path: *const c_char, name: *const c_char) -> AxResult<isi
     remove_xattr(&resolve_path(path)?, name)
 }
 
+pub fn sys_lsetxattr(
+    path: *const c_char,
+    name: *const c_char,
+    value: *const u8,
+    size: usize,
+    flags: u32,
+) -> AxResult<isize> {
+    debug!("sys_lsetxattr <= path: {path:p}, name: {name:p}, size: {size}, flags: {flags}");
+    set_xattr(&resolve_path_no_follow(path)?, name, value, size, flags)
+}
+
+pub fn sys_lgetxattr(
+    path: *const c_char,
+    name: *const c_char,
+    value: *mut u8,
+    size: usize,
+) -> AxResult<isize> {
+    debug!("sys_lgetxattr <= path: {path:p}, name: {name:p}, size: {size}");
+    get_xattr(&resolve_path_no_follow(path)?, name, value, size)
+}
+
+pub fn sys_llistxattr(path: *const c_char, list: *mut u8, size: usize) -> AxResult<isize> {
+    debug!("sys_llistxattr <= path: {path:p}, size: {size}");
+    list_xattr(&resolve_path_no_follow(path)?, list, size)
+}
+
+pub fn sys_lremovexattr(path: *const c_char, name: *const c_char) -> AxResult<isize> {
+    debug!("sys_lremovexattr <= path: {path:p}, name: {name:p}");
+    remove_xattr(&resolve_path_no_follow(path)?, name)
+}
+
 pub fn sys_fsetxattr(
     fd: c_int,
     name: *const c_char,
@@ -169,7 +223,12 @@ pub fn sys_fgetxattr(
     size: usize,
 ) -> AxResult<isize> {
     debug!("sys_fgetxattr <= fd: {fd}, name: {name:p}, size: {size}");
-    get_xattr(&resolve_fd(fd)?, name, value, size)
+    if let Some(loc) = resolve_fd_optional(fd)? {
+        get_xattr(&loc, name, value, size)
+    } else {
+        load_xattr_name(name)?;
+        Err(AxError::from(LinuxError::ENODATA))
+    }
 }
 
 pub fn sys_flistxattr(fd: c_int, list: *mut u8, size: usize) -> AxResult<isize> {
