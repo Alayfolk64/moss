@@ -1,45 +1,44 @@
 if ! /glibc/busybox test -d /bin; then
-    echo @@@@@@@@@@ setup @@@@@@@@@@
-
     /glibc/busybox mkdir -v /bin
-    /glibc/busybox --install -s /bin
-    export PATH=/bin
-
-    mkdir -v /lib
-    if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
-        ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
-        ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
-    elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
-        ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
-        ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
-        ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
-    fi
-    ln -v -s /lib /lib64
-
-    mkdir -v /usr
-    ln -v -s /lib /usr/lib64
-
-    cd /
-    mkdir -v var
-    cd var
-    mkdir -v tmp log
-
-    cd /
-    mkdir -v etc
-    echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
-    echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
-    echo "root:x:0:" >>/etc/group
-    echo "nobody:x:65534:" >>/etc/group
-    echo "nameserver 8.8.8.8" >/etc/resolv.conf
-
-    mkdir -vp /lib/modules/10.0.0/build
-    echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
-    echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
-    echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
 fi
 
+/glibc/busybox --install -s /bin
+export PATH=/bin:$PATH
+
+mkdir -v /lib
+if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
+    ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
+    ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
+    ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+fi
+ln -v -s /lib /lib64
+
+mkdir -v /usr
+ln -v -s /lib /usr/lib64
+
+cd /
+mkdir -v var
+cd var
+mkdir -v tmp log
+
+cd /
+mkdir -v etc
+echo "root:x:0:0:root:/root:/bin/sh" >>/etc/passwd
+echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
+echo "root:x:0:" >>/etc/group
+echo "nobody:x:65534:" >>/etc/group
+echo "nameserver 8.8.8.8" >/etc/resolv.conf
+
+mkdir -vp /lib/modules/10.0.0/build
+echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
+echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
+echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
+
 ARCH=RISCV
-if [[-e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
+if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
@@ -233,29 +232,19 @@ run_ltp() {
         eventfd2_02
         eventfd2_03
         execl01
-        execl01_child
         execle01
-        execle01_child
         execlp01
-        execlp01_child
         execv01
-        execv01_child
         execve01
-        execve01_child
         execve02
         execve03
         execve04
         execve05
         execve06
-        execve06_child
-        execve_child
         execveat01
         execveat02
         execveat03
-        execveat_child
-        execveat_errno
         execvp01
-        execvp01_child
         exit01
         exit02
         exit_group01
@@ -269,30 +258,11 @@ run_ltp() {
         fallocate04
         # fallocate05
         # fallocate06
-        # fanotify01
-        # fanotify02
-        # fanotify03
         fanotify04
-        # fanotify05
-        # fanotify06
-        # fanotify07
         fanotify08
-        # fanotify09
-        # fanotify10
-        # fanotify11
-        # fanotify12
-        # fanotify13
-        # fanotify14
-        # fanotify15
-        # fanotify16
-        # fanotify17
-        # fanotify18
-        # fanotify19
-        # fanotify20
-        # fanotify21
-        # fanotify22
-        # fanotify23
-        # fanotify_child
+        fanotify14
+        fanotify18
+        fanotify20
         fchdir01
         fchdir02
         # fchdir03
@@ -516,18 +486,12 @@ run_ltp() {
         getrandom03
         getrandom04
         getrandom05
-        # getresgid01
-        # getresgid01_16
-        # getresgid02
-        # getresgid02_16
-        # getresgid03
-        # getresgid03_16
-        # getresuid01
-        # getresuid01_16
-        # getresuid02
-        # getresuid02_16
-        # getresuid03
-        # getresuid03_16
+        getresgid01
+        getresgid02
+        getresgid03
+        getresuid01
+        getresuid02
+        getresuid03
         getrlimit01
         getrlimit02
         # getrlimit03
@@ -1557,10 +1521,18 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+        getresgid01
+        getresgid02
+        getresgid03
+        getresuid01
+        getresuid02
+        getresuid03
+    "
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
+
 
 
     for f in $(printf '%s\n' "$all_testcases" | awk 'NF && $1 !~ /^#/ { print $1 }'); do

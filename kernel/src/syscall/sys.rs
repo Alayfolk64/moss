@@ -12,6 +12,24 @@ use starry_vm::{VmMutPtr, vm_write_slice};
 
 use crate::task::{AsThread, processes};
 
+pub fn sys_getresgid(rid: *mut u32, eid: *mut u32, sid: *mut u32) -> AxResult<isize> {
+    let curr = axtask::current();
+    let proc_data = &curr.as_thread().proc_data;
+    rid.vm_write(proc_data.gid())?;
+    eid.vm_write(proc_data.egid())?;
+    sid.vm_write(proc_data.sgid())?;
+    Ok(0)
+}
+
+pub fn sys_getresuid(rid: *mut u32, eid: *mut u32, sid: *mut u32) -> AxResult<isize> {
+    let curr = axtask::current();
+    let proc_data = &curr.as_thread().proc_data;
+    rid.vm_write(proc_data.uid())?;
+    eid.vm_write(proc_data.euid())?;
+    sid.vm_write(proc_data.suid())?;
+    Ok(0)
+}
+
 pub fn sys_getuid() -> AxResult<isize> {
     Ok(axtask::current().as_thread().proc_data.uid() as _)
 }
