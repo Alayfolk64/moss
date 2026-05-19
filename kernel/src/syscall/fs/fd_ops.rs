@@ -23,7 +23,7 @@ use crate::{
     file::{
         Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, add_file_like_from,
         async_fcntl_get_owner, async_fcntl_get_signal, async_fcntl_set_owner,
-        async_fcntl_set_signal, close_file_like, get_file_like, with_fs,
+        async_fcntl_set_signal, close_file_like, get_file_like, resolve_at, with_fs,
     },
     mm::{UserConstPtr, UserPtr, vm_load_string},
     pseudofs::{Device, dev::tty},
@@ -66,6 +66,80 @@ fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32))
         options.direct(true);
     }
     options
+}
+
+fn open_access_mode(flags: u32) -> u32 {
+    if flags & O_PATH != 0 {
+        return 0;
+    }
+
+    let mut mode = match flags & O_ACCMODE {
+        O_WRONLY => W_OK as u32,
+        O_RDWR => (R_OK | W_OK) as u32,
+        _ => R_OK as u32,
+    };
+    if flags & O_TRUNC != 0 {
+        mode |= W_OK as u32;
+    }
+    mode
+}
+
+fn has_open_access(mode: u32, st_mode: u32, st_uid: u32, st_gid: u32, uid: u32, gid: u32) -> bool {
+    if mode == 0 || uid == 0 {
+        return true;
+    }
+
+    let shift = if uid == st_uid {
+        6
+    } else if gid == st_gid {
+        3
+    } else {
+        0
+    };
+
+    let mut required = 0;
+    if mode & R_OK as u32 != 0 {
+        required |= 0o4 << shift;
+    }
+    if mode & W_OK as u32 != 0 {
+        required |= 0o2 << shift;
+    }
+
+    st_mode & required == required
+}
+
+fn check_open_access(dirfd: c_int, path: &str, flags: u32, (uid, gid): (u32, u32)) -> AxResult {
+    let mode = open_access_mode(flags);
+    if mode == 0 {
+        return Ok(());
+    }
+
+    let resolve_flags = if flags & O_NOFOLLOW != 0 {
+        AT_SYMLINK_NOFOLLOW
+    } else {
+        0
+    };
+    let loc = match resolve_at(dirfd, Some(path), resolve_flags) {
+        Ok(result) => match result.into_file() {
+            Some(loc) => loc,
+            None => return Ok(()),
+        },
+        Err(AxError::NotFound) if flags & O_CREAT != 0 => return Ok(()),
+        Err(err) => return Err(err),
+    };
+    let metadata = loc.metadata()?;
+    if has_open_access(
+        mode,
+        metadata.mode.bits() as u32,
+        metadata.uid,
+        metadata.gid,
+        uid,
+        gid,
+    ) {
+        Ok(())
+    } else {
+        Err(AxError::PermissionDenied)
+    }
 }
 
 fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
@@ -149,6 +223,7 @@ pub fn sys_openat(
         let open_options = flags_to_options(open_flags, mode, ids);
 
         if flags_u32 & O_EXCL == 0 {
+            check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
             match with_fs(dirfd, |fs| open_options.open(fs, path.as_str())) {
                 Ok(result) => {
                     return add_to_fd(result, flags_u32).map(|fd| fd as isize);
@@ -168,7 +243,8 @@ pub fn sys_openat(
     }
 
     let options = flags_to_options(flags, mode, ids);
-    with_fs(dirfd, |fs| options.open(fs, path))
+    check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
+    with_fs(dirfd, |fs| options.open(fs, path.as_str()))
         .and_then(|it| add_to_fd(it, flags as _))
         .map(|fd| fd as isize)
 }

@@ -190,16 +190,28 @@ pub fn sys_umask(mask: u32) -> AxResult<isize> {
 
 const UID_GID_NO_CHANGE: u32 = u32::MAX;
 
+fn valid_id_change(new_id: u32, allowed_ids: &[u32]) -> bool {
+    new_id == UID_GID_NO_CHANGE || allowed_ids.contains(&new_id)
+}
+
 pub fn sys_setreuid(ruid: u32, euid: u32) -> AxResult<isize> {
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
     let old_ruid = proc_data.uid();
+    let old_euid = proc_data.euid();
+    let old_suid = proc_data.suid();
     let new_euid = if euid != UID_GID_NO_CHANGE {
         euid
     } else {
-        proc_data.euid()
+        old_euid
     };
 
+    if old_euid != 0
+        && (!valid_id_change(ruid, &[old_ruid, old_euid])
+            || !valid_id_change(euid, &[old_ruid, old_euid, old_suid]))
+    {
+        return Err(eperm());
+    }
     if ruid != UID_GID_NO_CHANGE {
         proc_data.set_real_uid(ruid);
     }
@@ -216,12 +228,20 @@ pub fn sys_setregid(rgid: u32, egid: u32) -> AxResult<isize> {
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
     let old_rgid = proc_data.gid();
+    let old_egid = proc_data.egid();
+    let old_sgid = proc_data.sgid();
     let new_egid = if egid != UID_GID_NO_CHANGE {
         egid
     } else {
-        proc_data.egid()
+        old_egid
     };
 
+    if old_egid != 0
+        && (!valid_id_change(rgid, &[old_rgid, old_egid])
+            || !valid_id_change(egid, &[old_rgid, old_egid, old_sgid]))
+    {
+        return Err(eperm());
+    }
     if rgid != UID_GID_NO_CHANGE {
         proc_data.set_real_gid(rgid);
     }
@@ -237,6 +257,19 @@ pub fn sys_setregid(rgid: u32, egid: u32) -> AxResult<isize> {
 pub fn sys_setresuid(ruid: u32, euid: u32, _suid: u32) -> AxResult<isize> {
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
+    let old_ruid = proc_data.uid();
+    let old_euid = proc_data.euid();
+    let old_suid = proc_data.suid();
+
+    if old_euid != 0 {
+        let allowed = [old_ruid, old_euid, old_suid];
+        if !valid_id_change(ruid, &allowed)
+            || !valid_id_change(euid, &allowed)
+            || !valid_id_change(_suid, &allowed)
+        {
+            return Err(eperm());
+        }
+    }
     if ruid != UID_GID_NO_CHANGE {
         proc_data.set_real_uid(ruid);
     }
@@ -252,6 +285,19 @@ pub fn sys_setresuid(ruid: u32, euid: u32, _suid: u32) -> AxResult<isize> {
 pub fn sys_setresgid(rgid: u32, egid: u32, _sgid: u32) -> AxResult<isize> {
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
+    let old_rgid = proc_data.gid();
+    let old_egid = proc_data.egid();
+    let old_sgid = proc_data.sgid();
+
+    if old_egid != 0 {
+        let allowed = [old_rgid, old_egid, old_sgid];
+        if !valid_id_change(rgid, &allowed)
+            || !valid_id_change(egid, &allowed)
+            || !valid_id_change(_sgid, &allowed)
+        {
+            return Err(eperm());
+        }
+    }
     if rgid != UID_GID_NO_CHANGE {
         proc_data.set_real_gid(rgid);
     }

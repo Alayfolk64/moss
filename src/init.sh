@@ -41,6 +41,8 @@ ARCH=RISCV
 if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
+chmod +x /musl/basic/run-all.sh
+chmod +x /glibc/basic/run-all.sh
 
 musl_runtime() {
     echo "prepare musl runtime"
@@ -498,7 +500,6 @@ run_ltp() {
         getrusage01
         getrusage02
         getrusage03
-        # getrusage03_child
         # getrusage04
         getsid01
         getsid02
@@ -1154,46 +1155,26 @@ run_ltp() {
         setpgrp02
         # setpriority01
         # setpriority02
-        # setregid01
-        # setregid01_16
+        setregid01
         setregid02
-        # setregid02_16
-        # setregid03
-        # setregid03_16
-        # setregid04
-        # setregid04_16
-        # setresgid01
-        # setresgid01_16
-        # setresgid02
-        # setresgid02_16
-        # setresgid03
-        # setresgid03_16
+        setregid03
+        setregid04
+        setresgid01
+        setresgid02
+        setresgid03
         setresgid04
-        # setresgid04_16
-        # setresuid01
-        # setresuid01_16
-        # setresuid02
-        # setresuid02_16
-        # setresuid03
-        # setresuid03_16
+        setresuid01
+        setresuid02
+        setresuid03
         setresuid04
-        # setresuid04_16
         setresuid05
-        # setresuid05_16
         setreuid01
-        # setreuid01_16
-        # setreuid02
-        # setreuid02_16
+        setreuid02
         setreuid03
-        # setreuid03_16
         setreuid04
-        # setreuid04_16
         setreuid05
-        # setreuid05_16
-        # setreuid06
-        # setreuid06_16
+        setreuid06
         setreuid07
-        # setreuid07_16
         # setrlimit01
         # setrlimit02
         # setrlimit03
@@ -1522,12 +1503,26 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-        getresgid01
-        getresgid02
-        getresgid03
-        getresuid01
-        getresuid02
-        getresuid03
+        setregid01
+        setregid02
+        setregid03
+        setregid04
+        setresgid01
+        setresgid02
+        setresgid03
+        setresgid04
+        setresuid01
+        setresuid02
+        setresuid03
+        setresuid04
+        setresuid05
+        setreuid01
+        setreuid02
+        setreuid03
+        setreuid04
+        setreuid05
+        setreuid06
+        setreuid07
     "
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
@@ -1565,12 +1560,12 @@ skip_group() {
 
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=1
-busybox=1
+busybox=0
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=1
+libctest=0
 lmbench=0
 ltp=1
 lua=0
