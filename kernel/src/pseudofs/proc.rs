@@ -98,6 +98,13 @@ const DUMMY_SCHED_DEBUG: &str = indoc! {"
     .load                          : 0
 "};
 
+const DUMMY_CPUINFO: &str = indoc! {"
+    processor	: 0
+    model name	: QEMU Virtual CPU
+    cpu MHz		: 1000.000
+    bogomips	: 1000.00
+"};
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -378,6 +385,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     root.add(
         "meminfo",
         SimpleFile::new_regular(fs.clone(), || Ok(DUMMY_MEMINFO)),
+    );
+    root.add(
+        "cpuinfo",
+        SimpleFile::new_regular(fs.clone(), || Ok(DUMMY_CPUINFO)),
     );
     root.add(
         "meminfo2",
