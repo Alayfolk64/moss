@@ -19,15 +19,19 @@ use scope_local::ActiveScope;
 use spin::RwLock;
 use starry_signal::Signo;
 
+use super::fanotify::notify_fanotify_open;
 use crate::{
     file::{
-        Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, add_file_like_from,
-        async_fcntl_get_owner, async_fcntl_get_signal, async_fcntl_set_owner,
+        Directory, FD_TABLE, File, FileLike, PIPE_MAX_SIZE, Pipe, add_file_like,
+        add_file_like_from, async_fcntl_get_owner, async_fcntl_get_signal, async_fcntl_set_owner,
         async_fcntl_set_signal, close_file_like, get_file_like, resolve_at, with_fs,
     },
     mm::{UserConstPtr, UserPtr, vm_load_string},
     pseudofs::{Device, dev::tty},
-    syscall::sys::{sys_getegid, sys_geteuid},
+    syscall::{
+        sys::{sys_getegid, sys_geteuid},
+        task::current_has_cap,
+    },
     task::AsThread,
 };
 
@@ -189,7 +193,10 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
     if flags & O_NONBLOCK != 0 {
         f.set_nonblocking(true)?;
     }
-    add_file_like(f, flags & O_CLOEXEC != 0)
+    let opened = f.clone();
+    let fd = add_file_like(f, flags & O_CLOEXEC != 0)?;
+    notify_fanotify_open(opened);
+    Ok(fd)
 }
 
 /// Open or create a file.
@@ -262,8 +269,11 @@ pub fn sys_open(path: *const c_char, flags: i32, mode: __kernel_mode_t) -> AxRes
 
 pub fn sys_close(fd: c_int) -> AxResult<isize> {
     debug!("sys_close <= {fd}");
-    release_posix_locks_for_fd(fd);
+    let file_like = get_file_like(fd)?;
+    release_posix_locks_for_file_like(&file_like);
+    release_file_lease_for_file_like(&file_like);
     close_file_like(fd)?;
+    release_bsd_flocks_for_file_like_if_last(&file_like);
     Ok(0)
 }
 
@@ -314,11 +324,11 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
                     f.cloexec = true;
                 }
             } else {
-                if let Some(file_desc) = fd_table.get(fd) {
+                if let Some(file_desc) = fd_table.remove(fd) {
                     release_posix_locks_for_file_like(&file_desc.inner);
                     release_file_lease_for_file_like(&file_desc.inner);
+                    release_bsd_flocks_for_file_like_if_last(&file_desc.inner);
                 }
-                fd_table.remove(fd);
             }
         }
     }
@@ -359,10 +369,17 @@ struct FileLease {
     lease_type: i16,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BsdFileLock {
+    owner: usize,
+    exclusive: bool,
+}
+
 static POSIX_LOCKS: RwLock<BTreeMap<PosixLockKey, Vec<PosixRecordLock>>> =
     RwLock::new(BTreeMap::new());
 static POSIX_WAIT_GRAPH: RwLock<BTreeMap<u32, Vec<u32>>> = RwLock::new(BTreeMap::new());
 static FILE_LEASES: RwLock<BTreeMap<PosixLockKey, FileLease>> = RwLock::new(BTreeMap::new());
+static BSD_FLOCKS: RwLock<BTreeMap<PosixLockKey, Vec<BsdFileLock>>> = RwLock::new(BTreeMap::new());
 
 fn has_unblocked_pending_signal() -> bool {
     let curr = current();
@@ -378,6 +395,31 @@ fn posix_lock_key(file: &File) -> AxResult<PosixLockKey> {
         dev: meta.device,
         ino: meta.inode,
     })
+}
+
+fn file_description_owner(file_like: &Arc<dyn FileLike>) -> usize {
+    let ptr: *const dyn FileLike = Arc::as_ptr(file_like);
+    ptr as *const () as usize
+}
+
+fn flock_mode(operation: c_int) -> AxResult<(bool, bool)> {
+    let shared = operation & LOCK_SH as c_int != 0;
+    let exclusive = operation & LOCK_EX as c_int != 0;
+    let unlock = operation & LOCK_UN as c_int != 0;
+    let nonblock = operation & LOCK_NB as c_int != 0;
+    let known = LOCK_SH | LOCK_EX | LOCK_UN | LOCK_NB;
+
+    if operation & !(known as c_int) != 0 || (shared as u8 + exclusive as u8 + unlock as u8) != 1 {
+        return Err(AxError::InvalidInput);
+    }
+
+    Ok((exclusive, nonblock))
+}
+
+fn bsd_flock_conflicts(locks: &[BsdFileLock], owner: usize, exclusive: bool) -> bool {
+    locks
+        .iter()
+        .any(|lock| lock.owner != owner && (exclusive || lock.exclusive))
 }
 
 fn validate_lock_type(lock_type: i16) -> AxResult<()> {
@@ -704,15 +746,38 @@ fn release_file_lease_for_file_like(file_like: &Arc<dyn FileLike>) {
     }
 }
 
-fn release_posix_locks_for_fd(fd: c_int) {
-    let Ok(file_like) = get_file_like(fd) else {
+fn release_bsd_flocks_for_file_like(file_like: &Arc<dyn FileLike>) {
+    let Some(file) = file_like.downcast_ref::<File>() else {
         return;
     };
-    release_posix_locks_for_file_like(&file_like);
-    release_file_lease_for_file_like(&file_like);
+    let Ok(key) = posix_lock_key(file) else {
+        return;
+    };
+    let owner = file_description_owner(file_like);
+    let mut map = BSD_FLOCKS.write();
+    if let Some(locks) = map.get_mut(&key) {
+        locks.retain(|lock| lock.owner != owner);
+        if locks.is_empty() {
+            map.remove(&key);
+        }
+    }
+}
+
+fn release_bsd_flocks_for_file_like_if_last(file_like: &Arc<dyn FileLike>) {
+    if Arc::strong_count(file_like) == 1 {
+        release_bsd_flocks_for_file_like(file_like);
+    }
 }
 
 pub fn close_all_files_for_current_process() {
+    let fd_table_ref = FD_TABLE.clone();
+    // CLONE_FILES shares the table Arc across process scopes; only the last
+    // process that references it should close the underlying descriptors.
+    if Arc::strong_count(&fd_table_ref) > 2 {
+        return;
+    }
+    drop(fd_table_ref);
+
     let file_likes = {
         let fd_table = FD_TABLE.read();
         fd_table
@@ -724,6 +789,7 @@ pub fn close_all_files_for_current_process() {
     for file_like in &file_likes {
         release_posix_locks_for_file_like(file_like);
         release_file_lease_for_file_like(file_like);
+        release_bsd_flocks_for_file_like(file_like);
     }
 
     let mut fd_table = FD_TABLE.write();
@@ -974,11 +1040,11 @@ pub fn sys_dup3(old_fd: c_int, new_fd: c_int, flags: c_int) -> AxResult<isize> {
         .ok_or(AxError::BadFileDescriptor)?;
     f.cloexec = flags.contains(Dup3Flags::O_CLOEXEC);
 
-    if let Some(file_desc) = fd_table.get(new_fd as _) {
+    if let Some(file_desc) = fd_table.remove(new_fd as _) {
         release_posix_locks_for_file_like(&file_desc.inner);
         release_file_lease_for_file_like(&file_desc.inner);
+        release_bsd_flocks_for_file_like_if_last(&file_desc.inner);
     }
-    fd_table.remove(new_fd as _);
     fd_table
         .add_at(new_fd as _, f)
         .map_err(|_| AxError::BadFileDescriptor)?;
@@ -1037,8 +1103,13 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
         }
         F_SETPIPE_SZ => {
             let pipe = Pipe::from_fd(fd)?;
-            pipe.resize(arg)?;
-            Ok(0)
+            if arg > (1usize << 31) {
+                return Err(AxError::InvalidInput);
+            }
+            if arg > PIPE_MAX_SIZE && !current_has_cap(CAP_SYS_RESOURCE) {
+                return Err(AxError::from(LinuxError::EPERM));
+            }
+            Ok(pipe.resize(arg)? as _)
         }
         _ => {
             warn!("unsupported fcntl parameters: cmd: {cmd}");
@@ -1049,6 +1120,31 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
 
 pub fn sys_flock(fd: c_int, operation: c_int) -> AxResult<isize> {
     debug!("flock <= fd: {fd}, operation: {operation}");
-    // TODO: flock
-    Ok(0)
+    let (exclusive, nonblock) = flock_mode(operation)?;
+    let file_like = get_file_like(fd)?;
+    let file = file_like
+        .downcast_ref::<File>()
+        .ok_or(AxError::InvalidInput)?;
+    let key = posix_lock_key(file)?;
+    let owner = file_description_owner(&file_like);
+
+    if operation & LOCK_UN as c_int != 0 {
+        release_bsd_flocks_for_file_like(&file_like);
+        return Ok(0);
+    }
+
+    loop {
+        let mut map = BSD_FLOCKS.write();
+        let locks = map.entry(key).or_default();
+        if !bsd_flock_conflicts(locks, owner, exclusive) {
+            locks.retain(|lock| lock.owner != owner);
+            locks.push(BsdFileLock { owner, exclusive });
+            return Ok(0);
+        }
+        if nonblock {
+            return Err(AxError::WouldBlock);
+        }
+        drop(map);
+        yield_now();
+    }
 }

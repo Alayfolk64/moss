@@ -20,7 +20,7 @@ use indoc::indoc;
 use starry_process::Process;
 
 use crate::{
-    file::FD_TABLE,
+    file::{FD_TABLE, PIPE_MAX_SIZE},
     pseudofs::{
         DirMaker, DirMapping, NodeOpsMux, RwFile, SimpleDir, SimpleDirOps, SimpleFile,
         SimpleFileOperation, SimpleFs, StaticFile,
@@ -464,6 +464,17 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             );
 
             SimpleDir::new_maker(fs.clone(), Arc::new(kernel))
+        });
+
+        sys.add("fs", {
+            let mut fs_sys = DirMapping::new();
+
+            fs_sys.add(
+                "pipe-max-size",
+                SimpleFile::new_regular(fs.clone(), || Ok(format!("{PIPE_MAX_SIZE}\n"))),
+            );
+
+            SimpleDir::new_maker(fs.clone(), Arc::new(fs_sys))
         });
 
         SimpleDir::new_maker(fs.clone(), Arc::new(sys))

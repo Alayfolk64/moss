@@ -37,6 +37,7 @@ pub(crate) fn new_tcp_socket() -> smol::Socket<'static> {
 pub struct TcpSocket {
     state: StateLock,
     handle: SocketHandle,
+    ever_connected: AtomicBool,
 
     general: GeneralOptions,
     has_mcast_group: AtomicBool,
@@ -52,6 +53,7 @@ impl TcpSocket {
         Self {
             state: StateLock::new(State::Idle),
             handle: SOCKET_SET.add(new_tcp_socket()),
+            ever_connected: AtomicBool::new(false),
 
             general: GeneralOptions::new(),
             has_mcast_group: AtomicBool::new(false),
@@ -65,6 +67,7 @@ impl TcpSocket {
         let result = Self {
             state: StateLock::new(State::Connected),
             handle,
+            ever_connected: AtomicBool::new(true),
 
             general: GeneralOptions::new(),
             has_mcast_group: AtomicBool::new(false),
@@ -109,6 +112,7 @@ impl TcpSocket {
             smol::State::SynSent => false, // wait for connection
             smol::State::Established => {
                 self.state.set(State::Connected); // connected
+                self.ever_connected.store(true, Ordering::Release);
                 debug!(
                     "TCP socket {}: connected to {}",
                     self.handle,
@@ -255,6 +259,9 @@ impl SocketOps for TcpSocket {
 
     fn connect(&self, remote_addr: SocketAddrEx) -> AxResult {
         let remote_addr = remote_addr.into_ip()?;
+        if self.ever_connected.load(Ordering::Acquire) {
+            return Err(ax_err_type!(AlreadyConnected));
+        }
         self.state
             .lock(State::Idle)
             .map_err(|state| {

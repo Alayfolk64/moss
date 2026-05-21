@@ -31,6 +31,7 @@ use crate::{
 };
 
 const RING_BUFFER_INIT_SIZE: usize = 65536; // 64 KiB
+pub const PIPE_MAX_SIZE: usize = 1048576; // 1 MiB
 
 struct Shared {
     buffer: Mutex<HeapRb<u8>>,
@@ -87,12 +88,12 @@ impl Pipe {
         self.shared.buffer.lock().capacity().get()
     }
 
-    pub fn resize(&self, new_size: usize) -> AxResult<()> {
+    pub fn resize(&self, new_size: usize) -> AxResult<usize> {
         let new_size = new_size.div_ceil(PAGE_SIZE_4K).max(1) * PAGE_SIZE_4K;
 
         let mut buffer = self.shared.buffer.lock();
         if new_size == buffer.capacity().get() {
-            return Ok(());
+            return Ok(new_size);
         }
         if new_size < buffer.occupied_len() {
             return Err(AxError::ResourceBusy);
@@ -101,7 +102,7 @@ impl Pipe {
         let (left, right) = old_buffer.as_slices();
         buffer.push_slice(left);
         buffer.push_slice(right);
-        Ok(())
+        Ok(new_size)
     }
 
     pub(super) fn async_key(&self) -> usize {

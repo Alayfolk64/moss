@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, format};
+use core::sync::atomic::{AtomicI64, Ordering};
 
 use axerrno::{AxError, AxResult};
 use axhal::time::{TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time};
@@ -54,6 +55,7 @@ const ADJ_VALID_MODES: u32 = ADJ_OFFSET
 const TIME_OK: isize = 0;
 const MIN_TICK: isize = 9000;
 const MAX_TICK: isize = 11000;
+static REALTIME_OFFSET_NANOS: AtomicI64 = AtomicI64::new(0);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -98,7 +100,7 @@ impl Timex {
             constant: 0,
             precision: 1,
             tolerance: 0,
-            time: timeval::from_time_value(wall_time()),
+            time: timeval::from_time_value(realtime_now()),
             tick: 10_000,
             ppsfreq: 0,
             jitter: 0,
@@ -117,7 +119,7 @@ impl Timex {
 
 pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxResult<isize> {
     let now = match clock_id as u32 {
-        CLOCK_REALTIME | CLOCK_REALTIME_COARSE | CLOCK_REALTIME_ALARM | CLOCK_TAI => wall_time(),
+        CLOCK_REALTIME | CLOCK_REALTIME_COARSE | CLOCK_REALTIME_ALARM | CLOCK_TAI => realtime_now(),
         CLOCK_MONOTONIC
         | CLOCK_MONOTONIC_RAW
         | CLOCK_MONOTONIC_COARSE
@@ -137,6 +139,30 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
         }
     };
     ts.vm_write(timespec::from_time_value(now))?;
+    Ok(0)
+}
+
+pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> AxResult<isize> {
+    if clock_id as u32 != CLOCK_REALTIME {
+        return Err(AxError::InvalidInput);
+    }
+    if current().as_thread().proc_data.euid() != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+
+    let target = unsafe { ts.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
+    let target_nanos: i128 = target
+        .as_nanos()
+        .try_into()
+        .map_err(|_| AxError::InvalidInput)?;
+    let base_nanos: i128 = wall_time()
+        .as_nanos()
+        .try_into()
+        .map_err(|_| AxError::InvalidInput)?;
+    let offset = (target_nanos - base_nanos)
+        .try_into()
+        .map_err(|_| AxError::InvalidInput)?;
+    REALTIME_OFFSET_NANOS.store(offset, Ordering::Relaxed);
     Ok(0)
 }
 
@@ -163,7 +189,7 @@ pub fn sys_clock_adjtime(clock_id: __kernel_clockid_t, buf: *mut Timex) -> AxRes
 }
 
 pub fn sys_gettimeofday(ts: *mut timeval) -> AxResult<isize> {
-    ts.vm_write(timeval::from_time_value(wall_time()))?;
+    ts.vm_write(timeval::from_time_value(realtime_now()))?;
     Ok(0)
 }
 
@@ -617,10 +643,23 @@ fn valid_timerfd_clock(clock_id: u32) -> bool {
 
 fn posix_timer_clock_now(clock_id: u32, pid: Pid, tid: Pid) -> Option<TimeValue> {
     match clock_id {
-        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => Some(wall_time()),
+        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => Some(realtime_now()),
         CLOCK_PROCESS_CPUTIME_ID => process_cpu_time(pid),
         CLOCK_THREAD_CPUTIME_ID => thread_cpu_time(tid),
         _ => Some(monotonic_time()),
+    }
+}
+
+fn realtime_now() -> TimeValue {
+    add_realtime_offset(wall_time(), REALTIME_OFFSET_NANOS.load(Ordering::Relaxed))
+}
+
+fn add_realtime_offset(time: TimeValue, offset: i64) -> TimeValue {
+    if offset >= 0 {
+        time.checked_add(TimeValue::from_nanos(offset as u64))
+            .unwrap_or(TimeValue::MAX)
+    } else {
+        time.saturating_sub(TimeValue::from_nanos(offset.unsigned_abs()))
     }
 }
 

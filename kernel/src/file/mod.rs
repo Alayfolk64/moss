@@ -40,7 +40,7 @@ pub use self::{
         Directory, File, inode_flags, register_special_node, resolve_at, set_inode_flags, with_fs,
     },
     pidfd::PidFd,
-    pipe::Pipe,
+    pipe::{PIPE_MAX_SIZE, Pipe},
     timerfd::TimerFd,
 };
 use crate::task::{
