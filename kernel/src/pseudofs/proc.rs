@@ -165,6 +165,49 @@ fn task_status(task: &AxTaskRef) -> String {
     )
 }
 
+fn proc_rw_file(fs: Arc<SimpleFs>, initial: impl Into<Vec<u8>>) -> Arc<SimpleFile> {
+    let data = Arc::new(Mutex::new(initial.into()));
+    SimpleFile::new_regular(
+        fs,
+        RwFile::new(move |req| match req {
+            SimpleFileOperation::Read => Ok(Some(data.lock().clone())),
+            SimpleFileOperation::Write(input) => {
+                let mut data = data.lock();
+                data.clear();
+                data.extend_from_slice(input);
+                Ok(None::<Vec<u8>>)
+            }
+        }),
+    )
+}
+
+fn proc_setgroups_file(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
+    let data = Arc::new(Mutex::new(b"allow\n".to_vec()));
+    SimpleFile::new_regular(
+        fs,
+        RwFile::new(move |req| match req {
+            SimpleFileOperation::Read => Ok(Some(data.lock().clone())),
+            SimpleFileOperation::Write(input) => {
+                let input = str::from_utf8(input).map_err(|_| VfsError::InvalidInput)?;
+                let input = input.trim();
+                let mut data = data.lock();
+                data.clear();
+                if input.is_empty() {
+                    return Ok(None::<Vec<u8>>);
+                }
+                if input.starts_with("deny") {
+                    data.extend_from_slice(b"deny\n");
+                } else if input.starts_with("allow") {
+                    data.extend_from_slice(b"allow\n");
+                } else {
+                    return Err(VfsError::InvalidInput);
+                }
+                Ok(None::<Vec<u8>>)
+            }
+        }),
+    )
+}
+
 /// The /proc/[pid]/fd directory
 struct ThreadFdDir {
     fs: Arc<SimpleFs>,
@@ -225,6 +268,9 @@ impl SimpleDirOps for ThreadDir {
                 "comm",
                 "exe",
                 "fd",
+                "setgroups",
+                "uid_map",
+                "gid_map",
             ]
             .into_iter()
             .map(Cow::Borrowed),
@@ -328,6 +374,23 @@ impl SimpleDirOps for ThreadDir {
                     fs,
                     task: Arc::downgrade(&task),
                 }),
+            )
+            .into(),
+            "setgroups" => proc_setgroups_file(fs).into(),
+            "uid_map" => proc_rw_file(
+                fs,
+                format!(
+                    "         0          {}          1\n",
+                    task.as_thread().proc_data.uid()
+                ),
+            )
+            .into(),
+            "gid_map" => proc_rw_file(
+                fs,
+                format!(
+                    "         0          {}          1\n",
+                    task.as_thread().proc_data.gid()
+                ),
             )
             .into(),
             _ => return Err(VfsError::NotFound),
@@ -475,6 +538,17 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             );
 
             SimpleDir::new_maker(fs.clone(), Arc::new(fs_sys))
+        });
+
+        sys.add("user", {
+            let mut user = DirMapping::new();
+
+            user.add(
+                "max_user_namespaces",
+                proc_rw_file(fs.clone(), b"1024\n".to_vec()),
+            );
+
+            SimpleDir::new_maker(fs.clone(), Arc::new(user))
         });
 
         SimpleDir::new_maker(fs.clone(), Arc::new(sys))
