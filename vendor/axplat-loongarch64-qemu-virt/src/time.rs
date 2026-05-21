@@ -124,7 +124,7 @@ impl TimeIf for TimeIfImpl {
     /// LoongArch64 TCFG CSR: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#timer-configuration>
     #[cfg(feature = "irq")]
     fn set_oneshot_timer(deadline_ns: u64) {
-        use loongArch64::register::tcfg;
+        use loongArch64::register::{tcfg, ticlr};
 
         let ticks_now = Self::current_ticks();
         let ticks_deadline = Self::nanos_to_ticks(deadline_ns);
@@ -133,6 +133,13 @@ impl TimeIf for TimeIfImpl {
             .saturating_add(MIN_ONESHOT_TICKS - 1)
             & !(MIN_ONESHOT_TICKS - 1);
         let init_value = init_value.max(MIN_ONESHOT_TICKS);
+
+        // Restart the one-shot from a clean state. Updating TCFG while the old
+        // one-shot is stopped or pending can leave QEMU without a following
+        // timer interrupt, which strands timeout-based waits such as futex.
+        tcfg::set_en(false);
+        ticlr::clear_timer_interrupt();
+        tcfg::set_periodic(false);
         tcfg::set_init_val(init_value as _);
         tcfg::set_en(true);
     }

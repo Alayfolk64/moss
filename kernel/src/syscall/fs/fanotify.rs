@@ -1,4 +1,9 @@
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    collections::VecDeque,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use core::{
     ffi::{c_char, c_int},
     sync::atomic::{AtomicBool, Ordering},
@@ -6,13 +11,19 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axpoll::{IoEvents, Pollable};
-use axtask::current;
+use axio::prelude::*;
+use axpoll::{IoEvents, PollSet, Pollable};
+use axsync::Mutex;
+use axtask::{
+    current,
+    future::{block_on, poll_io},
+};
 use linux_raw_sys::general::{O_ACCMODE, O_CLOEXEC, O_LARGEFILE, O_NONBLOCK, S_IFDIR, S_IFMT};
+use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{FileLike, IoDst, resolve_at},
+    file::{FileLike, IoDst, add_file_like, resolve_at},
     mm::vm_load_string,
     task::AsThread,
 };
@@ -122,16 +133,48 @@ const FAN_MARK_KNOWN_FLAGS: u32 = FAN_MARK_ADD
     | FAN_MARK_EVICTABLE
     | FAN_MARK_IGNORE;
 
+const FANOTIFY_METADATA_VERSION: u8 = 3;
+const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FanotifyTarget {
+    dev: u64,
+    ino: u64,
+    is_dir: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FanotifyMark {
+    target: FanotifyTarget,
+    mask: u64,
+}
+
+struct FanotifyEvent {
+    mask: u64,
+    file: Arc<dyn FileLike>,
+    pid: i32,
+}
+
+static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
+
 pub struct FanotifyFd {
     init_flags: u32,
+    event_f_flags: u32,
     nonblocking: AtomicBool,
+    marks: Mutex<Vec<FanotifyMark>>,
+    events: Mutex<VecDeque<FanotifyEvent>>,
+    poll: PollSet,
 }
 
 impl FanotifyFd {
-    fn new(init_flags: u32) -> Self {
+    fn new(init_flags: u32, event_f_flags: u32) -> Self {
         Self {
             init_flags,
+            event_f_flags,
             nonblocking: AtomicBool::new(false),
+            marks: Mutex::new(Vec::new()),
+            events: Mutex::new(VecDeque::new()),
+            poll: PollSet::new(),
         }
     }
 
@@ -146,11 +189,54 @@ impl FanotifyFd {
     fn reports_target_fid(&self) -> bool {
         self.init_flags & FAN_REPORT_TARGET_FID != 0
     }
+
+    fn apply_mark(&self, flags: u32, mask: u64, target: Option<FanotifyTarget>) {
+        if flags & FAN_MARK_FLUSH != 0 {
+            self.marks.lock().clear();
+            self.events.lock().clear();
+            return;
+        }
+
+        let Some(target) = target else {
+            return;
+        };
+        let mut marks = self.marks.lock();
+        if flags & FAN_MARK_REMOVE != 0 {
+            marks.retain(|mark| mark.target != target);
+        } else if let Some(mark) = marks.iter_mut().find(|mark| mark.target == target) {
+            mark.mask |= mask;
+        } else {
+            marks.push(FanotifyMark { target, mask });
+        }
+    }
+
+    fn queue_open(&self, target: FanotifyTarget, file: Arc<dyn FileLike>, pid: i32) {
+        let matched = self.marks.lock().iter().any(|mark| {
+            mark.target == target
+                && mark.mask & FAN_OPEN != 0
+                && (!target.is_dir || mark.mask & FAN_ONDIR != 0)
+        });
+        if !matched {
+            return;
+        }
+
+        self.events.lock().push_back(FanotifyEvent {
+            mask: FAN_OPEN,
+            file,
+            pid,
+        });
+        self.poll.wake();
+    }
 }
 
 impl FileLike for FanotifyFd {
-    fn read(&self, _dst: &mut IoDst) -> AxResult<usize> {
-        Err(AxError::WouldBlock)
+    fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
+        block_on(poll_io(self, IoEvents::IN, self.nonblocking(), || {
+            let event = self.events.lock().pop_front().ok_or(AxError::WouldBlock)?;
+            let event_fd = add_file_like(event.file, self.event_f_flags & O_CLOEXEC != 0)?;
+            let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
+            dst.write(&metadata)
+        }))
     }
 
     fn path(&self) -> Cow<'_, str> {
@@ -169,10 +255,18 @@ impl FileLike for FanotifyFd {
 
 impl Pollable for FanotifyFd {
     fn poll(&self) -> IoEvents {
-        IoEvents::empty()
+        if self.events.lock().is_empty() {
+            IoEvents::empty()
+        } else {
+            IoEvents::IN
+        }
     }
 
-    fn register(&self, _context: &mut Context<'_>, _events: IoEvents) {}
+    fn register(&self, context: &mut Context<'_>, events: IoEvents) {
+        if events.contains(IoEvents::IN) {
+            self.poll.register(context.waker());
+        }
+    }
 }
 
 pub fn sys_fanotify_init(flags: u32, event_f_flags: u32) -> AxResult<isize> {
@@ -184,10 +278,10 @@ pub fn sys_fanotify_init(flags: u32, event_f_flags: u32) -> AxResult<isize> {
 
     validate_init_flags(flags, event_f_flags)?;
 
-    let fd = FanotifyFd::new(flags);
+    let fd = Arc::new(FanotifyFd::new(flags, event_f_flags));
     fd.set_nonblocking(flags & FAN_NONBLOCK != 0)?;
-    fd.add_to_fd_table(flags & FAN_CLOEXEC != 0)
-        .map(|fd| fd as isize)
+    FANOTIFY_FDS.write().push(Arc::downgrade(&fd));
+    add_file_like(fd, flags & FAN_CLOEXEC != 0).map(|fd| fd as isize)
 }
 
 pub fn sys_fanotify_mark(
@@ -205,7 +299,67 @@ pub fn sys_fanotify_mark(
 
     let fd = FanotifyFd::from_fd(fanotify_fd)?;
     validate_mark(&fd, flags, mask, dirfd, path.as_deref())?;
+    let target = target_from_mark(dirfd, path.as_deref(), flags)?;
+    fd.apply_mark(flags, mask, target);
     Ok(0)
+}
+
+pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
+    let Ok(target) = target_from_file_like(&file) else {
+        return;
+    };
+    let pid = current().as_thread().proc_data.proc.pid() as i32;
+    let mut fds = FANOTIFY_FDS.write();
+    fds.retain(|weak| {
+        let Some(fd) = weak.upgrade() else {
+            return false;
+        };
+        fd.queue_open(target, file.clone(), pid);
+        true
+    });
+}
+
+fn fanotify_event_metadata(mask: u64, fd: c_int, pid: i32) -> [u8; FANOTIFY_EVENT_METADATA_LEN] {
+    let mut out = [0u8; FANOTIFY_EVENT_METADATA_LEN];
+    out[0..4].copy_from_slice(&(FANOTIFY_EVENT_METADATA_LEN as u32).to_ne_bytes());
+    out[4] = FANOTIFY_METADATA_VERSION;
+    out[6..8].copy_from_slice(&(FANOTIFY_EVENT_METADATA_LEN as u16).to_ne_bytes());
+    out[8..16].copy_from_slice(&mask.to_ne_bytes());
+    out[16..20].copy_from_slice(&fd.to_ne_bytes());
+    out[20..24].copy_from_slice(&pid.to_ne_bytes());
+    out
+}
+
+fn target_from_stat(stat: crate::file::Kstat) -> FanotifyTarget {
+    FanotifyTarget {
+        dev: stat.dev,
+        ino: stat.ino,
+        is_dir: stat.mode & S_IFMT == S_IFDIR,
+    }
+}
+
+fn target_from_file_like(file: &Arc<dyn FileLike>) -> AxResult<FanotifyTarget> {
+    file.stat().map(target_from_stat)
+}
+
+fn target_from_mark(
+    dirfd: c_int,
+    path: Option<&str>,
+    flags: u32,
+) -> AxResult<Option<FanotifyTarget>> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+
+    let resolve_flags = if flags & FAN_MARK_DONT_FOLLOW != 0 {
+        linux_raw_sys::general::AT_SYMLINK_NOFOLLOW
+    } else {
+        0
+    };
+    resolve_at(dirfd, Some(path), resolve_flags)?
+        .stat()
+        .map(target_from_stat)
+        .map(Some)
 }
 
 fn validate_init_flags(flags: u32, event_f_flags: u32) -> AxResult {

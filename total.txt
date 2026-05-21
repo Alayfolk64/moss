@@ -1,0 +1,5 @@
+passed   9115
+failed   542
+broken   83
+skipped  253
+warnings 22

@@ -55,6 +55,10 @@ fn get_state(pid: u32) -> CapState {
     *all.entry(pid).or_default()
 }
 
+pub fn current_has_cap(cap: u32) -> bool {
+    cap < 64 && (get_state(current_pid()).effective & (1u64 << cap)) != 0
+}
+
 fn set_state(pid: u32, state: CapState) {
     CAP_STATE.lock().insert(pid, state);
 }

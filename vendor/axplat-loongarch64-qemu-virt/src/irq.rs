@@ -113,14 +113,19 @@ impl IrqIf for IrqIfImpl {
 
         trace!("IRQ {irq:?}");
 
+        if matches!(irq, IrqType::Timer) {
+            // Acknowledge the expired one-shot before the handler arms the next
+            // one. Clearing it after reprogramming can drop a timer event if
+            // the next deadline expires while the handler is still running.
+            ticlr::clear_timer_interrupt();
+        }
+
         if !IRQ_HANDLER_TABLE.handle(irq.as_usize()) {
             debug!("Unhandled IRQ {irq:?}");
         }
 
         match irq {
-            IrqType::Timer => {
-                ticlr::clear_timer_interrupt();
-            }
+            IrqType::Timer => {}
             IrqType::Io => {}
             IrqType::Ex(irq) => {
                 eiointc::complete_irq(irq);

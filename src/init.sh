@@ -431,7 +431,6 @@ run_ltp() {
         futex_wait03
         futex_wait04
         futex_wait05
-        futex_wait_bitset01
         futex_waitv01
         futex_waitv02
         futex_waitv03
@@ -457,21 +456,21 @@ run_ltp() {
         getegid02
         getegid02_16
         geteuid01
-        # geteuid01_16
+        geteuid01_16
         geteuid02
-        # geteuid02_16
+        geteuid02_16
         getgid01
-        # getgid01_16
+        getgid01_16
         getgid03
-        # getgid03_16
+        getgid03_16
         getgroups01
-        # getgroups01_16
+        getgroups01_16
         getgroups03
-        # getgroups03_16
-        # gethostbyname_r01
-        # gethostid01
+        getgroups03_16
+        gethostbyname_r01
+        gethostid01
         gethostname01
-        # gethostname02
+        gethostname02
         getitimer01
         getitimer02
         getpagesize01
@@ -479,9 +478,9 @@ run_ltp() {
         getpgid01
         getpgid02
         getpgrp01
-        # getpid01
+        getpid01
         getpid02
-        # getppid01
+        getppid01
         getppid02
         getpriority01
         getpriority02
@@ -1504,7 +1503,268 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+        abort01
+        accept01
+        accept02
+        accept03
+        accept4_01
+        access01
+        access02
+        access03
+        access04 
+        adjtimex01
+        adjtimex02
+        adjtimex03
+        alarm02
+        alarm03
+        alarm05
+        alarm06
+        alarm07
+        arch_prctl01
+        bind01
+        bind02
+        bind03
+        bind04
+        bind05
+        capget01
+        capget02
+        capset01
+        capset02
+        capset03
+        capset04
+        chdir01
+        chdir04
+        chmod01
+        chmod03
+        chmod06
+        chown01
+        chown02
+        chown03
+        chown04
+        chown05
+        chroot02
+        chroot03
+        clock_adjtime01
+        clock_adjtime02
+        clock_getres01
+        clock_gettime01
+        clock_gettime02
+        clock_nanosleep01
+        clock_nanosleep04
+        clone01
+        clone02
+        clone03
+        clone04
+        clone06
+        clone07
+        clone08
+        clone301
+        clone302
+        close01
+        close02
+        close_range01
+        close_range02
+        confstr01
+        connect01
+        copy_file_range01
+        creat01
+        creat03
+        creat05
+        creat06
+        dup01
+        dup02
+        dup03
+        dup04
+        dup06
+        dup07
+        dup201
+        dup202
+        dup203
+        dup204
+        dup205
+        dup206
+        dup207
+        dup3_01
+        dup3_02
+        epoll-ltp
+        epoll_create01
+        epoll_create02
+        epoll_create1_01
+        epoll_create1_02
+        epoll_ctl01
+        epoll_ctl02
+        epoll_ctl03
+        epoll_pwait01
+        epoll_pwait02
+        epoll_pwait04
+        epoll_pwait05
+        eventfd01
+        eventfd02
+        eventfd03
+        eventfd04
+        eventfd05
+        eventfd06
+        eventfd2_01
+        eventfd2_02
+        eventfd2_03
+        execl01
+        execle01
+        execlp01
+        execv01
+        execve01
+        execve02
+        execve03
+        execve04
+        execve05
+        execve06
+        execveat01
+        execveat02
+        execveat03
+        execvp01
+        exit01
+        exit02
+        exit_group01
+        faccessat01
+        faccessat02
+        faccessat201
+        faccessat202
+        fallocate01
+        fallocate03
+        fallocate04
+        fanotify04
+        fanotify08
+        fanotify14
+        fanotify18
+        fanotify20
+        fchdir01
+        fchdir02
+        fchmod01
+        fchmod03
+        fchmod04
+        fchmodat01
+        fchmodat02
+        fchown01
+        fchown02
+        fchown03
+        fchown04
+        fchown05
+        fchownat01
+        fchownat02
+        fcntl02
+        fcntl02_64
+        fcntl03
+        fcntl03_64
+        fcntl04
+        fcntl04_64
+        fcntl05
+        fcntl05_64
+        fcntl08
+        fcntl08_64
+        fcntl09
+        fcntl09_64
+        fcntl10
+        fcntl10_64
+        fcntl11
+        fcntl11_64
+        fcntl12
+        fcntl12_64
+        fcntl13
+        fcntl13_64
+        fcntl14
+        fcntl14_64
+        fcntl15
+        fcntl15_64
+        fcntl16
+        fcntl16_64
+        fcntl17
+        fcntl17_64
+        fcntl18
+        fcntl18_64
+        fcntl19
+        fcntl19_64
+        fcntl20
+        fcntl20_64
+        fcntl21
+        fcntl21_64
+        fcntl22
+        fcntl22_64
+        fcntl23
+        fcntl23_64
+        fcntl24
+        fcntl24_64
+        fcntl25
+        fcntl25_64
+        fcntl26
+        fcntl26_64
+        fcntl27
+        fcntl27_64
+        fcntl29
+        fcntl29_64
+        fcntl30
+        fcntl30_64
+        fcntl31
+        fcntl31_64
+        fcntl32
+        fcntl32_64
+        fcntl33
+        fcntl33_64
+        fcntl34
+        fcntl34_64
+        fcntl35
+        fcntl35_64
+        fcntl36
+        fcntl36_64
+        fcntl37
+        fcntl37_64
+        fcntl38
+        fcntl38_64
+        fcntl39
+        fcntl39_64
+        fdatasync01
+        fdatasync02
+        fgetxattr01
+        fgetxattr02
+        fgetxattr03
+        flistxattr01
+        flistxattr02
+        flistxattr03
+        flock01
+        flock03
+        flock04
+        flock06
+        fork01
+        fork03
+        fork04
+        fork07
+        fork08
+        fork09
+        fork10
+        fork_procs
+        fpathconf01
+        fremovexattr01
+        fremovexattr02
+        fsetxattr01
+        fsetxattr02
+        fstat02
+        fstat02_64
+        fstat03
+        fstat03_64
+        fstatat01
+        fstatfs01
+        fstatfs01_64
+        fstatfs02
+        fstatfs02_64
+        fsync01
+        ftruncate01
+        ftruncate01_64
+        futex_cmp_requeue01
+        futex_cmp_requeue02
+        futex_wait01
+        futex_wait02
+        futex_wait03
+        futex_wait04
+        futex_wait05"
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
@@ -1540,13 +1800,13 @@ skip_group() {
 }
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
+basic=0
+busybox=0
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=1
+libctest=0
 lmbench=0
 ltp=1
 lua=0
@@ -1616,11 +1876,7 @@ else
     skip_group netperf musl
 fi
 
-if [ "$ltp" = 1 ]; then
-    run_ltp musl
-else
-    skip_group ltp musl
-fi
+skip_group ltp musl
 
 cd /glibc
 chmod +x ./basic/run-all.sh
