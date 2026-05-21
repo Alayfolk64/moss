@@ -112,7 +112,6 @@ run_ltp() {
         # bpf_prog07
         # brk01
         # brk02
-        # cacheflush01
         capget01
         capget02
         capset01
@@ -1519,17 +1518,22 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-        futex_cmp_requeue01
-        futex_cmp_requeue02
-        futex_wait01
-        futex_wait02
-        futex_wait03
-        futex_wait04
-        futex_wait05
-        futex_wake01
-        futex_wake02
-        futex_wake03
-        futex_wake04"
+        bind01
+        bind02
+        bind03
+        bind04
+        bind05
+        bind06
+        bpf_map01
+        bpf_prog01
+        bpf_prog02
+        bpf_prog03
+        bpf_prog04
+        bpf_prog05
+        bpf_prog06
+        bpf_prog07
+        brk01
+        brk02"
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
