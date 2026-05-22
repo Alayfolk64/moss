@@ -501,7 +501,7 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
 
         sys.add("kernel", {
             let mut kernel = DirMapping::new();
-            let pid_max = Arc::new(Mutex::new(b"32768\n".to_vec()));
+            let pid_max = Arc::new(Mutex::new(b"4194304\n".to_vec()));
 
             kernel.add(
                 "pid_max",

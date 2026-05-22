@@ -213,6 +213,15 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
 
     info!("{} exit with code: {}", curr.id_name(), exit_code);
 
+    let head = thr.robust_list_head() as *const RobustListHead;
+    if !head.is_null()
+        && let Err(err) = exit_robust_list(head)
+    {
+        if err.canonicalize() != AxError::BadAddress {
+            warn!("exit robust list failed: {err:?}");
+        }
+    }
+
     let clear_child_tid = thr.clear_child_tid() as *mut u32;
     if clear_child_tid.vm_write(0).is_ok() {
         let key = FutexKey::new_current(clear_child_tid as usize);
@@ -222,12 +231,6 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
             futex.wq.wake(1, u32::MAX);
         }
         axtask::yield_now();
-    }
-    let head = thr.robust_list_head() as *const RobustListHead;
-    if !head.is_null()
-        && let Err(err) = exit_robust_list(head)
-    {
-        warn!("exit robust list failed: {err:?}");
     }
 
     let process = &thr.proc_data.proc;

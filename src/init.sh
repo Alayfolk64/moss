@@ -142,7 +142,7 @@ echo
 run_ltp() {
     echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
-    export LTP_TIMEOUT_MUL=1
+    export LTP_TIMEOUT_MUL=2
     export LTP_DEV_FS_TYPE=tmpfs
     export LTP_SINGLE_FS_TYPE=tmpfs
 
@@ -226,7 +226,17 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+        splice01 splice01
+        splice02 splice02
+        splice03 splice03
+        splice04 splice04
+        splice05 splice05
+        splice06 splice06
+        splice07 splice07
+        splice08 splice08
+        splice09 splice09
+    "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
