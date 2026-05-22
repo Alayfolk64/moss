@@ -66,7 +66,7 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
 fi
 
 RUN_RV=1
-RUN_LA=0
+RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=0
@@ -226,17 +226,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        splice01 splice01
-        splice02 splice02
-        splice03 splice03
-        splice04 splice04
-        splice05 splice05
-        splice06 splice06
-        splice07 splice07
-        splice08 splice08
-        splice09 splice09
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
