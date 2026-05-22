@@ -98,6 +98,11 @@ pub fn resolve_at(dirfd: c_int, path: Option<&str>, flags: u32) -> AxResult<Reso
             if flags & AT_EMPTY_PATH == 0 {
                 return Err(AxError::NotFound);
             }
+            if dirfd == AT_FDCWD {
+                return Ok(ResolveAtResult::File(
+                    FS_CONTEXT.lock().current_dir().clone(),
+                ));
+            }
             let file_like = get_file_like(dirfd)?;
             let f = file_like.clone();
             Ok(if let Some(file) = f.downcast_ref::<File>() {

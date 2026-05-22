@@ -101,17 +101,17 @@ run_ltp() {
         bind03
         bind04
         bind05
-        # bind06
-        # bpf_map01
-        # bpf_prog01
-        # bpf_prog02
-        # bpf_prog03
-        # bpf_prog04
-        # bpf_prog05
-        # bpf_prog06
-        # bpf_prog07
-        # brk01
-        # brk02
+        bind06
+        bpf_map01
+        bpf_prog01
+        bpf_prog02
+        bpf_prog03
+        bpf_prog04
+        bpf_prog05
+        bpf_prog06
+        bpf_prog07
+        brk01
+        brk02
         capget01
         capget02
         capset01
@@ -813,8 +813,8 @@ run_ltp() {
         munmap01
         munmap02
         munmap03
-        # name_to_handle_at01
-        # name_to_handle_at02
+        name_to_handle_at01
+        name_to_handle_at02
         # nanosleep01
         nanosleep02
         nanosleep04
@@ -840,8 +840,8 @@ run_ltp() {
         # open12_child
         open13
         # open14
-        # open_by_handle_at01
-        # open_by_handle_at02
+        open_by_handle_at01
+        open_by_handle_at02
         # open_tree01
         # open_tree02
         # openat01
@@ -1518,22 +1518,10 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-        bind01
-        bind02
-        bind03
-        bind04
-        bind05
-        bind06
-        bpf_map01
-        bpf_prog01
-        bpf_prog02
-        bpf_prog03
-        bpf_prog04
-        bpf_prog05
-        bpf_prog06
-        bpf_prog07
-        brk01
-        brk02"
+        open_by_handle_at01
+        open_by_handle_at02
+        name_to_handle_at01
+        name_to_handle_at02"
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
