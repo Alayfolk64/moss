@@ -12,7 +12,7 @@ pub const INIT_SCRIPT: &str = include_str!("init_timerfd_debug.sh");
 pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
 #[cfg(all(not(feature = "timerfd-debug-init"), not(feature = "shell-init")))]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
-pub const LTP_CASES_RAW: &str = include_str!("ltp.txt");
+pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases");
 
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
 
@@ -25,7 +25,7 @@ fn build_ltp_cases_env() -> alloc::string::String {
             continue;
         }
         if !first {
-            env.push(' ');
+            env.push('\n');
         }
         first = false;
         env.push_str(case);

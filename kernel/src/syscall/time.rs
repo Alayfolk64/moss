@@ -11,6 +11,7 @@ use linux_raw_sys::general::{
     CLOCK_REALTIME_ALARM, CLOCK_REALTIME_COARSE, CLOCK_TAI, CLOCK_THREAD_CPUTIME_ID, SIGEV_NONE,
     SIGEV_SIGNAL, SIGEV_THREAD, SIGEV_THREAD_ID, TFD_CLOEXEC, TFD_NONBLOCK, TFD_TIMER_ABSTIME,
     TFD_TIMER_CANCEL_ON_SET, TIMER_ABSTIME, itimerspec, itimerval, sigevent, timespec, timeval,
+    timezone,
 };
 use spin::Mutex;
 use starry_process::Pid;
@@ -188,8 +189,16 @@ pub fn sys_clock_adjtime(clock_id: __kernel_clockid_t, buf: *mut Timex) -> AxRes
     sys_adjtimex(buf)
 }
 
-pub fn sys_gettimeofday(ts: *mut timeval) -> AxResult<isize> {
-    ts.vm_write(timeval::from_time_value(realtime_now()))?;
+pub fn sys_gettimeofday(tv: *mut timeval, tz: *mut timezone) -> AxResult<isize> {
+    if let Some(tv) = tv.nullable() {
+        tv.vm_write(timeval::from_time_value(realtime_now()))?;
+    }
+    if let Some(tz) = tz.nullable() {
+        tz.vm_write(timezone {
+            tz_minuteswest: 0,
+            tz_dsttime: 0,
+        })?;
+    }
     Ok(0)
 }
 
