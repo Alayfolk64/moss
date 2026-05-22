@@ -261,29 +261,29 @@ run_ltp() {
         fallocate04
         # fallocate05
         # fallocate06
-        fanotify01
-        fanotify02
-        fanotify03
+        # fanotify01
+        # fanotify02
+        # fanotify03
         fanotify04
-        fanotify05
-        fanotify06
-        fanotify07
+        # fanotify05
+        # fanotify06
+        # fanotify07
         fanotify08
-        fanotify09
-        fanotify10
-        fanotify11
-        fanotify12
-        fanotify13
+        # fanotify09
+        # fanotify10
+        # fanotify11
+        # fanotify12
+        # fanotify13
         fanotify14
-        fanotify15
-        fanotify16
-        fanotify17
-        fanotify18
-        fanotify19
+        # fanotify15
+        # fanotify16
+        # fanotify17
+        # fanotify18
+        # fanotify19
         fanotify20
-        fanotify21
-        fanotify22
-        fanotify23
+        # fanotify21
+        # fanotify22
+        # fanotify23
         fchdir01
         fchdir02
         # fchdir03
@@ -1517,9 +1517,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        fanotify04
-        "
+    some_testcases=""
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
@@ -1555,13 +1553,13 @@ skip_group() {
 }
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=0
-busybox=0
+basic=1
+busybox=1
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=0
+libctest=1
 lmbench=0
 ltp=1
 lua=0

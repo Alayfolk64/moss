@@ -186,7 +186,7 @@ impl FanotifyFd {
     }
 
     fn reports_fid(&self) -> bool {
-        self.init_flags & FAN_REPORT_FID != 0
+        self.init_flags & (FAN_REPORT_FID | FAN_REPORT_DIR_FID | FAN_REPORT_NAME) != 0
     }
 
     fn reports_name(&self) -> bool {
@@ -222,12 +222,13 @@ impl FanotifyFd {
         }
     }
 
-    fn queue_open(
+    fn queue_event(
         &self,
         target: FanotifyTarget,
         path: Option<&str>,
         file: Arc<dyn FileLike>,
         pid: i32,
+        mask: u64,
     ) {
         let matched = self.marks.lock().iter().any(|mark| {
             let target_matched = mark.target == target
@@ -237,7 +238,7 @@ impl FanotifyFd {
                     .zip(path)
                     .is_some_and(|(mark_path, event_path)| mark_path == event_path);
             target_matched
-                && mark.mask & FAN_OPEN != 0
+                && mark.mask & mask != 0
                 && (!target.is_dir || mark.mask & FAN_ONDIR != 0)
         });
         if !matched {
@@ -245,7 +246,7 @@ impl FanotifyFd {
         }
 
         self.events.lock().push_back(FanotifyEvent {
-            mask: FAN_OPEN,
+            mask,
             file,
             pid,
         });
@@ -257,9 +258,25 @@ impl FileLike for FanotifyFd {
     fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
         block_on(poll_io(self, IoEvents::IN, self.nonblocking(), || {
             let event = self.events.lock().pop_front().ok_or(AxError::WouldBlock)?;
-            let event_fd = add_file_like(event.file, self.event_f_flags & O_CLOEXEC != 0)?;
+            let event_fd = add_file_like(event.file.clone(), self.event_f_flags & O_CLOEXEC != 0)?;
             let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
-            dst.write(&metadata)
+            let mut written = dst.write(&metadata)?;
+
+            while let Some(event) = self.events.lock().pop_front() {
+                let event_fd =
+                    add_file_like(event.file.clone(), self.event_f_flags & O_CLOEXEC != 0)?;
+                let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
+                match dst.write(&metadata) {
+                    Ok(0) => break,
+                    Ok(n) => written += n,
+                    Err(err) => {
+                        self.events.lock().push_front(event);
+                        return if written == 0 { Err(err) } else { Ok(written) };
+                    }
+                }
+            }
+
+            Ok(written)
         }))
     }
 
@@ -328,7 +345,7 @@ pub fn sys_fanotify_mark(
     Ok(0)
 }
 
-pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
+fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
     let Ok(target) = target_from_file_like(&file) else {
         return;
     };
@@ -339,9 +356,32 @@ pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
         let Some(fd) = weak.upgrade() else {
             return false;
         };
-        fd.queue_open(target, path.as_deref(), file.clone(), pid);
+        fd.queue_event(target, path.as_deref(), file.clone(), pid, mask);
         true
     });
+}
+
+pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
+    notify_fanotify_event(file, FAN_OPEN);
+}
+
+pub(super) fn notify_fanotify_access(file: Arc<dyn FileLike>) {
+    notify_fanotify_event(file, FAN_ACCESS);
+}
+
+pub(super) fn notify_fanotify_modify(file: Arc<dyn FileLike>) {
+    notify_fanotify_event(file, FAN_MODIFY);
+}
+
+pub(super) fn notify_fanotify_close(file: Arc<dyn FileLike>, writable: bool) {
+    notify_fanotify_event(
+        file,
+        if writable {
+            FAN_CLOSE_WRITE
+        } else {
+            FAN_CLOSE_NOWRITE
+        },
+    );
 }
 
 fn fanotify_event_metadata(mask: u64, fd: c_int, pid: i32) -> [u8; FANOTIFY_EVENT_METADATA_LEN] {

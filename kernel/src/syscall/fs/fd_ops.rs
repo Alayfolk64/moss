@@ -19,7 +19,7 @@ use scope_local::ActiveScope;
 use spin::RwLock;
 use starry_signal::Signo;
 
-use super::fanotify::notify_fanotify_open;
+use super::fanotify::{notify_fanotify_close, notify_fanotify_open};
 use crate::{
     file::{
         Directory, FD_TABLE, File, FileLike, PIPE_MAX_SIZE, Pipe, add_file_like,
@@ -270,9 +270,11 @@ pub fn sys_open(path: *const c_char, flags: i32, mode: __kernel_mode_t) -> AxRes
 pub fn sys_close(fd: c_int) -> AxResult<isize> {
     debug!("sys_close <= {fd}");
     let file_like = get_file_like(fd)?;
+    let writable = file_like.status_flags() & O_ACCMODE != O_RDONLY;
     release_posix_locks_for_file_like(&file_like);
     release_file_lease_for_file_like(&file_like);
     close_file_like(fd)?;
+    notify_fanotify_close(file_like.clone(), writable);
     release_bsd_flocks_for_file_like_if_last(&file_like);
     Ok(0)
 }
