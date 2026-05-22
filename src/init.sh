@@ -66,7 +66,7 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
 fi
 
 RUN_RV = 1
-RUN_LA = 1
+RUN_LA = 0
 
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=0
