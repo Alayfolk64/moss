@@ -81,7 +81,7 @@ ltp=1
 lua=0
 netperf=0
 
-if [ "$RUN_RV" = 0 ]; then
+if [ "$ARCH" = RISCV ] && [ "$RUN_RV" = 0 ]; then
     basic=0
     busybox=0
     cyclictest=0
@@ -95,7 +95,7 @@ if [ "$RUN_RV" = 0 ]; then
     netperf=0
 fi
 
-if [ "$RUN_LA" = 0 ]; then
+if [ "$ARCH" = LOONGARCH ] && [ "$RUN_LA" = 0 ]; then
     basic=0
     busybox=0
     cyclictest=0
