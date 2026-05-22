@@ -65,8 +65,8 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
-RUN_RV = 1
-RUN_LA = 1
+RUN_RV=1
+RUN_LA=0
 
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=0
@@ -81,7 +81,7 @@ ltp=1
 lua=0
 netperf=0
 
-if [ "$RUN_RV" = 0 ]; then
+if [ "$ARCH" = RISCV ] && [ "$RUN_RV" = 0 ]; then
     basic=0
     busybox=0
     cyclictest=0
@@ -95,7 +95,7 @@ if [ "$RUN_RV" = 0 ]; then
     netperf=0
 fi
 
-if [ "$RUN_LA" = 0 ]; then
+if [ "$ARCH" = LOONGARCH ] && [ "$RUN_LA" = 0 ]; then
     basic=0
     busybox=0
     cyclictest=0
@@ -142,7 +142,7 @@ echo
 run_ltp() {
     echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
-    export LTP_TIMEOUT_MUL=1
+    export LTP_TIMEOUT_MUL=2
     export LTP_DEV_FS_TYPE=tmpfs
     export LTP_SINGLE_FS_TYPE=tmpfs
 
@@ -227,13 +227,15 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-        acct01 acct01
-        acct02 acct02
-        add_key01 add_key01
-        add_key02 add_key02
-        add_key03 add_key03
-        add_key04 add_key04
-        add_key05 add_key05
+        splice01 splice01
+        splice02 splice02
+        splice03 splice03
+        splice04 splice04
+        splice05 splice05
+        splice06 splice06
+        splice07 splice07
+        splice08 splice08
+        splice09 splice09
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

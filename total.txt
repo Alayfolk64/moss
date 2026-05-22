@@ -1,5 +1,5 @@
-passed   9115
-failed   542
-broken   83
-skipped  253
-warnings 22
+passed   9171
+failed   631
+broken   63
+skipped  189
+warnings 18

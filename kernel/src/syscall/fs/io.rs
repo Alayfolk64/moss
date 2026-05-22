@@ -13,6 +13,8 @@ use linux_raw_sys::general::__kernel_off_t;
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
+#[cfg(feature = "net")]
+use crate::file::Socket;
 use crate::{
     file::{File, FileLike, Pipe, get_file_like},
     mm::{IoVec, IoVectorBuf, UserConstPtr, VmBytes, VmBytesMut},
@@ -364,6 +366,111 @@ fn do_send(mut src: SendFile, mut dst: SendFile, len: usize) -> AxResult<usize> 
     Ok(total_written)
 }
 
+enum SpliceEndpoint {
+    File(Arc<File>),
+    Pipe(Arc<Pipe>),
+    #[cfg(feature = "net")]
+    Socket(Arc<Socket>),
+}
+
+fn splice_endpoint(fd: c_int) -> AxResult<SpliceEndpoint> {
+    let file = get_file_like(fd)?;
+    if file.downcast_ref::<Pipe>().is_some() {
+        return Pipe::from_fd(fd).map(SpliceEndpoint::Pipe);
+    }
+    if file.downcast_ref::<File>().is_some() {
+        return File::from_fd(fd).map(SpliceEndpoint::File);
+    }
+    #[cfg(feature = "net")]
+    if file.downcast_ref::<Socket>().is_some() {
+        return Socket::from_fd(fd).map(SpliceEndpoint::Socket);
+    }
+    Err(AxError::InvalidInput)
+}
+
+fn splice_offset(offset: *mut i64) -> AxResult<*mut u64> {
+    if offset.vm_read()? < 0 {
+        return Err(AxError::InvalidInput);
+    }
+    Ok(offset.cast())
+}
+
+fn splice_src(endpoint: SpliceEndpoint, offset: *mut i64) -> AxResult<SendFile> {
+    match endpoint {
+        SpliceEndpoint::Pipe(pipe) => {
+            if !offset.is_null() {
+                return Err(AxError::from(LinuxError::ESPIPE));
+            }
+            if !pipe.is_read() {
+                return Err(AxError::BadFileDescriptor);
+            }
+            Ok(SendFile::Direct(pipe))
+        }
+        SpliceEndpoint::File(file) => {
+            if file.inner().is_path() {
+                return Err(AxError::InvalidInput);
+            }
+            file.inner().access(FileFlags::READ)?;
+            if offset.is_null() {
+                Ok(SendFile::Direct(file))
+            } else {
+                Ok(SendFile::Offset(file, splice_offset(offset)?))
+            }
+        }
+        #[cfg(feature = "net")]
+        SpliceEndpoint::Socket(socket) => {
+            if !offset.is_null() {
+                return Err(AxError::InvalidInput);
+            }
+            Ok(SendFile::Direct(socket))
+        }
+    }
+}
+
+fn splice_dst(endpoint: SpliceEndpoint, offset: *mut i64) -> AxResult<SendFile> {
+    match endpoint {
+        SpliceEndpoint::Pipe(pipe) => {
+            if !offset.is_null() {
+                return Err(AxError::from(LinuxError::ESPIPE));
+            }
+            if !pipe.is_write() {
+                return Err(AxError::BadFileDescriptor);
+            }
+            Ok(SendFile::Direct(pipe))
+        }
+        SpliceEndpoint::File(file) => {
+            if file.inner().is_path() || file.inner().access(FileFlags::APPEND).is_ok() {
+                return Err(AxError::InvalidInput);
+            }
+            file.inner().access(FileFlags::WRITE)?;
+            if offset.is_null() {
+                Ok(SendFile::Direct(file))
+            } else {
+                Ok(SendFile::Offset(file, splice_offset(offset)?))
+            }
+        }
+        #[cfg(feature = "net")]
+        SpliceEndpoint::Socket(socket) => {
+            if !offset.is_null() {
+                return Err(AxError::InvalidInput);
+            }
+            Ok(SendFile::Direct(socket))
+        }
+    }
+}
+
+fn splice_error(err: AxError) -> AxError {
+    if err == AxError::NotConnected {
+        AxError::InvalidInput
+    } else {
+        err
+    }
+}
+
+fn splice_is_pipe(endpoint: &SpliceEndpoint) -> bool {
+    matches!(endpoint, SpliceEndpoint::Pipe(_))
+}
+
 pub fn sys_sendfile(out_fd: c_int, in_fd: c_int, offset: *mut u64, len: usize) -> AxResult<isize> {
     debug!(
         "sys_sendfile <= out_fd: {}, in_fd: {}, offset: {}, len: {}",
@@ -451,57 +558,21 @@ pub fn sys_splice(
         _flags
     );
 
-    let mut has_pipe = false;
-
     if DummyFd::from_fd(fd_in).is_ok() || DummyFd::from_fd(fd_out).is_ok() {
         return Err(AxError::BadFileDescriptor);
     }
 
-    let src = if !off_in.is_null() {
-        if off_in.vm_read()? < 0 {
-            return Err(AxError::InvalidInput);
-        }
-        SendFile::Offset(File::from_fd(fd_in)?, off_in.cast())
-    } else {
-        if let Ok(src) = Pipe::from_fd(fd_in) {
-            if !src.is_read() {
-                return Err(AxError::BadFileDescriptor);
-            }
-            has_pipe = true;
-        }
-        if let Ok(file) = File::from_fd(fd_in)
-            && file.inner().is_path()
-        {
-            return Err(AxError::InvalidInput);
-        }
-        SendFile::Direct(get_file_like(fd_in)?)
-    };
+    let src_endpoint = splice_endpoint(fd_in)?;
+    let dst_endpoint = splice_endpoint(fd_out)?;
 
-    let dst = if !off_out.is_null() {
-        if off_out.vm_read()? < 0 {
-            return Err(AxError::InvalidInput);
-        }
-        SendFile::Offset(File::from_fd(fd_out)?, off_out.cast())
-    } else {
-        if let Ok(dst) = Pipe::from_fd(fd_out) {
-            if !dst.is_write() {
-                return Err(AxError::BadFileDescriptor);
-            }
-            has_pipe = true;
-        }
-        if let Ok(file) = File::from_fd(fd_out)
-            && file.inner().access(FileFlags::APPEND).is_ok()
-        {
-            return Err(AxError::InvalidInput);
-        }
-        let f = get_file_like(fd_out)?;
-        f.write(&mut b"".as_slice())?;
-        SendFile::Direct(f)
-    };
+    let has_pipe = splice_is_pipe(&src_endpoint) || splice_is_pipe(&dst_endpoint);
 
     if !has_pipe {
         return Err(AxError::InvalidInput);
     }
 
-    do_send(src, dst, len).map(|n| n as _)
+    let src = splice_src(src_endpoint, off_in)?;
+    let dst = splice_dst(dst_endpoint, off_out)?;
+
+    do_send(src, dst, len).map_err(splice_error).map(|n| n as _)
 }
