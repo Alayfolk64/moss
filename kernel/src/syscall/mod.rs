@@ -601,6 +601,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::uname => sys_uname(uctx.arg0() as _),
         Sysno::sysinfo => sys_sysinfo(uctx.arg0() as _),
         Sysno::syslog => sys_syslog(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::acct => sys_acct(uctx.arg0() as _),
         Sysno::getrandom => sys_getrandom(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::seccomp => sys_seccomp(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::reboot => sys_reboot(

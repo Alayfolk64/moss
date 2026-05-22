@@ -233,6 +233,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
     let process = &thr.proc_data.proc;
     if process.exit_thread(curr.id().as_u64() as Pid, exit_code) {
         let (utime, stime) = thr.time.borrow().output();
+        crate::syscall::release_key_quota(thr.proc_data.uid());
         crate::syscall::close_all_files_for_current_process();
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
