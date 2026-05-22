@@ -1,6 +1,7 @@
 use alloc::{
     borrow::Cow,
     collections::VecDeque,
+    string::{String, ToString},
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -143,9 +144,10 @@ struct FanotifyTarget {
     is_dir: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct FanotifyMark {
     target: FanotifyTarget,
+    path: Option<String>,
     mask: u64,
 }
 
@@ -153,6 +155,11 @@ struct FanotifyEvent {
     mask: u64,
     file: Arc<dyn FileLike>,
     pid: i32,
+}
+
+struct FanotifyMarkTarget {
+    target: FanotifyTarget,
+    path: Option<String>,
 }
 
 static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
@@ -190,7 +197,7 @@ impl FanotifyFd {
         self.init_flags & FAN_REPORT_TARGET_FID != 0
     }
 
-    fn apply_mark(&self, flags: u32, mask: u64, target: Option<FanotifyTarget>) {
+    fn apply_mark(&self, flags: u32, mask: u64, target: Option<FanotifyMarkTarget>) {
         if flags & FAN_MARK_FLUSH != 0 {
             self.marks.lock().clear();
             self.events.lock().clear();
@@ -202,17 +209,34 @@ impl FanotifyFd {
         };
         let mut marks = self.marks.lock();
         if flags & FAN_MARK_REMOVE != 0 {
-            marks.retain(|mark| mark.target != target);
-        } else if let Some(mark) = marks.iter_mut().find(|mark| mark.target == target) {
+            marks.retain(|mark| mark.target != target.target);
+        } else if let Some(mark) = marks.iter_mut().find(|mark| mark.target == target.target) {
             mark.mask |= mask;
+            mark.path = target.path;
         } else {
-            marks.push(FanotifyMark { target, mask });
+            marks.push(FanotifyMark {
+                target: target.target,
+                path: target.path,
+                mask,
+            });
         }
     }
 
-    fn queue_open(&self, target: FanotifyTarget, file: Arc<dyn FileLike>, pid: i32) {
+    fn queue_open(
+        &self,
+        target: FanotifyTarget,
+        path: Option<&str>,
+        file: Arc<dyn FileLike>,
+        pid: i32,
+    ) {
         let matched = self.marks.lock().iter().any(|mark| {
-            mark.target == target
+            let target_matched = mark.target == target
+                || mark
+                    .path
+                    .as_deref()
+                    .zip(path)
+                    .is_some_and(|(mark_path, event_path)| mark_path == event_path);
+            target_matched
                 && mark.mask & FAN_OPEN != 0
                 && (!target.is_dir || mark.mask & FAN_ONDIR != 0)
         });
@@ -308,13 +332,14 @@ pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
     let Ok(target) = target_from_file_like(&file) else {
         return;
     };
+    let path = path_from_file_like(&file);
     let pid = current().as_thread().proc_data.proc.pid() as i32;
     let mut fds = FANOTIFY_FDS.write();
     fds.retain(|weak| {
         let Some(fd) = weak.upgrade() else {
             return false;
         };
-        fd.queue_open(target, file.clone(), pid);
+        fd.queue_open(target, path.as_deref(), file.clone(), pid);
         true
     });
 }
@@ -342,11 +367,20 @@ fn target_from_file_like(file: &Arc<dyn FileLike>) -> AxResult<FanotifyTarget> {
     file.stat().map(target_from_stat)
 }
 
+fn path_from_file_like(file: &Arc<dyn FileLike>) -> Option<String> {
+    let path = file.path();
+    if path.starts_with('<') {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
 fn target_from_mark(
     dirfd: c_int,
     path: Option<&str>,
     flags: u32,
-) -> AxResult<Option<FanotifyTarget>> {
+) -> AxResult<Option<FanotifyMarkTarget>> {
     let Some(path) = path else {
         return Ok(None);
     };
@@ -356,10 +390,15 @@ fn target_from_mark(
     } else {
         0
     };
-    resolve_at(dirfd, Some(path), resolve_flags)?
-        .stat()
-        .map(target_from_stat)
-        .map(Some)
+    let resolved = resolve_at(dirfd, Some(path), resolve_flags)?;
+    let stat = resolved.stat()?;
+    let loc = resolved.into_file();
+    Ok(Some(FanotifyMarkTarget {
+        target: target_from_stat(stat),
+        path: loc
+            .and_then(|loc| loc.absolute_path().ok())
+            .map(|path| path.to_string()),
+    }))
 }
 
 fn validate_init_flags(flags: u32, event_f_flags: u32) -> AxResult {

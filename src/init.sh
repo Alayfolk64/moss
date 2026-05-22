@@ -1518,10 +1518,8 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-        open_by_handle_at01
-        open_by_handle_at02
-        name_to_handle_at01
-        name_to_handle_at02"
+        fanotify04
+        "
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
