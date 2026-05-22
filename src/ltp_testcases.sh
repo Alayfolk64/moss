@@ -10,13 +10,13 @@ access01 access01
 access02 access02
 access03 access03
 access04 access04
-# acct01 acct01
-# acct02 acct02
-# add_key01 add_key01
-# add_key02 add_key02
-# add_key03 add_key03
-# add_key04 add_key04
-# add_key05 add_key05
+acct01 acct01
+acct02 acct02
+add_key01 add_key01
+add_key02 add_key02
+add_key03 add_key03
+add_key04 add_key04
+add_key05 add_key05
 adjtimex01 adjtimex01
 adjtimex02 adjtimex02
 adjtimex03 adjtimex03

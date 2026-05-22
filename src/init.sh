@@ -38,6 +38,27 @@ mkdir -vp /lib/modules/10.0.0/build
 echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
 echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
 echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
+echo "CONFIG_BSD_PROCESS_ACCT=y" >>/lib/modules/10.0.0/build/.config
+
+rm -f /bin/useradd /bin/userdel /bin/groupdel
+cat >/bin/useradd <<'EOF'
+#!/bin/sh
+name=$1
+uid=$((2000 + ${name##*_}))
+echo "$name:x:$uid:$uid:$name:/:/bin/sh" >>/etc/passwd
+EOF
+
+chmod +x /bin/useradd
+cat >/bin/userdel <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+
+cat >/bin/groupdel <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x /bin/userdel /bin/groupdel
 
 ARCH=RISCV
 if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
@@ -112,7 +133,10 @@ glibc_runtime() {
 echo @@@@@@@@@@ files @@@@@@@@@@
 ls -lhAR /lib
 echo @@@@@@@@@@ env @@@@@@@@@@
-env
+env | awk '
+    /^[A-Za-z_][A-Za-z0-9_]*=/ { skip = ($0 ~ /^LTP_CASES=/) }
+    !skip { print }
+'
 echo
 
 run_ltp() {
@@ -123,8 +147,8 @@ run_ltp() {
     export LTP_SINGLE_FS_TYPE=tmpfs
 
     all_testcases="${LTP_CASES:-}"
-    if [ -z "$all_testcases" ] && [ -f ./ltp_testcases ]; then
-        all_testcases="$(awk 'NF && $1 !~ /^#/ { print }' ./ltp_testcases)"
+    if [ -z "$all_testcases" ] && [ -f ./ltp_testcases.sh ]; then
+        all_testcases="$(awk 'NF && $1 !~ /^#/ { print }' ./ltp_testcases.sh)"
     fi
 
     emit_summary_if_missing() {
@@ -203,17 +227,13 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-        execv01 execv01
-        execve01 execve01
-        execve02 execve02
-        execve03 execve03
-        execve04 execve04
-        execve05 execve05 -i 5 -n 32
-        execve06 execve06
-        execvp01 execvp01
-        execveat01 execveat01
-        execveat02 execveat02
-        execveat03 execveat03
+        acct01 acct01
+        acct02 acct02
+        add_key01 add_key01
+        add_key02 add_key02
+        add_key03 add_key03
+        add_key04 add_key04
+        add_key05 add_key05
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

@@ -465,6 +465,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
         SimpleFile::new_regular(fs.clone(), || Ok(DUMMY_SCHED_DEBUG)),
     );
     root.add(
+        "key-users",
+        SimpleFile::new_regular(fs.clone(), || Ok(crate::syscall::key_users_proc())),
+    );
+    root.add(
         "instret",
         SimpleFile::new_regular(fs.clone(), || {
             #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
@@ -525,6 +529,15 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                 "core_pattern",
                 SimpleFile::new_regular(fs.clone(), || Ok("core\n")),
             );
+            kernel.add("keys", {
+                let mut keys = DirMapping::new();
+
+                keys.add("gc_delay", proc_rw_file(fs.clone(), b"1\n".to_vec()));
+                keys.add("maxkeys", proc_rw_file(fs.clone(), b"200\n".to_vec()));
+                keys.add("maxbytes", proc_rw_file(fs.clone(), b"20000\n".to_vec()));
+
+                SimpleDir::new_maker(fs.clone(), Arc::new(keys))
+            });
 
             SimpleDir::new_maker(fs.clone(), Arc::new(kernel))
         });
