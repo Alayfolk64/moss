@@ -226,15 +226,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        acct01 acct01
-        acct02 acct02
-        add_key01 add_key01
-        add_key02 add_key02
-        add_key03 add_key03
-        add_key04 add_key04
-        add_key05 add_key05
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
