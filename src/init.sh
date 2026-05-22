@@ -101,17 +101,17 @@ run_ltp() {
         bind03
         bind04
         bind05
-        # bind06
-        # bpf_map01
-        # bpf_prog01
-        # bpf_prog02
-        # bpf_prog03
-        # bpf_prog04
-        # bpf_prog05
-        # bpf_prog06
-        # bpf_prog07
-        # brk01
-        # brk02
+        bind06
+        bpf_map01
+        bpf_prog01
+        bpf_prog02
+        bpf_prog03
+        bpf_prog04
+        bpf_prog05
+        bpf_prog06
+        bpf_prog07
+        brk01
+        brk02
         capget01
         capget02
         capset01
@@ -1517,23 +1517,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        bind01
-        bind02
-        bind03
-        bind04
-        bind05
-        bind06
-        bpf_map01
-        bpf_prog01
-        bpf_prog02
-        bpf_prog03
-        bpf_prog04
-        bpf_prog05
-        bpf_prog06
-        bpf_prog07
-        brk01
-        brk02"
+    some_testcases=""
     if [ -n "$some_testcases" ];then
         all_testcases="$some_testcases"
     fi
