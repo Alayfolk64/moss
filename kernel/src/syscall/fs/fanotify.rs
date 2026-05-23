@@ -12,6 +12,7 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult, LinuxError};
+use axfs::{FS_CONTEXT, OpenOptions, OpenResult};
 use axio::prelude::*;
 use axpoll::{IoEvents, PollSet, Pollable};
 use axsync::Mutex;
@@ -24,7 +25,7 @@ use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{FileLike, IoDst, add_file_like, resolve_at},
+    file::{Directory, File, FileLike, IoDst, add_file_like, resolve_at},
     mm::vm_load_string,
     task::AsThread,
 };
@@ -136,6 +137,7 @@ const FAN_MARK_KNOWN_FLAGS: u32 = FAN_MARK_ADD
 
 const FANOTIFY_METADATA_VERSION: u8 = 3;
 const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
+const FAN_NOFD: c_int = -1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FanotifyTarget {
@@ -148,18 +150,30 @@ struct FanotifyTarget {
 struct FanotifyMark {
     target: FanotifyTarget,
     path: Option<String>,
+    kind: FanotifyMarkKind,
     mask: u64,
+    ignored_mask: u64,
+    ignore_surv_modify: bool,
 }
 
 struct FanotifyEvent {
     mask: u64,
     file: Arc<dyn FileLike>,
+    path: Option<String>,
     pid: i32,
 }
 
 struct FanotifyMarkTarget {
     target: FanotifyTarget,
     path: Option<String>,
+    kind: FanotifyMarkKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FanotifyMarkKind {
+    Inode,
+    Mount,
+    Filesystem,
 }
 
 static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
@@ -208,16 +222,41 @@ impl FanotifyFd {
             return;
         };
         let mut marks = self.marks.lock();
+        let mark_is_ignored = flags & (FAN_MARK_IGNORED_MASK | FAN_MARK_IGNORE) != 0;
         if flags & FAN_MARK_REMOVE != 0 {
-            marks.retain(|mark| mark.target != target.target);
-        } else if let Some(mark) = marks.iter_mut().find(|mark| mark.target == target.target) {
-            mark.mask |= mask;
+            if let Some(mark) = marks
+                .iter_mut()
+                .find(|mark| mark.target == target.target && mark.kind == target.kind)
+            {
+                if mark_is_ignored {
+                    mark.ignored_mask &= !mask;
+                    if flags & FAN_MARK_IGNORED_SURV_MODIFY != 0 {
+                        mark.ignore_surv_modify = false;
+                    }
+                } else {
+                    mark.mask &= !mask;
+                }
+            }
+            marks.retain(|mark| mark.mask != 0 || mark.ignored_mask != 0);
+        } else if let Some(mark) = marks
+            .iter_mut()
+            .find(|mark| mark.target == target.target && mark.kind == target.kind)
+        {
+            if mark_is_ignored {
+                mark.ignored_mask |= mask;
+                mark.ignore_surv_modify = flags & FAN_MARK_IGNORED_SURV_MODIFY != 0;
+            } else {
+                mark.mask |= mask;
+            }
             mark.path = target.path;
         } else {
             marks.push(FanotifyMark {
                 target: target.target,
                 path: target.path,
-                mask,
+                kind: target.kind,
+                mask: if mark_is_ignored { 0 } else { mask },
+                ignored_mask: if mark_is_ignored { mask } else { 0 },
+                ignore_surv_modify: flags & FAN_MARK_IGNORED_SURV_MODIFY != 0,
             });
         }
     }
@@ -230,41 +269,141 @@ impl FanotifyFd {
         pid: i32,
         mask: u64,
     ) {
-        let matched = self.marks.lock().iter().any(|mark| {
-            let target_matched = mark.target == target
-                || mark
-                    .path
-                    .as_deref()
-                    .zip(path)
-                    .is_some_and(|(mark_path, event_path)| mark_path == event_path);
-            target_matched
-                && mark.mask & mask != 0
-                && (!target.is_dir || mark.mask & FAN_ONDIR != 0)
-        });
-        if !matched {
+        let mut matched = false;
+        let mut ignored = false;
+        {
+            let mut marks = self.marks.lock();
+            for mark in marks.iter_mut() {
+                if !mark_matches_event(mark, target, path) {
+                    continue;
+                }
+
+                let event_on_dir_allowed = !target.is_dir || mark.mask & FAN_ONDIR != 0;
+                if mark.ignored_mask & mask != 0 {
+                    ignored = true;
+                }
+                if mark.mask & mask != 0 && event_on_dir_allowed {
+                    matched = true;
+                }
+            }
+
+            if mask & FAN_MODIFY != 0 {
+                for mark in marks.iter_mut() {
+                    if !mark.ignore_surv_modify && mark_matches_event(mark, target, path) {
+                        mark.ignored_mask = 0;
+                    }
+                }
+                marks.retain(|mark| mark.mask != 0 || mark.ignored_mask != 0);
+            }
+        }
+
+        if !matched || ignored {
             return;
         }
 
         self.events.lock().push_back(FanotifyEvent {
             mask,
             file,
+            path: path.map(ToString::to_string),
             pid,
         });
         self.poll.wake();
     }
+
+    fn event_fd(&self, event: &FanotifyEvent) -> AxResult<c_int> {
+        if self.reports_fid() {
+            return Ok(FAN_NOFD);
+        }
+
+        let Some(path) = event.path.as_deref() else {
+            return add_file_like(event.file.clone(), self.event_f_flags & O_CLOEXEC != 0);
+        };
+
+        let file = open_fanotify_event_file(path, self.event_f_flags)
+            .unwrap_or_else(|_| event.file.clone());
+        add_file_like(file, self.event_f_flags & O_CLOEXEC != 0)
+    }
+}
+
+fn mark_matches_event(mark: &FanotifyMark, target: FanotifyTarget, path: Option<&str>) -> bool {
+    match mark.kind {
+        FanotifyMarkKind::Inode => {
+            let self_match = mark.target == target
+                || mark
+                    .path
+                    .as_deref()
+                    .zip(path)
+                    .is_some_and(|(mark_path, event_path)| mark_path == event_path);
+            self_match || mark_matches_child(mark, path)
+        }
+        FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
+            .path
+            .as_deref()
+            .zip(path)
+            .is_some_and(|(mark_path, event_path)| path_is_same_or_below(event_path, mark_path)),
+    }
+}
+
+fn mark_matches_child(mark: &FanotifyMark, path: Option<&str>) -> bool {
+    mark.mask & FAN_EVENT_ON_CHILD != 0
+        && mark.target.is_dir
+        && mark
+            .path
+            .as_deref()
+            .zip(path)
+            .and_then(|(mark_path, event_path)| {
+                parent_path(event_path).map(|parent| (mark_path, parent))
+            })
+            .is_some_and(|(mark_path, parent)| mark_path == parent)
+}
+
+fn parent_path(path: &str) -> Option<&str> {
+    path.rsplit_once('/')
+        .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
+}
+
+fn path_is_same_or_below(path: &str, base: &str) -> bool {
+    path == base
+        || base == "/"
+        || path
+            .strip_prefix(base)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn open_fanotify_event_file(path: &str, event_f_flags: u32) -> AxResult<Arc<dyn FileLike>> {
+    let mut options = OpenOptions::new();
+    match event_f_flags & O_ACCMODE {
+        linux_raw_sys::general::O_WRONLY => {
+            options.write(true);
+        }
+        linux_raw_sys::general::O_RDWR => {
+            options.read(true).write(true);
+        }
+        _ => {
+            options.read(true);
+        }
+    };
+
+    let file: Arc<dyn FileLike> = match options.open(&FS_CONTEXT.lock(), path)? {
+        OpenResult::File(file) => Arc::new(File::new(file)),
+        OpenResult::Dir(dir) => Arc::new(Directory::new(dir)),
+    };
+    if event_f_flags & O_NONBLOCK != 0 {
+        file.set_nonblocking(true)?;
+    }
+    Ok(file)
 }
 
 impl FileLike for FanotifyFd {
     fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
         block_on(poll_io(self, IoEvents::IN, self.nonblocking(), || {
             let event = self.events.lock().pop_front().ok_or(AxError::WouldBlock)?;
-            let event_fd = add_file_like(event.file.clone(), self.event_f_flags & O_CLOEXEC != 0)?;
+            let event_fd = self.event_fd(&event)?;
             let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
             let mut written = dst.write(&metadata)?;
 
             while let Some(event) = self.events.lock().pop_front() {
-                let event_fd =
-                    add_file_like(event.file.clone(), self.event_f_flags & O_CLOEXEC != 0)?;
+                let event_fd = self.event_fd(&event)?;
                 let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
                 match dst.write(&metadata) {
                     Ok(0) => break,
@@ -435,10 +574,21 @@ fn target_from_mark(
     let loc = resolved.into_file();
     Ok(Some(FanotifyMarkTarget {
         target: target_from_stat(stat),
+        kind: mark_kind_from_flags(flags),
         path: loc
             .and_then(|loc| loc.absolute_path().ok())
             .map(|path| path.to_string()),
     }))
+}
+
+fn mark_kind_from_flags(flags: u32) -> FanotifyMarkKind {
+    if flags & FAN_MARK_MOUNT != 0 {
+        FanotifyMarkKind::Mount
+    } else if flags & FAN_MARK_FILESYSTEM != 0 {
+        FanotifyMarkKind::Filesystem
+    } else {
+        FanotifyMarkKind::Inode
+    }
 }
 
 fn validate_init_flags(flags: u32, event_f_flags: u32) -> AxResult {
