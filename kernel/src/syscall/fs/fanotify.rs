@@ -181,6 +181,8 @@ static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
 pub struct FanotifyFd {
     init_flags: u32,
     event_f_flags: u32,
+    owner_pid: i32,
+    unprivileged_listener: bool,
     nonblocking: AtomicBool,
     marks: Mutex<Vec<FanotifyMark>>,
     events: Mutex<VecDeque<FanotifyEvent>>,
@@ -189,9 +191,13 @@ pub struct FanotifyFd {
 
 impl FanotifyFd {
     fn new(init_flags: u32, event_f_flags: u32) -> Self {
+        let curr = current();
+        let proc_data = &curr.as_thread().proc_data;
         Self {
             init_flags,
             event_f_flags,
+            owner_pid: proc_data.proc.pid() as i32,
+            unprivileged_listener: proc_data.euid() != 0,
             nonblocking: AtomicBool::new(false),
             marks: Mutex::new(Vec::new()),
             events: Mutex::new(VecDeque::new()),
@@ -300,6 +306,11 @@ impl FanotifyFd {
             return;
         }
 
+        let pid = if self.unprivileged_listener && pid != self.owner_pid {
+            0
+        } else {
+            pid
+        };
         self.events.lock().push_back(FanotifyEvent {
             mask: event_mask,
             file,

@@ -227,8 +227,8 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-    fanotify06 fanotify06
-    fanotify12 fanotify12
+    fanotify18 fanotify18
+    fanotify19 fanotify19
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
