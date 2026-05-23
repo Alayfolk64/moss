@@ -118,14 +118,19 @@ musl_runtime() {
     rm -rf /lib/libm.so
     rm -rf /lib/libc.so.6
     rm -rf /lib/libm.so.6
+    rm -rf /lib/libgcc_s.so.1
     ln -v -s /musl/lib/libc.so /lib/libc.so
 }
 
 glibc_runtime() {
-    echo "prepare musl runtime"
+    echo "prepare glibc runtime"
     rm -rf /lib/libc.so
+    rm -rf /lib/libgcc_s.so.1
     ln -v -s /glibc/lib/libc.so.6 /lib/libc.so.6
     ln -v -s /glibc/lib/libm.so.6 /lib/libm.so.6
+    if [[ -e /glibc/lib/libgcc_s.so.1 ]]; then
+        ln -v -s /glibc/lib/libgcc_s.so.1 /lib/libgcc_s.so.1
+    fi
     ln -v -s /lib/libc.so.6 /lib/libc.so
     ln -v -s /lib/libm.so.6 /lib/libm.so
 }
@@ -227,8 +232,7 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-    fanotify18 fanotify18
-    fanotify19 fanotify19
+    fanotify05 fanotify05
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

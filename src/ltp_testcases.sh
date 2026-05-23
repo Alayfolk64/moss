@@ -434,13 +434,13 @@ fanotify01 fanotify01
 fanotify02 fanotify02
 # fanotify03 fanotify03
 fanotify04 fanotify04
-# fanotify05 fanotify05
+fanotify05 fanotify05
 fanotify06 fanotify06
 # fanotify07 fanotify07
 fanotify08 fanotify08
 # fanotify09 fanotify09
 # fanotify10 fanotify10
-# fanotify11 fanotify11
+fanotify11 fanotify11
 fanotify12 fanotify12
 # fanotify13 fanotify13
 fanotify14 fanotify14

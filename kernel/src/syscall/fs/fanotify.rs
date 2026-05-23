@@ -25,7 +25,7 @@ use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{Directory, File, FileLike, IoDst, add_file_like, resolve_at},
+    file::{Directory, File, FileLike, IoDst, add_file_like, close_file_like, resolve_at},
     mm::vm_load_string,
     task::AsThread,
 };
@@ -137,6 +137,7 @@ const FAN_MARK_KNOWN_FLAGS: u32 = FAN_MARK_ADD
 
 const FANOTIFY_METADATA_VERSION: u8 = 3;
 const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
+const FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS: usize = 16_384;
 const FAN_NOFD: c_int = -1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,7 +159,7 @@ struct FanotifyMark {
 
 struct FanotifyEvent {
     mask: u64,
-    file: Arc<dyn FileLike>,
+    file: Option<Arc<dyn FileLike>>,
     path: Option<String>,
     pid: i32,
 }
@@ -217,6 +218,10 @@ impl FanotifyFd {
         self.init_flags & FAN_REPORT_TARGET_FID != 0
     }
 
+    fn reports_tid(&self) -> bool {
+        self.init_flags & FAN_REPORT_TID != 0
+    }
+
     fn apply_mark(&self, flags: u32, mask: u64, target: Option<FanotifyMarkTarget>) {
         if flags & FAN_MARK_FLUSH != 0 {
             self.marks.lock().clear();
@@ -272,7 +277,8 @@ impl FanotifyFd {
         target: FanotifyTarget,
         path: Option<&str>,
         file: Arc<dyn FileLike>,
-        pid: i32,
+        tgid: i32,
+        tid: i32,
         mask: u64,
     ) {
         let mut matched_mask = 0;
@@ -306,14 +312,24 @@ impl FanotifyFd {
             return;
         }
 
-        let pid = if self.unprivileged_listener && pid != self.owner_pid {
+        let pid = if self.reports_tid() { tid } else { tgid };
+        let pid = if self.unprivileged_listener && tgid != self.owner_pid {
             0
         } else {
             pid
         };
-        self.events.lock().push_back(FanotifyEvent {
+        let mut events = self.events.lock();
+        if self.init_flags & FAN_UNLIMITED_QUEUE == 0
+            && events.len() >= FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS
+        {
+            queue_overflow_event(&mut events, pid);
+            self.poll.wake();
+            return;
+        }
+
+        events.push_back(FanotifyEvent {
             mask: event_mask,
-            file,
+            file: Some(file),
             path: path.map(ToString::to_string),
             pid,
         });
@@ -325,14 +341,34 @@ impl FanotifyFd {
             return Ok(FAN_NOFD);
         }
 
+        let Some(event_file) = event.file.as_ref() else {
+            return Ok(FAN_NOFD);
+        };
+
         let Some(path) = event.path.as_deref() else {
-            return add_file_like(event.file.clone(), self.event_f_flags & O_CLOEXEC != 0);
+            return add_file_like(event_file.clone(), self.event_f_flags & O_CLOEXEC != 0);
         };
 
         let file = open_fanotify_event_file(path, self.event_f_flags)
-            .unwrap_or_else(|_| event.file.clone());
+            .unwrap_or_else(|_| event_file.clone());
         add_file_like(file, self.event_f_flags & O_CLOEXEC != 0)
     }
+}
+
+fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
+    if events.iter().any(|event| event.mask == FAN_Q_OVERFLOW) {
+        return;
+    }
+
+    while events.len() >= FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS {
+        events.pop_back();
+    }
+    events.push_back(FanotifyEvent {
+        mask: FAN_Q_OVERFLOW,
+        file: None,
+        path: None,
+        pid,
+    });
 }
 
 fn mark_matches_event(mark: &FanotifyMark, target: FanotifyTarget, path: Option<&str>) -> bool {
@@ -407,18 +443,40 @@ fn open_fanotify_event_file(path: &str, event_f_flags: u32) -> AxResult<Arc<dyn 
 impl FileLike for FanotifyFd {
     fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
         block_on(poll_io(self, IoEvents::IN, self.nonblocking(), || {
-            let event = self.events.lock().pop_front().ok_or(AxError::WouldBlock)?;
-            let event_fd = self.event_fd(&event)?;
-            let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
-            let mut written = dst.write(&metadata)?;
+            let mut written = 0;
 
-            while let Some(event) = self.events.lock().pop_front() {
+            loop {
+                if dst.remaining_mut() < FANOTIFY_EVENT_METADATA_LEN {
+                    return if written == 0 {
+                        Err(AxError::InvalidInput)
+                    } else {
+                        Ok(written)
+                    };
+                }
+
+                let Some(event) = self.events.lock().pop_front() else {
+                    return if written == 0 {
+                        Err(AxError::WouldBlock)
+                    } else {
+                        Ok(written)
+                    };
+                };
+
                 let event_fd = self.event_fd(&event)?;
                 let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
                 match dst.write(&metadata) {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        if event_fd >= 0 {
+                            let _ = close_file_like(event_fd);
+                        }
+                        self.events.lock().push_front(event);
+                        break;
+                    }
                     Ok(n) => written += n,
                     Err(err) => {
+                        if event_fd >= 0 {
+                            let _ = close_file_like(event_fd);
+                        }
                         self.events.lock().push_front(event);
                         return if written == 0 { Err(err) } else { Ok(written) };
                     }
@@ -499,13 +557,15 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
         return;
     };
     let path = path_from_file_like(&file);
-    let pid = current().as_thread().proc_data.proc.pid() as i32;
+    let curr = current();
+    let tgid = curr.as_thread().proc_data.proc.pid() as i32;
+    let tid = curr.id().as_u64() as i32;
     let mut fds = FANOTIFY_FDS.write();
     fds.retain(|weak| {
         let Some(fd) = weak.upgrade() else {
             return false;
         };
-        fd.queue_event(target, path.as_deref(), file.clone(), pid, mask);
+        fd.queue_event(target, path.as_deref(), file.clone(), tgid, tid, mask);
         true
     });
 }
