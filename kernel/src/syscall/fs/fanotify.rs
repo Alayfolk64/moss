@@ -269,8 +269,8 @@ impl FanotifyFd {
         pid: i32,
         mask: u64,
     ) {
-        let mut matched = false;
-        let mut ignored = false;
+        let mut matched_mask = 0;
+        let mut ignored_mask = 0;
         {
             let mut marks = self.marks.lock();
             for mark in marks.iter_mut() {
@@ -278,12 +278,10 @@ impl FanotifyFd {
                     continue;
                 }
 
+                ignored_mask |= mark.ignored_mask & mask;
                 let event_on_dir_allowed = !target.is_dir || mark.mask & FAN_ONDIR != 0;
-                if mark.ignored_mask & mask != 0 {
-                    ignored = true;
-                }
-                if mark.mask & mask != 0 && event_on_dir_allowed {
-                    matched = true;
+                if event_on_dir_allowed {
+                    matched_mask |= mask & mark.mask;
                 }
             }
 
@@ -297,12 +295,13 @@ impl FanotifyFd {
             }
         }
 
-        if !matched || ignored {
+        let event_mask = matched_mask & !ignored_mask;
+        if event_mask == 0 {
             return;
         }
 
         self.events.lock().push_back(FanotifyEvent {
-            mask,
+            mask: event_mask,
             file,
             path: path.map(ToString::to_string),
             pid,
@@ -502,6 +501,12 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
 
 pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
     notify_fanotify_event(file, FAN_OPEN);
+}
+
+pub(crate) fn notify_fanotify_open_exec_path(path: &str) {
+    if let Ok(file) = open_fanotify_event_file(path, 0) {
+        notify_fanotify_event(file, FAN_OPEN | FAN_OPEN_EXEC);
+    }
 }
 
 pub(super) fn notify_fanotify_access(file: Arc<dyn FileLike>) {

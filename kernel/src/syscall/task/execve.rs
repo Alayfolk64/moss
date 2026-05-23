@@ -18,6 +18,7 @@ use crate::{
     config::USER_HEAP_BASE,
     file::{FD_TABLE, File, resolve_at},
     mm::{load_user_app, load_user_app_from_location, vm_load_string},
+    syscall::notify_fanotify_open_exec_path,
     task::{AsThread, processes},
 };
 
@@ -196,7 +197,9 @@ fn execve_common(
     };
     curr.set_name(loc.name());
 
-    *proc_data.exe_path.write() = loc.absolute_path()?.to_string();
+    let exec_path = loc.absolute_path()?.to_string();
+    notify_fanotify_open_exec_path(&exec_path);
+    *proc_data.exe_path.write() = exec_path;
     *proc_data.cmdline.write() = Arc::new(args);
 
     proc_data.set_heap_top(USER_HEAP_BASE);
