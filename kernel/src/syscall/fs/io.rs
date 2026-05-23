@@ -13,6 +13,7 @@ use linux_raw_sys::general::__kernel_off_t;
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
+use super::fanotify::{notify_fanotify_access, notify_fanotify_modify};
 #[cfg(feature = "net")]
 use crate::file::Socket;
 use crate::{
@@ -49,14 +50,22 @@ pub fn sys_dummy_fd(sysno: Sysno) -> AxResult<isize> {
 /// Return the read size if success.
 pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
     debug!("sys_read <= fd: {fd}, buf: {buf:p}, len: {len}");
-    Ok(get_file_like(fd)?.read(&mut VmBytesMut::new(buf, len))? as _)
+    let f = get_file_like(fd)?;
+    let read = f.read(&mut VmBytesMut::new(buf, len))?;
+    if read > 0 {
+        notify_fanotify_access(f);
+    }
+    Ok(read as _)
 }
 
 pub fn sys_readv(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     debug!("sys_readv <= fd: {fd}, iovcnt: {iovcnt}");
     let f = get_file_like(fd)?;
-    f.read(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())
-        .map(|n| n as _)
+    let read = f.read(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
+    if read > 0 {
+        notify_fanotify_access(f);
+    }
+    Ok(read as _)
 }
 
 /// Write data to the file indicated by `fd`.
@@ -67,14 +76,22 @@ pub fn sys_write(fd: i32, buf: *const u8, len: usize) -> AxResult<isize> {
     if len == 0 {
         return Ok(0);
     }
-    Ok(get_file_like(fd)?.write(&mut VmBytes::new(buf, len))? as _)
+    let f = get_file_like(fd)?;
+    let written = f.write(&mut VmBytes::new(buf, len))?;
+    if written > 0 {
+        notify_fanotify_modify(f);
+    }
+    Ok(written as _)
 }
 
 pub fn sys_writev(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     debug!("sys_writev <= fd: {fd}, iovcnt: {iovcnt}");
     let f = get_file_like(fd)?;
-    f.write(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())
-        .map(|n| n as _)
+    let written = f.write(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
+    if written > 0 {
+        notify_fanotify_modify(f);
+    }
+    Ok(written as _)
 }
 
 pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> AxResult<isize> {

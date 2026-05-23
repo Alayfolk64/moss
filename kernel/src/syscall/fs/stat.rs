@@ -1,19 +1,30 @@
-use core::ffi::{c_char, c_int};
+use alloc::{
+    collections::BTreeMap,
+    string::{String, ToString},
+    sync::Arc,
+};
+use core::{
+    ffi::{c_char, c_int},
+    mem::MaybeUninit,
+};
 
-use axerrno::{AxError, AxResult};
-use axfs::FS_CONTEXT;
+use axerrno::{AxError, AxResult, LinuxError};
+use axfs::{FS_CONTEXT, OpenOptions, OpenResult};
 use axfs_ng_vfs::Location;
 use axtask::current;
 use linux_raw_sys::general::{
     __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
-    AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_NOFOLLOW, MS_RDONLY, R_OK, STATX__RESERVED,
-    W_OK, X_OK, stat, statfs, statx,
+    AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_FOLLOW, AT_SYMLINK_NOFOLLOW, MS_RDONLY,
+    O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK, S_IFMT,
+    STATX__RESERVED, W_OK, X_OK, stat, statfs, statx,
 };
-use starry_vm::{VmMutPtr, VmPtr};
+use spin::RwLock;
+use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use crate::{
-    file::{File, FileLike, resolve_at},
+    file::{Directory, File, FileLike, add_file_like, get_file_like, resolve_at},
     mm::vm_load_string,
+    syscall::task::current_has_cap,
     task::AsThread,
 };
 
@@ -58,6 +69,183 @@ pub fn sys_fstatat(
     statbuf.vm_write(loc.stat()?.into())?;
 
     Ok(0)
+}
+
+const MAX_HANDLE_SZ: u32 = 128;
+const STARRY_FILE_HANDLE_BYTES: u32 = 16;
+const STARRY_FILE_HANDLE_TYPE: i32 = 1;
+const CAP_DAC_READ_SEARCH: u32 = 2;
+
+#[derive(Clone)]
+struct HandleRecord {
+    path: String,
+    mount_id: u64,
+}
+
+static HANDLE_RECORDS: RwLock<BTreeMap<[u8; STARRY_FILE_HANDLE_BYTES as usize], HandleRecord>> =
+    RwLock::new(BTreeMap::new());
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FileHandleHeader {
+    handle_bytes: u32,
+    handle_type: i32,
+}
+
+pub(crate) fn encode_name_handle(
+    stat: crate::file::Kstat,
+) -> [u8; STARRY_FILE_HANDLE_BYTES as usize] {
+    let mut handle = [0u8; STARRY_FILE_HANDLE_BYTES as usize];
+    handle[..8].copy_from_slice(&stat.dev.to_ne_bytes());
+    handle[8..].copy_from_slice(&stat.ino.to_ne_bytes());
+    handle
+}
+
+pub fn sys_name_to_handle_at(
+    dirfd: c_int,
+    pathname: *const c_char,
+    handle: *mut FileHandleHeader,
+    mount_id: *mut c_int,
+    flags: u32,
+) -> AxResult<isize> {
+    const VALID_FLAGS: u32 = AT_EMPTY_PATH | AT_SYMLINK_FOLLOW;
+
+    debug!(
+        "sys_name_to_handle_at <= dirfd: {dirfd}, pathname: {pathname:p}, handle: {handle:p}, \
+         mount_id: {mount_id:p}, flags: {flags:#x}"
+    );
+
+    let supplied_size = unsafe { handle.vm_read_uninit()?.assume_init() }.handle_bytes;
+    mount_id.vm_write(0)?;
+
+    if flags & !VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let path = pathname.nullable().map(vm_load_string).transpose()?;
+    let resolve_flags = if flags & AT_SYMLINK_FOLLOW != 0 {
+        flags & AT_EMPTY_PATH
+    } else {
+        (flags & AT_EMPTY_PATH) | AT_SYMLINK_NOFOLLOW
+    };
+    let target = resolve_at(dirfd, path.as_deref(), resolve_flags)?;
+    let stat = target.stat()?;
+    let Some(loc) = target.into_file() else {
+        return Err(AxError::OperationNotSupported);
+    };
+
+    if supplied_size > MAX_HANDLE_SZ {
+        return Err(AxError::InvalidInput);
+    }
+    if supplied_size < STARRY_FILE_HANDLE_BYTES {
+        handle.vm_write(FileHandleHeader {
+            handle_bytes: STARRY_FILE_HANDLE_BYTES,
+            handle_type: 0,
+        })?;
+        return Err(AxError::from(LinuxError::EOVERFLOW));
+    }
+
+    let encoded = encode_name_handle(stat);
+    if let Ok(path) = loc.absolute_path() {
+        HANDLE_RECORDS.write().insert(
+            encoded,
+            HandleRecord {
+                path: path.to_string(),
+                mount_id: loc.mountpoint().device(),
+            },
+        );
+    }
+    handle.vm_write(FileHandleHeader {
+        handle_bytes: STARRY_FILE_HANDLE_BYTES,
+        handle_type: STARRY_FILE_HANDLE_TYPE,
+    })?;
+    vm_write_slice(unsafe { handle.add(1).cast::<u8>() }, &encoded)?;
+    mount_id.vm_write(loc.mountpoint().device() as c_int)?;
+    Ok(0)
+}
+
+fn open_options_from_handle_flags(flags: u32) -> OpenOptions {
+    let mut options = OpenOptions::new();
+    match flags & O_ACCMODE {
+        O_WRONLY => options.write(true),
+        O_RDWR => options.read(true).write(true),
+        _ => options.read(true),
+    };
+    if flags & O_PATH != 0 {
+        options.path(true);
+    }
+    if flags & O_DIRECTORY != 0 {
+        options.directory(true);
+    }
+    options
+}
+
+fn check_handle_mount(mount_fd: c_int, expected_mount_id: u64) -> AxResult {
+    use linux_raw_sys::general::AT_FDCWD;
+
+    if mount_fd == AT_FDCWD {
+        return Ok(());
+    }
+
+    let _ = get_file_like(mount_fd)?;
+    let Some(loc) = resolve_at(mount_fd, None, AT_EMPTY_PATH)?.into_file() else {
+        return Err(AxError::from(LinuxError::ESTALE));
+    };
+    if loc.mountpoint().device() != expected_mount_id {
+        return Err(AxError::from(LinuxError::ESTALE));
+    }
+    Ok(())
+}
+
+pub fn sys_open_by_handle_at(
+    mount_fd: c_int,
+    handle: *const FileHandleHeader,
+    flags: u32,
+) -> AxResult<isize> {
+    debug!("sys_open_by_handle_at <= mount_fd: {mount_fd}, handle: {handle:p}, flags: {flags:#x}");
+
+    if !current_has_cap(CAP_DAC_READ_SEARCH) {
+        return Err(AxError::from(LinuxError::EPERM));
+    }
+
+    let header = unsafe { handle.vm_read_uninit()?.assume_init() };
+    if header.handle_bytes == 0 || header.handle_bytes > MAX_HANDLE_SZ {
+        return Err(AxError::InvalidInput);
+    }
+    if header.handle_bytes != STARRY_FILE_HANDLE_BYTES
+        || header.handle_type != STARRY_FILE_HANDLE_TYPE
+    {
+        return Err(AxError::from(LinuxError::ESTALE));
+    }
+
+    let mut key = [MaybeUninit::<u8>::uninit(); STARRY_FILE_HANDLE_BYTES as usize];
+    starry_vm::vm_read_slice(unsafe { handle.add(1).cast::<u8>() }, &mut key)?;
+    let key = key.map(|byte| unsafe { byte.assume_init() });
+    let record = HANDLE_RECORDS
+        .read()
+        .get(&key)
+        .cloned()
+        .ok_or_else(|| AxError::from(LinuxError::ESTALE))?;
+    check_handle_mount(mount_fd, record.mount_id)?;
+
+    let loc = resolve_at(
+        linux_raw_sys::general::AT_FDCWD,
+        Some(record.path.as_str()),
+        AT_SYMLINK_NOFOLLOW,
+    )?;
+    if loc.stat()?.mode & S_IFMT == S_IFLNK {
+        return Err(AxError::FilesystemLoop);
+    }
+
+    let options = open_options_from_handle_flags(flags);
+    let f: Arc<dyn FileLike> = match options.open(&FS_CONTEXT.lock(), record.path.as_str())? {
+        OpenResult::File(file) => Arc::new(File::new(file)),
+        OpenResult::Dir(dir) => Arc::new(Directory::new(dir)),
+    };
+    if flags & O_NONBLOCK != 0 {
+        f.set_nonblocking(true)?;
+    }
+    add_file_like(f, flags & O_CLOEXEC != 0).map(|fd| fd as isize)
 }
 
 pub fn sys_statx(
