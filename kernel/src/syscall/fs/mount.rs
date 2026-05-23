@@ -2,7 +2,7 @@ use core::ffi::{c_char, c_void};
 
 use axerrno::{AxError, AxResult};
 use axfs::FS_CONTEXT;
-use linux_raw_sys::general::MS_RDONLY;
+use linux_raw_sys::general::{MS_BIND, MS_RDONLY};
 use starry_vm::VmPtr;
 
 use crate::{mm::vm_load_string, pseudofs::MemoryFs};
@@ -50,6 +50,18 @@ pub fn sys_mount(
     let target = vm_load_string(target)?;
     let fs_type = vm_load_string(fs_type)?;
     debug!("sys_mount <= source: {source:?}, target: {target:?}, fs_type: {fs_type:?}");
+
+    if flags as u32 & MS_BIND != 0 {
+        let Some(source) = source.as_deref() else {
+            return Err(AxError::InvalidInput);
+        };
+        let mut fs_context = FS_CONTEXT.lock();
+        fs_context.resolve(source)?;
+        let target = fs_context.resolve(target)?;
+        let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
+        target.mount(&fs)?;
+        return Ok(0);
+    }
 
     let Some(kind) = detect_mount_kind(&fs_type) else {
         return Err(AxError::NoSuchDevice);

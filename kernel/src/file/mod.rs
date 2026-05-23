@@ -9,7 +9,7 @@ mod pipe;
 pub mod signalfd;
 pub mod timerfd;
 
-use alloc::{borrow::Cow, collections::BTreeMap, sync::Arc};
+use alloc::{borrow::Cow, collections::BTreeMap, string::String, sync::Arc};
 use core::{ffi::c_int, time::Duration};
 
 use axerrno::{AxError, AxResult};
@@ -187,6 +187,10 @@ pub trait FileLike: Pollable + DowncastSync {
     }
 
     fn path(&self) -> Cow<'_, str>;
+
+    fn proc_fdinfo(&self) -> Option<String> {
+        None
+    }
 
     fn ioctl(&self, _cmd: u32, _arg: usize) -> AxResult<usize> {
         Err(AxError::NotATty)

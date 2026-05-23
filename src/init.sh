@@ -69,13 +69,13 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=0
-busybox=0
+basic=1
+busybox=1
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=0
+libctest=1
 lmbench=0
 ltp=1
 lua=0
@@ -231,9 +231,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-    fanotify05 fanotify05
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi

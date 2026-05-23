@@ -248,6 +248,50 @@ impl SimpleDirOps for ThreadFdDir {
     }
 }
 
+/// The /proc/[pid]/fdinfo directory
+struct ThreadFdInfoDir {
+    fs: Arc<SimpleFs>,
+    task: WeakAxTaskRef,
+}
+
+impl SimpleDirOps for ThreadFdInfoDir {
+    fn child_names<'a>(&'a self) -> Box<dyn Iterator<Item = Cow<'a, str>> + 'a> {
+        let Some(task) = self.task.upgrade() else {
+            return Box::new(iter::empty());
+        };
+        let ids = FD_TABLE
+            .scope(&task.as_thread().proc_data.scope.read())
+            .read()
+            .ids()
+            .map(|id| Cow::Owned(id.to_string()))
+            .collect::<Vec<_>>();
+        Box::new(ids.into_iter())
+    }
+
+    fn lookup_child(&self, name: &str) -> VfsResult<NodeOpsMux> {
+        let fs = self.fs.clone();
+        let task = self.task.upgrade().ok_or(VfsError::NotFound)?;
+        let fd = name.parse::<u32>().map_err(|_| VfsError::NotFound)?;
+        let file = FD_TABLE
+            .scope(&task.as_thread().proc_data.scope.read())
+            .read()
+            .get(fd as _)
+            .ok_or(VfsError::NotFound)?
+            .inner
+            .clone();
+        Ok(SimpleFile::new_regular(fs, move || {
+            Ok(file
+                .proc_fdinfo()
+                .unwrap_or_else(|| "pos:\t0\nflags:\t0\nmnt_id:\t0\n".to_string()))
+        })
+        .into())
+    }
+
+    fn is_cacheable(&self) -> bool {
+        false
+    }
+}
+
 /// The /proc/[pid] directory
 struct ThreadDir {
     fs: Arc<SimpleFs>,
@@ -268,6 +312,7 @@ impl SimpleDirOps for ThreadDir {
                 "comm",
                 "exe",
                 "fd",
+                "fdinfo",
                 "setgroups",
                 "uid_map",
                 "gid_map",
@@ -371,6 +416,14 @@ impl SimpleDirOps for ThreadDir {
             "fd" => SimpleDir::new_maker(
                 fs.clone(),
                 Arc::new(ThreadFdDir {
+                    fs,
+                    task: Arc::downgrade(&task),
+                }),
+            )
+            .into(),
+            "fdinfo" => SimpleDir::new_maker(
+                fs.clone(),
+                Arc::new(ThreadFdInfoDir {
                     fs,
                     task: Arc::downgrade(&task),
                 }),

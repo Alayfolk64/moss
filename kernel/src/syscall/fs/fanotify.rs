@@ -1,6 +1,7 @@
 use alloc::{
     borrow::Cow,
     collections::VecDeque,
+    format,
     string::{String, ToString},
     sync::{Arc, Weak},
     vec::Vec,
@@ -25,7 +26,7 @@ use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{Directory, File, FileLike, IoDst, add_file_like, close_file_like, resolve_at},
+    file::{Directory, File, FileLike, IoDst, IoSrc, add_file_like, close_file_like, resolve_at},
     mm::vm_load_string,
     task::AsThread,
 };
@@ -138,6 +139,9 @@ const FAN_MARK_KNOWN_FLAGS: u32 = FAN_MARK_ADD
 const FANOTIFY_METADATA_VERSION: u8 = 3;
 const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
 const FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS: usize = 16_384;
+const FANOTIFY_EVENT_INFO_TYPE_DFID_NAME: u8 = 2;
+const FANOTIFY_EVENT_INFO_FID_HEADER_LEN: usize = 12;
+const FANOTIFY_FILE_HANDLE_HEADER_LEN: usize = 8;
 const FAN_NOFD: c_int = -1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,6 +165,7 @@ struct FanotifyEvent {
     mask: u64,
     file: Option<Arc<dyn FileLike>>,
     path: Option<String>,
+    name: Option<String>,
     pid: i32,
 }
 
@@ -283,23 +288,34 @@ impl FanotifyFd {
     ) {
         let mut matched_mask = 0;
         let mut ignored_mask = 0;
+        let mut event_name = None;
         {
             let mut marks = self.marks.lock();
             for mark in marks.iter_mut() {
-                if !mark_matches_event(mark, target, path) {
-                    continue;
+                if mark_matches_event_mask(mark, target, path, mark.ignored_mask) {
+                    ignored_mask |= mark.ignored_mask & mask;
                 }
 
-                ignored_mask |= mark.ignored_mask & mask;
-                let event_on_dir_allowed = !target.is_dir || mark.mask & FAN_ONDIR != 0;
-                if event_on_dir_allowed {
+                if mark_matches_event_mask(mark, target, path, mark.mask) {
                     matched_mask |= mask & mark.mask;
+                    if self.reports_name() {
+                        if let Some(candidate) = fanotify_event_name(mark, path) {
+                            if event_name
+                                .as_ref()
+                                .map_or(true, |(_, priority)| candidate.1 > *priority)
+                            {
+                                event_name = Some(candidate);
+                            }
+                        }
+                    }
                 }
             }
 
             if mask & FAN_MODIFY != 0 {
                 for mark in marks.iter_mut() {
-                    if !mark.ignore_surv_modify && mark_matches_event(mark, target, path) {
+                    if !mark.ignore_surv_modify
+                        && mark_matches_event_mask(mark, target, path, mark.ignored_mask)
+                    {
                         mark.ignored_mask = 0;
                     }
                 }
@@ -331,6 +347,7 @@ impl FanotifyFd {
             mask: event_mask,
             file: Some(file),
             path: path.map(ToString::to_string),
+            name: event_name.map(|(name, _)| name),
             pid,
         });
         self.poll.wake();
@@ -346,12 +363,18 @@ impl FanotifyFd {
         };
 
         let Some(path) = event.path.as_deref() else {
-            return add_file_like(event_file.clone(), self.event_f_flags & O_CLOEXEC != 0);
+            return add_file_like(
+                Arc::new(FanotifyEventFile::new(event_file.clone())),
+                self.event_f_flags & O_CLOEXEC != 0,
+            );
         };
 
         let file = open_fanotify_event_file(path, self.event_f_flags)
             .unwrap_or_else(|_| event_file.clone());
-        add_file_like(file, self.event_f_flags & O_CLOEXEC != 0)
+        add_file_like(
+            Arc::new(FanotifyEventFile::new(file)),
+            self.event_f_flags & O_CLOEXEC != 0,
+        )
     }
 }
 
@@ -367,11 +390,21 @@ fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
         mask: FAN_Q_OVERFLOW,
         file: None,
         path: None,
+        name: None,
         pid,
     });
 }
 
-fn mark_matches_event(mark: &FanotifyMark, target: FanotifyTarget, path: Option<&str>) -> bool {
+fn mark_matches_event_mask(
+    mark: &FanotifyMark,
+    target: FanotifyTarget,
+    path: Option<&str>,
+    mark_mask: u64,
+) -> bool {
+    if mark_mask == 0 || target.is_dir && mark_mask & FAN_ONDIR == 0 {
+        return false;
+    }
+
     match mark.kind {
         FanotifyMarkKind::Inode => {
             let self_match = mark.target == target
@@ -380,7 +413,7 @@ fn mark_matches_event(mark: &FanotifyMark, target: FanotifyTarget, path: Option<
                     .as_deref()
                     .zip(path)
                     .is_some_and(|(mark_path, event_path)| mark_path == event_path);
-            self_match || mark_matches_child(mark, path)
+            self_match || mark_matches_child(mark, path, mark_mask)
         }
         FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
             .path
@@ -390,17 +423,34 @@ fn mark_matches_event(mark: &FanotifyMark, target: FanotifyTarget, path: Option<
     }
 }
 
-fn mark_matches_child(mark: &FanotifyMark, path: Option<&str>) -> bool {
-    mark.mask & FAN_EVENT_ON_CHILD != 0
-        && mark.target.is_dir
-        && mark
-            .path
-            .as_deref()
-            .zip(path)
-            .and_then(|(mark_path, event_path)| {
-                parent_path(event_path).map(|parent| (mark_path, parent))
-            })
-            .is_some_and(|(mark_path, parent)| mark_path == parent)
+fn mark_matches_child(mark: &FanotifyMark, path: Option<&str>, mark_mask: u64) -> bool {
+    mark_mask & FAN_EVENT_ON_CHILD != 0 && mark.target.is_dir && mark_is_parent_of_path(mark, path)
+}
+
+fn mark_is_parent_of_path(mark: &FanotifyMark, path: Option<&str>) -> bool {
+    mark.path
+        .as_deref()
+        .zip(path)
+        .and_then(|(mark_path, event_path)| {
+            parent_path(event_path).map(|parent| (mark_path, parent))
+        })
+        .is_some_and(|(mark_path, parent)| mark_path == parent)
+}
+
+fn fanotify_event_name(mark: &FanotifyMark, path: Option<&str>) -> Option<(String, u8)> {
+    let event_path = path?;
+    let mark_path = mark.path.as_deref()?;
+    if mark_is_parent_of_path(mark, path) {
+        return Some((basename(event_path).to_string(), 2));
+    }
+    if event_path == mark_path {
+        return Some((".".to_string(), 1));
+    }
+    Some((basename(event_path).to_string(), 0))
+}
+
+fn basename(path: &str) -> &str {
+    path.rsplit_once('/').map_or(path, |(_, name)| name)
 }
 
 fn parent_path(path: &str) -> Option<&str> {
@@ -463,8 +513,20 @@ impl FileLike for FanotifyFd {
                 };
 
                 let event_fd = self.event_fd(&event)?;
-                let metadata = fanotify_event_metadata(event.mask, event_fd, event.pid);
-                match dst.write(&metadata) {
+                let record = fanotify_event_record(&event, event_fd);
+                if dst.remaining_mut() < record.len() {
+                    if event_fd >= 0 {
+                        let _ = close_file_like(event_fd);
+                    }
+                    self.events.lock().push_front(event);
+                    return if written == 0 {
+                        Err(AxError::InvalidInput)
+                    } else {
+                        Ok(written)
+                    };
+                }
+
+                match dst.write(&record) {
                     Ok(0) => {
                         if event_fd >= 0 {
                             let _ = close_file_like(event_fd);
@@ -491,6 +553,21 @@ impl FileLike for FanotifyFd {
         "anon_inode:[fanotify]".into()
     }
 
+    fn proc_fdinfo(&self) -> Option<String> {
+        let mut out = String::from("pos:\t0\nflags:\t0\nmnt_id:\t0\n");
+        for mark in self.marks.lock().iter() {
+            out.push_str(&format!(
+                "fanotify ino:{:x} sdev:{:x} mflags: {:x} mask:{:x} ignored_mask:{:x}\n",
+                mark.target.ino,
+                mark.target.dev,
+                fanotify_mark_fdinfo_flags(mark.kind),
+                mark.mask,
+                mark.ignored_mask,
+            ));
+        }
+        Some(out)
+    }
+
     fn nonblocking(&self) -> bool {
         self.nonblocking.load(Ordering::Acquire)
     }
@@ -498,6 +575,72 @@ impl FileLike for FanotifyFd {
     fn set_nonblocking(&self, nonblocking: bool) -> AxResult {
         self.nonblocking.store(nonblocking, Ordering::Release);
         Ok(())
+    }
+}
+
+struct FanotifyEventFile {
+    inner: Arc<dyn FileLike>,
+}
+
+impl FanotifyEventFile {
+    fn new(inner: Arc<dyn FileLike>) -> Self {
+        Self { inner }
+    }
+}
+
+impl FileLike for FanotifyEventFile {
+    fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
+        self.inner.read(dst)
+    }
+
+    fn write(&self, src: &mut IoSrc) -> AxResult<usize> {
+        self.inner.write(src)
+    }
+
+    fn stat(&self) -> AxResult<crate::file::Kstat> {
+        self.inner.stat()
+    }
+
+    fn ioctl(&self, cmd: u32, arg: usize) -> AxResult<usize> {
+        self.inner.ioctl(cmd, arg)
+    }
+
+    fn set_nonblocking(&self, flag: bool) -> AxResult {
+        self.inner.set_nonblocking(flag)
+    }
+
+    fn nonblocking(&self) -> bool {
+        self.inner.nonblocking()
+    }
+
+    fn status_flags(&self) -> u32 {
+        self.inner.status_flags()
+    }
+
+    fn set_status_flags(&self, flags: u32) -> AxResult {
+        self.inner.set_status_flags(flags)
+    }
+
+    fn path(&self) -> Cow<'_, str> {
+        self.inner.path()
+    }
+}
+
+impl Pollable for FanotifyEventFile {
+    fn poll(&self) -> IoEvents {
+        self.inner.poll()
+    }
+
+    fn register(&self, context: &mut Context<'_>, events: IoEvents) {
+        self.inner.register(context, events);
+    }
+}
+
+fn fanotify_mark_fdinfo_flags(kind: FanotifyMarkKind) -> u32 {
+    match kind {
+        FanotifyMarkKind::Inode => 0,
+        FanotifyMarkKind::Mount => FAN_MARK_MOUNT,
+        FanotifyMarkKind::Filesystem => FAN_MARK_FILESYSTEM,
     }
 }
 
@@ -553,6 +696,10 @@ pub fn sys_fanotify_mark(
 }
 
 fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
+    if file.downcast_ref::<FanotifyEventFile>().is_some() {
+        return;
+    }
+
     let Ok(target) = target_from_file_like(&file) else {
         return;
     };
@@ -599,9 +746,50 @@ pub(super) fn notify_fanotify_close(file: Arc<dyn FileLike>, writable: bool) {
     );
 }
 
-fn fanotify_event_metadata(mask: u64, fd: c_int, pid: i32) -> [u8; FANOTIFY_EVENT_METADATA_LEN] {
+fn fanotify_event_record(event: &FanotifyEvent, fd: c_int) -> Vec<u8> {
+    let name = event
+        .name
+        .as_deref()
+        .filter(|_| event.mask != FAN_Q_OVERFLOW);
+    let info_len = name.map_or(0, |name| {
+        align_to_8(
+            FANOTIFY_EVENT_INFO_FID_HEADER_LEN + FANOTIFY_FILE_HANDLE_HEADER_LEN + name.len() + 1,
+        )
+    });
+    let record_len = FANOTIFY_EVENT_METADATA_LEN + info_len;
+    let mut out = Vec::with_capacity(record_len);
+    out.extend_from_slice(&fanotify_event_metadata(
+        event.mask, fd, event.pid, record_len,
+    ));
+
+    if let Some(name) = name {
+        out.push(FANOTIFY_EVENT_INFO_TYPE_DFID_NAME);
+        out.push(0);
+        out.extend_from_slice(&(info_len as u16).to_ne_bytes());
+        out.extend_from_slice(&0u32.to_ne_bytes());
+        out.extend_from_slice(&0u32.to_ne_bytes());
+        out.extend_from_slice(&0u32.to_ne_bytes());
+        out.extend_from_slice(&0i32.to_ne_bytes());
+        out.extend_from_slice(name.as_bytes());
+        out.push(0);
+        out.resize(record_len, 0);
+    }
+
+    out
+}
+
+fn align_to_8(value: usize) -> usize {
+    (value + 7) & !7
+}
+
+fn fanotify_event_metadata(
+    mask: u64,
+    fd: c_int,
+    pid: i32,
+    event_len: usize,
+) -> [u8; FANOTIFY_EVENT_METADATA_LEN] {
     let mut out = [0u8; FANOTIFY_EVENT_METADATA_LEN];
-    out[0..4].copy_from_slice(&(FANOTIFY_EVENT_METADATA_LEN as u32).to_ne_bytes());
+    out[0..4].copy_from_slice(&(event_len as u32).to_ne_bytes());
     out[4] = FANOTIFY_METADATA_VERSION;
     out[6..8].copy_from_slice(&(FANOTIFY_EVENT_METADATA_LEN as u16).to_ne_bytes());
     out[8..16].copy_from_slice(&mask.to_ne_bytes());
