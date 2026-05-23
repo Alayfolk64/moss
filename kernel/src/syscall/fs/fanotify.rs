@@ -695,7 +695,22 @@ pub fn sys_fanotify_mark(
     Ok(0)
 }
 
+fn has_fanotify_interest(mask: u64) -> bool {
+    FANOTIFY_FDS.read().iter().any(|weak| {
+        weak.upgrade().is_some_and(|fd| {
+            fd.marks
+                .lock()
+                .iter()
+                .any(|mark| (mark.mask | mark.ignored_mask) & mask != 0)
+        })
+    })
+}
+
 fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
+    if !has_fanotify_interest(mask) {
+        return;
+    }
+
     if file.downcast_ref::<FanotifyEventFile>().is_some() {
         return;
     }
@@ -722,6 +737,10 @@ pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
 }
 
 pub(crate) fn notify_fanotify_open_exec_path(path: &str) {
+    if !has_fanotify_interest(FAN_OPEN | FAN_OPEN_EXEC) {
+        return;
+    }
+
     if let Ok(file) = open_fanotify_event_file(path, 0) {
         notify_fanotify_event(file, FAN_OPEN | FAN_OPEN_EXEC);
     }

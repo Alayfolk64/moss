@@ -499,9 +499,8 @@ impl CachedFile {
 
         // Page not in cache, read it
         let mut page = PageCache::new()?;
-        if self.in_memory {
-            page.data().fill(0);
-        } else {
+        page.data().fill(0);
+        if !self.in_memory {
             file.read_at(page.data(), pn as u64 * PAGE_SIZE as u64)?;
         }
         cache.put(pn, page);
