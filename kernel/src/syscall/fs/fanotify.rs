@@ -139,9 +139,12 @@ const FAN_MARK_KNOWN_FLAGS: u32 = FAN_MARK_ADD
 const FANOTIFY_METADATA_VERSION: u8 = 3;
 const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
 const FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS: usize = 16_384;
+const FANOTIFY_EVENT_INFO_TYPE_FID: u8 = 1;
 const FANOTIFY_EVENT_INFO_TYPE_DFID_NAME: u8 = 2;
 const FANOTIFY_EVENT_INFO_FID_HEADER_LEN: usize = 12;
 const FANOTIFY_FILE_HANDLE_HEADER_LEN: usize = 8;
+const FANOTIFY_FILE_HANDLE_BYTES: usize = 16;
+const FANOTIFY_FILE_HANDLE_TYPE: i32 = 1;
 const FAN_NOFD: c_int = -1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,6 +169,7 @@ struct FanotifyEvent {
     file: Option<Arc<dyn FileLike>>,
     path: Option<String>,
     name: Option<String>,
+    fid: Option<FanotifyTarget>,
     pid: i32,
 }
 
@@ -294,10 +298,16 @@ impl FanotifyFd {
             for mark in marks.iter_mut() {
                 if mark_matches_event_mask(mark, target, path, mark.ignored_mask) {
                     ignored_mask |= mark.ignored_mask & mask;
+                    if self.reports_fid() && target.is_dir && mark.ignored_mask & FAN_ONDIR != 0 {
+                        ignored_mask |= FAN_ONDIR;
+                    }
                 }
 
                 if mark_matches_event_mask(mark, target, path, mark.mask) {
                     matched_mask |= mask & mark.mask;
+                    if self.reports_fid() && target.is_dir && mark.mask & FAN_ONDIR != 0 {
+                        matched_mask |= FAN_ONDIR;
+                    }
                     if self.reports_name() {
                         if let Some(candidate) = fanotify_event_name(mark, path) {
                             if event_name
@@ -335,6 +345,17 @@ impl FanotifyFd {
             pid
         };
         let mut events = self.events.lock();
+        if self.reports_fid() {
+            if let Some(event) = events
+                .iter_mut()
+                .find(|event| event.fid == Some(target) && event.pid == pid)
+            {
+                event.mask |= event_mask;
+                self.poll.wake();
+                return;
+            }
+        }
+
         if self.init_flags & FAN_UNLIMITED_QUEUE == 0
             && events.len() >= FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS
         {
@@ -348,6 +369,7 @@ impl FanotifyFd {
             file: Some(file),
             path: path.map(ToString::to_string),
             name: event_name.map(|(name, _)| name),
+            fid: self.reports_fid().then_some(target),
             pid,
         });
         self.poll.wake();
@@ -391,6 +413,7 @@ fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
         file: None,
         path: None,
         name: None,
+        fid: None,
         pid,
     });
 }
@@ -766,31 +789,53 @@ pub(super) fn notify_fanotify_close(file: Arc<dyn FileLike>, writable: bool) {
 }
 
 fn fanotify_event_record(event: &FanotifyEvent, fd: c_int) -> Vec<u8> {
+    let fid = event.fid.filter(|_| event.mask != FAN_Q_OVERFLOW);
     let name = event
         .name
         .as_deref()
         .filter(|_| event.mask != FAN_Q_OVERFLOW);
-    let info_len = name.map_or(0, |name| {
+    let handle_len = fid.map_or(0, |_| FANOTIFY_FILE_HANDLE_BYTES);
+    let info_len = if fid.is_some() || name.is_some() {
         align_to_8(
-            FANOTIFY_EVENT_INFO_FID_HEADER_LEN + FANOTIFY_FILE_HANDLE_HEADER_LEN + name.len() + 1,
+            FANOTIFY_EVENT_INFO_FID_HEADER_LEN
+                + FANOTIFY_FILE_HANDLE_HEADER_LEN
+                + handle_len
+                + name.map_or(0, |name| name.len() + 1),
         )
-    });
+    } else {
+        0
+    };
     let record_len = FANOTIFY_EVENT_METADATA_LEN + info_len;
     let mut out = Vec::with_capacity(record_len);
     out.extend_from_slice(&fanotify_event_metadata(
         event.mask, fd, event.pid, record_len,
     ));
 
-    if let Some(name) = name {
-        out.push(FANOTIFY_EVENT_INFO_TYPE_DFID_NAME);
+    if fid.is_some() || name.is_some() {
+        out.push(if name.is_some() {
+            FANOTIFY_EVENT_INFO_TYPE_DFID_NAME
+        } else {
+            FANOTIFY_EVENT_INFO_TYPE_FID
+        });
         out.push(0);
         out.extend_from_slice(&(info_len as u16).to_ne_bytes());
-        out.extend_from_slice(&0u32.to_ne_bytes());
-        out.extend_from_slice(&0u32.to_ne_bytes());
-        out.extend_from_slice(&0u32.to_ne_bytes());
-        out.extend_from_slice(&0i32.to_ne_bytes());
-        out.extend_from_slice(name.as_bytes());
-        out.push(0);
+        if let Some(fid) = fid {
+            let handle = fanotify_target_handle(fid);
+            out.extend_from_slice(&0i32.to_ne_bytes());
+            out.extend_from_slice(&(fid.dev as i32).to_ne_bytes());
+            out.extend_from_slice(&(FANOTIFY_FILE_HANDLE_BYTES as u32).to_ne_bytes());
+            out.extend_from_slice(&FANOTIFY_FILE_HANDLE_TYPE.to_ne_bytes());
+            out.extend_from_slice(&handle);
+        } else {
+            out.extend_from_slice(&0u32.to_ne_bytes());
+            out.extend_from_slice(&0u32.to_ne_bytes());
+            out.extend_from_slice(&0u32.to_ne_bytes());
+            out.extend_from_slice(&0i32.to_ne_bytes());
+        }
+        if let Some(name) = name {
+            out.extend_from_slice(name.as_bytes());
+            out.push(0);
+        }
         out.resize(record_len, 0);
     }
 
@@ -799,6 +844,13 @@ fn fanotify_event_record(event: &FanotifyEvent, fd: c_int) -> Vec<u8> {
 
 fn align_to_8(value: usize) -> usize {
     (value + 7) & !7
+}
+
+fn fanotify_target_handle(target: FanotifyTarget) -> [u8; FANOTIFY_FILE_HANDLE_BYTES] {
+    let mut handle = [0u8; FANOTIFY_FILE_HANDLE_BYTES];
+    handle[..8].copy_from_slice(&target.dev.to_ne_bytes());
+    handle[8..].copy_from_slice(&target.ino.to_ne_bytes());
+    handle
 }
 
 fn fanotify_event_metadata(

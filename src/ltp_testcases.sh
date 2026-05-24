@@ -442,7 +442,7 @@ fanotify09 fanotify09
 # fanotify10 fanotify10
 fanotify11 fanotify11
 fanotify12 fanotify12
-# fanotify13 fanotify13
+fanotify13 fanotify13
 fanotify14 fanotify14
 # fanotify15 fanotify15
 # fanotify16 fanotify16
