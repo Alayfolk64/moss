@@ -8,7 +8,7 @@ use alloc::{
 };
 use core::{
     ffi::{c_char, c_int},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     task::Context,
 };
 
@@ -22,6 +22,7 @@ use axtask::{
     current,
     future::{block_on, poll_io},
 };
+use event_listener::{Event, listener};
 use linux_raw_sys::general::{O_ACCMODE, O_CLOEXEC, O_LARGEFILE, O_NONBLOCK, S_IFDIR, S_IFMT};
 use spin::RwLock;
 use starry_vm::VmPtr;
@@ -142,7 +143,9 @@ const FAN_MARK_KNOWN_FLAGS: u32 = FAN_MARK_ADD
 
 const FANOTIFY_METADATA_VERSION: u8 = 3;
 const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
-const FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS: usize = 16_384;
+pub(crate) const FANOTIFY_MAX_QUEUED_EVENTS: usize = 128;
+pub(crate) const FANOTIFY_MAX_USER_GROUPS: usize = 129;
+pub(crate) const FANOTIFY_MAX_USER_MARKS: usize = 8192;
 const FANOTIFY_EVENT_INFO_TYPE_FID: u8 = 1;
 const FANOTIFY_EVENT_INFO_TYPE_DFID_NAME: u8 = 2;
 const FANOTIFY_EVENT_INFO_TYPE_DFID: u8 = 3;
@@ -156,6 +159,9 @@ const FANOTIFY_FILE_HANDLE_BYTES: usize = 16;
 const FANOTIFY_FILE_HANDLE_TYPE: i32 = 1;
 const FAN_NOFD: c_int = -1;
 const FAN_NOPIDFD: c_int = FAN_NOFD;
+const FAN_ALLOW: u32 = 0x01;
+const FAN_DENY: u32 = 0x02;
+const FANOTIFY_RESPONSE_LEN: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FanotifyTarget {
@@ -172,6 +178,7 @@ struct FanotifyMark {
     mask: u64,
     ignored_mask: u64,
     ignore_surv_modify: bool,
+    evictable: bool,
 }
 
 struct FanotifyEvent {
@@ -185,6 +192,13 @@ struct FanotifyEvent {
     child_info_type: u8,
     child_name: Option<String>,
     pid: i32,
+    permission_id: Option<u64>,
+}
+
+struct FanotifyPermission {
+    id: u64,
+    fd: Option<c_int>,
+    response: Option<u32>,
 }
 
 struct FanotifyPathFile {
@@ -245,8 +259,12 @@ pub struct FanotifyFd {
     owner_pid: i32,
     unprivileged_listener: bool,
     nonblocking: AtomicBool,
+    destroyed: AtomicBool,
     marks: Mutex<Vec<FanotifyMark>>,
     events: Mutex<VecDeque<FanotifyEvent>>,
+    permissions: Mutex<Vec<FanotifyPermission>>,
+    next_permission_id: AtomicU64,
+    permission_event: Event,
     poll: PollSet,
 }
 
@@ -260,8 +278,12 @@ impl FanotifyFd {
             owner_pid: proc_data.proc.pid() as i32,
             unprivileged_listener: proc_data.euid() != 0,
             nonblocking: AtomicBool::new(false),
+            destroyed: AtomicBool::new(false),
             marks: Mutex::new(Vec::new()),
             events: Mutex::new(VecDeque::new()),
+            permissions: Mutex::new(Vec::new()),
+            next_permission_id: AtomicU64::new(1),
+            permission_event: Event::new(),
             poll: PollSet::new(),
         }
     }
@@ -290,15 +312,41 @@ impl FanotifyFd {
         self.init_flags & FAN_REPORT_TID != 0
     }
 
-    fn apply_mark(&self, flags: u32, mask: u64, target: Option<FanotifyMarkTarget>) {
-        if flags & FAN_MARK_FLUSH != 0 {
-            self.marks.lock().clear();
-            self.events.lock().clear();
+    fn is_destroyed(&self) -> bool {
+        self.destroyed.load(Ordering::Acquire)
+    }
+
+    fn destroy(&self) {
+        if self.destroyed.swap(true, Ordering::AcqRel) {
             return;
         }
 
+        self.events.lock().clear();
+        for permission in self.permissions.lock().iter_mut() {
+            if permission.response.is_none() {
+                permission.response = Some(FAN_ALLOW);
+            }
+        }
+        self.permission_event.notify(usize::MAX);
+        self.poll.wake();
+    }
+
+    fn destroy_on_owner_close(&self) {
+        let curr = current();
+        if curr.as_thread().proc_data.proc.pid() as i32 == self.owner_pid {
+            self.destroy();
+        }
+    }
+
+    fn apply_mark(&self, flags: u32, mask: u64, target: Option<FanotifyMarkTarget>) -> AxResult {
+        if flags & FAN_MARK_FLUSH != 0 {
+            self.marks.lock().clear();
+            self.events.lock().clear();
+            return Ok(());
+        }
+
         let Some(target) = target else {
-            return;
+            return Ok(());
         };
         let mut marks = self.marks.lock();
         let mark_is_ignored = flags & (FAN_MARK_IGNORED_MASK | FAN_MARK_IGNORE) != 0;
@@ -315,12 +363,21 @@ impl FanotifyFd {
                 } else {
                     mark.mask &= !mask;
                 }
+            } else {
+                return Err(AxError::NotFound);
             }
             marks.retain(|mark| mark.mask != 0 || mark.ignored_mask != 0);
         } else if let Some(mark) = marks
             .iter_mut()
             .find(|mark| mark.target == target.target && mark.kind == target.kind)
         {
+            let evictable = flags & FAN_MARK_EVICTABLE != 0;
+            if evictable && !mark.evictable {
+                return Err(AxError::AlreadyExists);
+            }
+            if !evictable {
+                mark.evictable = false;
+            }
             if mark_is_ignored {
                 mark.ignored_mask |= mask;
                 mark.ignore_surv_modify = flags & FAN_MARK_IGNORED_SURV_MODIFY != 0;
@@ -329,6 +386,10 @@ impl FanotifyFd {
             }
             mark.path = target.path;
         } else {
+            if self.init_flags & FAN_UNLIMITED_MARKS == 0 && marks.len() >= FANOTIFY_MAX_USER_MARKS
+            {
+                return Err(AxError::StorageFull);
+            }
             marks.push(FanotifyMark {
                 target: target.target,
                 path: target.path,
@@ -336,8 +397,10 @@ impl FanotifyFd {
                 mask: if mark_is_ignored { 0 } else { mask },
                 ignored_mask: if mark_is_ignored { mask } else { 0 },
                 ignore_surv_modify: flags & FAN_MARK_IGNORED_SURV_MODIFY != 0,
+                evictable: flags & FAN_MARK_EVICTABLE != 0,
             });
         }
+        Ok(())
     }
 
     fn queue_event(
@@ -354,7 +417,12 @@ impl FanotifyFd {
         tid: i32,
         mask: u64,
         event_is_dir: bool,
-    ) {
+        permission_id: Option<u64>,
+    ) -> bool {
+        if self.is_destroyed() {
+            return false;
+        }
+
         let mut matched_mask = 0;
         let mut ignored_mask = 0;
         let mut event_name = None;
@@ -364,8 +432,14 @@ impl FanotifyFd {
         {
             let mut marks = self.marks.lock();
             for mark in marks.iter_mut() {
-                if mark_matches_event_mask(mark, target, path, mark.ignored_mask, mask, event_is_dir)
-                {
+                if mark_matches_event_mask(
+                    mark,
+                    target,
+                    path,
+                    mark.ignored_mask,
+                    mask,
+                    event_is_dir,
+                ) {
                     ignored_mask |= mark.ignored_mask & mask;
                     if self.reports_fid() && event_is_dir && mark.ignored_mask & FAN_ONDIR != 0 {
                         ignored_mask |= FAN_ONDIR;
@@ -485,7 +559,7 @@ impl FanotifyFd {
             event_mask &= !(FAN_DELETE_SELF | FAN_MOVE_SELF);
         }
         if event_mask == 0 {
-            return;
+            return false;
         }
 
         let pid = if self.reports_tid() { tid } else { tgid };
@@ -577,7 +651,7 @@ impl FanotifyFd {
             report_child_info_type = FANOTIFY_EVENT_INFO_TYPE_FID;
         }
         let mut events = self.events.lock();
-        if self.reports_fid() {
+        if permission_id.is_none() && self.reports_fid() {
             if let Some(event) = events.iter_mut().find(|event| {
                 event.fid == report_fid
                     && event.fid_info_type == report_info_type
@@ -595,16 +669,17 @@ impl FanotifyFd {
             }) {
                 event.mask |= event_mask;
                 self.poll.wake();
-                return;
+                return true;
             }
         }
 
-        if self.init_flags & FAN_UNLIMITED_QUEUE == 0
-            && events.len() >= FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS
+        if self.init_flags & FAN_UNLIMITED_QUEUE == 0 && events.len() >= FANOTIFY_MAX_QUEUED_EVENTS
         {
-            queue_overflow_event(&mut events, pid);
-            self.poll.wake();
-            return;
+            if permission_id.is_none() {
+                queue_overflow_event(&mut events, pid);
+                self.poll.wake();
+            }
+            return false;
         }
 
         let event = FanotifyEvent {
@@ -618,6 +693,7 @@ impl FanotifyFd {
             child_info_type: report_child_info_type,
             child_name: report_child_name,
             pid,
+            permission_id,
         };
         if let Some(pos) = fanotify_insert_before_pending_close(&events, &event) {
             events.insert(pos, event);
@@ -625,6 +701,126 @@ impl FanotifyFd {
             events.push_back(event);
         }
         self.poll.wake();
+        true
+    }
+
+    fn queue_permission_event(
+        &self,
+        target: FanotifyTarget,
+        path: Option<&str>,
+        file: Arc<dyn FileLike>,
+        child_target: Option<FanotifyTarget>,
+        child_info_type: u8,
+        child_name: Option<&str>,
+        child_path: Option<&str>,
+        object_target: Option<FanotifyTarget>,
+        tgid: i32,
+        tid: i32,
+        mask: u64,
+        event_is_dir: bool,
+    ) -> Option<u64> {
+        if self.is_destroyed() {
+            return None;
+        }
+
+        let id = self.next_permission_id.fetch_add(1, Ordering::AcqRel);
+        self.permissions.lock().push(FanotifyPermission {
+            id,
+            fd: None,
+            response: None,
+        });
+        if self.queue_event(
+            target,
+            path,
+            file,
+            child_target,
+            child_info_type,
+            child_name,
+            child_path,
+            object_target,
+            tgid,
+            tid,
+            mask,
+            event_is_dir,
+            Some(id),
+        ) {
+            Some(id)
+        } else {
+            self.remove_permission(id);
+            None
+        }
+    }
+
+    fn set_permission_fd(&self, id: u64, fd: c_int) {
+        if fd < 0 {
+            return;
+        }
+        if let Some(permission) = self
+            .permissions
+            .lock()
+            .iter_mut()
+            .find(|permission| permission.id == id)
+        {
+            permission.fd = Some(fd);
+        }
+    }
+
+    fn set_permission_response(&self, fd: c_int, response: u32) -> AxResult {
+        let mut permissions = self.permissions.lock();
+        let Some(permission) = permissions
+            .iter_mut()
+            .find(|permission| permission.fd == Some(fd) && permission.response.is_none())
+        else {
+            return Err(AxError::InvalidInput);
+        };
+        permission.response = Some(response);
+        drop(permissions);
+        self.permission_event.notify(usize::MAX);
+        Ok(())
+    }
+
+    fn permission_response(&self, id: u64) -> Option<u32> {
+        self.permissions
+            .lock()
+            .iter()
+            .find(|permission| permission.id == id)
+            .and_then(|permission| permission.response)
+    }
+
+    fn remove_permission(&self, id: u64) {
+        self.permissions
+            .lock()
+            .retain(|permission| permission.id != id);
+    }
+
+    fn wait_for_permission_response(&self, id: u64) -> AxResult {
+        let response = loop {
+            if self.is_destroyed() {
+                self.remove_permission(id);
+                return Ok(());
+            }
+
+            if let Some(response) = self.permission_response(id) {
+                break response;
+            }
+
+            listener!(self.permission_event => listener);
+            if self.is_destroyed() {
+                self.remove_permission(id);
+                return Ok(());
+            }
+            if let Some(response) = self.permission_response(id) {
+                break response;
+            }
+            block_on(listener);
+        };
+
+        self.remove_permission(id);
+        if response == FAN_ALLOW {
+            Ok(())
+        } else {
+            Err(AxError::from(LinuxError::EPERM))
+        }
     }
 
     fn event_fd(&self, event: &FanotifyEvent) -> AxResult<c_int> {
@@ -685,7 +881,7 @@ fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
         return;
     }
 
-    while events.len() >= FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS {
+    while events.len() >= FANOTIFY_MAX_QUEUED_EVENTS {
         events.pop_back();
     }
     events.push_back(FanotifyEvent {
@@ -699,6 +895,7 @@ fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
         child_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
         child_name: None,
         pid,
+        permission_id: None,
     });
 }
 
@@ -768,11 +965,12 @@ fn mark_matches_event_mask(
             }
             self_match || mark_matches_child(mark, path, mark_mask)
         }
-        FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
+        FanotifyMarkKind::Mount => mark
             .path
             .as_deref()
             .zip(path)
             .is_some_and(|(mark_path, event_path)| path_is_same_or_below(event_path, mark_path)),
+        FanotifyMarkKind::Filesystem => mark.target.dev == target.dev,
     }
 }
 
@@ -796,15 +994,20 @@ fn mark_ignores_rename(mark: &FanotifyMark, target: FanotifyTarget, path: Option
                         mark_path == event_path || parent_path(event_path) == Some(mark_path)
                     })
         }
-        FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
+        FanotifyMarkKind::Mount => mark
             .path
             .as_deref()
             .zip(path)
             .is_some_and(|(mark_path, event_path)| path_is_same_or_below(event_path, mark_path)),
+        FanotifyMarkKind::Filesystem => mark.target.dev == target.dev,
     }
 }
 
-fn mark_ignores_child_move(mark: &FanotifyMark, target: FanotifyTarget, path: Option<&str>) -> bool {
+fn mark_ignores_child_move(
+    mark: &FanotifyMark,
+    target: FanotifyTarget,
+    path: Option<&str>,
+) -> bool {
     if mark.ignored_mask & FAN_MOVE == 0 {
         return false;
     }
@@ -820,11 +1023,12 @@ fn mark_ignores_child_move(mark: &FanotifyMark, target: FanotifyTarget, path: Op
                         parent_path(event_path) == Some(mark_path)
                     })
         }
-        FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
+        FanotifyMarkKind::Mount => mark
             .path
             .as_deref()
             .zip(path)
             .is_some_and(|(mark_path, event_path)| path_is_same_or_below(event_path, mark_path)),
+        FanotifyMarkKind::Filesystem => mark.target.dev == target.dev,
     }
 }
 
@@ -923,6 +1127,9 @@ impl FileLike for FanotifyFd {
 
                 let event_fd = self.event_fd(&event)?;
                 let event_pidfd = self.event_pidfd(&event)?;
+                if let Some(permission_id) = event.permission_id {
+                    self.set_permission_fd(permission_id, event_fd);
+                }
                 let record = fanotify_event_record(&event, event_fd, event_pidfd);
                 if dst.remaining_mut() < record.len() {
                     close_fanotify_record_fds(event_fd, event_pidfd);
@@ -955,6 +1162,23 @@ impl FileLike for FanotifyFd {
 
     fn path(&self) -> Cow<'_, str> {
         "anon_inode:[fanotify]".into()
+    }
+
+    fn write(&self, src: &mut IoSrc) -> AxResult<usize> {
+        if src.remaining() < FANOTIFY_RESPONSE_LEN {
+            return Err(AxError::InvalidInput);
+        }
+
+        let mut buf = [0u8; FANOTIFY_RESPONSE_LEN];
+        src.read_exact(&mut buf)?;
+        let fd = c_int::from_ne_bytes(buf[0..4].try_into().unwrap());
+        let response = u32::from_ne_bytes(buf[4..8].try_into().unwrap());
+        if response != FAN_ALLOW && response != FAN_DENY {
+            return Err(AxError::InvalidInput);
+        }
+
+        self.set_permission_response(fd, response)?;
+        Ok(FANOTIFY_RESPONSE_LEN)
     }
 
     fn proc_fdinfo(&self) -> Option<String> {
@@ -1073,10 +1297,37 @@ pub fn sys_fanotify_init(flags: u32, event_f_flags: u32) -> AxResult<isize> {
 
     validate_init_flags(flags, event_f_flags)?;
 
+    let mut fds = FANOTIFY_FDS.write();
+    fds.retain(|weak| weak.upgrade().is_some_and(|fd| !fd.is_destroyed()));
+    if fds.len() >= FANOTIFY_MAX_USER_GROUPS {
+        return Err(AxError::TooManyOpenFiles);
+    }
+
     let fd = Arc::new(FanotifyFd::new(flags, event_f_flags));
     fd.set_nonblocking(flags & FAN_NONBLOCK != 0)?;
-    FANOTIFY_FDS.write().push(Arc::downgrade(&fd));
+    fds.push(Arc::downgrade(&fd));
+    drop(fds);
     add_file_like(fd, flags & FAN_CLOEXEC != 0).map(|fd| fd as isize)
+}
+
+pub(super) fn notify_fanotify_fd_close(file: &Arc<dyn FileLike>) {
+    if let Some(fd) = file.downcast_ref::<FanotifyFd>() {
+        fd.destroy_on_owner_close();
+    }
+}
+
+pub(crate) fn evict_fanotify_marks() {
+    let mut fds = FANOTIFY_FDS.write();
+    fds.retain(|weak| {
+        let Some(fd) = weak.upgrade() else {
+            return false;
+        };
+        if fd.is_destroyed() {
+            return false;
+        }
+        fd.marks.lock().retain(|mark| !mark.evictable);
+        true
+    });
 }
 
 pub fn sys_fanotify_mark(
@@ -1095,13 +1346,16 @@ pub fn sys_fanotify_mark(
     let fd = FanotifyFd::from_fd(fanotify_fd)?;
     validate_mark(&fd, flags, mask, dirfd, path.as_deref())?;
     let target = target_from_mark(dirfd, path.as_deref(), flags)?;
-    fd.apply_mark(flags, mask, target);
+    fd.apply_mark(flags, mask, target)?;
     Ok(0)
 }
 
 fn has_fanotify_interest(mask: u64) -> bool {
     FANOTIFY_FDS.read().iter().any(|weak| {
         weak.upgrade().is_some_and(|fd| {
+            if fd.is_destroyed() {
+                return false;
+            }
             fd.marks
                 .lock()
                 .iter()
@@ -1126,7 +1380,9 @@ fn notify_fanotify_target_event(
         return;
     }
 
-    if file.downcast_ref::<FanotifyEventFile>().is_some() {
+    if file.downcast_ref::<FanotifyFd>().is_some()
+        || file.downcast_ref::<FanotifyEventFile>().is_some()
+    {
         return;
     }
 
@@ -1138,6 +1394,9 @@ fn notify_fanotify_target_event(
         let Some(fd) = weak.upgrade() else {
             return false;
         };
+        if fd.is_destroyed() {
+            return false;
+        }
         fd.queue_event(
             target,
             path.as_deref(),
@@ -1151,9 +1410,70 @@ fn notify_fanotify_target_event(
             tid,
             mask,
             event_is_dir,
+            None,
         );
         true
     });
+}
+
+fn request_fanotify_target_permission(
+    target: FanotifyTarget,
+    path: Option<String>,
+    file: Arc<dyn FileLike>,
+    child_target: Option<FanotifyTarget>,
+    child_info_type: u8,
+    child_name: Option<String>,
+    child_path: Option<String>,
+    object_target: Option<FanotifyTarget>,
+    mask: u64,
+    event_is_dir: bool,
+) -> AxResult {
+    if !has_fanotify_interest(mask) {
+        return Ok(());
+    }
+
+    if file.downcast_ref::<FanotifyFd>().is_some()
+        || file.downcast_ref::<FanotifyEventFile>().is_some()
+    {
+        return Ok(());
+    }
+
+    let curr = current();
+    let tgid = curr.as_thread().proc_data.proc.pid() as i32;
+    let tid = curr.id().as_u64() as i32;
+    let mut requests = Vec::new();
+    let mut fds = FANOTIFY_FDS.write();
+    fds.retain(|weak| {
+        let Some(fd) = weak.upgrade() else {
+            return false;
+        };
+        if fd.is_destroyed() {
+            return false;
+        }
+        if let Some(id) = fd.queue_permission_event(
+            target,
+            path.as_deref(),
+            file.clone(),
+            child_target,
+            child_info_type,
+            child_name.as_deref(),
+            child_path.as_deref(),
+            object_target,
+            tgid,
+            tid,
+            mask,
+            event_is_dir,
+        ) {
+            requests.push((fd.clone(), id));
+        }
+        true
+    });
+    drop(fds);
+
+    for (fd, id) in requests {
+        fd.wait_for_permission_response(id)?;
+    }
+    Ok(())
 }
 
 fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
@@ -1173,6 +1493,23 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
         mask,
         target.is_dir,
     );
+}
+
+fn request_fanotify_permission(file: Arc<dyn FileLike>, mask: u64) -> AxResult {
+    let target = target_from_file_like(&file)?;
+    let path = path_from_file_like(&file);
+    request_fanotify_target_permission(
+        target,
+        path,
+        file,
+        None,
+        FANOTIFY_EVENT_INFO_TYPE_FID,
+        None,
+        None,
+        None,
+        mask,
+        target.is_dir,
+    )
 }
 
 fn fanotify_snapshot_file(path: String) -> Arc<dyn FileLike> {
@@ -1247,6 +1584,21 @@ pub(super) fn notify_fanotify_prepared_event(event: FanotifyPreparedEvent) {
     if mask & FAN_DELETE_SELF != 0 {
         forget_fanotify_path_alias(target);
     }
+}
+
+fn request_fanotify_prepared_permission(event: FanotifyPreparedEvent) -> AxResult {
+    request_fanotify_target_permission(
+        event.target,
+        Some(event.path),
+        event.file,
+        event.child_target,
+        event.child_info_type,
+        event.child_name,
+        event.child_path,
+        event.object_target,
+        event.mask,
+        event.event_is_dir,
+    )
 }
 
 pub(super) fn prepare_fanotify_dirent_event(
@@ -1396,6 +1748,10 @@ pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
     notify_fanotify_event(file, FAN_OPEN);
 }
 
+pub(super) fn check_fanotify_open_permission(file: Arc<dyn FileLike>) -> AxResult {
+    request_fanotify_permission(file, FAN_OPEN_PERM)
+}
+
 pub(crate) fn notify_fanotify_open_exec_path(path: &str) {
     if !has_fanotify_interest(FAN_OPEN | FAN_OPEN_EXEC) {
         return;
@@ -1406,8 +1762,30 @@ pub(crate) fn notify_fanotify_open_exec_path(path: &str) {
     }
 }
 
+pub(crate) fn check_fanotify_open_permission_path(path: &str) -> AxResult {
+    if let Some(event) =
+        prepare_fanotify_path_event(linux_raw_sys::general::AT_FDCWD, path, FAN_OPEN_PERM)
+    {
+        request_fanotify_prepared_permission(event)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn check_fanotify_open_exec_permission_path(path: &str) -> AxResult {
+    if let Some(event) =
+        prepare_fanotify_path_event(linux_raw_sys::general::AT_FDCWD, path, FAN_OPEN_EXEC_PERM)
+    {
+        request_fanotify_prepared_permission(event)?;
+    }
+    Ok(())
+}
+
 pub(super) fn notify_fanotify_access(file: Arc<dyn FileLike>) {
     notify_fanotify_event(file, FAN_ACCESS);
+}
+
+pub(super) fn check_fanotify_access_permission(file: Arc<dyn FileLike>) -> AxResult {
+    request_fanotify_permission(file, FAN_ACCESS_PERM)
 }
 
 pub(super) fn notify_fanotify_modify(file: Arc<dyn FileLike>) {
@@ -1596,7 +1974,10 @@ pub(super) fn prepare_fanotify_path_alias(
     }) else {
         return None;
     };
-    let parent_path = new_parent.absolute_path().ok().map(|path| path.to_string())?;
+    let parent_path = new_parent
+        .absolute_path()
+        .ok()
+        .map(|path| path.to_string())?;
     let path = if parent_path == "/" {
         format!("/{new_name}")
     } else {

@@ -19,7 +19,10 @@ use scope_local::ActiveScope;
 use spin::RwLock;
 use starry_signal::Signo;
 
-use super::fanotify::{notify_fanotify_close, notify_fanotify_create, notify_fanotify_open};
+use super::fanotify::{
+    check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
+    notify_fanotify_fd_close, notify_fanotify_open,
+};
 use crate::{
     file::{
         Directory, FD_TABLE, File, FileLike, PIPE_MAX_SIZE, Pipe, add_file_like,
@@ -194,6 +197,7 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
         f.set_nonblocking(true)?;
     }
     let opened = f.clone();
+    check_fanotify_open_permission(opened.clone())?;
     let fd = add_file_like(f, flags & O_CLOEXEC != 0)?;
     notify_fanotify_open(opened);
     Ok(fd)
@@ -285,6 +289,7 @@ pub fn sys_close(fd: c_int) -> AxResult<isize> {
     let writable = file_like.status_flags() & O_ACCMODE != O_RDONLY;
     release_posix_locks_for_file_like(&file_like);
     release_file_lease_for_file_like(&file_like);
+    notify_fanotify_fd_close(&file_like);
     close_file_like(fd)?;
     notify_fanotify_close(file_like.clone(), writable);
     release_bsd_flocks_for_file_like_if_last(&file_like);
@@ -804,6 +809,7 @@ pub fn close_all_files_for_current_process() {
         release_posix_locks_for_file_like(file_like);
         release_file_lease_for_file_like(file_like);
         release_bsd_flocks_for_file_like(file_like);
+        notify_fanotify_fd_close(file_like);
     }
 
     let mut fd_table = FD_TABLE.write();

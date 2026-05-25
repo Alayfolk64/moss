@@ -602,8 +602,59 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                 "pipe-max-size",
                 SimpleFile::new_regular(fs.clone(), || Ok(format!("{PIPE_MAX_SIZE}\n"))),
             );
+            fs_sys.add("fanotify", {
+                let mut fanotify = DirMapping::new();
+
+                fanotify.add(
+                    "max_queued_events",
+                    SimpleFile::new_regular(fs.clone(), || {
+                        Ok(format!("{}\n", crate::syscall::FANOTIFY_MAX_QUEUED_EVENTS))
+                    }),
+                );
+                fanotify.add(
+                    "max_user_groups",
+                    SimpleFile::new_regular(fs.clone(), || {
+                        Ok(format!("{}\n", crate::syscall::FANOTIFY_MAX_USER_GROUPS))
+                    }),
+                );
+                fanotify.add(
+                    "max_user_marks",
+                    SimpleFile::new_regular(fs.clone(), || {
+                        Ok(format!("{}\n", crate::syscall::FANOTIFY_MAX_USER_MARKS))
+                    }),
+                );
+
+                SimpleDir::new_maker(fs.clone(), Arc::new(fanotify))
+            });
 
             SimpleDir::new_maker(fs.clone(), Arc::new(fs_sys))
+        });
+
+        sys.add("vm", {
+            let mut vm = DirMapping::new();
+
+            vm.add(
+                "vfs_cache_pressure",
+                proc_rw_file(fs.clone(), b"100\n".to_vec()),
+            );
+            vm.add("drop_caches", {
+                let data = Arc::new(Mutex::new(b"0\n".to_vec()));
+                SimpleFile::new_regular(
+                    fs.clone(),
+                    RwFile::new(move |req| match req {
+                        SimpleFileOperation::Read => Ok(Some(data.lock().clone())),
+                        SimpleFileOperation::Write(input) => {
+                            let mut data = data.lock();
+                            data.clear();
+                            data.extend_from_slice(input);
+                            crate::syscall::evict_fanotify_marks();
+                            Ok(None::<Vec<u8>>)
+                        }
+                    }),
+                )
+            });
+
+            SimpleDir::new_maker(fs.clone(), Arc::new(vm))
         });
 
         sys.add("user", {

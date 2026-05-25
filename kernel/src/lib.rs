@@ -6,6 +6,7 @@
 #![feature(bstr)]
 #![allow(missing_docs)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(dead_code)]
 
 extern crate alloc;
 extern crate axruntime;

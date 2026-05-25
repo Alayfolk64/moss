@@ -14,7 +14,8 @@ use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
 use super::fanotify::{
-    notify_fanotify_access, notify_fanotify_modify, notify_fanotify_modify_path,
+    check_fanotify_access_permission, notify_fanotify_access, notify_fanotify_modify,
+    notify_fanotify_modify_path,
 };
 #[cfg(feature = "net")]
 use crate::file::Socket;
@@ -53,6 +54,9 @@ pub fn sys_dummy_fd(sysno: Sysno) -> AxResult<isize> {
 pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
     debug!("sys_read <= fd: {fd}, buf: {buf:p}, len: {len}");
     let f = get_file_like(fd)?;
+    if len > 0 {
+        check_fanotify_access_permission(f.clone())?;
+    }
     let read = f.read(&mut VmBytesMut::new(buf, len))?;
     if read > 0 {
         notify_fanotify_access(f);
@@ -63,7 +67,11 @@ pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
 pub fn sys_readv(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     debug!("sys_readv <= fd: {fd}, iovcnt: {iovcnt}");
     let f = get_file_like(fd)?;
-    let read = f.read(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
+    let iov = IoVectorBuf::new(iov, iovcnt)?;
+    if iovcnt > 0 {
+        check_fanotify_access_permission(f.clone())?;
+    }
+    let read = f.read(&mut iov.into_io())?;
     if read > 0 {
         notify_fanotify_access(f);
     }

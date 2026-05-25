@@ -7,8 +7,10 @@ use axfs_ng_vfs::Location;
 use linux_raw_sys::general::{FS_APPEND_FL, FS_IMMUTABLE_FL};
 use starry_vm::{vm_load, vm_write_slice};
 
-use crate::file::{Directory, File, get_file_like, inode_flags};
-use crate::mm::vm_load_string;
+use crate::{
+    file::{Directory, File, get_file_like, inode_flags},
+    mm::vm_load_string,
+};
 
 const XATTR_CREATE: u32 = 1;
 const XATTR_REPLACE: u32 = 2;

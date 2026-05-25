@@ -33,6 +33,7 @@ pub struct FatFilesystem {
 }
 
 impl FatFilesystem {
+    #[allow(dead_code)]
     pub fn new(dev: AxBlockDevice) -> Filesystem {
         let mut inner = FatFilesystemInner {
             inner: ff::FileSystem::new(SeekableDisk::new(dev), fatfs::FsOptions::new())

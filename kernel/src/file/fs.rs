@@ -1,4 +1,9 @@
-use alloc::{borrow::Cow, collections::BTreeMap, string::String, string::ToString, sync::Arc};
+use alloc::{
+    borrow::Cow,
+    collections::BTreeMap,
+    string::{String, ToString},
+    sync::Arc,
+};
 use core::{
     ffi::c_int,
     hint::likely,

@@ -301,6 +301,7 @@ impl Default for OpenOptions {
 }
 
 const PAGE_SIZE: usize = 4096;
+static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 
 #[derive(Debug)]
 pub struct PageCache {
@@ -555,6 +556,9 @@ impl CachedFile {
         if end <= offset {
             return Ok(0);
         }
+        if self.in_memory {
+            return self.read_at_in_memory(dst, offset, end);
+        }
         self.with_pages(
             offset..end,
             |_| Ok(0),
@@ -566,8 +570,44 @@ impl CachedFile {
         )
     }
 
+    fn read_at_in_memory(
+        &self,
+        mut dst: impl Write + IoBufMut,
+        offset: u64,
+        end: u64,
+    ) -> VfsResult<usize> {
+        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+        let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
+        let mut read = 0;
+
+        for pn in start_page..end_page {
+            let page_start = pn as u64 * PAGE_SIZE as u64;
+            let range_start = page_offset;
+            let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
+            let len = range_end - range_start;
+
+            let mut guard = self.shared.page_cache.lock();
+            if let Some(page) = guard.get_mut(&pn) {
+                dst.write(&page.data()[range_start..range_end])?;
+            } else {
+                dst.write(&ZERO_PAGE[range_start..range_end])?;
+            }
+            read += len;
+            page_offset = 0;
+        }
+
+        Ok(read)
+    }
+
     fn write_at_locked(&self, mut buf: impl Read + IoBuf, offset: u64) -> VfsResult<usize> {
         let end = offset + buf.remaining() as u64;
+        if end <= offset {
+            return Ok(0);
+        }
+        if self.in_memory {
+            return self.write_at_in_memory(buf, offset, end);
+        }
         self.with_pages(
             offset..end,
             |file| {
@@ -585,6 +625,49 @@ impl CachedFile {
                 Ok(written + len)
             },
         )
+    }
+
+    fn write_at_in_memory(
+        &self,
+        mut buf: impl Read + IoBuf,
+        offset: u64,
+        end: u64,
+    ) -> VfsResult<usize> {
+        let file = self.inner.entry().as_file()?;
+        if end > file.len()? {
+            file.set_len(end)?;
+        }
+
+        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+        let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
+        let mut written = 0;
+
+        for pn in start_page..end_page {
+            let page_start = pn as u64 * PAGE_SIZE as u64;
+            let range_start = page_offset;
+            let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
+            let len = range_end - range_start;
+
+            let mut guard = self.shared.page_cache.lock();
+            if let Some(page) = guard.get_mut(&pn) {
+                buf.read(&mut page.data()[range_start..range_end])?;
+            } else {
+                let mut data = Vec::new();
+                data.resize(len, 0);
+                buf.read(&mut data)?;
+                if data.iter().any(|byte| *byte != 0) {
+                    let mut page = PageCache::new()?;
+                    page.data().fill(0);
+                    page.data()[range_start..range_end].copy_from_slice(&data);
+                    guard.put(pn, page);
+                }
+            }
+            written += len;
+            page_offset = 0;
+        }
+
+        Ok(written)
     }
 
     pub fn write_at(&self, buf: impl Read + IoBuf, offset: u64) -> VfsResult<usize> {
