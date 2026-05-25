@@ -266,31 +266,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        fanotify01 fanotify01
-        fanotify02 fanotify02
-        fanotify03 fanotify03
-        fanotify04 fanotify04
-        fanotify05 fanotify05
-        fanotify06 fanotify06
-        fanotify07 fanotify07
-        fanotify08 fanotify08
-        fanotify09 fanotify09
-        fanotify10 fanotify10
-        fanotify11 fanotify11
-        fanotify12 fanotify12
-        fanotify13 fanotify13
-        fanotify14 fanotify14
-        fanotify15 fanotify15
-        fanotify16 fanotify16
-        fanotify17 fanotify17
-        fanotify18 fanotify18
-        fanotify19 fanotify19
-        fanotify20 fanotify20
-        fanotify21 fanotify21
-        fanotify22 fanotify22
-        fanotify23 fanotify23
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
