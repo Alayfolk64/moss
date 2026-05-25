@@ -1195,6 +1195,11 @@ int ext4_xattr_remove(struct ext4_inode_ref *inode_ref, uint8_t name_index,
 	if (ret != EOK)
 		goto out;
 
+	if (ibody_finder.s.not_found && !xattr_block) {
+		ret = ENODATA;
+		goto out;
+	}
+
 	if (ibody_finder.s.not_found && xattr_block) {
 		ret = ext4_trans_block_get(fs->bdev, &block, xattr_block);
 		if (ret != EOK)
@@ -1240,7 +1245,9 @@ int ext4_xattr_remove(struct ext4_inode_ref *inode_ref, uint8_t name_index,
 			goto out;
 
 		/* Now remove the entry */
-		ext4_xattr_set_entry(&i, &block_finder.s, false);
+		ret = ext4_xattr_set_entry(&i, &block_finder.s, false);
+		if (ret != EOK)
+			goto out;
 
 		if (ext4_xattr_is_empty(&block_finder.s)) {
 			ext4_block_set(fs->bdev, &new_block);
@@ -1261,7 +1268,10 @@ int ext4_xattr_remove(struct ext4_inode_ref *inode_ref, uint8_t name_index,
 
 	} else {
 		/* Now remove the entry */
-		ext4_xattr_set_entry(&i, &block_finder.s, false);
+		ret = ext4_xattr_set_entry(&i, &ibody_finder.s, false);
+		if (ret != EOK)
+			goto out;
+
 		inode_ref->dirty = true;
 	}
 out:
