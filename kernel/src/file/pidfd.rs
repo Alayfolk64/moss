@@ -1,5 +1,7 @@
 use alloc::{
     borrow::Cow,
+    format,
+    string::String,
     sync::{Arc, Weak},
 };
 use core::{
@@ -57,6 +59,14 @@ impl PidFd {
 impl FileLike for PidFd {
     fn path(&self) -> Cow<'_, str> {
         "anon_inode:[pidfd]".into()
+    }
+
+    fn proc_fdinfo(&self) -> Option<String> {
+        let proc_data = self.process_data().ok()?;
+        let pid = proc_data.proc.pid();
+        Some(format!(
+            "pos:\t0\nflags:\t0\nmnt_id:\t0\nPid:\t{pid}\nNSpid:\t{pid}\n"
+        ))
     }
 
     fn set_nonblocking(&self, nonblocking: bool) -> AxResult {

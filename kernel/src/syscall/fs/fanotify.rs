@@ -26,9 +26,11 @@ use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{Directory, File, FileLike, IoDst, IoSrc, add_file_like, close_file_like, resolve_at},
+    file::{
+        Directory, File, FileLike, IoDst, IoSrc, PidFd, add_file_like, close_file_like, resolve_at,
+    },
     mm::vm_load_string,
-    task::AsThread,
+    task::{AsThread, get_process_data},
 };
 
 const FAN_ACCESS: u64 = 0x0000_0001;
@@ -141,11 +143,14 @@ const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
 const FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS: usize = 16_384;
 const FANOTIFY_EVENT_INFO_TYPE_FID: u8 = 1;
 const FANOTIFY_EVENT_INFO_TYPE_DFID_NAME: u8 = 2;
+const FANOTIFY_EVENT_INFO_TYPE_PIDFD: u8 = 4;
 const FANOTIFY_EVENT_INFO_FID_HEADER_LEN: usize = 12;
 const FANOTIFY_FILE_HANDLE_HEADER_LEN: usize = 8;
+const FANOTIFY_EVENT_INFO_PIDFD_LEN: usize = 8;
 const FANOTIFY_FILE_HANDLE_BYTES: usize = 16;
 const FANOTIFY_FILE_HANDLE_TYPE: i32 = 1;
 const FAN_NOFD: c_int = -1;
+const FAN_NOPIDFD: c_int = FAN_NOFD;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FanotifyTarget {
@@ -225,6 +230,10 @@ impl FanotifyFd {
 
     fn reports_target_fid(&self) -> bool {
         self.init_flags & FAN_REPORT_TARGET_FID != 0
+    }
+
+    fn reports_pidfd(&self) -> bool {
+        self.init_flags & FAN_REPORT_PIDFD != 0
     }
 
     fn reports_tid(&self) -> bool {
@@ -398,6 +407,34 @@ impl FanotifyFd {
             self.event_f_flags & O_CLOEXEC != 0,
         )
     }
+
+    fn event_pidfd(&self, event: &FanotifyEvent) -> AxResult<Option<c_int>> {
+        if !self.reports_pidfd() {
+            return Ok(None);
+        }
+
+        if event.mask == FAN_Q_OVERFLOW {
+            return Ok(Some(FAN_NOPIDFD));
+        }
+
+        let Ok(proc_data) = get_process_data(event.pid as u32) else {
+            return Ok(Some(FAN_NOPIDFD));
+        };
+        Ok(Some(
+            add_file_like(Arc::new(PidFd::new_process(&proc_data)), true).unwrap_or(FAN_NOPIDFD),
+        ))
+    }
+}
+
+fn close_fanotify_record_fds(fd: c_int, pidfd: Option<c_int>) {
+    if fd >= 0 {
+        let _ = close_file_like(fd);
+    }
+    if let Some(pidfd) = pidfd {
+        if pidfd >= 0 {
+            let _ = close_file_like(pidfd);
+        }
+    }
 }
 
 fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
@@ -536,11 +573,10 @@ impl FileLike for FanotifyFd {
                 };
 
                 let event_fd = self.event_fd(&event)?;
-                let record = fanotify_event_record(&event, event_fd);
+                let event_pidfd = self.event_pidfd(&event)?;
+                let record = fanotify_event_record(&event, event_fd, event_pidfd);
                 if dst.remaining_mut() < record.len() {
-                    if event_fd >= 0 {
-                        let _ = close_file_like(event_fd);
-                    }
+                    close_fanotify_record_fds(event_fd, event_pidfd);
                     self.events.lock().push_front(event);
                     return if written == 0 {
                         Err(AxError::InvalidInput)
@@ -551,17 +587,13 @@ impl FileLike for FanotifyFd {
 
                 match dst.write(&record) {
                     Ok(0) => {
-                        if event_fd >= 0 {
-                            let _ = close_file_like(event_fd);
-                        }
+                        close_fanotify_record_fds(event_fd, event_pidfd);
                         self.events.lock().push_front(event);
                         break;
                     }
                     Ok(n) => written += n,
                     Err(err) => {
-                        if event_fd >= 0 {
-                            let _ = close_file_like(event_fd);
-                        }
+                        close_fanotify_record_fds(event_fd, event_pidfd);
                         self.events.lock().push_front(event);
                         return if written == 0 { Err(err) } else { Ok(written) };
                     }
@@ -788,7 +820,7 @@ pub(super) fn notify_fanotify_close(file: Arc<dyn FileLike>, writable: bool) {
     );
 }
 
-fn fanotify_event_record(event: &FanotifyEvent, fd: c_int) -> Vec<u8> {
+fn fanotify_event_record(event: &FanotifyEvent, fd: c_int, pidfd: Option<c_int>) -> Vec<u8> {
     let fid = event.fid.filter(|_| event.mask != FAN_Q_OVERFLOW);
     let name = event
         .name
@@ -805,7 +837,8 @@ fn fanotify_event_record(event: &FanotifyEvent, fd: c_int) -> Vec<u8> {
     } else {
         0
     };
-    let record_len = FANOTIFY_EVENT_METADATA_LEN + info_len;
+    let pidfd_info_len = pidfd.map_or(0, |_| FANOTIFY_EVENT_INFO_PIDFD_LEN);
+    let record_len = FANOTIFY_EVENT_METADATA_LEN + info_len + pidfd_info_len;
     let mut out = Vec::with_capacity(record_len);
     out.extend_from_slice(&fanotify_event_metadata(
         event.mask, fd, event.pid, record_len,
@@ -836,7 +869,14 @@ fn fanotify_event_record(event: &FanotifyEvent, fd: c_int) -> Vec<u8> {
             out.extend_from_slice(name.as_bytes());
             out.push(0);
         }
-        out.resize(record_len, 0);
+        out.resize(FANOTIFY_EVENT_METADATA_LEN + info_len, 0);
+    }
+
+    if let Some(pidfd) = pidfd {
+        out.push(FANOTIFY_EVENT_INFO_TYPE_PIDFD);
+        out.push(0);
+        out.extend_from_slice(&(FANOTIFY_EVENT_INFO_PIDFD_LEN as u16).to_ne_bytes());
+        out.extend_from_slice(&pidfd.to_ne_bytes());
     }
 
     out
