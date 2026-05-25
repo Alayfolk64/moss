@@ -94,9 +94,7 @@ pub struct CloneArgs {
 
 impl CloneArgs {
     fn validate(&self) -> AxResult<()> {
-        let Self {
-            flags, exit_signal, ..
-        } = self;
+        let Self { flags, .. } = self;
 
         if flags.contains(CloneFlags::THREAD)
             && !flags.contains(CloneFlags::VM | CloneFlags::SIGHAND)

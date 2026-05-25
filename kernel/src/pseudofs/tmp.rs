@@ -267,13 +267,22 @@ impl NodeOps for MemoryNode {
     }
 
     fn metadata(&self) -> VfsResult<Metadata> {
-        let mut metadata = self.inode.metadata.lock().clone();
+        let mut metadata = { self.inode.metadata.lock().clone() };
         match &self.inode.content {
             NodeContent::File(content) => {
                 metadata.size = *content.length.lock();
             }
             NodeContent::Dir(dir) => {
-                metadata.size = dir.entries.lock().len() as u64;
+                let entries = dir.entries.lock();
+                metadata.size = entries.len() as u64;
+                metadata.nlink = 2 + entries
+                    .iter()
+                    .filter(|(name, entry)| {
+                        name.0 != "."
+                            && name.0 != ".."
+                            && entry.get().metadata.lock().node_type == NodeType::Directory
+                    })
+                    .count() as u64;
             }
         }
         Ok(metadata)
@@ -318,7 +327,10 @@ impl NodeOps for MemoryNode {
             NodeType::RegularFile | NodeType::Directory | NodeType::Symlink => {}
             _ => return Err(VfsError::OperationNotPermitted),
         }
-        self.inode.xattrs.lock().insert(name.to_vec(), value.to_vec());
+        self.inode
+            .xattrs
+            .lock()
+            .insert(name.to_vec(), value.to_vec());
         Ok(())
     }
 

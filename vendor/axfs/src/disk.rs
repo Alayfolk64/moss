@@ -34,6 +34,7 @@ pub struct SeekableDisk {
 
 impl SeekableDisk {
     /// Create a new disk.
+    #[allow(dead_code)]
     pub fn new(dev: AxBlockDevice) -> Self {
         assert!(dev.block_size().is_power_of_two());
         let block_size_log2 = dev.block_size().trailing_zeros() as u8;

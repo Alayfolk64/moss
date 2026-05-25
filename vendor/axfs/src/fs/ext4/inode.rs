@@ -58,6 +58,21 @@ impl Inode {
         .map_err(into_vfs_err)
     }
 
+    fn directory_nlink_locked(&self, fs: &mut LwExt4Filesystem) -> VfsResult<u64> {
+        let mut reader = fs.read_dir(self.ino, 0).map_err(into_vfs_err)?;
+        let mut nlink = 2;
+        while let Some(entry) = reader.current() {
+            let name = core::str::from_utf8(entry.name()).map_err(|_| VfsError::InvalidData)?;
+            let is_child_dir =
+                entry.inode_type() == InodeType::Directory && name != "." && name != "..";
+            reader.step().map_err(into_vfs_err)?;
+            if is_child_dir {
+                nlink += 1;
+            }
+        }
+        Ok(nlink)
+    }
+
     pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
         self.fs
             .lock()
@@ -102,16 +117,20 @@ impl NodeOps for Inode {
 
     fn metadata(&self) -> VfsResult<Metadata> {
         let mut attr = FileAttr::default();
-        self.fs
-            .lock()
-            .get_attr(self.ino, &mut attr)
-            .map_err(into_vfs_err)?;
+        let mut fs = self.fs.lock();
+        fs.get_attr(self.ino, &mut attr).map_err(into_vfs_err)?;
+        let node_type = into_vfs_type(attr.node_type);
+        let nlink = if node_type == NodeType::Directory {
+            self.directory_nlink_locked(&mut fs).unwrap_or(attr.nlink)
+        } else {
+            attr.nlink
+        };
         Ok(Metadata {
             inode: self.ino as _,
             device: attr.device,
-            nlink: attr.nlink,
+            nlink,
             mode: NodePermission::from_bits_truncate(attr.mode as u16),
-            node_type: into_vfs_type(attr.node_type),
+            node_type,
             uid: attr.uid,
             gid: attr.gid,
             size: attr.size,

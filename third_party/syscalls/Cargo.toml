@@ -43,6 +43,9 @@ rustdoc-args = [
     "doc_cfg",
 ]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(doc_cfg)"] }
+
 [features]
 aarch64 = []
 all = [
@@ -114,4 +117,3 @@ optional = true
 [dev-dependencies]
 libc = "0.2"
 serde_json = "1"
-

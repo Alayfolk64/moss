@@ -9,11 +9,14 @@ use axfs::{FS_CONTEXT, FileFlags, OpenOptions};
 use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
-use linux_raw_sys::general::__kernel_off_t;
+use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD};
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
-use super::fanotify::{notify_fanotify_access, notify_fanotify_modify};
+use super::fanotify::{
+    check_fanotify_access_permission, notify_fanotify_access, notify_fanotify_modify,
+    notify_fanotify_modify_path,
+};
 #[cfg(feature = "net")]
 use crate::file::Socket;
 use crate::{
@@ -51,6 +54,9 @@ pub fn sys_dummy_fd(sysno: Sysno) -> AxResult<isize> {
 pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
     debug!("sys_read <= fd: {fd}, buf: {buf:p}, len: {len}");
     let f = get_file_like(fd)?;
+    if len > 0 {
+        check_fanotify_access_permission(f.clone())?;
+    }
     let read = f.read(&mut VmBytesMut::new(buf, len))?;
     if read > 0 {
         notify_fanotify_access(f);
@@ -61,7 +67,11 @@ pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
 pub fn sys_readv(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     debug!("sys_readv <= fd: {fd}, iovcnt: {iovcnt}");
     let f = get_file_like(fd)?;
-    let read = f.read(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
+    let iov = IoVectorBuf::new(iov, iovcnt)?;
+    if iovcnt > 0 {
+        check_fanotify_access_permission(f.clone())?;
+    }
+    let read = f.read(&mut iov.into_io())?;
     if read > 0 {
         notify_fanotify_access(f);
     }
@@ -117,6 +127,7 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxRes
         .open(&FS_CONTEXT.lock(), path)?
         .into_file()?;
     file.access(FileFlags::WRITE)?.set_len(length as _)?;
+    notify_fanotify_modify_path(AT_FDCWD, path);
     Ok(0)
 }
 
@@ -124,6 +135,7 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> AxResult<isize> {
     debug!("sys_ftruncate <= {fd} {length}");
     let f = File::from_fd(fd)?;
     f.inner().access(FileFlags::WRITE)?.set_len(length as _)?;
+    notify_fanotify_modify(f);
     Ok(0)
 }
 

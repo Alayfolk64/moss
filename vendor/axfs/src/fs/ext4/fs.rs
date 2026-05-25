@@ -22,9 +22,17 @@ pub struct Ext4Filesystem {
 
 impl Ext4Filesystem {
     pub fn new(dev: AxBlockDevice) -> VfsResult<Filesystem> {
-        let ext4 =
-            lwext4_rust::Ext4Filesystem::new(Ext4Disk(dev), EXT4_CONFIG).map_err(into_vfs_err)?;
+        Self::new_disk(Ext4Disk::runtime(dev))
+    }
 
+    pub fn new_driver(
+        dev: impl axdriver::prelude::BlockDriverOps + 'static,
+    ) -> VfsResult<Filesystem> {
+        Self::new_disk(Ext4Disk::driver(dev))
+    }
+
+    fn new_disk(disk: Ext4Disk) -> VfsResult<Filesystem> {
+        let ext4 = lwext4_rust::Ext4Filesystem::new(disk, EXT4_CONFIG).map_err(into_vfs_err)?;
         let fs = Arc::new(Self {
             inner: Mutex::new(ext4),
             root_dir: OnceCell::new(),

@@ -7,6 +7,7 @@ mod util;
 use core::cell::UnsafeCell;
 
 use fatfs::SeekFrom;
+#[cfg(not(feature = "ext4"))]
 pub use fs::FatFilesystem;
 use fs::FatFilesystemInner;
 

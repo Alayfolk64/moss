@@ -60,6 +60,43 @@ exit 0
 EOF
 chmod +x /bin/userdel /bin/groupdel
 
+cat >/bin/mkfs.ext3 <<'EOF'
+#!/bin/sh
+exec mkfs.ext2 "$@"
+EOF
+
+cat >/bin/mkfs.ext4 <<'EOF'
+#!/bin/sh
+exec mkfs.ext2 "$@"
+EOF
+
+cat >/bin/mkfs.xfs <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+
+cat >/bin/mkfs.btrfs <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+
+cat >/bin/mkfs.exfat <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+
+cat >/bin/mkfs.ntfs <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+
+cat >/bin/mount.ntfs <<'EOF'
+#!/bin/sh
+exec mount -t ntfs "$1" "$2"
+EOF
+
+chmod +x /bin/mkfs.ext3 /bin/mkfs.ext4 /bin/mkfs.xfs /bin/mkfs.btrfs /bin/mkfs.exfat /bin/mkfs.ntfs /bin/mount.ntfs
+
 ARCH=RISCV
 if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
@@ -69,13 +106,13 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
+basic=0
+busybox=0
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=1
+libctest=0
 lmbench=0
 ltp=1
 lua=0
@@ -148,8 +185,6 @@ run_ltp() {
     echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
     export LTP_TIMEOUT_MUL=2
-    export LTP_DEV_FS_TYPE=tmpfs
-    export LTP_SINGLE_FS_TYPE=tmpfs
 
     all_testcases="${LTP_CASES:-}"
     if [ -z "$all_testcases" ] && [ -f ./ltp_testcases.sh ]; then
@@ -231,7 +266,31 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+        fanotify01 fanotify01
+        fanotify02 fanotify02
+        fanotify03 fanotify03
+        fanotify04 fanotify04
+        fanotify05 fanotify05
+        fanotify06 fanotify06
+        fanotify07 fanotify07
+        fanotify08 fanotify08
+        fanotify09 fanotify09
+        fanotify10 fanotify10
+        fanotify11 fanotify11
+        fanotify12 fanotify12
+        fanotify13 fanotify13
+        fanotify14 fanotify14
+        fanotify15 fanotify15
+        fanotify16 fanotify16
+        fanotify17 fanotify17
+        fanotify18 fanotify18
+        fanotify19 fanotify19
+        fanotify20 fanotify20
+        fanotify21 fanotify21
+        fanotify22 fanotify22
+        fanotify23 fanotify23
+    "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi

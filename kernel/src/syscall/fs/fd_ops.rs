@@ -19,7 +19,10 @@ use scope_local::ActiveScope;
 use spin::RwLock;
 use starry_signal::Signo;
 
-use super::fanotify::{notify_fanotify_close, notify_fanotify_open};
+use super::fanotify::{
+    check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
+    notify_fanotify_fd_close, notify_fanotify_open,
+};
 use crate::{
     file::{
         Directory, FD_TABLE, File, FileLike, PIPE_MAX_SIZE, Pipe, add_file_like,
@@ -194,6 +197,7 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
         f.set_nonblocking(true)?;
     }
     let opened = f.clone();
+    check_fanotify_open_permission(opened.clone())?;
     let fd = add_file_like(f, flags & O_CLOEXEC != 0)?;
     notify_fanotify_open(opened);
     Ok(fd)
@@ -224,6 +228,8 @@ pub fn sys_openat(
         mode &= !((S_ISUID | S_ISGID) as __kernel_mode_t);
     }
     let ids = (sys_geteuid()? as u32, sys_getegid()? as u32);
+    let existed_before_create =
+        flags_u32 & O_CREAT != 0 && resolve_at(dirfd, Some(path.as_str()), 0).is_ok();
 
     // axfs::OpenOptions rejects (read-only + create), but Linux permits
     // O_RDONLY|O_CREAT. Handle it locally without modifying third-party crates.
@@ -235,7 +241,11 @@ pub fn sys_openat(
             check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
             match with_fs(dirfd, |fs| open_options.open(fs, path.as_str())) {
                 Ok(result) => {
-                    return add_to_fd(result, flags_u32).map(|fd| fd as isize);
+                    let fd = add_to_fd(result, flags_u32)?;
+                    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                        notify_fanotify_create(dirfd, &path, false);
+                    }
+                    return Ok(fd as isize);
                 }
                 Err(err) if err.canonicalize() == AxError::NotFound => {}
                 Err(err) => return Err(err),
@@ -246,16 +256,22 @@ pub fn sys_openat(
         let create_options = flags_to_options(create_flags, mode, ids);
         with_fs(dirfd, |fs| create_options.open(fs, path.as_str()))?;
 
-        return with_fs(dirfd, |fs| open_options.open(fs, path.as_str()))
-            .and_then(|it| add_to_fd(it, flags_u32))
-            .map(|fd| fd as isize);
+        let fd = with_fs(dirfd, |fs| open_options.open(fs, path.as_str()))
+            .and_then(|it| add_to_fd(it, flags_u32))?;
+        if !existed_before_create {
+            notify_fanotify_create(dirfd, &path, false);
+        }
+        return Ok(fd as isize);
     }
 
     let options = flags_to_options(flags, mode, ids);
     check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
-    with_fs(dirfd, |fs| options.open(fs, path.as_str()))
-        .and_then(|it| add_to_fd(it, flags as _))
-        .map(|fd| fd as isize)
+    let fd = with_fs(dirfd, |fs| options.open(fs, path.as_str()))
+        .and_then(|it| add_to_fd(it, flags as _))?;
+    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+        notify_fanotify_create(dirfd, &path, false);
+    }
+    Ok(fd as isize)
 }
 
 /// Open a file by `filename` and insert it into the file descriptor table.
@@ -273,6 +289,7 @@ pub fn sys_close(fd: c_int) -> AxResult<isize> {
     let writable = file_like.status_flags() & O_ACCMODE != O_RDONLY;
     release_posix_locks_for_file_like(&file_like);
     release_file_lease_for_file_like(&file_like);
+    notify_fanotify_fd_close(&file_like);
     close_file_like(fd)?;
     notify_fanotify_close(file_like.clone(), writable);
     release_bsd_flocks_for_file_like_if_last(&file_like);
@@ -792,6 +809,7 @@ pub fn close_all_files_for_current_process() {
         release_posix_locks_for_file_like(file_like);
         release_file_lease_for_file_like(file_like);
         release_bsd_flocks_for_file_like(file_like);
+        notify_fanotify_fd_close(file_like);
     }
 
     let mut fd_table = FD_TABLE.write();

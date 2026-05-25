@@ -18,7 +18,10 @@ use crate::{
     config::USER_HEAP_BASE,
     file::{FD_TABLE, File, resolve_at},
     mm::{load_user_app, load_user_app_from_location, vm_load_string},
-    syscall::notify_fanotify_open_exec_path,
+    syscall::{
+        check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
+        notify_fanotify_open_exec_path,
+    },
     task::{AsThread, processes},
 };
 
@@ -101,7 +104,7 @@ pub fn sys_execveat(
 
     let requested_path = vm_load_string(path)?;
     let exec_loc = if requested_path.starts_with('/') {
-        let mut fs = FS_CONTEXT.lock();
+        let fs = FS_CONTEXT.lock();
         if flags & AT_SYMLINK_NOFOLLOW != 0 {
             fs.resolve_no_follow(&requested_path)?
         } else {
@@ -181,6 +184,13 @@ fn execve_common(
         error!("sys_execve: multi-thread not supported");
         return Err(AxError::WouldBlock);
     }
+
+    let fanotify_exec_path = exec_loc
+        .as_ref()
+        .and_then(|loc| loc.absolute_path().ok())
+        .map_or_else(|| path.clone(), |path| path.to_string());
+    check_fanotify_open_permission_path(&fanotify_exec_path)?;
+    check_fanotify_open_exec_permission_path(&fanotify_exec_path)?;
 
     let mut aspace = proc_data.aspace.lock();
     let (entry_point, user_stack_base) = if let Some(load_loc) = load_loc {

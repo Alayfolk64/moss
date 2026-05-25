@@ -19,3 +19,10 @@ pub fn new_default(dev: AxBlockDevice) -> VfsResult<Filesystem> {
         }
     }
 }
+
+#[cfg(feature = "ext4")]
+pub fn new_ext4_from_block_driver(
+    dev: impl axdriver::prelude::BlockDriverOps + 'static,
+) -> VfsResult<Filesystem> {
+    ext4::Ext4Filesystem::new_driver(dev)
+}

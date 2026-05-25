@@ -14,13 +14,21 @@ mod disk;
 mod fs;
 
 mod highlevel;
-pub use highlevel::*;
-
 #[cfg(feature = "ext4")]
 pub use fs::ext4::Inode as Ext4Inode;
+pub use highlevel::*;
 
-pub fn new_filesystem_from_block_device(dev: AxBlockDevice) -> axfs_ng_vfs::VfsResult<axfs_ng_vfs::Filesystem> {
+pub fn new_filesystem_from_block_device(
+    dev: AxBlockDevice,
+) -> axfs_ng_vfs::VfsResult<axfs_ng_vfs::Filesystem> {
     fs::new_default(dev)
+}
+
+#[cfg(feature = "ext4")]
+pub fn new_ext4_filesystem_from_block_driver(
+    dev: impl BlockDriverOps + 'static,
+) -> axfs_ng_vfs::VfsResult<axfs_ng_vfs::Filesystem> {
+    fs::new_ext4_from_block_driver(dev)
 }
 
 pub fn init_filesystems(mut block_devs: AxDeviceContainer<AxBlockDevice>) {
