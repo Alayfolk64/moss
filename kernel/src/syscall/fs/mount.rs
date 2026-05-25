@@ -56,10 +56,9 @@ pub fn sys_mount(
             return Err(AxError::InvalidInput);
         };
         let mut fs_context = FS_CONTEXT.lock();
-        fs_context.resolve(source)?;
+        let source = fs_context.resolve(source)?;
         let target = fs_context.resolve(target)?;
-        let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
-        target.mount(&fs)?;
+        target.bind_mount(&source)?;
         return Ok(0);
     }
 

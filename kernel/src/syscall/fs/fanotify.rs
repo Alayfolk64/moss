@@ -145,7 +145,10 @@ const FANOTIFY_EVENT_METADATA_LEN: usize = 24;
 const FANOTIFY_DEFAULT_MAX_QUEUED_EVENTS: usize = 16_384;
 const FANOTIFY_EVENT_INFO_TYPE_FID: u8 = 1;
 const FANOTIFY_EVENT_INFO_TYPE_DFID_NAME: u8 = 2;
+const FANOTIFY_EVENT_INFO_TYPE_DFID: u8 = 3;
 const FANOTIFY_EVENT_INFO_TYPE_PIDFD: u8 = 4;
+const FANOTIFY_EVENT_INFO_TYPE_OLD_DFID_NAME: u8 = 10;
+const FANOTIFY_EVENT_INFO_TYPE_NEW_DFID_NAME: u8 = 12;
 const FANOTIFY_EVENT_INFO_FID_HEADER_LEN: usize = 12;
 const FANOTIFY_FILE_HANDLE_HEADER_LEN: usize = 8;
 const FANOTIFY_EVENT_INFO_PIDFD_LEN: usize = 8;
@@ -177,6 +180,10 @@ struct FanotifyEvent {
     path: Option<String>,
     name: Option<String>,
     fid: Option<FanotifyTarget>,
+    fid_info_type: u8,
+    child_fid: Option<FanotifyTarget>,
+    child_info_type: u8,
+    child_name: Option<String>,
     pid: i32,
 }
 
@@ -200,10 +207,20 @@ impl Pollable for FanotifyPathFile {
 
 pub(super) struct FanotifyPreparedEvent {
     target: FanotifyTarget,
+    child_target: Option<FanotifyTarget>,
+    child_info_type: u8,
+    child_name: Option<String>,
+    child_path: Option<String>,
+    object_target: Option<FanotifyTarget>,
     path: String,
     file: Arc<dyn FileLike>,
     mask: u64,
     event_is_dir: bool,
+}
+
+pub(super) struct FanotifyPathAlias {
+    target: FanotifyTarget,
+    path: String,
 }
 
 struct FanotifyMarkTarget {
@@ -220,6 +237,7 @@ enum FanotifyMarkKind {
 }
 
 static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
+static FANOTIFY_PATH_ALIASES: RwLock<Vec<FanotifyPathAlias>> = RwLock::new(Vec::new());
 
 pub struct FanotifyFd {
     init_flags: u32,
@@ -254,6 +272,10 @@ impl FanotifyFd {
 
     fn reports_name(&self) -> bool {
         self.init_flags & FAN_REPORT_NAME != 0
+    }
+
+    fn reports_dir_fid(&self) -> bool {
+        self.init_flags & (FAN_REPORT_DIR_FID | FAN_REPORT_NAME) != 0
     }
 
     fn reports_target_fid(&self) -> bool {
@@ -323,6 +345,11 @@ impl FanotifyFd {
         target: FanotifyTarget,
         path: Option<&str>,
         file: Arc<dyn FileLike>,
+        child_target: Option<FanotifyTarget>,
+        child_info_type: u8,
+        child_name: Option<&str>,
+        child_path: Option<&str>,
+        object_target: Option<FanotifyTarget>,
         tgid: i32,
         tid: i32,
         mask: u64,
@@ -331,17 +358,33 @@ impl FanotifyFd {
         let mut matched_mask = 0;
         let mut ignored_mask = 0;
         let mut event_name = None;
+        let mut child_matched_mask = 0;
+        let mut child_ignored_mask = 0;
+        let mut child_event_name = None;
         {
             let mut marks = self.marks.lock();
             for mark in marks.iter_mut() {
-                if mark_matches_event_mask(mark, target, path, mark.ignored_mask, event_is_dir) {
+                if mark_matches_event_mask(mark, target, path, mark.ignored_mask, mask, event_is_dir)
+                {
                     ignored_mask |= mark.ignored_mask & mask;
                     if self.reports_fid() && event_is_dir && mark.ignored_mask & FAN_ONDIR != 0 {
                         ignored_mask |= FAN_ONDIR;
                     }
                 }
+                if mask & FAN_RENAME != 0 && mark_ignores_rename(mark, target, path) {
+                    ignored_mask |= FAN_RENAME;
+                    if event_is_dir {
+                        ignored_mask |= FAN_ONDIR;
+                    }
+                }
+                if mask & FAN_MOVE != 0 && mark_ignores_child_move(mark, target, path) {
+                    ignored_mask |= mask & FAN_MOVE;
+                    if event_is_dir {
+                        ignored_mask |= FAN_ONDIR;
+                    }
+                }
 
-                if mark_matches_event_mask(mark, target, path, mark.mask, event_is_dir) {
+                if mark_matches_event_mask(mark, target, path, mark.mask, mask, event_is_dir) {
                     matched_mask |= mask & mark.mask;
                     if self.reports_fid() && event_is_dir && mark.mask & FAN_ONDIR != 0 {
                         matched_mask |= FAN_ONDIR;
@@ -357,6 +400,61 @@ impl FanotifyFd {
                         }
                     }
                 }
+
+                if mask & FAN_RENAME != 0 {
+                    if let Some(child_target) = child_target {
+                        if mark_matches_event_mask(
+                            mark,
+                            child_target,
+                            child_path,
+                            mark.ignored_mask,
+                            mask,
+                            event_is_dir,
+                        ) {
+                            child_ignored_mask |= mark.ignored_mask & mask;
+                            if self.reports_fid()
+                                && event_is_dir
+                                && mark.ignored_mask & FAN_ONDIR != 0
+                            {
+                                child_ignored_mask |= FAN_ONDIR;
+                            }
+                        }
+                        if mark_ignores_rename(mark, child_target, child_path) {
+                            child_ignored_mask |= FAN_RENAME;
+                            if event_is_dir {
+                                child_ignored_mask |= FAN_ONDIR;
+                            }
+                        }
+                    }
+                }
+
+                if mask & FAN_RENAME != 0 {
+                    if let Some(child_target) = child_target {
+                        if mark_matches_event_mask(
+                            mark,
+                            child_target,
+                            child_path,
+                            mark.mask,
+                            mask,
+                            event_is_dir,
+                        ) {
+                            child_matched_mask |= mask & mark.mask;
+                            if self.reports_fid() && event_is_dir && mark.mask & FAN_ONDIR != 0 {
+                                child_matched_mask |= FAN_ONDIR;
+                            }
+                            if self.reports_name() {
+                                if let Some(candidate) = fanotify_event_name(mark, child_path) {
+                                    if child_event_name
+                                        .as_ref()
+                                        .map_or(true, |(_, priority)| candidate.1 > *priority)
+                                    {
+                                        child_event_name = Some(candidate);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             if mask & FAN_MODIFY != 0 {
@@ -367,6 +465,7 @@ impl FanotifyFd {
                             target,
                             path,
                             mark.ignored_mask,
+                            mask,
                             event_is_dir,
                         )
                     {
@@ -377,7 +476,14 @@ impl FanotifyFd {
             }
         }
 
-        let event_mask = matched_mask & !ignored_mask;
+        let mut event_mask = if mask & FAN_RENAME != 0 {
+            (matched_mask | child_matched_mask) & !(ignored_mask | child_ignored_mask)
+        } else {
+            matched_mask & !ignored_mask
+        };
+        if !event_is_dir && self.init_flags & FAN_REPORT_FID == 0 {
+            event_mask &= !(FAN_DELETE_SELF | FAN_MOVE_SELF);
+        }
         if event_mask == 0 {
             return;
         }
@@ -388,12 +494,105 @@ impl FanotifyFd {
         } else {
             pid
         };
+
+        let self_event = event_mask & (FAN_DELETE_SELF | FAN_MOVE_SELF) != 0;
+        let rename_event = event_mask & FAN_RENAME != 0;
+        let old_rename_matched = rename_event && matched_mask & event_mask != 0;
+        let new_rename_matched = rename_event && child_matched_mask & event_mask != 0;
+        let dirent_event = child_target.is_some() && (!rename_event || old_rename_matched);
+        if self_event && !event_is_dir {
+            event_name = None;
+        }
+        if self.reports_name() && event_is_dir && !dirent_event {
+            event_name = Some((".".to_string(), 3));
+        }
+
+        let mut report_fid = self.reports_fid().then_some(target);
+        let mut report_info_type = FANOTIFY_EVENT_INFO_TYPE_FID;
+        let mut report_child_fid = None;
+        let mut report_child_info_type = child_info_type;
+        if self.reports_fid() {
+            if self.reports_dir_fid() {
+                if new_rename_matched && !old_rename_matched {
+                    if let Some(child_target) = child_target {
+                        report_fid = Some(child_target);
+                        event_name = child_event_name;
+                        report_info_type = if event_name.is_some() {
+                            FANOTIFY_EVENT_INFO_TYPE_NEW_DFID_NAME
+                        } else {
+                            FANOTIFY_EVENT_INFO_TYPE_DFID
+                        };
+                        if self.reports_target_fid() {
+                            report_child_fid = object_target;
+                            report_child_info_type = FANOTIFY_EVENT_INFO_TYPE_FID;
+                        }
+                    }
+                } else if dirent_event || event_is_dir {
+                    report_info_type = if rename_event && event_name.is_some() {
+                        FANOTIFY_EVENT_INFO_TYPE_OLD_DFID_NAME
+                    } else if event_name.is_some() {
+                        FANOTIFY_EVENT_INFO_TYPE_DFID_NAME
+                    } else {
+                        FANOTIFY_EVENT_INFO_TYPE_DFID
+                    };
+                    if rename_event && old_rename_matched && !new_rename_matched {
+                        if self.reports_target_fid() {
+                            report_child_fid = object_target;
+                            report_child_info_type = FANOTIFY_EVENT_INFO_TYPE_FID;
+                        }
+                    } else if !rename_event || new_rename_matched {
+                        report_child_fid = child_target.filter(|_| {
+                            child_info_type != FANOTIFY_EVENT_INFO_TYPE_FID
+                                || self.reports_target_fid()
+                        });
+                    }
+                } else if !self_event
+                    && let Some(parent) = path.and_then(fanotify_parent_target_from_path)
+                {
+                    report_fid = Some(parent);
+                    report_info_type = if event_name.is_some() {
+                        FANOTIFY_EVENT_INFO_TYPE_DFID_NAME
+                    } else {
+                        FANOTIFY_EVENT_INFO_TYPE_DFID
+                    };
+                    if self.init_flags & FAN_REPORT_FID != 0 {
+                        report_child_fid = Some(target);
+                    }
+                }
+            }
+            if !self.reports_dir_fid() && event_name.is_some() {
+                report_info_type = FANOTIFY_EVENT_INFO_TYPE_DFID_NAME;
+            }
+        }
+
+        let report_name = event_name.map(|(name, _)| name);
+        let report_child_name = if report_child_fid.is_some()
+            && report_child_info_type != FANOTIFY_EVENT_INFO_TYPE_FID
+        {
+            child_name.map(ToString::to_string)
+        } else {
+            None
+        };
+        if report_child_fid.is_none() {
+            report_child_info_type = FANOTIFY_EVENT_INFO_TYPE_FID;
+        }
         let mut events = self.events.lock();
         if self.reports_fid() {
-            if let Some(event) = events
-                .iter_mut()
-                .find(|event| event.fid == Some(target) && event.pid == pid)
-            {
+            if let Some(event) = events.iter_mut().find(|event| {
+                event.fid == report_fid
+                    && event.fid_info_type == report_info_type
+                    && event.child_fid == report_child_fid
+                    && event.child_info_type == report_child_info_type
+                    && event.child_name.as_ref() == report_child_name.as_ref()
+                    && event.name.as_ref() == report_name.as_ref()
+                    && event.pid == pid
+                    && fanotify_can_merge_masks(
+                        event.mask,
+                        event_mask,
+                        self.reports_name(),
+                        self.reports_target_fid(),
+                    )
+            }) {
                 event.mask |= event_mask;
                 self.poll.wake();
                 return;
@@ -408,14 +607,23 @@ impl FanotifyFd {
             return;
         }
 
-        events.push_back(FanotifyEvent {
+        let event = FanotifyEvent {
             mask: event_mask,
             file: Some(file),
             path: path.map(ToString::to_string),
-            name: event_name.map(|(name, _)| name),
-            fid: self.reports_fid().then_some(target),
+            name: report_name,
+            fid: report_fid,
+            fid_info_type: report_info_type,
+            child_fid: report_child_fid,
+            child_info_type: report_child_info_type,
+            child_name: report_child_name,
             pid,
-        });
+        };
+        if let Some(pos) = fanotify_insert_before_pending_close(&events, &event) {
+            events.insert(pos, event);
+        } else {
+            events.push_back(event);
+        }
         self.poll.wake();
     }
 
@@ -486,8 +694,53 @@ fn queue_overflow_event(events: &mut VecDeque<FanotifyEvent>, pid: i32) {
         path: None,
         name: None,
         fid: None,
+        fid_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
+        child_fid: None,
+        child_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
+        child_name: None,
         pid,
     });
+}
+
+fn fanotify_insert_before_pending_close(
+    events: &VecDeque<FanotifyEvent>,
+    event: &FanotifyEvent,
+) -> Option<usize> {
+    if event.mask & (FAN_DELETE | FAN_DELETE_SELF | FAN_MOVE_SELF | FAN_RENAME) == 0 {
+        return None;
+    }
+    events.iter().position(|queued| {
+        queued.pid == event.pid
+            && queued.mask & FAN_CLOSE != 0
+            && queued.mask & FAN_ONDIR == 0
+            && (queued.fid == event.fid || queued.child_fid == event.child_fid)
+    })
+}
+
+fn fanotify_can_merge_masks(
+    queued_mask: u64,
+    new_mask: u64,
+    reports_name: bool,
+    reports_target_fid: bool,
+) -> bool {
+    let open_close = FAN_OPEN | FAN_CLOSE;
+    let self_events = FAN_DELETE_SELF | FAN_MOVE_SELF;
+    let ondir = FAN_ONDIR;
+    if queued_mask & ondir != 0
+        && new_mask & ondir != 0
+        && ((queued_mask & open_close != 0 && new_mask & self_events != 0)
+            || (new_mask & open_close != 0 && queued_mask & self_events != 0))
+    {
+        return false;
+    }
+
+    if !reports_name || reports_target_fid {
+        return true;
+    }
+    let close = FAN_CLOSE;
+    let dirent = FAN_CREATE | FAN_DELETE | FAN_MOVE;
+    !((queued_mask & close != 0 && new_mask & dirent != 0)
+        || (new_mask & close != 0 && queued_mask & dirent != 0))
 }
 
 fn mark_matches_event_mask(
@@ -495,6 +748,7 @@ fn mark_matches_event_mask(
     target: FanotifyTarget,
     path: Option<&str>,
     mark_mask: u64,
+    event_mask: u64,
     event_is_dir: bool,
 ) -> bool {
     if mark_mask == 0 || event_is_dir && mark_mask & FAN_ONDIR == 0 {
@@ -509,6 +763,9 @@ fn mark_matches_event_mask(
                     .as_deref()
                     .zip(path)
                     .is_some_and(|(mark_path, event_path)| mark_path == event_path);
+            if event_mask & (FAN_DELETE_SELF | FAN_MOVE_SELF) != 0 {
+                return self_match;
+            }
             self_match || mark_matches_child(mark, path, mark_mask)
         }
         FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
@@ -521,6 +778,54 @@ fn mark_matches_event_mask(
 
 fn mark_matches_child(mark: &FanotifyMark, path: Option<&str>, mark_mask: u64) -> bool {
     mark_mask & FAN_EVENT_ON_CHILD != 0 && mark.target.is_dir && mark_is_parent_of_path(mark, path)
+}
+
+fn mark_ignores_rename(mark: &FanotifyMark, target: FanotifyTarget, path: Option<&str>) -> bool {
+    if mark.ignored_mask & FAN_RENAME == 0 {
+        return false;
+    }
+
+    match mark.kind {
+        FanotifyMarkKind::Inode => {
+            mark.target == target
+                || mark
+                    .path
+                    .as_deref()
+                    .zip(path)
+                    .is_some_and(|(mark_path, event_path)| {
+                        mark_path == event_path || parent_path(event_path) == Some(mark_path)
+                    })
+        }
+        FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
+            .path
+            .as_deref()
+            .zip(path)
+            .is_some_and(|(mark_path, event_path)| path_is_same_or_below(event_path, mark_path)),
+    }
+}
+
+fn mark_ignores_child_move(mark: &FanotifyMark, target: FanotifyTarget, path: Option<&str>) -> bool {
+    if mark.ignored_mask & FAN_MOVE == 0 {
+        return false;
+    }
+
+    match mark.kind {
+        FanotifyMarkKind::Inode => {
+            mark.target == target
+                || mark
+                    .path
+                    .as_deref()
+                    .zip(path)
+                    .is_some_and(|(mark_path, event_path)| {
+                        parent_path(event_path) == Some(mark_path)
+                    })
+        }
+        FanotifyMarkKind::Mount | FanotifyMarkKind::Filesystem => mark
+            .path
+            .as_deref()
+            .zip(path)
+            .is_some_and(|(mark_path, event_path)| path_is_same_or_below(event_path, mark_path)),
+    }
 }
 
 fn mark_is_parent_of_path(mark: &FanotifyMark, path: Option<&str>) -> bool {
@@ -552,6 +857,14 @@ fn basename(path: &str) -> &str {
 fn parent_path(path: &str) -> Option<&str> {
     path.rsplit_once('/')
         .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
+}
+
+fn fanotify_parent_target_from_path(path: &str) -> Option<FanotifyTarget> {
+    let parent = parent_path(path).unwrap_or(".");
+    resolve_at(linux_raw_sys::general::AT_FDCWD, Some(parent), 0)
+        .ok()
+        .and_then(|resolved| resolved.stat().ok())
+        .map(target_from_stat)
 }
 
 fn path_is_same_or_below(path: &str, base: &str) -> bool {
@@ -801,6 +1114,11 @@ fn notify_fanotify_target_event(
     target: FanotifyTarget,
     path: Option<String>,
     file: Arc<dyn FileLike>,
+    child_target: Option<FanotifyTarget>,
+    child_info_type: u8,
+    child_name: Option<String>,
+    child_path: Option<String>,
+    object_target: Option<FanotifyTarget>,
     mask: u64,
     event_is_dir: bool,
 ) {
@@ -824,6 +1142,11 @@ fn notify_fanotify_target_event(
             target,
             path.as_deref(),
             file.clone(),
+            child_target,
+            child_info_type,
+            child_name.as_deref(),
+            child_path.as_deref(),
+            object_target,
             tgid,
             tid,
             mask,
@@ -838,7 +1161,18 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
         return;
     };
     let path = path_from_file_like(&file);
-    notify_fanotify_target_event(target, path, file, mask, target.is_dir);
+    notify_fanotify_target_event(
+        target,
+        path,
+        file,
+        None,
+        FANOTIFY_EVENT_INFO_TYPE_FID,
+        None,
+        None,
+        None,
+        mask,
+        target.is_dir,
+    );
 }
 
 fn fanotify_snapshot_file(path: String) -> Arc<dyn FileLike> {
@@ -871,6 +1205,11 @@ pub(super) fn prepare_fanotify_path_event(
         .map_or_else(|| path.to_string(), |path| path.to_string());
     Some(FanotifyPreparedEvent {
         target,
+        child_target: None,
+        child_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
+        child_name: None,
+        child_path: None,
+        object_target: None,
         path: path.clone(),
         file: fanotify_snapshot_file(path),
         mask,
@@ -891,31 +1230,78 @@ pub(super) fn fanotify_path_is_dir(dirfd: c_int, path: &str) -> Option<bool> {
 }
 
 pub(super) fn notify_fanotify_prepared_event(event: FanotifyPreparedEvent) {
+    let target = event.target;
+    let mask = event.mask;
     notify_fanotify_target_event(
         event.target,
         Some(event.path),
         event.file,
+        event.child_target,
+        event.child_info_type,
+        event.child_name,
+        event.child_path,
+        event.object_target,
         event.mask,
         event.event_is_dir,
     );
+    if mask & FAN_DELETE_SELF != 0 {
+        forget_fanotify_path_alias(target);
+    }
+}
+
+pub(super) fn prepare_fanotify_dirent_event(
+    dirfd: c_int,
+    path: &str,
+    mask: u64,
+    event_is_dir: bool,
+) -> Option<FanotifyPreparedEvent> {
+    if !has_fanotify_interest(mask) {
+        return None;
+    }
+
+    let Ok((parent, name)) = with_fs(dirfd, |fs| {
+        fs.resolve_parent(Path::new(path))
+            .map(|(parent, name)| (parent, name.to_string()))
+    }) else {
+        return None;
+    };
+    let child_target = resolve_at(dirfd, Some(path), 0)
+        .ok()
+        .and_then(|resolved| resolved.stat().ok())
+        .map(target_from_stat);
+    let parent_path = parent.absolute_path().ok().map(|path| path.to_string());
+    let path = parent_path.map_or_else(
+        || path.to_string(),
+        |parent_path| {
+            if parent_path == "/" {
+                format!("/{name}")
+            } else {
+                format!("{parent_path}/{name}")
+            }
+        },
+    );
+    let file: Arc<dyn FileLike> = Arc::new(Directory::new(parent));
+    let Ok(target) = target_from_file_like(&file) else {
+        return None;
+    };
+    Some(FanotifyPreparedEvent {
+        target,
+        child_target,
+        child_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
+        child_name: None,
+        child_path: None,
+        object_target: None,
+        path,
+        file,
+        mask,
+        event_is_dir,
+    })
 }
 
 fn notify_fanotify_dirent_event(dirfd: c_int, path: &str, mask: u64, event_is_dir: bool) {
-    if !has_fanotify_interest(mask) {
-        return;
+    if let Some(event) = prepare_fanotify_dirent_event(dirfd, path, mask, event_is_dir) {
+        notify_fanotify_prepared_event(event);
     }
-
-    let Ok(parent) = with_fs(dirfd, |fs| {
-        fs.resolve_parent(Path::new(path)).map(|(parent, _)| parent)
-    }) else {
-        return;
-    };
-    let file: Arc<dyn FileLike> = Arc::new(Directory::new(parent));
-    let Ok(target) = target_from_file_like(&file) else {
-        return;
-    };
-    let path = path_from_file_like(&file);
-    notify_fanotify_target_event(target, path, file, mask, event_is_dir);
 }
 
 pub(super) fn notify_fanotify_create(dirfd: c_int, path: &str, is_dir: bool) {
@@ -926,12 +1312,62 @@ pub(super) fn notify_fanotify_delete(dirfd: c_int, path: &str, is_dir: bool) {
     notify_fanotify_dirent_event(dirfd, path, FAN_DELETE, is_dir);
 }
 
+pub(super) fn prepare_fanotify_delete_event(
+    dirfd: c_int,
+    path: &str,
+    is_dir: bool,
+) -> Option<FanotifyPreparedEvent> {
+    prepare_fanotify_dirent_event(dirfd, path, FAN_DELETE, is_dir)
+}
+
 pub(super) fn notify_fanotify_move_from(dirfd: c_int, path: &str, is_dir: bool) {
     notify_fanotify_dirent_event(dirfd, path, FAN_MOVED_FROM, is_dir);
 }
 
+pub(super) fn prepare_fanotify_move_from_event(
+    dirfd: c_int,
+    path: &str,
+    is_dir: bool,
+) -> Option<FanotifyPreparedEvent> {
+    prepare_fanotify_dirent_event(dirfd, path, FAN_MOVED_FROM, is_dir)
+}
+
 pub(super) fn notify_fanotify_move_to(dirfd: c_int, path: &str, is_dir: bool) {
     notify_fanotify_dirent_event(dirfd, path, FAN_MOVED_TO, is_dir);
+}
+
+pub(super) fn prepare_fanotify_rename_event(
+    old_dirfd: c_int,
+    old_path: &str,
+    new_dirfd: c_int,
+    new_path: &str,
+    is_dir: bool,
+) -> Option<FanotifyPreparedEvent> {
+    let mut event = prepare_fanotify_dirent_event(old_dirfd, old_path, FAN_RENAME, is_dir)?;
+    event.object_target = event.child_target;
+    let Ok((new_parent, new_name)) = with_fs(new_dirfd, |fs| {
+        fs.resolve_parent(Path::new(new_path))
+            .map(|(parent, name)| (parent, name.to_string()))
+    }) else {
+        return Some(event);
+    };
+    let new_parent_path = new_parent.absolute_path().ok().map(|path| path.to_string());
+    let new_child_path = new_parent_path.as_ref().map(|parent_path| {
+        if parent_path == "/" {
+            format!("/{new_name}")
+        } else {
+            format!("{parent_path}/{new_name}")
+        }
+    });
+    let file: Arc<dyn FileLike> = Arc::new(Directory::new(new_parent));
+    if let Ok(new_parent_target) = target_from_file_like(&file) {
+        event.child_target = Some(new_parent_target);
+        event.child_info_type = FANOTIFY_EVENT_INFO_TYPE_NEW_DFID_NAME;
+        event.child_name = Some(new_name);
+        event.child_path = new_child_path;
+        event.mask = FAN_RENAME;
+    }
+    Some(event)
 }
 
 pub(super) fn notify_fanotify_delete_self(dirfd: c_int, path: &str) {
@@ -943,6 +1379,13 @@ pub(super) fn prepare_fanotify_delete_self_event(
     path: &str,
 ) -> Option<FanotifyPreparedEvent> {
     prepare_fanotify_path_event(dirfd, path, FAN_DELETE_SELF)
+}
+
+pub(super) fn prepare_fanotify_move_self_event(
+    dirfd: c_int,
+    path: &str,
+) -> Option<FanotifyPreparedEvent> {
+    prepare_fanotify_path_event(dirfd, path, FAN_MOVE_SELF)
 }
 
 pub(super) fn notify_fanotify_modify_path(dirfd: c_int, path: &str) {
@@ -984,54 +1427,37 @@ pub(super) fn notify_fanotify_close(file: Arc<dyn FileLike>, writable: bool) {
 
 fn fanotify_event_record(event: &FanotifyEvent, fd: c_int, pidfd: Option<c_int>) -> Vec<u8> {
     let fid = event.fid.filter(|_| event.mask != FAN_Q_OVERFLOW);
+    let child_fid = event
+        .child_fid
+        .filter(|_| event.mask != FAN_Q_OVERFLOW)
+        .map(|fid| fanotify_refresh_child_fid(event.path.as_deref(), fid));
+    let child_name = event
+        .child_name
+        .as_deref()
+        .filter(|_| event.mask != FAN_Q_OVERFLOW);
     let name = event
         .name
         .as_deref()
         .filter(|_| event.mask != FAN_Q_OVERFLOW);
-    let handle_len = fid.map_or(0, |_| FANOTIFY_FILE_HANDLE_BYTES);
-    let info_len = if fid.is_some() || name.is_some() {
-        align_to_8(
-            FANOTIFY_EVENT_INFO_FID_HEADER_LEN
-                + FANOTIFY_FILE_HANDLE_HEADER_LEN
-                + handle_len
-                + name.map_or(0, |name| name.len() + 1),
-        )
-    } else {
-        0
-    };
+    let info_len = fid.map_or(0, |_| {
+        fanotify_event_info_len(name.map(|name| name.len() + 1))
+    });
+    let child_info_len = child_fid.map_or(0, |_| {
+        fanotify_event_info_len(child_name.map(|name| name.len() + 1))
+    });
     let pidfd_info_len = pidfd.map_or(0, |_| FANOTIFY_EVENT_INFO_PIDFD_LEN);
-    let record_len = FANOTIFY_EVENT_METADATA_LEN + info_len + pidfd_info_len;
+    let record_len = FANOTIFY_EVENT_METADATA_LEN + info_len + child_info_len + pidfd_info_len;
     let mut out = Vec::with_capacity(record_len);
     out.extend_from_slice(&fanotify_event_metadata(
         event.mask, fd, event.pid, record_len,
     ));
 
-    if fid.is_some() || name.is_some() {
-        out.push(if name.is_some() {
-            FANOTIFY_EVENT_INFO_TYPE_DFID_NAME
-        } else {
-            FANOTIFY_EVENT_INFO_TYPE_FID
-        });
-        out.push(0);
-        out.extend_from_slice(&(info_len as u16).to_ne_bytes());
-        if let Some(fid) = fid {
-            let handle = fanotify_target_handle(fid);
-            out.extend_from_slice(&0i32.to_ne_bytes());
-            out.extend_from_slice(&(fid.dev as i32).to_ne_bytes());
-            out.extend_from_slice(&(FANOTIFY_FILE_HANDLE_BYTES as u32).to_ne_bytes());
-            out.extend_from_slice(&FANOTIFY_FILE_HANDLE_TYPE.to_ne_bytes());
-            out.extend_from_slice(&handle);
-        } else {
-            out.extend_from_slice(&0u32.to_ne_bytes());
-            out.extend_from_slice(&0u32.to_ne_bytes());
-            out.extend_from_slice(&0u32.to_ne_bytes());
-            out.extend_from_slice(&0i32.to_ne_bytes());
-        }
-        if let Some(name) = name {
-            out.extend_from_slice(name.as_bytes());
-            out.push(0);
-        }
-        out.resize(FANOTIFY_EVENT_METADATA_LEN + info_len, 0);
+    if let Some(fid) = fid {
+        append_fanotify_event_info(&mut out, event.fid_info_type, fid, name);
+    }
+
+    if let Some(child_fid) = child_fid {
+        append_fanotify_event_info(&mut out, event.child_info_type, child_fid, child_name);
     }
 
     if let Some(pidfd) = pidfd {
@@ -1042,6 +1468,48 @@ fn fanotify_event_record(event: &FanotifyEvent, fd: c_int, pidfd: Option<c_int>)
     }
 
     out
+}
+
+fn fanotify_refresh_child_fid(path: Option<&str>, fid: FanotifyTarget) -> FanotifyTarget {
+    if !fid.is_dir {
+        return fid;
+    }
+    path.and_then(|path| resolve_at(linux_raw_sys::general::AT_FDCWD, Some(path), 0).ok())
+        .and_then(|resolved| resolved.stat().ok())
+        .map(target_from_stat)
+        .unwrap_or(fid)
+}
+
+fn fanotify_event_info_len(name_len: Option<usize>) -> usize {
+    align_to_8(
+        FANOTIFY_EVENT_INFO_FID_HEADER_LEN
+            + FANOTIFY_FILE_HANDLE_HEADER_LEN
+            + FANOTIFY_FILE_HANDLE_BYTES
+            + name_len.unwrap_or(0),
+    )
+}
+
+fn append_fanotify_event_info(
+    out: &mut Vec<u8>,
+    info_type: u8,
+    fid: FanotifyTarget,
+    name: Option<&str>,
+) {
+    let info_len = fanotify_event_info_len(name.map(|name| name.len() + 1));
+    out.push(info_type);
+    out.push(0);
+    out.extend_from_slice(&(info_len as u16).to_ne_bytes());
+    let handle = fanotify_target_handle(fid);
+    out.extend_from_slice(&0i32.to_ne_bytes());
+    out.extend_from_slice(&(fid.dev as i32).to_ne_bytes());
+    out.extend_from_slice(&(FANOTIFY_FILE_HANDLE_BYTES as u32).to_ne_bytes());
+    out.extend_from_slice(&FANOTIFY_FILE_HANDLE_TYPE.to_ne_bytes());
+    out.extend_from_slice(&handle);
+    if let Some(name) = name {
+        out.extend_from_slice(name.as_bytes());
+        out.push(0);
+    }
+    out.resize(out.len().next_multiple_of(8), 0);
 }
 
 fn align_to_8(value: usize) -> usize {
@@ -1084,11 +1552,64 @@ fn target_from_file_like(file: &Arc<dyn FileLike>) -> AxResult<FanotifyTarget> {
 }
 
 fn path_from_file_like(file: &Arc<dyn FileLike>) -> Option<String> {
+    if let Ok(target) = target_from_file_like(file) {
+        if let Some(alias) = fanotify_path_alias(target) {
+            return Some(alias);
+        }
+    }
     let path = file.path();
     if path.starts_with('<') {
         None
     } else {
         Some(path.to_string())
+    }
+}
+
+fn fanotify_path_alias(target: FanotifyTarget) -> Option<String> {
+    FANOTIFY_PATH_ALIASES
+        .read()
+        .iter()
+        .rev()
+        .find(|alias| alias.target == target)
+        .map(|alias| alias.path.clone())
+}
+
+fn forget_fanotify_path_alias(target: FanotifyTarget) {
+    FANOTIFY_PATH_ALIASES
+        .write()
+        .retain(|alias| alias.target != target);
+}
+
+pub(super) fn prepare_fanotify_path_alias(
+    dirfd: c_int,
+    old_path: &str,
+    new_dirfd: c_int,
+    new_path: &str,
+) -> Option<FanotifyPathAlias> {
+    let target = resolve_at(dirfd, Some(old_path), 0)
+        .ok()
+        .and_then(|resolved| resolved.stat().ok())
+        .map(target_from_stat)?;
+    let Ok((new_parent, new_name)) = with_fs(new_dirfd, |fs| {
+        fs.resolve_parent(Path::new(new_path))
+            .map(|(parent, name)| (parent, name.to_string()))
+    }) else {
+        return None;
+    };
+    let parent_path = new_parent.absolute_path().ok().map(|path| path.to_string())?;
+    let path = if parent_path == "/" {
+        format!("/{new_name}")
+    } else {
+        format!("{parent_path}/{new_name}")
+    };
+    Some(FanotifyPathAlias { target, path })
+}
+
+pub(super) fn commit_fanotify_path_alias(alias: Option<FanotifyPathAlias>) {
+    if let Some(alias) = alias {
+        let mut aliases = FANOTIFY_PATH_ALIASES.write();
+        aliases.retain(|old| old.target != alias.target);
+        aliases.push(alias);
     }
 }
 

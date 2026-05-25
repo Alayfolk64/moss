@@ -444,8 +444,8 @@ fanotify11 fanotify11
 fanotify12 fanotify12
 fanotify13 fanotify13
 fanotify14 fanotify14
-# fanotify15 fanotify15
-# fanotify16 fanotify16
+fanotify15 fanotify15
+fanotify16 fanotify16
 # fanotify17 fanotify17
 fanotify18 fanotify18
 fanotify19 fanotify19
