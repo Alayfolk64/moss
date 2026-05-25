@@ -14,6 +14,7 @@ use core::{
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, OpenOptions, OpenResult};
+use axfs_ng_vfs::path::Path;
 use axio::prelude::*;
 use axpoll::{IoEvents, PollSet, Pollable};
 use axsync::Mutex;
@@ -28,6 +29,7 @@ use starry_vm::VmPtr;
 use crate::{
     file::{
         Directory, File, FileLike, IoDst, IoSrc, PidFd, add_file_like, close_file_like, resolve_at,
+        with_fs,
     },
     mm::vm_load_string,
     task::{AsThread, get_process_data},
@@ -178,6 +180,32 @@ struct FanotifyEvent {
     pid: i32,
 }
 
+struct FanotifyPathFile {
+    path: String,
+}
+
+impl FileLike for FanotifyPathFile {
+    fn path(&self) -> Cow<'_, str> {
+        self.path.as_str().into()
+    }
+}
+
+impl Pollable for FanotifyPathFile {
+    fn poll(&self) -> IoEvents {
+        IoEvents::IN | IoEvents::OUT
+    }
+
+    fn register(&self, _context: &mut Context<'_>, _events: IoEvents) {}
+}
+
+pub(super) struct FanotifyPreparedEvent {
+    target: FanotifyTarget,
+    path: String,
+    file: Arc<dyn FileLike>,
+    mask: u64,
+    event_is_dir: bool,
+}
+
 struct FanotifyMarkTarget {
     target: FanotifyTarget,
     path: Option<String>,
@@ -298,6 +326,7 @@ impl FanotifyFd {
         tgid: i32,
         tid: i32,
         mask: u64,
+        event_is_dir: bool,
     ) {
         let mut matched_mask = 0;
         let mut ignored_mask = 0;
@@ -305,16 +334,16 @@ impl FanotifyFd {
         {
             let mut marks = self.marks.lock();
             for mark in marks.iter_mut() {
-                if mark_matches_event_mask(mark, target, path, mark.ignored_mask) {
+                if mark_matches_event_mask(mark, target, path, mark.ignored_mask, event_is_dir) {
                     ignored_mask |= mark.ignored_mask & mask;
-                    if self.reports_fid() && target.is_dir && mark.ignored_mask & FAN_ONDIR != 0 {
+                    if self.reports_fid() && event_is_dir && mark.ignored_mask & FAN_ONDIR != 0 {
                         ignored_mask |= FAN_ONDIR;
                     }
                 }
 
-                if mark_matches_event_mask(mark, target, path, mark.mask) {
+                if mark_matches_event_mask(mark, target, path, mark.mask, event_is_dir) {
                     matched_mask |= mask & mark.mask;
-                    if self.reports_fid() && target.is_dir && mark.mask & FAN_ONDIR != 0 {
+                    if self.reports_fid() && event_is_dir && mark.mask & FAN_ONDIR != 0 {
                         matched_mask |= FAN_ONDIR;
                     }
                     if self.reports_name() {
@@ -333,7 +362,13 @@ impl FanotifyFd {
             if mask & FAN_MODIFY != 0 {
                 for mark in marks.iter_mut() {
                     if !mark.ignore_surv_modify
-                        && mark_matches_event_mask(mark, target, path, mark.ignored_mask)
+                        && mark_matches_event_mask(
+                            mark,
+                            target,
+                            path,
+                            mark.ignored_mask,
+                            event_is_dir,
+                        )
                     {
                         mark.ignored_mask = 0;
                     }
@@ -460,8 +495,9 @@ fn mark_matches_event_mask(
     target: FanotifyTarget,
     path: Option<&str>,
     mark_mask: u64,
+    event_is_dir: bool,
 ) -> bool {
-    if mark_mask == 0 || target.is_dir && mark_mask & FAN_ONDIR == 0 {
+    if mark_mask == 0 || event_is_dir && mark_mask & FAN_ONDIR == 0 {
         return false;
     }
 
@@ -761,7 +797,13 @@ fn has_fanotify_interest(mask: u64) -> bool {
     })
 }
 
-fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
+fn notify_fanotify_target_event(
+    target: FanotifyTarget,
+    path: Option<String>,
+    file: Arc<dyn FileLike>,
+    mask: u64,
+    event_is_dir: bool,
+) {
     if !has_fanotify_interest(mask) {
         return;
     }
@@ -770,10 +812,6 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
         return;
     }
 
-    let Ok(target) = target_from_file_like(&file) else {
-        return;
-    };
-    let path = path_from_file_like(&file);
     let curr = current();
     let tgid = curr.as_thread().proc_data.proc.pid() as i32;
     let tid = curr.id().as_u64() as i32;
@@ -782,9 +820,133 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
         let Some(fd) = weak.upgrade() else {
             return false;
         };
-        fd.queue_event(target, path.as_deref(), file.clone(), tgid, tid, mask);
+        fd.queue_event(
+            target,
+            path.as_deref(),
+            file.clone(),
+            tgid,
+            tid,
+            mask,
+            event_is_dir,
+        );
         true
     });
+}
+
+fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
+    let Ok(target) = target_from_file_like(&file) else {
+        return;
+    };
+    let path = path_from_file_like(&file);
+    notify_fanotify_target_event(target, path, file, mask, target.is_dir);
+}
+
+fn fanotify_snapshot_file(path: String) -> Arc<dyn FileLike> {
+    Arc::new(FanotifyPathFile { path })
+}
+
+fn notify_fanotify_resolved_path(dirfd: c_int, path: &str, mask: u64) {
+    if let Some(event) = prepare_fanotify_path_event(dirfd, path, mask) {
+        notify_fanotify_prepared_event(event);
+    }
+}
+
+pub(super) fn prepare_fanotify_path_event(
+    dirfd: c_int,
+    path: &str,
+    mask: u64,
+) -> Option<FanotifyPreparedEvent> {
+    if !has_fanotify_interest(mask) {
+        return None;
+    }
+    let Ok(resolved) = resolve_at(dirfd, Some(path), 0) else {
+        return None;
+    };
+    let Ok(target) = resolved.stat().map(target_from_stat) else {
+        return None;
+    };
+    let path = resolved
+        .into_file()
+        .and_then(|loc| loc.absolute_path().ok())
+        .map_or_else(|| path.to_string(), |path| path.to_string());
+    Some(FanotifyPreparedEvent {
+        target,
+        path: path.clone(),
+        file: fanotify_snapshot_file(path),
+        mask,
+        event_is_dir: target.is_dir,
+    })
+}
+
+pub(super) fn fanotify_prepared_event_is_dir(event: &FanotifyPreparedEvent) -> bool {
+    event.event_is_dir
+}
+
+pub(super) fn fanotify_path_is_dir(dirfd: c_int, path: &str) -> Option<bool> {
+    resolve_at(dirfd, Some(path), 0)
+        .ok()
+        .and_then(|resolved| resolved.stat().ok())
+        .map(target_from_stat)
+        .map(|target| target.is_dir)
+}
+
+pub(super) fn notify_fanotify_prepared_event(event: FanotifyPreparedEvent) {
+    notify_fanotify_target_event(
+        event.target,
+        Some(event.path),
+        event.file,
+        event.mask,
+        event.event_is_dir,
+    );
+}
+
+fn notify_fanotify_dirent_event(dirfd: c_int, path: &str, mask: u64, event_is_dir: bool) {
+    if !has_fanotify_interest(mask) {
+        return;
+    }
+
+    let Ok(parent) = with_fs(dirfd, |fs| {
+        fs.resolve_parent(Path::new(path)).map(|(parent, _)| parent)
+    }) else {
+        return;
+    };
+    let file: Arc<dyn FileLike> = Arc::new(Directory::new(parent));
+    let Ok(target) = target_from_file_like(&file) else {
+        return;
+    };
+    let path = path_from_file_like(&file);
+    notify_fanotify_target_event(target, path, file, mask, event_is_dir);
+}
+
+pub(super) fn notify_fanotify_create(dirfd: c_int, path: &str, is_dir: bool) {
+    notify_fanotify_dirent_event(dirfd, path, FAN_CREATE, is_dir);
+}
+
+pub(super) fn notify_fanotify_delete(dirfd: c_int, path: &str, is_dir: bool) {
+    notify_fanotify_dirent_event(dirfd, path, FAN_DELETE, is_dir);
+}
+
+pub(super) fn notify_fanotify_move_from(dirfd: c_int, path: &str, is_dir: bool) {
+    notify_fanotify_dirent_event(dirfd, path, FAN_MOVED_FROM, is_dir);
+}
+
+pub(super) fn notify_fanotify_move_to(dirfd: c_int, path: &str, is_dir: bool) {
+    notify_fanotify_dirent_event(dirfd, path, FAN_MOVED_TO, is_dir);
+}
+
+pub(super) fn notify_fanotify_delete_self(dirfd: c_int, path: &str) {
+    notify_fanotify_resolved_path(dirfd, path, FAN_DELETE_SELF);
+}
+
+pub(super) fn prepare_fanotify_delete_self_event(
+    dirfd: c_int,
+    path: &str,
+) -> Option<FanotifyPreparedEvent> {
+    prepare_fanotify_path_event(dirfd, path, FAN_DELETE_SELF)
+}
+
+pub(super) fn notify_fanotify_modify_path(dirfd: c_int, path: &str) {
+    notify_fanotify_resolved_path(dirfd, path, FAN_MODIFY);
 }
 
 pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {

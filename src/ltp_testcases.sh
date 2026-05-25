@@ -450,7 +450,7 @@ fanotify14 fanotify14
 fanotify18 fanotify18
 fanotify19 fanotify19
 fanotify20 fanotify20
-# fanotify21 fanotify21
+fanotify21 fanotify21
 # fanotify22 fanotify22
 # fanotify23 fanotify23
 # ioprio_get01 ioprio_get01

@@ -232,7 +232,7 @@ run_ltp() {
     cd ltp/testcases/bin
 
     some_testcases="
-    fanotify21 fanotify21
+    fanotify15 fanotify15
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

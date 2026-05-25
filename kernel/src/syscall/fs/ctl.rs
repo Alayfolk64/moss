@@ -16,6 +16,11 @@ use linux_raw_sys::{
 };
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
+use super::fanotify::{
+    fanotify_path_is_dir, fanotify_prepared_event_is_dir, notify_fanotify_create,
+    notify_fanotify_delete, notify_fanotify_move_from, notify_fanotify_move_to,
+    notify_fanotify_prepared_event, prepare_fanotify_delete_self_event,
+};
 use crate::{
     file::{
         Directory, File, FileLike, get_file_like, inode_flags, register_special_node, resolve_at,
@@ -106,9 +111,11 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
     let mode = NodePermission::from_bits_truncate(mode as u16);
 
     with_fs(dirfd, |fs| {
-        fs.create_dir(path, mode)?;
+        fs.create_dir(path.as_str(), mode)?;
         Ok(0)
-    })
+    })?;
+    notify_fanotify_create(dirfd, &path, true);
+    Ok(0)
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -339,14 +346,24 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
 
     debug!("sys_unlinkat <= dirfd: {dirfd}, path: {path:?}, flags: {flags}");
 
+    let self_event = prepare_fanotify_delete_self_event(dirfd, &path);
+    let is_dir = self_event
+        .as_ref()
+        .map(fanotify_prepared_event_is_dir)
+        .unwrap_or(flags == AT_REMOVEDIR as _);
     with_fs(dirfd, |fs| {
         if flags == AT_REMOVEDIR as _ {
-            fs.remove_dir(path)?;
+            fs.remove_dir(path.as_str())?;
         } else {
-            fs.remove_file(path)?;
+            fs.remove_file(path.as_str())?;
         }
         Ok(0)
-    })
+    })?;
+    notify_fanotify_delete(dirfd, &path, is_dir);
+    if let Some(event) = self_event {
+        notify_fanotify_prepared_event(event);
+    }
+    Ok(0)
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -619,8 +636,11 @@ pub fn sys_renameat2(
     let (old_dir, old_name) = with_fs(old_dirfd, |fs| fs.resolve_parent(Path::new(&old_path)))?;
     let (new_dir, new_name) =
         with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
+    let is_dir = fanotify_path_is_dir(old_dirfd, &old_path).unwrap_or(false);
 
     old_dir.rename(&old_name, &new_dir, new_name)?;
+    notify_fanotify_move_from(old_dirfd, &old_path, is_dir);
+    notify_fanotify_move_to(new_dirfd, &new_path, is_dir);
     Ok(0)
 }
 

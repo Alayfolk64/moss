@@ -9,11 +9,13 @@ use axfs::{FS_CONTEXT, FileFlags, OpenOptions};
 use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
-use linux_raw_sys::general::__kernel_off_t;
+use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD};
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
-use super::fanotify::{notify_fanotify_access, notify_fanotify_modify};
+use super::fanotify::{
+    notify_fanotify_access, notify_fanotify_modify, notify_fanotify_modify_path,
+};
 #[cfg(feature = "net")]
 use crate::file::Socket;
 use crate::{
@@ -117,6 +119,7 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxRes
         .open(&FS_CONTEXT.lock(), path)?
         .into_file()?;
     file.access(FileFlags::WRITE)?.set_len(length as _)?;
+    notify_fanotify_modify_path(AT_FDCWD, path);
     Ok(0)
 }
 
@@ -124,6 +127,7 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> AxResult<isize> {
     debug!("sys_ftruncate <= {fd} {length}");
     let f = File::from_fd(fd)?;
     f.inner().access(FileFlags::WRITE)?.set_len(length as _)?;
+    notify_fanotify_modify(f);
     Ok(0)
 }
 
