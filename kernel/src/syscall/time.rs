@@ -1,8 +1,10 @@
 use alloc::{collections::BTreeMap, format};
-use core::sync::atomic::{AtomicI64, Ordering};
 
 use axerrno::{AxError, AxResult};
-use axhal::time::{TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, wall_time};
+use axhal::time::{
+    TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, realtime_time,
+    set_realtime_offset_nanos, wall_time,
+};
 use axtask::{current, yield_now};
 use lazy_static::lazy_static;
 use linux_raw_sys::general::{
@@ -56,7 +58,6 @@ const ADJ_VALID_MODES: u32 = ADJ_OFFSET
 const TIME_OK: isize = 0;
 const MIN_TICK: isize = 9000;
 const MAX_TICK: isize = 11000;
-static REALTIME_OFFSET_NANOS: AtomicI64 = AtomicI64::new(0);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -163,7 +164,7 @@ pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> A
     let offset = (target_nanos - base_nanos)
         .try_into()
         .map_err(|_| AxError::InvalidInput)?;
-    REALTIME_OFFSET_NANOS.store(offset, Ordering::Relaxed);
+    set_realtime_offset_nanos(offset);
     Ok(0)
 }
 
@@ -660,16 +661,7 @@ fn posix_timer_clock_now(clock_id: u32, pid: Pid, tid: Pid) -> Option<TimeValue>
 }
 
 fn realtime_now() -> TimeValue {
-    add_realtime_offset(wall_time(), REALTIME_OFFSET_NANOS.load(Ordering::Relaxed))
-}
-
-fn add_realtime_offset(time: TimeValue, offset: i64) -> TimeValue {
-    if offset >= 0 {
-        time.checked_add(TimeValue::from_nanos(offset as u64))
-            .unwrap_or(TimeValue::MAX)
-    } else {
-        time.saturating_sub(TimeValue::from_nanos(offset.unsigned_abs()))
-    }
+    realtime_time()
 }
 
 fn task_cpu_time(task: &axtask::AxTaskRef) -> TimeValue {

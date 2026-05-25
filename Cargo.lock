@@ -455,8 +455,6 @@ dependencies = [
 [[package]]
 name = "axhal"
 version = "0.2.2-preview.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb544b7a866bf391721e039976d18ac77028c59e2dfd65c951414ab98cd0394e"
 dependencies = [
  "axalloc",
  "axconfig",
@@ -570,8 +568,6 @@ dependencies = [
 [[package]]
 name = "axplat"
 version = "0.3.0-preview.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92cadeaefb5b95b1617dd76c0b3e1191b73dcc295f42aad7716636027cab6151"
 dependencies = [
  "axplat-macros",
  "bitflags 2.11.0",

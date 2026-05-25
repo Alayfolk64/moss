@@ -9,7 +9,6 @@ use axconfig::ARCH;
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FS_CONTEXT;
 use axfs_ng_vfs::{NodeType, path::Path};
-use axhal::time::wall_time;
 use axsync::Mutex;
 use linux_raw_sys::{
     general::{GRND_INSECURE, GRND_NONBLOCK, GRND_RANDOM, MS_RDONLY},
@@ -342,7 +341,7 @@ pub fn sys_acct(path: *const c_char) -> AxResult<isize> {
         Err(err) if err.canonicalize() == AxError::NotFound => {
             with_fs(linux_raw_sys::general::AT_FDCWD, |fs| {
                 let (dir, _) = fs.resolve_parent(Path::new(path.as_str()))?;
-                if dir.filesystem().stat()?.mount_flags & MS_RDONLY != 0 {
+                if dir.mount_flags() & MS_RDONLY != 0 {
                     return Err(AxError::ReadOnlyFilesystem);
                 }
                 Err(err)
@@ -356,7 +355,7 @@ pub fn sys_acct(path: *const c_char) -> AxResult<isize> {
     if loc.metadata()?.node_type != NodeType::RegularFile {
         return Err(AxError::PermissionDenied);
     }
-    if loc.filesystem().stat()?.mount_flags & MS_RDONLY != 0 {
+    if loc.mount_flags() & MS_RDONLY != 0 {
         return Err(AxError::ReadOnlyFilesystem);
     }
 
@@ -371,7 +370,11 @@ fn write_acct_record(path: &str) -> AxResult<()> {
 
     put_u16(&mut record, 2, proc_data.uid() as u16);
     put_u16(&mut record, 4, proc_data.gid() as u16);
-    put_u32(&mut record, 8, wall_time().as_secs() as u32);
+    put_u32(
+        &mut record,
+        8,
+        axhal::time::realtime_time().as_secs() as u32,
+    );
     put_u32(&mut record, 32, 128u32 << 8);
     let comm = b"acct02_helper";
     record[36..36 + comm.len()].copy_from_slice(comm);

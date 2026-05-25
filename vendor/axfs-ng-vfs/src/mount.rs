@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::{
     iter, mem,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicU32, AtomicU64, Ordering},
     task::Context,
 };
 
@@ -20,6 +20,11 @@ use crate::{
     path::{DOT, DOTDOT, PathBuf},
 };
 
+pub const MOUNT_RDONLY: u32 = 0x1;
+pub const MOUNT_NOSYMFOLLOW: u32 = 0x100;
+
+static DEVICE_COUNTER: AtomicU64 = AtomicU64::new(1);
+
 #[derive(Debug)]
 pub struct Mountpoint {
     /// Root dir entry in the mountpoint.
@@ -30,23 +35,34 @@ pub struct Mountpoint {
     children: Mutex<HashMap<ReferenceKey, Weak<Self>>>,
     /// Device ID
     device: u64,
+    /// Per-mount flags such as read-only and no-symlink-follow.
+    mount_flags: AtomicU32,
 }
 
 impl Mountpoint {
     pub fn new(fs: &Filesystem, location_in_parent: Option<Location>) -> Arc<Self> {
-        static DEVICE_COUNTER: AtomicU64 = AtomicU64::new(1);
-
         let root = fs.root_dir();
-        let device = DEVICE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        Self::new_with_root(root, location_in_parent, device)
+        let device = Self::next_device();
+        let mount_flags = fs.stat().map_or(0, |stat| stat.mount_flags);
+        Self::new_with_root(root, location_in_parent, device, mount_flags)
     }
 
-    fn new_with_root(root: DirEntry, location_in_parent: Option<Location>, device: u64) -> Arc<Self> {
+    fn next_device() -> u64 {
+        DEVICE_COUNTER.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn new_with_root(
+        root: DirEntry,
+        location_in_parent: Option<Location>,
+        device: u64,
+        mount_flags: u32,
+    ) -> Arc<Self> {
         Arc::new(Self {
             root,
             location: location_in_parent,
             children: Mutex::default(),
             device,
+            mount_flags: AtomicU32::new(mount_flags),
         })
     }
 
@@ -86,6 +102,14 @@ impl Mountpoint {
 
     pub fn device(self: &Arc<Self>) -> u64 {
         self.device
+    }
+
+    pub fn mount_flags(&self) -> u32 {
+        self.mount_flags.load(Ordering::Relaxed)
+    }
+
+    pub fn set_mount_flags(&self, flags: u32) {
+        self.mount_flags.store(flags, Ordering::Relaxed);
     }
 }
 
@@ -142,6 +166,10 @@ impl Location {
 
     pub fn mountpoint(&self) -> &Arc<Mountpoint> {
         &self.mountpoint
+    }
+
+    pub fn mount_flags(&self) -> u32 {
+        self.mountpoint.mount_flags()
     }
 
     pub fn entry(&self) -> &DirEntry {
@@ -290,11 +318,20 @@ impl Location {
     }
 
     pub fn mount(&self, fs: &Filesystem) -> VfsResult<Arc<Mountpoint>> {
+        self.mount_with_flags(fs, fs.stat().map_or(0, |stat| stat.mount_flags))
+    }
+
+    pub fn mount_with_flags(&self, fs: &Filesystem, flags: u32) -> VfsResult<Arc<Mountpoint>> {
         let mut mountpoint = self.entry.as_dir()?.mountpoint.lock();
         if mountpoint.is_some() {
             return Err(VfsError::ResourceBusy);
         }
-        let result = Mountpoint::new(fs, Some(self.clone()));
+        let result = Mountpoint::new_with_root(
+            fs.root_dir(),
+            Some(self.clone()),
+            Mountpoint::next_device(),
+            flags,
+        );
         *mountpoint = Some(result.clone());
         self.mountpoint
             .children
@@ -313,6 +350,7 @@ impl Location {
             source.entry.clone(),
             Some(self.clone()),
             source.mountpoint.device(),
+            source.mountpoint.mount_flags(),
         );
         *mountpoint = Some(result.clone());
         self.mountpoint

@@ -7,7 +7,7 @@ use alloc::{
 };
 
 use axfs_ng_vfs::{
-    Location, Metadata, NodePermission, NodeType, VfsError, VfsResult,
+    Location, MOUNT_NOSYMFOLLOW, Metadata, NodePermission, NodeType, VfsError, VfsResult,
     path::{Component, Components, Path, PathBuf},
 };
 use axio::{Read, Write};
@@ -83,6 +83,9 @@ impl FsContext {
     ) -> VfsResult<Location> {
         if loc.node_type() != NodeType::Symlink {
             return Ok(loc);
+        }
+        if loc.mount_flags() & MOUNT_NOSYMFOLLOW != 0 {
+            return Err(VfsError::FilesystemLoop);
         }
         if *follow_count >= SYMLINKS_MAX {
             return Err(VfsError::FilesystemLoop);

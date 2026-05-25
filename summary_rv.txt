@@ -1,101 +1,218 @@
-RUN LTP CASE splice07
+RUN LTP CASE copy_file_range01
 Summary
-passed   310
-failed   23
-broken   1
-skipped  14
-warnings 0
-FAIL LTP CASE splice07 : 0
-
-RUN LTP CASE splice07
-Summary
-passed   324
-failed   23
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE splice07 : 0
-
-RUN LTP CASE utimensat01
-Summary
-passed   20
-failed   14
+passed   30
+failed   864
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE utimensat01 : 0
+FAIL LTP CASE copy_file_range01 : 0
 
-RUN LTP CASE utimensat01
+RUN LTP CASE copy_file_range01
 Summary
-passed   20
-failed   14
+passed   30
+failed   864
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE utimensat01 : 0
-
-RUN LTP CASE mount03
-Summary
-passed   7
-failed   12
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mount03 : 0
-
-RUN LTP CASE mount03
-Summary
-passed   7
-failed   12
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mount03 : 0
-
-RUN LTP CASE mmap06
-Summary
-passed   2
-failed   6
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mmap06 : 0
-
-RUN LTP CASE socketpair01
-Summary
-passed   4
-failed   6
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE socketpair01 : 0
-
-RUN LTP CASE mmap06
-Summary
-passed   2
-failed   6
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mmap06 : 0
-
-RUN LTP CASE socketpair01
-Summary
-passed   4
-failed   6
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE socketpair01 : 0
+FAIL LTP CASE copy_file_range01 : 0
 
 RUN LTP CASE mount07
 Summary
-passed   9
-failed   5
+passed   54
+failed   30
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mount07 : 0
+
+RUN LTP CASE mount07
+Summary
+passed   54
+failed   30
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount07 : 0
+
+RUN LTP CASE utimensat01
+Summary
+passed   20
+failed   15
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utimensat01 : 0
+
+RUN LTP CASE utimensat01
+Summary
+passed   20
+failed   15
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utimensat01 : 0
+
+RUN LTP CASE utime01
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime01 : 0
+
+RUN LTP CASE utime02
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime02 : 0
+
+RUN LTP CASE utime03
+Summary
+passed   7
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime03 : 0
+
+RUN LTP CASE utime01
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime01 : 0
+
+RUN LTP CASE utime02
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime02 : 0
+
+RUN LTP CASE utime03
+Summary
+passed   7
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime03 : 0
+
+RUN LTP CASE chdir01
+Summary
+passed   135
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir01 : 0
+
+RUN LTP CASE fstatfs01
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01 : 0
+
+RUN LTP CASE fstatfs01_64
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01_64 : 0
+
+RUN LTP CASE chdir01
+Summary
+passed   135
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir01 : 0
+
+RUN LTP CASE fstatfs01
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01 : 0
+
+RUN LTP CASE fstatfs01_64
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01_64 : 0
+
+RUN LTP CASE mount01
+Summary
+passed   8
+failed   8
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount01 : 0
+
+RUN LTP CASE mount01
+Summary
+passed   8
+failed   8
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount01 : 0
+
+RUN LTP CASE mmap06
+Summary
+passed   2
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap06 : 0
+
+RUN LTP CASE socketpair01
+Summary
+passed   4
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socketpair01 : 0
+
+RUN LTP CASE mmap06
+Summary
+passed   2
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap06 : 0
+
+RUN LTP CASE socketpair01
+Summary
+passed   4
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socketpair01 : 0
 
 RUN LTP CASE open10
 Summary
@@ -132,15 +249,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE umount2_02 : 0
-
-RUN LTP CASE mount07
-Summary
-passed   9
-failed   5
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mount07 : 0
 
 RUN LTP CASE open10
 Summary
@@ -213,6 +321,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE sched_getscheduler01 : 0
+
+RUN LTP CASE statx06
+Summary
+passed   0
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx06 : 0
 
 RUN LTP CASE clock_getres01
 Summary
@@ -268,6 +385,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE utimes01 : 0
 
+RUN LTP CASE statx06
+Summary
+passed   0
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx06 : 0
+
 RUN LTP CASE chmod06
 Summary
 passed   6
@@ -285,6 +411,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE chown04 : 0
+
+RUN LTP CASE fremovexattr02
+Summary
+passed   24
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
 
 RUN LTP CASE getdents02
 Summary
@@ -322,6 +457,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE mlock202 : 0
 
+RUN LTP CASE mount03
+Summary
+passed   0
+failed   3
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE mount03 : 0
+
 RUN LTP CASE readlink03
 Summary
 passed   5
@@ -330,6 +474,15 @@ broken   0
 skipped  0
 warnings 1
 FAIL LTP CASE readlink03 : 0
+
+RUN LTP CASE rename13
+Summary
+passed   12
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename13 : 0
 
 RUN LTP CASE rmdir02
 Summary
@@ -403,6 +556,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE chown04 : 0
 
+RUN LTP CASE fremovexattr02
+Summary
+passed   24
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+
 RUN LTP CASE link04
 Summary
 passed   11
@@ -421,6 +583,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE mlock202 : 0
 
+RUN LTP CASE mount03
+Summary
+passed   0
+failed   3
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE mount03 : 0
+
 RUN LTP CASE readlink03
 Summary
 passed   5
@@ -429,6 +600,15 @@ broken   0
 skipped  0
 warnings 1
 FAIL LTP CASE readlink03 : 0
+
+RUN LTP CASE rename13
+Summary
+passed   12
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename13 : 0
 
 RUN LTP CASE rmdir02
 Summary
@@ -483,6 +663,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE utime06 : 0
+
+RUN LTP CASE writev03
+Summary
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 3
+FAIL LTP CASE writev03 : 0
 
 RUN LTP CASE accept03
 Summary
@@ -598,7 +787,7 @@ passed   4
 failed   2
 broken   0
 skipped  1
-warnings 1
+warnings 0
 FAIL LTP CASE linkat02 : 0
 
 RUN LTP CASE lstat02
@@ -727,15 +916,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE sockioctl01 : 0
 
-RUN LTP CASE splice03
-Summary
-passed   5
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE splice03 : 0
-
 RUN LTP CASE symlink03
 Summary
 passed   4
@@ -754,33 +934,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE unlink08 : 0
 
-RUN LTP CASE utime01
-Summary
-passed   3
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime01 : 0
-
-RUN LTP CASE utime02
-Summary
-passed   3
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime02 : 0
-
-RUN LTP CASE utime03
-Summary
-passed   1
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime03 : 0
-
 RUN LTP CASE writev07
 Summary
 passed   6
@@ -789,15 +942,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE writev07 : 0
-
-RUN LTP CASE futex_cmp_requeue01
-Summary
-passed   5
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE futex_cmp_requeue01 : 0
 
 RUN LTP CASE accept03
 Summary
@@ -922,7 +1066,7 @@ passed   4
 failed   2
 broken   0
 skipped  1
-warnings 1
+warnings 0
 FAIL LTP CASE linkat02 : 0
 
 RUN LTP CASE lstat02
@@ -1060,15 +1204,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE sockioctl01 : 0
 
-RUN LTP CASE splice03
-Summary
-passed   5
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE splice03 : 0
-
 RUN LTP CASE symlink03
 Summary
 passed   4
@@ -1087,33 +1222,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE unlink08 : 0
 
-RUN LTP CASE utime01
-Summary
-passed   3
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime01 : 0
-
-RUN LTP CASE utime02
-Summary
-passed   3
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime02 : 0
-
-RUN LTP CASE utime03
-Summary
-passed   1
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime03 : 0
-
 RUN LTP CASE writev07
 Summary
 passed   6
@@ -1131,15 +1239,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE abort01 : 0
-
-RUN LTP CASE chdir01
-Summary
-passed   15
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE chdir01 : 0
 
 RUN LTP CASE clock_nanosleep01
 Summary
@@ -1203,24 +1302,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fstatat01 : 0
-
-RUN LTP CASE fstatfs01
-Summary
-passed   1
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fstatfs01 : 0
-
-RUN LTP CASE fstatfs01_64
-Summary
-passed   1
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fstatfs01_64 : 0
 
 RUN LTP CASE getcwd01
 Summary
@@ -1339,14 +1420,23 @@ skipped  0
 warnings 0
 FAIL LTP CASE llseek01 : 0
 
-RUN LTP CASE mount01
+RUN LTP CASE mknod07
 Summary
-passed   1
+passed   5
 failed   1
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE mount01 : 0
+FAIL LTP CASE mknod07 : 0
+
+RUN LTP CASE mknodat02
+Summary
+passed   3
+failed   1
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE nftw01
 Summary
@@ -1435,7 +1525,7 @@ passed   1
 failed   1
 broken   0
 skipped  1
-warnings 1
+warnings 0
 FAIL LTP CASE rename11 : 0
 
 RUN LTP CASE renameat01
@@ -1444,7 +1534,7 @@ passed   6
 failed   1
 broken   0
 skipped  1
-warnings 1
+warnings 0
 FAIL LTP CASE renameat01 : 0
 
 RUN LTP CASE sched_setaffinity01
@@ -1618,24 +1708,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE acct02 : 0
 
-RUN LTP CASE capset04
-Summary
-passed   0
-failed   1
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE capset04 : 0
-
-RUN LTP CASE chdir01
-Summary
-passed   15
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE chdir01 : 0
-
 RUN LTP CASE clock_nanosleep01
 Summary
 passed   11
@@ -1698,24 +1770,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fstatat01 : 0
-
-RUN LTP CASE fstatfs01
-Summary
-passed   1
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fstatfs01 : 0
-
-RUN LTP CASE fstatfs01_64
-Summary
-passed   1
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fstatfs01_64 : 0
 
 RUN LTP CASE getcwd01
 Summary
@@ -1825,14 +1879,23 @@ skipped  0
 warnings 0
 FAIL LTP CASE llseek01 : 0
 
-RUN LTP CASE mount01
+RUN LTP CASE mknod07
 Summary
-passed   1
+passed   5
 failed   1
 broken   0
 skipped  0
 warnings 0
-FAIL LTP CASE mount01 : 0
+FAIL LTP CASE mknod07 : 0
+
+RUN LTP CASE mknodat02
+Summary
+passed   3
+failed   1
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE nftw01
 Summary
@@ -1921,7 +1984,7 @@ passed   1
 failed   1
 broken   0
 skipped  1
-warnings 1
+warnings 0
 FAIL LTP CASE rename11 : 0
 
 RUN LTP CASE renameat01
@@ -1930,7 +1993,7 @@ passed   6
 failed   1
 broken   0
 skipped  1
-warnings 1
+warnings 0
 FAIL LTP CASE renameat01 : 0
 
 RUN LTP CASE sched_setaffinity01
@@ -2664,7 +2727,7 @@ FAIL LTP CASE close02 : 0
 
 RUN LTP CASE close_range01
 Summary
-passed   4
+passed   36
 failed   0
 broken   0
 skipped  0
@@ -3195,7 +3258,7 @@ FAIL LTP CASE faccessat02 : 0
 
 RUN LTP CASE fsetxattr01
 Summary
-passed   9
+passed   81
 failed   0
 broken   0
 skipped  0
@@ -3897,7 +3960,7 @@ FAIL LTP CASE fdatasync02 : 0
 
 RUN LTP CASE fgetxattr01
 Summary
-passed   5
+passed   45
 failed   0
 broken   0
 skipped  0
@@ -4068,21 +4131,12 @@ FAIL LTP CASE fpathconf01 : 0
 
 RUN LTP CASE fremovexattr01
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr01 : 0
-
-RUN LTP CASE fremovexattr02
-Summary
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fremovexattr02 : 0
 
 RUN LTP CASE fstat02
 Summary
@@ -4140,7 +4194,7 @@ FAIL LTP CASE fstatfs02_64 : 0
 
 RUN LTP CASE fsync01
 Summary
-passed   10
+passed   90
 failed   0
 broken   0
 skipped  0
@@ -4608,7 +4662,7 @@ FAIL LTP CASE getxattr01 : 0
 
 RUN LTP CASE getxattr02
 Summary
-passed   4
+passed   36
 failed   0
 broken   0
 skipped  0
@@ -4617,7 +4671,7 @@ FAIL LTP CASE getxattr02 : 0
 
 RUN LTP CASE getxattr03
 Summary
-passed   1
+passed   6
 failed   0
 broken   0
 skipped  0
@@ -4626,10 +4680,10 @@ FAIL LTP CASE getxattr03 : 0
 
 RUN LTP CASE getxattr04
 Summary
-passed   0
+passed   1
 failed   0
 broken   0
-skipped  1
+skipped  0
 warnings 0
 FAIL LTP CASE getxattr04 : 0
 
@@ -4650,6 +4704,213 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE ioctl_ns07 : 0
+
+RUN LTP CASE fanotify01
+Summary
+passed   702
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify01 : 0
+
+RUN LTP CASE fanotify02
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify02 : 0
+
+RUN LTP CASE fanotify03
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify03 : 0
+
+RUN LTP CASE fanotify04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify04 : 0
+
+RUN LTP CASE fanotify05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify05 : 0
+
+RUN LTP CASE fanotify06
+Summary
+passed   9
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify06 : 0
+
+RUN LTP CASE fanotify07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify07 : 0
+
+RUN LTP CASE fanotify08
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify08 : 0
+
+RUN LTP CASE fanotify09
+Summary
+passed   76
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify09 : 0
+
+RUN LTP CASE fanotify10
+Summary
+passed   1047
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify10 : 0
+
+RUN LTP CASE fanotify11
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify11 : 0
+
+RUN LTP CASE fanotify12
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify12 : 0
+
+RUN LTP CASE fanotify13
+Summary
+passed   135
+failed   0
+broken   0
+skipped  216
+warnings 0
+FAIL LTP CASE fanotify13 : 0
+
+RUN LTP CASE fanotify14
+Summary
+passed   513
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify14 : 0
+
+RUN LTP CASE fanotify15
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify15 : 0
+
+RUN LTP CASE fanotify16
+Summary
+passed   1386
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify16 : 0
+
+RUN LTP CASE fanotify17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify17 : 0
+
+RUN LTP CASE fanotify18
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify18 : 0
+
+RUN LTP CASE fanotify19
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify19 : 0
+
+RUN LTP CASE fanotify20
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify20 : 0
+
+RUN LTP CASE fanotify21
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify21 : 0
+
+RUN LTP CASE fanotify22
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify22 : 0
+
+RUN LTP CASE fanotify23
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify23 : 0
 
 RUN LTP CASE lchown01
 Summary
@@ -4779,7 +5040,7 @@ FAIL LTP CASE llseek03 : 0
 
 RUN LTP CASE lremovexattr01
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -4930,15 +5191,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE mknod06 : 0
 
-RUN LTP CASE mknod07
-Summary
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mknod07 : 0
-
 RUN LTP CASE mknod08
 Summary
 passed   1
@@ -4965,15 +5217,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mknodat01 : 0
-
-RUN LTP CASE mknodat02
-Summary
-passed   9
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE mlock01
 Summary
@@ -5706,18 +5949,18 @@ FAIL LTP CASE pwritev02_64 : 0
 
 RUN LTP CASE pwritev03
 Summary
-passed   0
+passed   24
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE pwritev03 : 0
 
 RUN LTP CASE pwritev03_64
 Summary
-passed   0
+passed   24
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE pwritev03_64 : 0
@@ -5859,7 +6102,7 @@ FAIL LTP CASE removexattr02 : 0
 
 RUN LTP CASE rename01
 Summary
-passed   8
+passed   72
 failed   0
 broken   0
 skipped  0
@@ -5868,7 +6111,7 @@ FAIL LTP CASE rename01 : 0
 
 RUN LTP CASE rename03
 Summary
-passed   8
+passed   72
 failed   0
 broken   0
 skipped  0
@@ -5877,7 +6120,7 @@ FAIL LTP CASE rename03 : 0
 
 RUN LTP CASE rename04
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -5886,7 +6129,7 @@ FAIL LTP CASE rename04 : 0
 
 RUN LTP CASE rename05
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -5895,7 +6138,7 @@ FAIL LTP CASE rename05 : 0
 
 RUN LTP CASE rename06
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -5904,7 +6147,7 @@ FAIL LTP CASE rename06 : 0
 
 RUN LTP CASE rename08
 Summary
-passed   2
+passed   18
 failed   0
 broken   0
 skipped  0
@@ -5913,21 +6156,12 @@ FAIL LTP CASE rename08 : 0
 
 RUN LTP CASE rename10
 Summary
-passed   2
+passed   18
 failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE rename10 : 0
-
-RUN LTP CASE rename13
-Summary
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE rename13 : 0
 
 RUN LTP CASE rename14
 Summary
@@ -6399,7 +6633,7 @@ FAIL LTP CASE setuid01 : 0
 
 RUN LTP CASE setxattr01
 Summary
-passed   9
+passed   81
 failed   0
 broken   0
 skipped  0
@@ -6604,6 +6838,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE splice02 : 0
 
+RUN LTP CASE splice03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice03 : 0
+
 RUN LTP CASE splice04
 Summary
 passed   1
@@ -6621,6 +6864,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE splice05 : 0
+
+RUN LTP CASE splice07
+Summary
+passed   566
+failed   0
+broken   0
+skipped  25
+warnings 0
+FAIL LTP CASE splice07 : 0
 
 RUN LTP CASE splice08
 Summary
@@ -6678,7 +6930,7 @@ FAIL LTP CASE stat02_64 : 0
 
 RUN LTP CASE statfs01
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -6687,7 +6939,7 @@ FAIL LTP CASE statfs01 : 0
 
 RUN LTP CASE statfs01_64
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -6714,7 +6966,7 @@ FAIL LTP CASE statfs02_64 : 0
 
 RUN LTP CASE statvfs01
 Summary
-passed   3
+passed   27
 failed   0
 broken   0
 skipped  0
@@ -6894,7 +7146,7 @@ FAIL LTP CASE umount01 : 0
 
 RUN LTP CASE utime04
 Summary
-passed   3
+passed   21
 failed   0
 broken   0
 skipped  0
@@ -6903,7 +7155,7 @@ FAIL LTP CASE utime04 : 0
 
 RUN LTP CASE utime05
 Summary
-passed   3
+passed   21
 failed   0
 broken   0
 skipped  0
@@ -7261,6 +7513,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE writev06 : 0
 
+RUN LTP CASE futex_cmp_requeue01
+Summary
+passed   5
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE futex_cmp_requeue01 : 0
+
 RUN LTP CASE futex_cmp_requeue02
 Summary
 passed   3
@@ -7360,15 +7621,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE memfd_create01 : 0
 
-RUN LTP CASE copy_file_range01
-Summary
-passed   4
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE copy_file_range01 : 0
-
 RUN LTP CASE statx01
 Summary
 passed   10
@@ -7398,7 +7650,7 @@ FAIL LTP CASE statx03 : 0
 
 RUN LTP CASE statx04
 Summary
-passed   3
+passed   30
 failed   0
 broken   0
 skipped  0
@@ -7409,23 +7661,14 @@ RUN LTP CASE statx05
 Summary
 passed   0
 failed   0
-broken   0
-skipped  1
-warnings 0
+broken   1
+skipped  0
+warnings 1
 FAIL LTP CASE statx05 : 0
-
-RUN LTP CASE statx06
-Summary
-passed   0
-failed   0
-broken   0
-skipped  1
-warnings 0
-FAIL LTP CASE statx06 : 0
 
 RUN LTP CASE statx08
 Summary
-passed   10
+passed   90
 failed   0
 broken   0
 skipped  0
@@ -7443,7 +7686,7 @@ FAIL LTP CASE statx09 : 0
 
 RUN LTP CASE statx12
 Summary
-passed   4
+passed   36
 failed   0
 broken   0
 skipped  0
@@ -7810,6 +8053,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE capset03 : 0
 
+RUN LTP CASE capset04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset04 : 0
+
 RUN LTP CASE chdir04
 Summary
 passed   3
@@ -8028,7 +8280,7 @@ FAIL LTP CASE close02 : 0
 
 RUN LTP CASE close_range01
 Summary
-passed   4
+passed   36
 failed   0
 broken   0
 skipped  0
@@ -8559,7 +8811,7 @@ FAIL LTP CASE faccessat02 : 0
 
 RUN LTP CASE fsetxattr01
 Summary
-passed   9
+passed   81
 failed   0
 broken   0
 skipped  0
@@ -9261,7 +9513,7 @@ FAIL LTP CASE fdatasync02 : 0
 
 RUN LTP CASE fgetxattr01
 Summary
-passed   5
+passed   45
 failed   0
 broken   0
 skipped  0
@@ -9432,21 +9684,12 @@ FAIL LTP CASE fpathconf01 : 0
 
 RUN LTP CASE fremovexattr01
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr01 : 0
-
-RUN LTP CASE fremovexattr02
-Summary
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fremovexattr02 : 0
 
 RUN LTP CASE fstat02
 Summary
@@ -9504,7 +9747,7 @@ FAIL LTP CASE fstatfs02_64 : 0
 
 RUN LTP CASE fsync01
 Summary
-passed   10
+passed   90
 failed   0
 broken   0
 skipped  0
@@ -9990,7 +10233,7 @@ FAIL LTP CASE getxattr01 : 0
 
 RUN LTP CASE getxattr02
 Summary
-passed   4
+passed   36
 failed   0
 broken   0
 skipped  0
@@ -9999,7 +10242,7 @@ FAIL LTP CASE getxattr02 : 0
 
 RUN LTP CASE getxattr03
 Summary
-passed   1
+passed   6
 failed   0
 broken   0
 skipped  0
@@ -10008,10 +10251,10 @@ FAIL LTP CASE getxattr03 : 0
 
 RUN LTP CASE getxattr04
 Summary
-passed   0
+passed   1
 failed   0
 broken   0
-skipped  1
+skipped  0
 warnings 0
 FAIL LTP CASE getxattr04 : 0
 
@@ -10032,6 +10275,213 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE ioctl_ns07 : 0
+
+RUN LTP CASE fanotify01
+Summary
+passed   702
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify01 : 0
+
+RUN LTP CASE fanotify02
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify02 : 0
+
+RUN LTP CASE fanotify03
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify03 : 0
+
+RUN LTP CASE fanotify04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify04 : 0
+
+RUN LTP CASE fanotify05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify05 : 0
+
+RUN LTP CASE fanotify06
+Summary
+passed   9
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify06 : 0
+
+RUN LTP CASE fanotify07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify07 : 0
+
+RUN LTP CASE fanotify08
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify08 : 0
+
+RUN LTP CASE fanotify09
+Summary
+passed   76
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify09 : 0
+
+RUN LTP CASE fanotify10
+Summary
+passed   1047
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify10 : 0
+
+RUN LTP CASE fanotify11
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify11 : 0
+
+RUN LTP CASE fanotify12
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify12 : 0
+
+RUN LTP CASE fanotify13
+Summary
+passed   135
+failed   0
+broken   0
+skipped  216
+warnings 0
+FAIL LTP CASE fanotify13 : 0
+
+RUN LTP CASE fanotify14
+Summary
+passed   513
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify14 : 0
+
+RUN LTP CASE fanotify15
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify15 : 0
+
+RUN LTP CASE fanotify16
+Summary
+passed   1386
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify16 : 0
+
+RUN LTP CASE fanotify17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify17 : 0
+
+RUN LTP CASE fanotify18
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify18 : 0
+
+RUN LTP CASE fanotify19
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify19 : 0
+
+RUN LTP CASE fanotify20
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify20 : 0
+
+RUN LTP CASE fanotify21
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify21 : 0
+
+RUN LTP CASE fanotify22
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify22 : 0
+
+RUN LTP CASE fanotify23
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify23 : 0
 
 RUN LTP CASE lchown01
 Summary
@@ -10161,7 +10611,7 @@ FAIL LTP CASE llseek03 : 0
 
 RUN LTP CASE lremovexattr01
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -10312,15 +10762,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE mknod06 : 0
 
-RUN LTP CASE mknod07
-Summary
-passed   6
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mknod07 : 0
-
 RUN LTP CASE mknod08
 Summary
 passed   1
@@ -10347,15 +10788,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mknodat01 : 0
-
-RUN LTP CASE mknodat02
-Summary
-passed   9
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE mlock01
 Summary
@@ -11088,18 +11520,18 @@ FAIL LTP CASE pwritev02_64 : 0
 
 RUN LTP CASE pwritev03
 Summary
-passed   0
+passed   24
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE pwritev03 : 0
 
 RUN LTP CASE pwritev03_64
 Summary
-passed   0
+passed   24
 failed   0
-broken   1
+broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE pwritev03_64 : 0
@@ -11241,7 +11673,7 @@ FAIL LTP CASE removexattr02 : 0
 
 RUN LTP CASE rename01
 Summary
-passed   8
+passed   72
 failed   0
 broken   0
 skipped  0
@@ -11250,7 +11682,7 @@ FAIL LTP CASE rename01 : 0
 
 RUN LTP CASE rename03
 Summary
-passed   8
+passed   72
 failed   0
 broken   0
 skipped  0
@@ -11259,7 +11691,7 @@ FAIL LTP CASE rename03 : 0
 
 RUN LTP CASE rename04
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -11268,7 +11700,7 @@ FAIL LTP CASE rename04 : 0
 
 RUN LTP CASE rename05
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -11277,7 +11709,7 @@ FAIL LTP CASE rename05 : 0
 
 RUN LTP CASE rename06
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -11286,7 +11718,7 @@ FAIL LTP CASE rename06 : 0
 
 RUN LTP CASE rename08
 Summary
-passed   2
+passed   18
 failed   0
 broken   0
 skipped  0
@@ -11295,21 +11727,12 @@ FAIL LTP CASE rename08 : 0
 
 RUN LTP CASE rename10
 Summary
-passed   2
+passed   18
 failed   0
 broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE rename10 : 0
-
-RUN LTP CASE rename13
-Summary
-passed   3
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE rename13 : 0
 
 RUN LTP CASE rename14
 Summary
@@ -11781,7 +12204,7 @@ FAIL LTP CASE setuid01 : 0
 
 RUN LTP CASE setxattr01
 Summary
-passed   9
+passed   81
 failed   0
 broken   0
 skipped  0
@@ -11977,6 +12400,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE splice02 : 0
 
+RUN LTP CASE splice03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice03 : 0
+
 RUN LTP CASE splice04
 Summary
 passed   1
@@ -11994,6 +12426,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE splice05 : 0
+
+RUN LTP CASE splice07
+Summary
+passed   615
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice07 : 0
 
 RUN LTP CASE splice08
 Summary
@@ -12051,7 +12492,7 @@ FAIL LTP CASE stat02_64 : 0
 
 RUN LTP CASE statfs01
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -12060,7 +12501,7 @@ FAIL LTP CASE statfs01 : 0
 
 RUN LTP CASE statfs01_64
 Summary
-passed   1
+passed   9
 failed   0
 broken   0
 skipped  0
@@ -12087,7 +12528,7 @@ FAIL LTP CASE statfs02_64 : 0
 
 RUN LTP CASE statvfs01
 Summary
-passed   3
+passed   27
 failed   0
 broken   0
 skipped  0
@@ -12276,7 +12717,7 @@ FAIL LTP CASE umount01 : 0
 
 RUN LTP CASE utime04
 Summary
-passed   3
+passed   21
 failed   0
 broken   0
 skipped  0
@@ -12285,7 +12726,7 @@ FAIL LTP CASE utime04 : 0
 
 RUN LTP CASE utime05
 Summary
-passed   3
+passed   21
 failed   0
 broken   0
 skipped  0
@@ -12555,9 +12996,9 @@ FAIL LTP CASE waitid11 : 0
 
 RUN LTP CASE write01
 Summary
-passed   1
+passed   0
 failed   0
-broken   0
+broken   1
 skipped  0
 warnings 0
 FAIL LTP CASE write01 : 0
@@ -12615,15 +13056,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE writev02 : 0
-
-RUN LTP CASE writev03
-Summary
-passed   1
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE writev03 : 0
 
 RUN LTP CASE writev05
 Summary
@@ -12751,15 +13183,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE memfd_create01 : 0
 
-RUN LTP CASE copy_file_range01
-Summary
-passed   4
-failed   0
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE copy_file_range01 : 0
-
 RUN LTP CASE statx01
 Summary
 passed   10
@@ -12789,7 +13212,7 @@ FAIL LTP CASE statx03 : 0
 
 RUN LTP CASE statx04
 Summary
-passed   3
+passed   30
 failed   0
 broken   0
 skipped  0
@@ -12800,23 +13223,14 @@ RUN LTP CASE statx05
 Summary
 passed   0
 failed   0
-broken   0
-skipped  1
-warnings 0
+broken   1
+skipped  0
+warnings 1
 FAIL LTP CASE statx05 : 0
-
-RUN LTP CASE statx06
-Summary
-passed   0
-failed   0
-broken   0
-skipped  1
-warnings 0
-FAIL LTP CASE statx06 : 0
 
 RUN LTP CASE statx08
 Summary
-passed   10
+passed   90
 failed   0
 broken   0
 skipped  0
@@ -12834,7 +13248,7 @@ FAIL LTP CASE statx09 : 0
 
 RUN LTP CASE statx12
 Summary
-passed   4
+passed   36
 failed   0
 broken   0
 skipped  0
@@ -12851,8 +13265,8 @@ warnings 0
 FAIL LTP CASE io_uring01 : 0
 
 Summary
-passed   9271
-failed   531
-broken   65
-skipped  189
-warnings 18
+passed   20121
+failed   2401
+broken   70
+skipped  642
+warnings 17

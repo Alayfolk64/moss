@@ -261,7 +261,7 @@ fn stop_timerfd_task(timerfd: &Arc<TimerFd>) {
 
 fn timer_clock_now(clock_id: u32) -> TimeValue {
     match clock_id {
-        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => axhal::time::wall_time(),
+        CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => axhal::time::realtime_time(),
         _ => axhal::time::monotonic_time(),
     }
 }

@@ -553,6 +553,14 @@ pub fn sys_copy_file_range(
     // TODO: check flags
     // TODO: check both regular files
     // TODO: check same file and overlap
+    if let (Ok(src), Ok(dst)) = (File::from_fd(fd_in), File::from_fd(fd_out)) {
+        src.inner().access(FileFlags::READ)?;
+        dst.inner().access(FileFlags::WRITE)?;
+
+        if src.inner().location().metadata()?.device != dst.inner().location().metadata()?.device {
+            return Err(AxError::from(LinuxError::EXDEV));
+        }
+    }
 
     let src = if !off_in.is_null() {
         SendFile::Offset(File::from_fd(fd_in)?, off_in)

@@ -1029,10 +1029,10 @@ impl Drop for File {
         if flags != 0 {
             let mut update = axfs_ng_vfs::MetadataUpdate::default();
             if flags & 1 != 0 {
-                update.atime = Some(axhal::time::wall_time());
+                update.atime = Some(axhal::time::realtime_time());
             }
             if flags & 2 != 0 {
-                update.mtime = Some(axhal::time::wall_time());
+                update.mtime = Some(axhal::time::realtime_time());
             }
             if let Err(err) = self.inner.location().update_metadata(update) {
                 warn!("Failed to update file times on drop: {err:?}");

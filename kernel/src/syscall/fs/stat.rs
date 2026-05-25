@@ -14,9 +14,9 @@ use axfs_ng_vfs::Location;
 use axtask::current;
 use linux_raw_sys::general::{
     __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
-    AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_FOLLOW, AT_SYMLINK_NOFOLLOW, MS_RDONLY,
-    O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK, S_IFMT,
-    STATX__RESERVED, W_OK, X_OK, stat, statfs, statx,
+    AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_FOLLOW, AT_SYMLINK_NOFOLLOW,
+    MS_NOSYMFOLLOW, MS_RDONLY, O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR,
+    O_WRONLY, R_OK, S_IFLNK, S_IFMT, STATX__RESERVED, W_OK, X_OK, stat, statfs, statx,
 };
 use spin::RwLock;
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
@@ -84,6 +84,16 @@ struct HandleRecord {
 
 static HANDLE_RECORDS: RwLock<BTreeMap<[u8; STARRY_FILE_HANDLE_BYTES as usize], HandleRecord>> =
     RwLock::new(BTreeMap::new());
+
+const ST_NOSYMFOLLOW: u32 = 0x2000;
+
+fn mount_flags_to_statfs_flags(flags: u32) -> u32 {
+    let mut statfs_flags = flags & MS_RDONLY;
+    if flags & MS_NOSYMFOLLOW != 0 {
+        statfs_flags |= ST_NOSYMFOLLOW;
+    }
+    statfs_flags
+}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -317,11 +327,9 @@ pub fn sys_faccessat2(dirfd: c_int, path: *const c_char, mode: u32, flags: u32) 
     let file = resolve_at(dirfd, path.as_deref(), flags)?;
     let stat = file.stat()?;
     let read_only_fs = mode & W_OK != 0
-        && file.into_file().is_some_and(|loc| {
-            loc.filesystem()
-                .stat()
-                .is_ok_and(|stat| stat.mount_flags & MS_RDONLY != 0)
-        });
+        && file
+            .into_file()
+            .is_some_and(|loc| loc.mount_flags() & MS_RDONLY != 0);
 
     let (uid, gid) = access_ids(flags);
     check_parent_search_access(dirfd, path.as_deref(), flags, uid, gid)?;
@@ -436,7 +444,7 @@ fn statfs(loc: &Location) -> AxResult<statfs> {
     };
     result.f_namelen = stat.name_length as _;
     result.f_frsize = stat.fragment_size as _;
-    result.f_flags = stat.mount_flags as _;
+    result.f_flags = mount_flags_to_statfs_flags(stat.mount_flags | loc.mount_flags()) as _;
     Ok(result)
 }
 

@@ -8,7 +8,7 @@ use core::{
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FsContext};
 use axfs_ng_vfs::{DeviceId, MetadataUpdate, NodePermission, NodeType, path::Path};
-use axhal::time::wall_time;
+use axhal::time::realtime_time;
 use axtask::current;
 use linux_raw_sys::{
     general::*,
@@ -161,7 +161,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
     let loc = with_fs(dirfd, |fs| {
         let (dir, name) = fs.resolve_nonexistent(Path::new(path.as_str()))?;
         let dir_stat = dir.metadata()?;
-        if dir.filesystem().stat()?.mount_flags & MS_RDONLY != 0 {
+        if dir.mount_flags() & MS_RDONLY != 0 {
             return Err(AxError::ReadOnlyFilesystem);
         }
         if euid != 0
@@ -521,22 +521,60 @@ pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> A
     Ok(0)
 }
 
+#[derive(Clone, Copy)]
+enum UtimeSpec {
+    Omit,
+    Now,
+    Set(Duration),
+}
+
+impl UtimeSpec {
+    fn duration(self) -> Option<Duration> {
+        match self {
+            Self::Omit => None,
+            Self::Now => Some(realtime_time()),
+            Self::Set(time) => Some(time),
+        }
+    }
+
+    fn is_omit(self) -> bool {
+        matches!(self, Self::Omit)
+    }
+
+    fn is_now(self) -> bool {
+        matches!(self, Self::Now)
+    }
+}
+
 fn update_times(
     dirfd: i32,
     path: *const c_char,
-    atime: Option<Duration>,
-    mtime: Option<Duration>,
+    atime: UtimeSpec,
+    mtime: UtimeSpec,
     flags: u32,
 ) -> AxResult<()> {
     let path = path.nullable().map(vm_load_string).transpose()?;
-    resolve_at(dirfd, path.as_deref(), flags)?
+    let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
-        .ok_or(AxError::BadFileDescriptor)?
-        .update_metadata(MetadataUpdate {
-            atime,
-            mtime,
-            ..Default::default()
-        })?;
+        .ok_or(AxError::BadFileDescriptor)?;
+
+    if let Ok(path) = loc.absolute_path() {
+        let inode_flags = inode_flags(path.as_str());
+        let omit_both = atime.is_omit() && mtime.is_omit();
+        let now_both = atime.is_now() && mtime.is_now();
+        if inode_flags & FS_IMMUTABLE_FL != 0 && !omit_both {
+            return Err(AxError::OperationNotPermitted);
+        }
+        if inode_flags & FS_APPEND_FL != 0 && !(omit_both || now_both) {
+            return Err(AxError::OperationNotPermitted);
+        }
+    }
+
+    loc.update_metadata(MetadataUpdate {
+        atime: atime.duration(),
+        mtime: mtime.duration(),
+        ..Default::default()
+    })?;
     Ok(())
 }
 
@@ -554,14 +592,13 @@ pub fn sys_utime(path: *const c_char, times: *const utimbuf) -> AxResult<isize> 
         // FIXME: AnyBitPattern
         let times = unsafe { times.vm_read_uninit()?.assume_init() };
         (
-            Duration::from_secs(times.actime as _),
-            Duration::from_secs(times.modtime as _),
+            UtimeSpec::Set(Duration::from_secs(times.actime as _)),
+            UtimeSpec::Set(Duration::from_secs(times.modtime as _)),
         )
     } else {
-        let time = wall_time();
-        (time, time)
+        (UtimeSpec::Now, UtimeSpec::Now)
     };
-    update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
+    update_times(AT_FDCWD, path, atime, mtime, 0)?;
     Ok(0)
 }
 
@@ -573,12 +610,14 @@ pub fn sys_utimes(
     let (atime, mtime) = if let Some(times) = times.nullable() {
         // FIXME: AnyBitPattern
         let [atime, mtime] = unsafe { times.vm_read_uninit()?.assume_init() };
-        (atime.try_into_time_value()?, mtime.try_into_time_value()?)
+        (
+            UtimeSpec::Set(atime.try_into_time_value()?),
+            UtimeSpec::Set(mtime.try_into_time_value()?),
+        )
     } else {
-        let time = wall_time();
-        (time, time)
+        (UtimeSpec::Now, UtimeSpec::Now)
     };
-    update_times(AT_FDCWD, path, Some(atime), Some(mtime), 0)?;
+    update_times(AT_FDCWD, path, atime, mtime, 0)?;
     Ok(0)
 }
 
@@ -588,29 +627,32 @@ pub fn sys_utimensat(
     times: *const [timespec; 2],
     mut flags: u32,
 ) -> AxResult<isize> {
+    const VALID_FLAGS: u32 = AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH;
+    if flags & !VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
     if path.is_null() {
+        if flags & AT_SYMLINK_NOFOLLOW != 0 {
+            return Err(AxError::InvalidInput);
+        }
         flags |= AT_EMPTY_PATH;
     }
-    fn utime_to_duration(time: &timespec) -> Option<AxResult<Duration>> {
+    fn utime_to_spec(time: &timespec) -> AxResult<UtimeSpec> {
         match time.tv_nsec {
-            val if val == UTIME_OMIT as _ => None,
-            val if val == UTIME_NOW as _ => Some(Ok(wall_time())),
-            _ => Some(time.try_into_time_value()),
+            val if val == UTIME_OMIT as _ => Ok(UtimeSpec::Omit),
+            val if val == UTIME_NOW as _ => Ok(UtimeSpec::Now),
+            _ => Ok(UtimeSpec::Set(time.try_into_time_value()?)),
         }
     }
 
     let (atime, mtime) = if let Some(times) = times.nullable() {
         // FIXME: AnyBitPattern
         let [atime, mtime] = unsafe { times.vm_read_uninit()?.assume_init() };
-        (
-            utime_to_duration(&atime).transpose()?,
-            utime_to_duration(&mtime).transpose()?,
-        )
+        (utime_to_spec(&atime)?, utime_to_spec(&mtime)?)
     } else {
-        let time = wall_time();
-        (Some(time), Some(time))
+        (UtimeSpec::Now, UtimeSpec::Now)
     };
-    if atime.is_none() && mtime.is_none() {
+    if atime.is_omit() && mtime.is_omit() {
         return Ok(0);
     }
 

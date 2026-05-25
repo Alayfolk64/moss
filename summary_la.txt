@@ -1,6 +1,13272 @@
+RUN LTP CASE copy_file_range01
+Summary
+passed   30
+failed   864
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE copy_file_range01 : 0
+
+RUN LTP CASE copy_file_range01
+Summary
+passed   30
+failed   864
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE copy_file_range01 : 0
+
+RUN LTP CASE mount07
+Summary
+passed   54
+failed   30
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount07 : 0
+
+RUN LTP CASE mount07
+Summary
+passed   54
+failed   30
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount07 : 0
+
+RUN LTP CASE utimensat01
+Summary
+passed   20
+failed   15
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utimensat01 : 0
+
+RUN LTP CASE utimensat01
+Summary
+passed   20
+failed   15
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utimensat01 : 0
+
+RUN LTP CASE utime01
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime01 : 0
+
+RUN LTP CASE utime02
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime02 : 0
+
+RUN LTP CASE utime03
+Summary
+passed   7
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime03 : 0
+
+RUN LTP CASE utime01
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime01 : 0
+
+RUN LTP CASE utime02
+Summary
+passed   21
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime02 : 0
+
+RUN LTP CASE utime03
+Summary
+passed   7
+failed   14
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime03 : 0
+
+RUN LTP CASE chdir01
+Summary
+passed   135
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir01 : 0
+
+RUN LTP CASE fstatfs01
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01 : 0
+
+RUN LTP CASE fstatfs01_64
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01_64 : 0
+
+RUN LTP CASE chdir01
+Summary
+passed   135
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir01 : 0
+
+RUN LTP CASE fstatfs01
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01 : 0
+
+RUN LTP CASE fstatfs01_64
+Summary
+passed   9
+failed   9
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs01_64 : 0
+
+RUN LTP CASE mount01
+Summary
+passed   8
+failed   8
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount01 : 0
+
+RUN LTP CASE mount01
+Summary
+passed   8
+failed   8
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount01 : 0
+
+RUN LTP CASE mmap06
+Summary
+passed   2
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap06 : 0
+
+RUN LTP CASE socketpair01
+Summary
+passed   4
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socketpair01 : 0
+
+RUN LTP CASE mmap06
+Summary
+passed   2
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap06 : 0
+
+RUN LTP CASE socketpair01
+Summary
+passed   4
+failed   6
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socketpair01 : 0
+
+RUN LTP CASE open10
+Summary
+passed   4
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open10 : 0
+
+RUN LTP CASE pathconf02
+Summary
+passed   1
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pathconf02 : 0
+
+RUN LTP CASE renameat201
+Summary
+passed   1
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE renameat201 : 0
+
+RUN LTP CASE umount2_02
+Summary
+passed   2
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE umount2_02 : 0
+
+RUN LTP CASE open10
+Summary
+passed   4
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open10 : 0
+
+RUN LTP CASE renameat201
+Summary
+passed   1
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE renameat201 : 0
+
+RUN LTP CASE umount2_02
+Summary
+passed   2
+failed   5
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE umount2_02 : 0
+
+RUN LTP CASE clock_getres01
+Summary
+passed   40
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_getres01 : 0
+
+RUN LTP CASE fallocate03
+Summary
+passed   4
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fallocate03 : 0
+
+RUN LTP CASE getsockopt01
+Summary
+passed   5
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsockopt01 : 0
+
+RUN LTP CASE open07
+Summary
+passed   1
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open07 : 0
+
+RUN LTP CASE statx06
+Summary
+passed   0
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx06 : 0
+
+RUN LTP CASE clock_getres01
+Summary
+passed   40
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_getres01 : 0
+
+RUN LTP CASE fallocate03
+Summary
+passed   4
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fallocate03 : 0
+
+RUN LTP CASE getsockopt01
+Summary
+passed   5
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsockopt01 : 0
+
+RUN LTP CASE open07
+Summary
+passed   1
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open07 : 0
+
+RUN LTP CASE sched_getscheduler01
+Summary
+passed   2
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sched_getscheduler01 : 0
+
+RUN LTP CASE statx06
+Summary
+passed   0
+failed   4
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx06 : 0
+
+RUN LTP CASE chmod06
+Summary
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod06 : 0
+
+RUN LTP CASE chown04
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown04 : 0
+
+RUN LTP CASE link04
+Summary
+passed   11
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link04 : 0
+
+RUN LTP CASE mlock202
+Summary
+passed   1
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock202 : 0
+
+RUN LTP CASE mount03
+Summary
+passed   0
+failed   3
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE mount03 : 0
+
+RUN LTP CASE readlink03
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 1
+FAIL LTP CASE readlink03 : 0
+
+RUN LTP CASE rename13
+Summary
+passed   12
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename13 : 0
+
+RUN LTP CASE rmdir02
+Summary
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rmdir02 : 0
+
+RUN LTP CASE setresgid02
+Summary
+passed   3
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid02 : 0
+
+RUN LTP CASE shmctl07
+Summary
+passed   1
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE shmctl07 : 0
+
+RUN LTP CASE truncate03
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate03 : 0
+
+RUN LTP CASE truncate03_64
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate03_64 : 0
+
+RUN LTP CASE utime06
+Summary
+passed   1
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime06 : 0
+
+RUN LTP CASE chmod06
+Summary
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod06 : 0
+
+RUN LTP CASE chown04
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown04 : 0
+
+RUN LTP CASE link04
+Summary
+passed   11
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link04 : 0
+
+RUN LTP CASE mlock202
+Summary
+passed   1
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock202 : 0
+
+RUN LTP CASE mount03
+Summary
+passed   0
+failed   3
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE mount03 : 0
+
+RUN LTP CASE readlink03
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 1
+FAIL LTP CASE readlink03 : 0
+
+RUN LTP CASE rename13
+Summary
+passed   12
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename13 : 0
+
+RUN LTP CASE rmdir02
+Summary
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rmdir02 : 0
+
+RUN LTP CASE setresgid02
+Summary
+passed   3
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid02 : 0
+
+RUN LTP CASE shmctl07
+Summary
+passed   1
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE shmctl07 : 0
+
+RUN LTP CASE truncate03
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate03 : 0
+
+RUN LTP CASE truncate03_64
+Summary
+passed   5
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate03_64 : 0
+
+RUN LTP CASE utime06
+Summary
+passed   1
+failed   3
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime06 : 0
+
+RUN LTP CASE writev03
+Summary
+passed   6
+failed   3
+broken   0
+skipped  0
+warnings 3
+FAIL LTP CASE writev03 : 0
+
+RUN LTP CASE accept03
+Summary
+passed   21
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept03 : 0
+
+RUN LTP CASE clock_gettime02
+Summary
+passed   8
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_gettime02 : 0
+
+RUN LTP CASE creat06
+Summary
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat06 : 0
+
+RUN LTP CASE epoll_ctl01
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_ctl01 : 0
+
+RUN LTP CASE epoll_ctl02
+Summary
+passed   7
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_ctl02 : 0
+
+RUN LTP CASE faccessat201
+Summary
+passed   5
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat201 : 0
+
+RUN LTP CASE fchmodat02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmodat02 : 0
+
+RUN LTP CASE fchown04
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown04 : 0
+
+RUN LTP CASE flock04
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock04 : 0
+
+RUN LTP CASE getdents02
+Summary
+passed   6
+failed   2
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE getdents02 : 0
+
+RUN LTP CASE getgroups01
+Summary
+passed   1
+failed   2
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getgroups01 : 0
+
+RUN LTP CASE getrusage03
+Summary
+passed   2
+failed   2
+broken   6
+skipped  0
+warnings 0
+FAIL LTP CASE getrusage03 : 0
+
+RUN LTP CASE lchown02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lchown02 : 0
+
+RUN LTP CASE link08
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link08 : 0
+
+RUN LTP CASE linkat02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE linkat02 : 0
+
+RUN LTP CASE lstat02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat02 : 0
+
+RUN LTP CASE lstat02_64
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat02_64 : 0
+
+RUN LTP CASE mkdirat02
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mkdirat02 : 0
+
+RUN LTP CASE mmap18
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap18 : 0
+
+RUN LTP CASE mremap05
+Summary
+passed   3
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mremap05 : 0
+
+RUN LTP CASE munmap03
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munmap03 : 0
+
+RUN LTP CASE open13
+Summary
+passed   3
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open13 : 0
+
+RUN LTP CASE madvise10
+Summary
+passed   12
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE madvise10 : 0
+
+RUN LTP CASE prctl02
+Summary
+passed   5
+failed   2
+broken   0
+skipped  11
+warnings 0
+FAIL LTP CASE prctl02 : 0
+
+RUN LTP CASE sbrk01
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sbrk01 : 0
+
+RUN LTP CASE sched_getscheduler01
+Summary
+passed   1
+failed   2
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sched_getscheduler01 : 0
+
+RUN LTP CASE setsockopt01
+Summary
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setsockopt01 : 0
+
+RUN LTP CASE shmctl08
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE shmctl08 : 0
+
+RUN LTP CASE socket01
+Summary
+passed   7
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socket01 : 0
+
+RUN LTP CASE sockioctl01
+Summary
+passed   3
+failed   2
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE sockioctl01 : 0
+
+RUN LTP CASE symlink03
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink03 : 0
+
+RUN LTP CASE unlink08
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlink08 : 0
+
+RUN LTP CASE writev07
+Summary
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev07 : 0
+
+RUN LTP CASE accept03
+Summary
+passed   21
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept03 : 0
+
+RUN LTP CASE clock_gettime02
+Summary
+passed   8
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_gettime02 : 0
+
+RUN LTP CASE creat06
+Summary
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat06 : 0
+
+RUN LTP CASE epoll_ctl01
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_ctl01 : 0
+
+RUN LTP CASE epoll_ctl02
+Summary
+passed   7
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_ctl02 : 0
+
+RUN LTP CASE faccessat201
+Summary
+passed   5
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat201 : 0
+
+RUN LTP CASE fchown04
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown04 : 0
+
+RUN LTP CASE flock04
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock04 : 0
+
+RUN LTP CASE getdents02
+Summary
+passed   6
+failed   2
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE getdents02 : 0
+
+RUN LTP CASE getrusage03
+Summary
+passed   5
+failed   2
+broken   8
+skipped  0
+warnings 0
+FAIL LTP CASE getrusage03 : 0
+
+RUN LTP CASE lchown02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lchown02 : 0
+
+RUN LTP CASE link08
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link08 : 0
+
+RUN LTP CASE linkat02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE linkat02 : 0
+
+RUN LTP CASE lstat02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat02 : 0
+
+RUN LTP CASE lstat02_64
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat02_64 : 0
+
+RUN LTP CASE mkdirat02
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mkdirat02 : 0
+
+RUN LTP CASE mmap18
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap18 : 0
+
+RUN LTP CASE mremap05
+Summary
+passed   3
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mremap05 : 0
+
+RUN LTP CASE munmap03
+Summary
+passed   1
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munmap03 : 0
+
+RUN LTP CASE open13
+Summary
+passed   3
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open13 : 0
+
+RUN LTP CASE madvise10
+Summary
+passed   12
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE madvise10 : 0
+
+RUN LTP CASE pathconf02
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pathconf02 : 0
+
+RUN LTP CASE prctl02
+Summary
+passed   5
+failed   2
+broken   0
+skipped  11
+warnings 0
+FAIL LTP CASE prctl02 : 0
+
+RUN LTP CASE sendmmsg02
+Summary
+passed   0
+failed   2
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendmmsg02 : 0
+
+RUN LTP CASE setsockopt01
+Summary
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setsockopt01 : 0
+
+RUN LTP CASE shmctl08
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE shmctl08 : 0
+
+RUN LTP CASE socket01
+Summary
+passed   7
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socket01 : 0
+
+RUN LTP CASE sockioctl01
+Summary
+passed   3
+failed   2
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE sockioctl01 : 0
+
+RUN LTP CASE symlink03
+Summary
+passed   4
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink03 : 0
+
+RUN LTP CASE unlink08
+Summary
+passed   2
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlink08 : 0
+
+RUN LTP CASE writev07
+Summary
+passed   6
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev07 : 0
+
+RUN LTP CASE futex_cmp_requeue01
+Summary
+passed   5
+failed   2
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_cmp_requeue01 : 0
+
+RUN LTP CASE abort01
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE abort01 : 0
+
+RUN LTP CASE clock_nanosleep01
+Summary
+passed   11
+failed   1
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE clock_nanosleep01 : 0
+
+RUN LTP CASE faccessat202
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat202 : 0
+
+RUN LTP CASE fallocate01
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fallocate01 : 0
+
+RUN LTP CASE fallocate04
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fallocate04 : 0
+
+RUN LTP CASE fchmodat01
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmodat01 : 0
+
+RUN LTP CASE fchownat01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchownat01 : 0
+
+RUN LTP CASE getcwd01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getcwd01 : 0
+
+RUN LTP CASE gethostbyname_r01
+Summary
+passed   0
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gethostbyname_r01 : 0
+
+RUN LTP CASE gethostname02
+Summary
+passed   0
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gethostname02 : 0
+
+RUN LTP CASE getpeername01
+Summary
+passed   6
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpeername01 : 0
+
+RUN LTP CASE getpgid01
+Summary
+passed   6
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE getpgid01 : 0
+
+RUN LTP CASE getrandom05
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom05 : 0
+
+RUN LTP CASE get_robust_list01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE get_robust_list01 : 0
+
+RUN LTP CASE getsockname01
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsockname01 : 0
+
+RUN LTP CASE ioctl04
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ioctl04 : 0
+
+RUN LTP CASE inotify_init1_01
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE inotify_init1_01 : 0
+
+RUN LTP CASE inotify_init1_02
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE inotify_init1_02 : 0
+
+RUN LTP CASE lchown03
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lchown03 : 0
+
+RUN LTP CASE llseek01
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llseek01 : 0
+
+RUN LTP CASE mknod07
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod07 : 0
+
+RUN LTP CASE mknodat02
+Summary
+passed   3
+failed   1
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat02 : 0
+
+RUN LTP CASE nftw01
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nftw01 : 0
+
+RUN LTP CASE nftw6401
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nftw6401 : 0
+
+RUN LTP CASE open02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open02 : 0
+
+RUN LTP CASE open08
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open08 : 0
+
+RUN LTP CASE pidfd_open02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open02 : 0
+
+RUN LTP CASE ptrace02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace02 : 0
+
+RUN LTP CASE read02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE read02 : 0
+
+RUN LTP CASE readlinkat02
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readlinkat02 : 0
+
+RUN LTP CASE readv02
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readv02 : 0
+
+RUN LTP CASE rename11
+Summary
+passed   1
+failed   1
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE rename11 : 0
+
+RUN LTP CASE renameat01
+Summary
+passed   6
+failed   1
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE renameat01 : 0
+
+RUN LTP CASE sched_setaffinity01
+Summary
+passed   1
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE sched_setaffinity01 : 0
+
+RUN LTP CASE sched_getaffinity01
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sched_getaffinity01 : 0
+
+RUN LTP CASE sendto01
+Summary
+passed   2
+failed   1
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE sendto01 : 0
+
+RUN LTP CASE setgroups02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgroups02 : 0
+
+RUN LTP CASE setresgid01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid01 : 0
+
+RUN LTP CASE settimeofday02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE settimeofday02 : 0
+
+RUN LTP CASE shmat03
+Summary
+passed   0
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE shmat03 : 0
+
+RUN LTP CASE sigaction01
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaction01 : 0
+
+RUN LTP CASE stat03
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat03 : 0
+
+RUN LTP CASE stat03_64
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat03_64 : 0
+
+RUN LTP CASE tkill02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE tkill02 : 0
+
+RUN LTP CASE ulimit01
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ulimit01 : 0
+
+RUN LTP CASE unlink07
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlink07 : 0
+
+RUN LTP CASE unlinkat01
+Summary
+passed   6
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlinkat01 : 0
+
+RUN LTP CASE unshare02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unshare02 : 0
+
+RUN LTP CASE umount02
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 1
+FAIL LTP CASE umount02 : 0
+
+RUN LTP CASE utimes01
+Summary
+passed   2
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE utimes01 : 0
+
+RUN LTP CASE write04
+Summary
+passed   0
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write04 : 0
+
+RUN LTP CASE abort01
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE abort01 : 0
+
+RUN LTP CASE acct02
+Summary
+passed   0
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE acct02 : 0
+
+RUN LTP CASE clock_nanosleep01
+Summary
+passed   11
+failed   1
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE clock_nanosleep01 : 0
+
+RUN LTP CASE faccessat202
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat202 : 0
+
+RUN LTP CASE fallocate01
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fallocate01 : 0
+
+RUN LTP CASE fallocate04
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fallocate04 : 0
+
+RUN LTP CASE fchmodat01
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmodat01 : 0
+
+RUN LTP CASE fchmodat02
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmodat02 : 0
+
+RUN LTP CASE fchownat01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchownat01 : 0
+
+RUN LTP CASE getcwd01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getcwd01 : 0
+
+RUN LTP CASE getgroups01
+Summary
+passed   2
+failed   1
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getgroups01 : 0
+
+RUN LTP CASE getpeername01
+Summary
+passed   6
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpeername01 : 0
+
+RUN LTP CASE getpgid01
+Summary
+passed   6
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE getpgid01 : 0
+
+RUN LTP CASE getrandom05
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom05 : 0
+
+RUN LTP CASE get_robust_list01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE get_robust_list01 : 0
+
+RUN LTP CASE getsockname01
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsockname01 : 0
+
+RUN LTP CASE ioctl04
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ioctl04 : 0
+
+RUN LTP CASE inotify_init1_01
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE inotify_init1_01 : 0
+
+RUN LTP CASE inotify_init1_02
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE inotify_init1_02 : 0
+
+RUN LTP CASE lchown03
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lchown03 : 0
+
+RUN LTP CASE llseek01
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llseek01 : 0
+
+RUN LTP CASE mknod07
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod07 : 0
+
+RUN LTP CASE mknodat02
+Summary
+passed   3
+failed   1
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat02 : 0
+
+RUN LTP CASE nftw01
+Summary
+passed   14
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nftw01 : 0
+
+RUN LTP CASE nftw6401
+Summary
+passed   14
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nftw6401 : 0
+
+RUN LTP CASE open02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open02 : 0
+
+RUN LTP CASE open08
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open08 : 0
+
+RUN LTP CASE pidfd_open02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open02 : 0
+
+RUN LTP CASE ptrace02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace02 : 0
+
+RUN LTP CASE read02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE read02 : 0
+
+RUN LTP CASE readlinkat02
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readlinkat02 : 0
+
+RUN LTP CASE readv02
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readv02 : 0
+
+RUN LTP CASE rename11
+Summary
+passed   1
+failed   1
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE rename11 : 0
+
+RUN LTP CASE renameat01
+Summary
+passed   6
+failed   1
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE renameat01 : 0
+
+RUN LTP CASE sched_setaffinity01
+Summary
+passed   1
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE sched_setaffinity01 : 0
+
+RUN LTP CASE sched_getaffinity01
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sched_getaffinity01 : 0
+
+RUN LTP CASE sendto01
+Summary
+passed   2
+failed   1
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE sendto01 : 0
+
+RUN LTP CASE setgroups02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgroups02 : 0
+
+RUN LTP CASE setresgid01
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid01 : 0
+
+RUN LTP CASE settimeofday02
+Summary
+passed   2
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE settimeofday02 : 0
+
+RUN LTP CASE sigaction01
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaction01 : 0
+
+RUN LTP CASE sigaltstack02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaltstack02 : 0
+
+RUN LTP CASE stat03
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat03 : 0
+
+RUN LTP CASE stat03_64
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat03_64 : 0
+
+RUN LTP CASE tkill02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE tkill02 : 0
+
+RUN LTP CASE unlink07
+Summary
+passed   5
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlink07 : 0
+
+RUN LTP CASE unlinkat01
+Summary
+passed   6
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlinkat01 : 0
+
+RUN LTP CASE unshare02
+Summary
+passed   1
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unshare02 : 0
+
+RUN LTP CASE umount02
+Summary
+passed   4
+failed   1
+broken   0
+skipped  0
+warnings 1
+FAIL LTP CASE umount02 : 0
+
+RUN LTP CASE utimes01
+Summary
+passed   2
+failed   1
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE utimes01 : 0
+
+RUN LTP CASE write04
+Summary
+passed   0
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write04 : 0
+
+RUN LTP CASE accept01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept01 : 0
+
+RUN LTP CASE accept02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept02 : 0
+
+RUN LTP CASE accept4_01
+Summary
+passed   8
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE accept4_01 : 0
+
+RUN LTP CASE access01
+Summary
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access01 : 0
+
+RUN LTP CASE access02
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+
+RUN LTP CASE access03
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+
+RUN LTP CASE access04
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access04 : 0
+
+RUN LTP CASE acct01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE acct01 : 0
+
+RUN LTP CASE acct02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE acct02 : 0
+
+RUN LTP CASE add_key01
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key01 : 0
+
+RUN LTP CASE add_key02
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key02 : 0
+
+RUN LTP CASE add_key03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key03 : 0
+
+RUN LTP CASE add_key04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key04 : 0
+
+RUN LTP CASE add_key05
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key05 : 0
+
+RUN LTP CASE adjtimex01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex01 : 0
+
+RUN LTP CASE adjtimex02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE adjtimex02 : 0
+
+RUN LTP CASE adjtimex03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex03 : 0
+
+RUN LTP CASE alarm02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm02 : 0
+
+RUN LTP CASE alarm03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm03 : 0
+
+RUN LTP CASE alarm05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm05 : 0
+
+RUN LTP CASE alarm06
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm06 : 0
+
+RUN LTP CASE alarm07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm07 : 0
+
+RUN LTP CASE bind01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind01 : 0
+
+RUN LTP CASE bind02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind02 : 0
+
+RUN LTP CASE bind03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind03 : 0
+
+RUN LTP CASE bind04
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind04 : 0
+
+RUN LTP CASE bind05
+Summary
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind05 : 0
+
+RUN LTP CASE bind06
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE bind06 : 0
+
+RUN LTP CASE bpf_map01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_map01 : 0
+
+RUN LTP CASE bpf_prog01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog01 : 0
+
+RUN LTP CASE bpf_prog02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog02 : 0
+
+RUN LTP CASE bpf_prog03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog03 : 0
+
+RUN LTP CASE bpf_prog04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog04 : 0
+
+RUN LTP CASE brk01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE brk01 : 0
+
+RUN LTP CASE brk02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE brk02 : 0
+
+RUN LTP CASE capget01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget01 : 0
+
+RUN LTP CASE capget02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget02 : 0
+
+RUN LTP CASE capset01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset01 : 0
+
+RUN LTP CASE capset02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset02 : 0
+
+RUN LTP CASE capset03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset03 : 0
+
+RUN LTP CASE capset04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset04 : 0
+
+RUN LTP CASE chdir04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir04 : 0
+
+RUN LTP CASE chmod01
+Summary
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod01 : 0
+
+RUN LTP CASE chmod03
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod03 : 0
+
+RUN LTP CASE chown01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown01 : 0
+
+RUN LTP CASE chown02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown02 : 0
+
+RUN LTP CASE chown03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown03 : 0
+
+RUN LTP CASE chown05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown05 : 0
+
+RUN LTP CASE chroot02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chroot02 : 0
+
+RUN LTP CASE chroot03
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chroot03 : 0
+
+RUN LTP CASE clock_adjtime01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_adjtime01 : 0
+
+RUN LTP CASE clock_adjtime02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_adjtime02 : 0
+
+RUN LTP CASE clock_nanosleep04
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_nanosleep04 : 0
+
+RUN LTP CASE clock_gettime01
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_gettime01 : 0
+
+RUN LTP CASE clone01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone01 : 0
+
+RUN LTP CASE clone02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone02 : 0
+
+RUN LTP CASE clone03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone03 : 0
+
+RUN LTP CASE clone04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone04 : 0
+
+RUN LTP CASE clone06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone06 : 0
+
+RUN LTP CASE clone07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone07 : 0
+
+RUN LTP CASE clone08
+Summary
+passed   3
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE clone08 : 0
+
+RUN LTP CASE clone301
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone301 : 0
+
+RUN LTP CASE clone302
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone302 : 0
+
+RUN LTP CASE close01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close01 : 0
+
+RUN LTP CASE close02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close02 : 0
+
+RUN LTP CASE close_range01
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close_range01 : 0
+
+RUN LTP CASE close_range02
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close_range02 : 0
+
+RUN LTP CASE confstr01
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE confstr01 : 0
+
+RUN LTP CASE connect01
+Summary
+passed   4
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE connect01 : 0
+
+RUN LTP CASE creat01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat01 : 0
+
+RUN LTP CASE creat03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat03 : 0
+
+RUN LTP CASE creat05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat05 : 0
+
+RUN LTP CASE dup01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup01 : 0
+
+RUN LTP CASE dup02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup02 : 0
+
+RUN LTP CASE dup03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup03 : 0
+
+RUN LTP CASE dup04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup04 : 0
+
+RUN LTP CASE dup06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup06 : 0
+
+RUN LTP CASE dup07
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup07 : 0
+
+RUN LTP CASE dup201
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup201 : 0
+
+RUN LTP CASE dup202
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup202 : 0
+
+RUN LTP CASE dup203
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup203 : 0
+
+RUN LTP CASE dup204
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup204 : 0
+
+RUN LTP CASE dup205
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup205 : 0
+
+RUN LTP CASE dup206
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup206 : 0
+
+RUN LTP CASE dup207
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup207 : 0
+
+RUN LTP CASE dup3_01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup3_01 : 0
+
+RUN LTP CASE dup3_02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup3_02 : 0
+
+RUN LTP CASE epoll_create01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE epoll_create01 : 0
+
+RUN LTP CASE epoll_create02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE epoll_create02 : 0
+
+RUN LTP CASE epoll_create1_01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_create1_01 : 0
+
+RUN LTP CASE epoll_create1_02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_create1_02 : 0
+
+RUN LTP CASE epoll01
+Summary
+passed   33
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll01 : 0
+
+RUN LTP CASE epoll_ctl03
+Summary
+passed   256
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_ctl03 : 0
+
+RUN LTP CASE epoll_pwait01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait01 : 0
+
+RUN LTP CASE epoll_pwait02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait02 : 0
+
+RUN LTP CASE epoll_pwait04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait04 : 0
+
+RUN LTP CASE epoll_pwait05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait05 : 0
+
+RUN LTP CASE eventfd01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd01 : 0
+
+RUN LTP CASE eventfd02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd02 : 0
+
+RUN LTP CASE eventfd03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd03 : 0
+
+RUN LTP CASE eventfd04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd04 : 0
+
+RUN LTP CASE eventfd05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd05 : 0
+
+RUN LTP CASE eventfd2_01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd2_01 : 0
+
+RUN LTP CASE eventfd2_02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd2_02 : 0
+
+RUN LTP CASE eventfd2_03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd2_03 : 0
+
+RUN LTP CASE execl01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execl01 : 0
+
+RUN LTP CASE execle01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execle01 : 0
+
+RUN LTP CASE execlp01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execlp01 : 0
+
+RUN LTP CASE execv01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execv01 : 0
+
+RUN LTP CASE execve01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve01 : 0
+
+RUN LTP CASE execve02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve02 : 0
+
+RUN LTP CASE execve03
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve03 : 0
+
+RUN LTP CASE execve04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve04 : 0
+
+RUN LTP CASE execve05
+Summary
+passed   160
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve05 : 0
+
+RUN LTP CASE execve06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve06 : 0
+
+RUN LTP CASE execvp01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execvp01 : 0
+
+RUN LTP CASE execveat01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execveat01 : 0
+
+RUN LTP CASE execveat02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execveat02 : 0
+
+RUN LTP CASE execveat03
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE execveat03 : 0
+
+RUN LTP CASE exit01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE exit01 : 0
+
+RUN LTP CASE exit02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE exit02 : 0
+
+RUN LTP CASE exit_group01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE exit_group01 : 0
+
+RUN LTP CASE faccessat01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat01 : 0
+
+RUN LTP CASE faccessat02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat02 : 0
+
+RUN LTP CASE fsetxattr01
+Summary
+passed   81
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fsetxattr01 : 0
+
+RUN LTP CASE fsetxattr02
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 2
+FAIL LTP CASE fsetxattr02 : 0
+
+RUN LTP CASE posix_fadvise01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise01 : 0
+
+RUN LTP CASE posix_fadvise01_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise01_64 : 0
+
+RUN LTP CASE posix_fadvise03
+Summary
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise03 : 0
+
+RUN LTP CASE posix_fadvise03_64
+Summary
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise03_64 : 0
+
+RUN LTP CASE fchdir01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchdir01 : 0
+
+RUN LTP CASE fchdir02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchdir02 : 0
+
+RUN LTP CASE fchmod01
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmod01 : 0
+
+RUN LTP CASE fchmod03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmod03 : 0
+
+RUN LTP CASE fchmod04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmod04 : 0
+
+RUN LTP CASE fchown01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown01 : 0
+
+RUN LTP CASE fchown02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown02 : 0
+
+RUN LTP CASE fchown03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown03 : 0
+
+RUN LTP CASE fchown05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown05 : 0
+
+RUN LTP CASE fchownat02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchownat02 : 0
+
+RUN LTP CASE fcntl02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02 : 0
+
+RUN LTP CASE fcntl02_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02_64 : 0
+
+RUN LTP CASE fcntl03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03 : 0
+
+RUN LTP CASE fcntl03_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03_64 : 0
+
+RUN LTP CASE fcntl04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04 : 0
+
+RUN LTP CASE fcntl04_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04_64 : 0
+
+RUN LTP CASE fcntl05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05 : 0
+
+RUN LTP CASE fcntl05_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05_64 : 0
+
+RUN LTP CASE fcntl08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08 : 0
+
+RUN LTP CASE fcntl08_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08_64 : 0
+
+RUN LTP CASE fcntl09
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09 : 0
+
+RUN LTP CASE fcntl09_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09_64 : 0
+
+RUN LTP CASE fcntl10
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10 : 0
+
+RUN LTP CASE fcntl10_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10_64 : 0
+
+RUN LTP CASE fcntl11
 Summary
 passed   0
 failed   0
 broken   0
 skipped  0
 warnings 0
+FAIL LTP CASE fcntl11 : 0
+
+RUN LTP CASE fcntl11_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11_64 : 0
+
+RUN LTP CASE fcntl12
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12 : 0
+
+RUN LTP CASE fcntl12_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12_64 : 0
+
+RUN LTP CASE fcntl13
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13 : 0
+
+RUN LTP CASE fcntl13_64
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13_64 : 0
+
+RUN LTP CASE fcntl14
+Summary
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14 : 0
+
+RUN LTP CASE fcntl14_64
+Summary
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14_64 : 0
+
+RUN LTP CASE fcntl15
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15 : 0
+
+RUN LTP CASE fcntl15_64
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15_64 : 0
+
+RUN LTP CASE fcntl16
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16 : 0
+
+RUN LTP CASE fcntl16_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16_64 : 0
+
+RUN LTP CASE fcntl17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17 : 0
+
+RUN LTP CASE fcntl17_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17_64 : 0
+
+RUN LTP CASE fcntl18
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18 : 0
+
+RUN LTP CASE fcntl18_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18_64 : 0
+
+RUN LTP CASE fcntl19
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19 : 0
+
+RUN LTP CASE fcntl19_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19_64 : 0
+
+RUN LTP CASE fcntl20
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20 : 0
+
+RUN LTP CASE fcntl20_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20_64 : 0
+
+RUN LTP CASE fcntl21
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21 : 0
+
+RUN LTP CASE fcntl21_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21_64 : 0
+
+RUN LTP CASE fcntl22
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22 : 0
+
+RUN LTP CASE fcntl22_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22_64 : 0
+
+RUN LTP CASE fcntl23
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23 : 0
+
+RUN LTP CASE fcntl23_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23_64 : 0
+
+RUN LTP CASE fcntl27
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27 : 0
+
+RUN LTP CASE fcntl27_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27_64 : 0
+
+RUN LTP CASE fcntl29
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29 : 0
+
+RUN LTP CASE fcntl29_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29_64 : 0
+
+RUN LTP CASE fcntl30
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30 : 0
+
+RUN LTP CASE fcntl30_64
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30_64 : 0
+
+RUN LTP CASE fcntl31
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31 : 0
+
+RUN LTP CASE fcntl31_64
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31_64 : 0
+
+RUN LTP CASE fcntl34
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34 : 0
+
+RUN LTP CASE fcntl34_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34_64 : 0
+
+RUN LTP CASE fcntl35
+Summary
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE fcntl35 : 0
+
+RUN LTP CASE fcntl35_64
+Summary
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE fcntl35_64 : 0
+
+RUN LTP CASE fcntl36
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36 : 0
+
+RUN LTP CASE fcntl36_64
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36_64 : 0
+
+RUN LTP CASE fcntl37
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37 : 0
+
+RUN LTP CASE fcntl37_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37_64 : 0
+
+RUN LTP CASE fcntl38
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl38 : 0
+
+RUN LTP CASE fcntl38_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl38_64 : 0
+
+RUN LTP CASE fcntl39
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl39 : 0
+
+RUN LTP CASE fcntl39_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl39_64 : 0
+
+RUN LTP CASE fdatasync01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fdatasync01 : 0
+
+RUN LTP CASE fdatasync02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fdatasync02 : 0
+
+RUN LTP CASE fgetxattr01
+Summary
+passed   45
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr01 : 0
+
+RUN LTP CASE fgetxattr02
+Summary
+passed   13
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr02 : 0
+
+RUN LTP CASE fgetxattr03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr03 : 0
+
+RUN LTP CASE flistxattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr01 : 0
+
+RUN LTP CASE flistxattr02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr02 : 0
+
+RUN LTP CASE flistxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr03 : 0
+
+RUN LTP CASE flock01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock01 : 0
+
+RUN LTP CASE flock03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock03 : 0
+
+RUN LTP CASE flock06
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock06 : 0
+
+RUN LTP CASE fork01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork01 : 0
+
+RUN LTP CASE fork03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork03 : 0
+
+RUN LTP CASE fork04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork04 : 0
+
+RUN LTP CASE fork06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork06 : 0
+
+RUN LTP CASE fork07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork07 : 0
+
+RUN LTP CASE fork08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork08 : 0
+
+RUN LTP CASE fork09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork09 : 0
+
+RUN LTP CASE fork10
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork10 : 0
+
+RUN LTP CASE fork11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork11 : 0
+
+RUN LTP CASE fpathconf01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fpathconf01 : 0
+
+RUN LTP CASE fremovexattr01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr01 : 0
+
+RUN LTP CASE fremovexattr02
+Summary
+passed   27
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+
+RUN LTP CASE fstat02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat02 : 0
+
+RUN LTP CASE fstat02_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat02_64 : 0
+
+RUN LTP CASE fstat03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat03 : 0
+
+RUN LTP CASE fstat03_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat03_64 : 0
+
+RUN LTP CASE fstatat01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatat01 : 0
+
+RUN LTP CASE fstatfs02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs02 : 0
+
+RUN LTP CASE fstatfs02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs02_64 : 0
+
+RUN LTP CASE fsync01
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fsync01 : 0
+
+RUN LTP CASE ftruncate01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ftruncate01 : 0
+
+RUN LTP CASE ftruncate01_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ftruncate01_64 : 0
+
+RUN LTP CASE getcwd02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getcwd02 : 0
+
+RUN LTP CASE getcwd03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getcwd03 : 0
+
+RUN LTP CASE getdents01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE getdents01 : 0
+
+RUN LTP CASE getdomainname01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getdomainname01 : 0
+
+RUN LTP CASE getegid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid01 : 0
+
+RUN LTP CASE getegid01_16
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid01_16 : 0
+
+RUN LTP CASE getegid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid02 : 0
+
+RUN LTP CASE getegid02_16
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid02_16 : 0
+
+RUN LTP CASE geteuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE geteuid01 : 0
+
+RUN LTP CASE geteuid02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE geteuid02 : 0
+
+RUN LTP CASE getgid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getgid01 : 0
+
+RUN LTP CASE getgid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getgid03 : 0
+
+RUN LTP CASE getgroups03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getgroups03 : 0
+
+RUN LTP CASE gethostname01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gethostname01 : 0
+
+RUN LTP CASE getitimer01
+Summary
+passed   30
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getitimer01 : 0
+
+RUN LTP CASE getitimer02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getitimer02 : 0
+
+RUN LTP CASE getpagesize01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpagesize01 : 0
+
+RUN LTP CASE getpgid02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpgid02 : 0
+
+RUN LTP CASE getpgrp01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpgrp01 : 0
+
+RUN LTP CASE getpid01
+Summary
+passed   100
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpid01 : 0
+
+RUN LTP CASE getpid02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpid02 : 0
+
+RUN LTP CASE getppid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getppid01 : 0
+
+RUN LTP CASE getppid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getppid02 : 0
+
+RUN LTP CASE getpriority01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpriority01 : 0
+
+RUN LTP CASE getpriority02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpriority02 : 0
+
+RUN LTP CASE getrandom01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom01 : 0
+
+RUN LTP CASE getrandom02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom02 : 0
+
+RUN LTP CASE getrandom03
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom03 : 0
+
+RUN LTP CASE getrandom04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom04 : 0
+
+RUN LTP CASE getresgid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresgid01 : 0
+
+RUN LTP CASE getresgid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresgid02 : 0
+
+RUN LTP CASE getresgid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresgid03 : 0
+
+RUN LTP CASE getresuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresuid01 : 0
+
+RUN LTP CASE getresuid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresuid02 : 0
+
+RUN LTP CASE getresuid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresuid03 : 0
+
+RUN LTP CASE getrlimit01
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrlimit01 : 0
+
+RUN LTP CASE getrlimit02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrlimit02 : 0
+
+RUN LTP CASE getrusage01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrusage01 : 0
+
+RUN LTP CASE getrusage02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getrusage02 : 0
+
+RUN LTP CASE getsid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsid01 : 0
+
+RUN LTP CASE getsid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsid02 : 0
+
+RUN LTP CASE getsockopt02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsockopt02 : 0
+
+RUN LTP CASE gettid01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettid01 : 0
+
+RUN LTP CASE gettid02
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettid02 : 0
+
+RUN LTP CASE gettimeofday01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettimeofday01 : 0
+
+RUN LTP CASE gettimeofday02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettimeofday02 : 0
+
+RUN LTP CASE getuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getuid01 : 0
+
+RUN LTP CASE getuid03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getuid03 : 0
+
+RUN LTP CASE getxattr01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr01 : 0
+
+RUN LTP CASE getxattr02
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr02 : 0
+
+RUN LTP CASE getxattr03
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr03 : 0
+
+RUN LTP CASE getxattr04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr04 : 0
+
+RUN LTP CASE ioctl05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ioctl05 : 0
+
+RUN LTP CASE ioctl_ns07
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ioctl_ns07 : 0
+
+RUN LTP CASE fanotify01
+Summary
+passed   702
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify01 : 0
+
+RUN LTP CASE fanotify02
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify02 : 0
+
+RUN LTP CASE fanotify03
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify03 : 0
+
+RUN LTP CASE fanotify04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify04 : 0
+
+RUN LTP CASE fanotify05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify05 : 0
+
+RUN LTP CASE fanotify06
+Summary
+passed   9
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify06 : 0
+
+RUN LTP CASE fanotify07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify07 : 0
+
+RUN LTP CASE fanotify08
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify08 : 0
+
+RUN LTP CASE fanotify09
+Summary
+passed   76
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify09 : 0
+
+RUN LTP CASE fanotify10
+Summary
+passed   1047
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify10 : 0
+
+RUN LTP CASE fanotify11
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify11 : 0
+
+RUN LTP CASE fanotify12
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify12 : 0
+
+RUN LTP CASE fanotify13
+Summary
+passed   135
+failed   0
+broken   0
+skipped  216
+warnings 0
+FAIL LTP CASE fanotify13 : 0
+
+RUN LTP CASE fanotify14
+Summary
+passed   513
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify14 : 0
+
+RUN LTP CASE fanotify15
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify15 : 0
+
+RUN LTP CASE fanotify16
+Summary
+passed   1386
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify16 : 0
+
+RUN LTP CASE fanotify17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify17 : 0
+
+RUN LTP CASE fanotify18
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify18 : 0
+
+RUN LTP CASE fanotify19
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify19 : 0
+
+RUN LTP CASE fanotify20
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify20 : 0
+
+RUN LTP CASE fanotify21
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify21 : 0
+
+RUN LTP CASE fanotify22
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify22 : 0
+
+RUN LTP CASE fanotify23
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify23 : 0
+
+RUN LTP CASE lchown01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lchown01 : 0
+
+RUN LTP CASE lgetxattr01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr01 : 0
+
+RUN LTP CASE lgetxattr02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr02 : 0
+
+RUN LTP CASE link02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link02 : 0
+
+RUN LTP CASE link05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link05 : 0
+
+RUN LTP CASE listen01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listen01 : 0
+
+RUN LTP CASE listxattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr01 : 0
+
+RUN LTP CASE listxattr02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr02 : 0
+
+RUN LTP CASE listxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr03 : 0
+
+RUN LTP CASE llistxattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr01 : 0
+
+RUN LTP CASE llistxattr02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr02 : 0
+
+RUN LTP CASE llistxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr03 : 0
+
+RUN LTP CASE llseek02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llseek02 : 0
+
+RUN LTP CASE llseek03
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llseek03 : 0
+
+RUN LTP CASE lremovexattr01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lremovexattr01 : 0
+
+RUN LTP CASE lseek01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lseek01 : 0
+
+RUN LTP CASE lseek07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lseek07 : 0
+
+RUN LTP CASE lstat01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat01 : 0
+
+RUN LTP CASE lstat01_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat01_64 : 0
+
+RUN LTP CASE memset01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE memset01 : 0
+
+RUN LTP CASE memcmp01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE memcmp01 : 0
+
+RUN LTP CASE memcpy01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE memcpy01 : 0
+
+RUN LTP CASE mlockall01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlockall01 : 0
+
+RUN LTP CASE mlockall02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE mlockall02 : 0
+
+RUN LTP CASE mkdirat01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mkdirat01 : 0
+
+RUN LTP CASE mknod01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod01 : 0
+
+RUN LTP CASE mknod02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod02 : 0
+
+RUN LTP CASE mknod03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod03 : 0
+
+RUN LTP CASE mknod04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod04 : 0
+
+RUN LTP CASE mknod05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod05 : 0
+
+RUN LTP CASE mknod06
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod06 : 0
+
+RUN LTP CASE mknod08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod08 : 0
+
+RUN LTP CASE mknod09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod09 : 0
+
+RUN LTP CASE mknodat01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat01 : 0
+
+RUN LTP CASE mlock01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock01 : 0
+
+RUN LTP CASE mlock03
+Summary
+passed   20
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock03 : 0
+
+RUN LTP CASE mlock04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock04 : 0
+
+RUN LTP CASE mmap02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap02 : 0
+
+RUN LTP CASE mmap05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap05 : 0
+
+RUN LTP CASE mmap09
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap09 : 0
+
+RUN LTP CASE mmap11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap11 : 0
+
+RUN LTP CASE mmap15
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap15 : 0
+
+RUN LTP CASE mmap17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap17 : 0
+
+RUN LTP CASE mmap19
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap19 : 0
+
+RUN LTP CASE mmap20
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap20 : 0
+
+RUN LTP CASE mremap02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mremap02 : 0
+
+RUN LTP CASE msgctl03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msgctl03 : 0
+
+RUN LTP CASE msgctl12
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msgctl12 : 0
+
+RUN LTP CASE msync01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msync01 : 0
+
+RUN LTP CASE msync02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msync02 : 0
+
+RUN LTP CASE munlock01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munlock01 : 0
+
+RUN LTP CASE munmap01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munmap01 : 0
+
+RUN LTP CASE munmap02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munmap02 : 0
+
+RUN LTP CASE nanosleep02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nanosleep02 : 0
+
+RUN LTP CASE nanosleep04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nanosleep04 : 0
+
+RUN LTP CASE open01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open01 : 0
+
+RUN LTP CASE open03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open03 : 0
+
+RUN LTP CASE open04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open04 : 0
+
+RUN LTP CASE open09
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open09 : 0
+
+RUN LTP CASE open12
+Summary
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE open12 : 0
+
+RUN LTP CASE openat02
+Summary
+passed   1
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE openat02 : 0
+
+RUN LTP CASE madvise01
+Summary
+passed   20
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE madvise01 : 0
+
+RUN LTP CASE madvise05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE madvise05 : 0
+
+RUN LTP CASE newuname01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE newuname01 : 0
+
+RUN LTP CASE pathconf01
+Summary
+passed   17
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pathconf01 : 0
+
+RUN LTP CASE pidfd_open01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open01 : 0
+
+RUN LTP CASE pidfd_open03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open03 : 0
+
+RUN LTP CASE pidfd_open04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open04 : 0
+
+RUN LTP CASE pipe01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe01 : 0
+
+RUN LTP CASE pipe02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe02 : 0
+
+RUN LTP CASE pipe03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe03 : 0
+
+RUN LTP CASE pipe04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe04 : 0
+
+RUN LTP CASE pipe05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe05 : 0
+
+RUN LTP CASE pipe06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe06 : 0
+
+RUN LTP CASE pipe07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe07 : 0
+
+RUN LTP CASE pipe08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe08 : 0
+
+RUN LTP CASE pipe09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe09 : 0
+
+RUN LTP CASE pipe10
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe10 : 0
+
+RUN LTP CASE pipe11
+Summary
+passed   70
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe11 : 0
+
+RUN LTP CASE pipe12
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe12 : 0
+
+RUN LTP CASE poll01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE poll01 : 0
+
+RUN LTP CASE prctl05
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE prctl05 : 0
+
+RUN LTP CASE pread01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread01 : 0
+
+RUN LTP CASE pread01_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread01_64 : 0
+
+RUN LTP CASE pread02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread02 : 0
+
+RUN LTP CASE pread02_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread02_64 : 0
+
+RUN LTP CASE preadv01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv01 : 0
+
+RUN LTP CASE preadv01_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv01_64 : 0
+
+RUN LTP CASE preadv02
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv02 : 0
+
+RUN LTP CASE preadv02_64
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv02_64 : 0
+
+RUN LTP CASE preadv201
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv201 : 0
+
+RUN LTP CASE preadv201_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv201_64 : 0
+
+RUN LTP CASE preadv202
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv202 : 0
+
+RUN LTP CASE preadv202_64
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv202_64 : 0
+
+RUN LTP CASE pselect02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect02 : 0
+
+RUN LTP CASE pselect02_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect02_64 : 0
+
+RUN LTP CASE pselect03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect03 : 0
+
+RUN LTP CASE pselect03_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect03_64 : 0
+
+RUN LTP CASE ptrace01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace01 : 0
+
+RUN LTP CASE ptrace03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace03 : 0
+
+RUN LTP CASE ptrace05
+Summary
+passed   62
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace05 : 0
+
+RUN LTP CASE ptrace06
+Summary
+passed   64
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace06 : 0
+
+RUN LTP CASE ptrace11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace11 : 0
+
+RUN LTP CASE pwrite01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite01 : 0
+
+RUN LTP CASE pwrite02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite02 : 0
+
+RUN LTP CASE pwrite03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite03 : 0
+
+RUN LTP CASE pwrite04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite04 : 0
+
+RUN LTP CASE pwrite01_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite01_64 : 0
+
+RUN LTP CASE pwrite02_64
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite02_64 : 0
+
+RUN LTP CASE pwrite03_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite03_64 : 0
+
+RUN LTP CASE pwrite04_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite04_64 : 0
+
+RUN LTP CASE pwritev01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev01 : 0
+
+RUN LTP CASE pwritev01_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev01_64 : 0
+
+RUN LTP CASE pwritev02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev02 : 0
+
+RUN LTP CASE pwritev02_64
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev02_64 : 0
+
+RUN LTP CASE pwritev03
+Summary
+passed   24
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev03 : 0
+
+RUN LTP CASE pwritev03_64
+Summary
+passed   24
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev03_64 : 0
+
+RUN LTP CASE pwritev201
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev201 : 0
+
+RUN LTP CASE pwritev201_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev201_64 : 0
+
+RUN LTP CASE pwritev202
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev202 : 0
+
+RUN LTP CASE pwritev202_64
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev202_64 : 0
+
+RUN LTP CASE read01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE read01 : 0
+
+RUN LTP CASE read04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE read04 : 0
+
+RUN LTP CASE readdir01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readdir01 : 0
+
+RUN LTP CASE readlink01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readlink01 : 0
+
+RUN LTP CASE readv01
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readv01 : 0
+
+RUN LTP CASE recv01
+Summary
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE recv01 : 0
+
+RUN LTP CASE recvfrom01
+Summary
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE recvfrom01 : 0
+
+RUN LTP CASE recvmsg01
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE recvmsg01 : 0
+
+RUN LTP CASE recvmsg02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE recvmsg02 : 0
+
+RUN LTP CASE removexattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr01 : 0
+
+RUN LTP CASE removexattr02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr02 : 0
+
+RUN LTP CASE rename01
+Summary
+passed   72
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename01 : 0
+
+RUN LTP CASE rename03
+Summary
+passed   72
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename03 : 0
+
+RUN LTP CASE rename04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename04 : 0
+
+RUN LTP CASE rename05
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename05 : 0
+
+RUN LTP CASE rename06
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename06 : 0
+
+RUN LTP CASE rename08
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename08 : 0
+
+RUN LTP CASE rename10
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename10 : 0
+
+RUN LTP CASE rename14
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename14 : 0
+
+RUN LTP CASE rmdir01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rmdir01 : 0
+
+RUN LTP CASE rt_sigaction01
+Summary
+passed   150
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigaction01 : 0
+
+RUN LTP CASE rt_sigaction02
+Summary
+passed   150
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigaction02 : 0
+
+RUN LTP CASE rt_sigaction03
+Summary
+passed   150
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigaction03 : 0
+
+RUN LTP CASE rt_sigprocmask01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigprocmask01 : 0
+
+RUN LTP CASE rt_sigprocmask02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigprocmask02 : 0
+
+RUN LTP CASE sbrk02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sbrk02 : 0
+
+RUN LTP CASE sched_yield01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sched_yield01 : 0
+
+RUN LTP CASE select03
+Summary
+passed   16
+failed   0
+broken   0
+skipped  24
+warnings 0
+FAIL LTP CASE select03 : 0
+
+RUN LTP CASE sendfile02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile02 : 0
+
+RUN LTP CASE sendfile02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile02_64 : 0
+
+RUN LTP CASE sendfile03
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03 : 0
+
+RUN LTP CASE sendfile03_64
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03_64 : 0
+
+RUN LTP CASE sendfile04
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04 : 0
+
+RUN LTP CASE sendfile04_64
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04_64 : 0
+
+RUN LTP CASE sendfile05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05 : 0
+
+RUN LTP CASE sendfile05_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05_64 : 0
+
+RUN LTP CASE sendfile06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06 : 0
+
+RUN LTP CASE sendfile06_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06_64 : 0
+
+RUN LTP CASE sendfile07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07 : 0
+
+RUN LTP CASE sendfile07_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07_64 : 0
+
+RUN LTP CASE sendfile08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08 : 0
+
+RUN LTP CASE sendfile08_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08_64 : 0
+
+RUN LTP CASE sendmmsg02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sendmmsg02 : 0
+
+RUN LTP CASE set_robust_list01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE set_robust_list01 : 0
+
+RUN LTP CASE set_tid_address01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE set_tid_address01 : 0
+
+RUN LTP CASE setgid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgid01 : 0
+
+RUN LTP CASE setgid03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgid03 : 0
+
+RUN LTP CASE setgroups01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgroups01 : 0
+
+RUN LTP CASE setpgrp01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setpgrp01 : 0
+
+RUN LTP CASE setpgrp02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setpgrp02 : 0
+
+RUN LTP CASE setregid01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid01 : 0
+
+RUN LTP CASE setregid02
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid02 : 0
+
+RUN LTP CASE setregid03
+Summary
+passed   22
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid03 : 0
+
+RUN LTP CASE setregid04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid04 : 0
+
+RUN LTP CASE setresgid03
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid03 : 0
+
+RUN LTP CASE setresgid04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid04 : 0
+
+RUN LTP CASE setresuid01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid01 : 0
+
+RUN LTP CASE setresuid02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid02 : 0
+
+RUN LTP CASE setresuid03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid03 : 0
+
+RUN LTP CASE setresuid04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid04 : 0
+
+RUN LTP CASE setresuid05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid05 : 0
+
+RUN LTP CASE setreuid01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid01 : 0
+
+RUN LTP CASE setreuid02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid02 : 0
+
+RUN LTP CASE setreuid03
+Summary
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid03 : 0
+
+RUN LTP CASE setreuid04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid04 : 0
+
+RUN LTP CASE setreuid05
+Summary
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid05 : 0
+
+RUN LTP CASE setreuid06
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid06 : 0
+
+RUN LTP CASE setreuid07
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid07 : 0
+
+RUN LTP CASE setsockopt03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE setsockopt03 : 0
+
+RUN LTP CASE setuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setuid01 : 0
+
+RUN LTP CASE setxattr01
+Summary
+passed   81
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr01 : 0
+
+RUN LTP CASE setxattr02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr02 : 0
+
+RUN LTP CASE setxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr03 : 0
+
+RUN LTP CASE sigaction02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaction02 : 0
+
+RUN LTP CASE sigaltstack01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaltstack01 : 0
+
+RUN LTP CASE sigaltstack02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaltstack02 : 0
+
+RUN LTP CASE sighold02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sighold02 : 0
+
+RUN LTP CASE signal01
+Summary
+passed   4
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE signal01 : 0
+
+RUN LTP CASE signal02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal02 : 0
+
+RUN LTP CASE signal03
+Summary
+passed   31
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal03 : 0
+
+RUN LTP CASE signal04
+Summary
+passed   28
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal04 : 0
+
+RUN LTP CASE signal05
+Summary
+passed   31
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal05 : 0
+
+RUN LTP CASE signalfd01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signalfd01 : 0
+
+RUN LTP CASE signalfd4_01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signalfd4_01 : 0
+
+RUN LTP CASE signalfd4_02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signalfd4_02 : 0
+
+RUN LTP CASE sigpending02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sigpending02 : 0
+
+RUN LTP CASE sigprocmask01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigprocmask01 : 0
+
+RUN LTP CASE sigwait01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigwait01 : 0
+
+RUN LTP CASE socket02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socket02 : 0
+
+RUN LTP CASE socketpair02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socketpair02 : 0
+
+RUN LTP CASE splice01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice01 : 0
+
+RUN LTP CASE splice02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice02 : 0
+
+RUN LTP CASE splice03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice03 : 0
+
+RUN LTP CASE splice04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice04 : 0
+
+RUN LTP CASE splice05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice05 : 0
+
+RUN LTP CASE splice07
+Summary
+passed   615
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice07 : 0
+
+RUN LTP CASE splice08
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice08 : 0
+
+RUN LTP CASE splice09
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice09 : 0
+
+RUN LTP CASE stat01
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat01 : 0
+
+RUN LTP CASE stat01_64
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat01_64 : 0
+
+RUN LTP CASE stat02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat02 : 0
+
+RUN LTP CASE stat02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat02_64 : 0
+
+RUN LTP CASE statfs01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs01 : 0
+
+RUN LTP CASE statfs01_64
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs01_64 : 0
+
+RUN LTP CASE statfs02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs02 : 0
+
+RUN LTP CASE statfs02_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs02_64 : 0
+
+RUN LTP CASE statvfs01
+Summary
+passed   27
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statvfs01 : 0
+
+RUN LTP CASE statvfs02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statvfs02 : 0
+
+RUN LTP CASE string01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE string01 : 0
+
+RUN LTP CASE symlink01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink01 : 0
+
+RUN LTP CASE symlink02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink02 : 0
+
+RUN LTP CASE symlink04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink04 : 0
+
+RUN LTP CASE syscall01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE syscall01 : 0
+
+RUN LTP CASE sysconf01
+Summary
+passed   37
+failed   0
+broken   0
+skipped  19
+warnings 0
+FAIL LTP CASE sysconf01 : 0
+
+RUN LTP CASE sysinfo01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sysinfo01 : 0
+
+RUN LTP CASE sysinfo02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sysinfo02 : 0
+
+RUN LTP CASE tkill01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE tkill01 : 0
+
+RUN LTP CASE truncate02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate02 : 0
+
+RUN LTP CASE truncate02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate02_64 : 0
+
+RUN LTP CASE umask01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE umask01 : 0
+
+RUN LTP CASE uname01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE uname01 : 0
+
+RUN LTP CASE uname02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE uname02 : 0
+
+RUN LTP CASE uname04
+Summary
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE uname04 : 0
+
+RUN LTP CASE unlink05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlink05 : 0
+
+RUN LTP CASE unshare01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unshare01 : 0
+
+RUN LTP CASE umount01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE umount01 : 0
+
+RUN LTP CASE utime04
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime04 : 0
+
+RUN LTP CASE utime05
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime05 : 0
+
+RUN LTP CASE utime07
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime07 : 0
+
+RUN LTP CASE vfork02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE vfork02 : 0
+
+RUN LTP CASE wait01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait01 : 0
+
+RUN LTP CASE wait02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait02 : 0
+
+RUN LTP CASE wait401
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait401 : 0
+
+RUN LTP CASE wait402
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait402 : 0
+
+RUN LTP CASE wait403
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait403 : 0
+
+RUN LTP CASE waitpid01
+Summary
+passed   126
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE waitpid01 : 0
+
+RUN LTP CASE waitpid03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid03 : 0
+
+RUN LTP CASE waitpid04
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid04 : 0
+
+RUN LTP CASE waitpid06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid06 : 0
+
+RUN LTP CASE waitpid07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid07 : 0
+
+RUN LTP CASE waitpid08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid08 : 0
+
+RUN LTP CASE waitpid09
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid09 : 0
+
+RUN LTP CASE waitpid10
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid10 : 0
+
+RUN LTP CASE waitpid11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid11 : 0
+
+RUN LTP CASE waitpid12
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid12 : 0
+
+RUN LTP CASE waitpid13
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid13 : 0
+
+RUN LTP CASE waitid01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid01 : 0
+
+RUN LTP CASE waitid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid02 : 0
+
+RUN LTP CASE waitid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid03 : 0
+
+RUN LTP CASE waitid04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid04 : 0
+
+RUN LTP CASE waitid05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid05 : 0
+
+RUN LTP CASE waitid06
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid06 : 0
+
+RUN LTP CASE waitid07
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid07 : 0
+
+RUN LTP CASE waitid08
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid08 : 0
+
+RUN LTP CASE waitid09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid09 : 0
+
+RUN LTP CASE waitid10
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid10 : 0
+
+RUN LTP CASE waitid11
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid11 : 0
+
+RUN LTP CASE write01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write01 : 0
+
+RUN LTP CASE write02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write02 : 0
+
+RUN LTP CASE write03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write03 : 0
+
+RUN LTP CASE write05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write05 : 0
+
+RUN LTP CASE write06
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write06 : 0
+
+RUN LTP CASE writev01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev01 : 0
+
+RUN LTP CASE writev02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev02 : 0
+
+RUN LTP CASE writev03
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE writev03 : 0
+
+RUN LTP CASE writev05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev05 : 0
+
+RUN LTP CASE writev06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev06 : 0
+
+RUN LTP CASE futex_cmp_requeue01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_cmp_requeue01 : 0
+
+RUN LTP CASE futex_cmp_requeue02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_cmp_requeue02 : 0
+
+RUN LTP CASE futex_wait01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait01 : 0
+
+RUN LTP CASE futex_wait02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait02 : 0
+
+RUN LTP CASE futex_wait03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait03 : 0
+
+RUN LTP CASE futex_wait04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait04 : 0
+
+RUN LTP CASE futex_wait05
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait05 : 0
+
+RUN LTP CASE futex_wake01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wake01 : 0
+
+RUN LTP CASE futex_wake02
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wake02 : 0
+
+RUN LTP CASE futex_wake03
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wake03 : 0
+
+RUN LTP CASE futex_wake04
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE futex_wake04 : 0
+
+RUN LTP CASE memfd_create01
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE memfd_create01 : 0
+
+RUN LTP CASE statx01
+Summary
+passed   10
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE statx01 : 0
+
+RUN LTP CASE statx02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx02 : 0
+
+RUN LTP CASE statx03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx03 : 0
+
+RUN LTP CASE statx04
+Summary
+passed   30
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx04 : 0
+
+RUN LTP CASE statx05
+Summary
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE statx05 : 0
+
+RUN LTP CASE statx08
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx08 : 0
+
+RUN LTP CASE statx09
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE statx09 : 0
+
+RUN LTP CASE statx12
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx12 : 0
+
+RUN LTP CASE io_uring01
+Summary
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE io_uring01 : 0
+
+RUN LTP CASE accept01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept01 : 0
+
+RUN LTP CASE accept02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept02 : 0
+
+RUN LTP CASE accept4_01
+Summary
+passed   8
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE accept4_01 : 0
+
+RUN LTP CASE access01
+Summary
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access01 : 0
+
+RUN LTP CASE access02
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access02 : 0
+
+RUN LTP CASE access03
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+
+RUN LTP CASE access04
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access04 : 0
+
+RUN LTP CASE acct01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE acct01 : 0
+
+RUN LTP CASE add_key01
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key01 : 0
+
+RUN LTP CASE add_key02
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key02 : 0
+
+RUN LTP CASE add_key03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key03 : 0
+
+RUN LTP CASE add_key04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key04 : 0
+
+RUN LTP CASE add_key05
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key05 : 0
+
+RUN LTP CASE adjtimex01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex01 : 0
+
+RUN LTP CASE adjtimex02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE adjtimex02 : 0
+
+RUN LTP CASE adjtimex03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex03 : 0
+
+RUN LTP CASE alarm02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm02 : 0
+
+RUN LTP CASE alarm03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm03 : 0
+
+RUN LTP CASE alarm05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm05 : 0
+
+RUN LTP CASE alarm06
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm06 : 0
+
+RUN LTP CASE alarm07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm07 : 0
+
+RUN LTP CASE bind01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind01 : 0
+
+RUN LTP CASE bind02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind02 : 0
+
+RUN LTP CASE bind03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind03 : 0
+
+RUN LTP CASE bind04
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind04 : 0
+
+RUN LTP CASE bind05
+Summary
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind05 : 0
+
+RUN LTP CASE bind06
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE bind06 : 0
+
+RUN LTP CASE bpf_map01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_map01 : 0
+
+RUN LTP CASE bpf_prog01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog01 : 0
+
+RUN LTP CASE bpf_prog02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog02 : 0
+
+RUN LTP CASE bpf_prog03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog03 : 0
+
+RUN LTP CASE bpf_prog04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog04 : 0
+
+RUN LTP CASE brk01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE brk01 : 0
+
+RUN LTP CASE brk02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE brk02 : 0
+
+RUN LTP CASE capget01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget01 : 0
+
+RUN LTP CASE capget02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget02 : 0
+
+RUN LTP CASE capset01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset01 : 0
+
+RUN LTP CASE capset02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset02 : 0
+
+RUN LTP CASE capset03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset03 : 0
+
+RUN LTP CASE capset04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset04 : 0
+
+RUN LTP CASE chdir04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir04 : 0
+
+RUN LTP CASE chmod01
+Summary
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod01 : 0
+
+RUN LTP CASE chmod03
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chmod03 : 0
+
+RUN LTP CASE chown01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown01 : 0
+
+RUN LTP CASE chown02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown02 : 0
+
+RUN LTP CASE chown03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown03 : 0
+
+RUN LTP CASE chown05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chown05 : 0
+
+RUN LTP CASE chroot02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chroot02 : 0
+
+RUN LTP CASE chroot03
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chroot03 : 0
+
+RUN LTP CASE clock_adjtime01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_adjtime01 : 0
+
+RUN LTP CASE clock_adjtime02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_adjtime02 : 0
+
+RUN LTP CASE clock_nanosleep04
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_nanosleep04 : 0
+
+RUN LTP CASE clock_gettime01
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clock_gettime01 : 0
+
+RUN LTP CASE clone01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone01 : 0
+
+RUN LTP CASE clone02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone02 : 0
+
+RUN LTP CASE clone03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone03 : 0
+
+RUN LTP CASE clone04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone04 : 0
+
+RUN LTP CASE clone06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone06 : 0
+
+RUN LTP CASE clone07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone07 : 0
+
+RUN LTP CASE clone08
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone08 : 0
+
+RUN LTP CASE clone301
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone301 : 0
+
+RUN LTP CASE clone302
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE clone302 : 0
+
+RUN LTP CASE close01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close01 : 0
+
+RUN LTP CASE close02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close02 : 0
+
+RUN LTP CASE close_range01
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close_range01 : 0
+
+RUN LTP CASE close_range02
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE close_range02 : 0
+
+RUN LTP CASE confstr01
+Summary
+passed   34
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE confstr01 : 0
+
+RUN LTP CASE connect01
+Summary
+passed   4
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE connect01 : 0
+
+RUN LTP CASE creat01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat01 : 0
+
+RUN LTP CASE creat03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat03 : 0
+
+RUN LTP CASE creat05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE creat05 : 0
+
+RUN LTP CASE dup01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup01 : 0
+
+RUN LTP CASE dup02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup02 : 0
+
+RUN LTP CASE dup03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup03 : 0
+
+RUN LTP CASE dup04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup04 : 0
+
+RUN LTP CASE dup06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup06 : 0
+
+RUN LTP CASE dup07
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup07 : 0
+
+RUN LTP CASE dup201
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup201 : 0
+
+RUN LTP CASE dup202
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup202 : 0
+
+RUN LTP CASE dup203
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup203 : 0
+
+RUN LTP CASE dup204
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup204 : 0
+
+RUN LTP CASE dup205
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup205 : 0
+
+RUN LTP CASE dup206
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup206 : 0
+
+RUN LTP CASE dup207
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup207 : 0
+
+RUN LTP CASE dup3_01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup3_01 : 0
+
+RUN LTP CASE dup3_02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE dup3_02 : 0
+
+RUN LTP CASE epoll_create01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE epoll_create01 : 0
+
+RUN LTP CASE epoll_create02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE epoll_create02 : 0
+
+RUN LTP CASE epoll_create1_01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_create1_01 : 0
+
+RUN LTP CASE epoll_create1_02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_create1_02 : 0
+
+RUN LTP CASE epoll01
+Summary
+passed   33
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll01 : 0
+
+RUN LTP CASE epoll_ctl03
+Summary
+passed   256
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_ctl03 : 0
+
+RUN LTP CASE epoll_pwait01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait01 : 0
+
+RUN LTP CASE epoll_pwait02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait02 : 0
+
+RUN LTP CASE epoll_pwait04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait04 : 0
+
+RUN LTP CASE epoll_pwait05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE epoll_pwait05 : 0
+
+RUN LTP CASE eventfd01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd01 : 0
+
+RUN LTP CASE eventfd02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd02 : 0
+
+RUN LTP CASE eventfd03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd03 : 0
+
+RUN LTP CASE eventfd04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd04 : 0
+
+RUN LTP CASE eventfd05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd05 : 0
+
+RUN LTP CASE eventfd2_01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd2_01 : 0
+
+RUN LTP CASE eventfd2_02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd2_02 : 0
+
+RUN LTP CASE eventfd2_03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE eventfd2_03 : 0
+
+RUN LTP CASE execl01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execl01 : 0
+
+RUN LTP CASE execle01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execle01 : 0
+
+RUN LTP CASE execlp01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execlp01 : 0
+
+RUN LTP CASE execv01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execv01 : 0
+
+RUN LTP CASE execve01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve01 : 0
+
+RUN LTP CASE execve02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve02 : 0
+
+RUN LTP CASE execve03
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve03 : 0
+
+RUN LTP CASE execve04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve04 : 0
+
+RUN LTP CASE execve05
+Summary
+passed   160
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve05 : 0
+
+RUN LTP CASE execve06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execve06 : 0
+
+RUN LTP CASE execvp01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execvp01 : 0
+
+RUN LTP CASE execveat01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execveat01 : 0
+
+RUN LTP CASE execveat02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE execveat02 : 0
+
+RUN LTP CASE execveat03
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE execveat03 : 0
+
+RUN LTP CASE exit01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE exit01 : 0
+
+RUN LTP CASE exit02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE exit02 : 0
+
+RUN LTP CASE exit_group01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE exit_group01 : 0
+
+RUN LTP CASE faccessat01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat01 : 0
+
+RUN LTP CASE faccessat02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE faccessat02 : 0
+
+RUN LTP CASE fsetxattr01
+Summary
+passed   81
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fsetxattr01 : 0
+
+RUN LTP CASE fsetxattr02
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 2
+FAIL LTP CASE fsetxattr02 : 0
+
+RUN LTP CASE posix_fadvise01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise01 : 0
+
+RUN LTP CASE posix_fadvise01_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise01_64 : 0
+
+RUN LTP CASE posix_fadvise03
+Summary
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise03 : 0
+
+RUN LTP CASE posix_fadvise03_64
+Summary
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE posix_fadvise03_64 : 0
+
+RUN LTP CASE fchdir01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchdir01 : 0
+
+RUN LTP CASE fchdir02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchdir02 : 0
+
+RUN LTP CASE fchmod01
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmod01 : 0
+
+RUN LTP CASE fchmod03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmod03 : 0
+
+RUN LTP CASE fchmod04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchmod04 : 0
+
+RUN LTP CASE fchown01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown01 : 0
+
+RUN LTP CASE fchown02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown02 : 0
+
+RUN LTP CASE fchown03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown03 : 0
+
+RUN LTP CASE fchown05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchown05 : 0
+
+RUN LTP CASE fchownat02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fchownat02 : 0
+
+RUN LTP CASE fcntl02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02 : 0
+
+RUN LTP CASE fcntl02_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl02_64 : 0
+
+RUN LTP CASE fcntl03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03 : 0
+
+RUN LTP CASE fcntl03_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl03_64 : 0
+
+RUN LTP CASE fcntl04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04 : 0
+
+RUN LTP CASE fcntl04_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl04_64 : 0
+
+RUN LTP CASE fcntl05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05 : 0
+
+RUN LTP CASE fcntl05_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl05_64 : 0
+
+RUN LTP CASE fcntl08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08 : 0
+
+RUN LTP CASE fcntl08_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl08_64 : 0
+
+RUN LTP CASE fcntl09
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09 : 0
+
+RUN LTP CASE fcntl09_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl09_64 : 0
+
+RUN LTP CASE fcntl10
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10 : 0
+
+RUN LTP CASE fcntl10_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl10_64 : 0
+
+RUN LTP CASE fcntl11
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11 : 0
+
+RUN LTP CASE fcntl11_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl11_64 : 0
+
+RUN LTP CASE fcntl12
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12 : 0
+
+RUN LTP CASE fcntl12_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl12_64 : 0
+
+RUN LTP CASE fcntl13
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13 : 0
+
+RUN LTP CASE fcntl13_64
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl13_64 : 0
+
+RUN LTP CASE fcntl14
+Summary
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14 : 0
+
+RUN LTP CASE fcntl14_64
+Summary
+passed   96
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl14_64 : 0
+
+RUN LTP CASE fcntl15
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15 : 0
+
+RUN LTP CASE fcntl15_64
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl15_64 : 0
+
+RUN LTP CASE fcntl16
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16 : 0
+
+RUN LTP CASE fcntl16_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl16_64 : 0
+
+RUN LTP CASE fcntl17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17 : 0
+
+RUN LTP CASE fcntl17_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl17_64 : 0
+
+RUN LTP CASE fcntl18
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18 : 0
+
+RUN LTP CASE fcntl18_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl18_64 : 0
+
+RUN LTP CASE fcntl19
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19 : 0
+
+RUN LTP CASE fcntl19_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl19_64 : 0
+
+RUN LTP CASE fcntl20
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20 : 0
+
+RUN LTP CASE fcntl20_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl20_64 : 0
+
+RUN LTP CASE fcntl21
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21 : 0
+
+RUN LTP CASE fcntl21_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl21_64 : 0
+
+RUN LTP CASE fcntl22
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22 : 0
+
+RUN LTP CASE fcntl22_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl22_64 : 0
+
+RUN LTP CASE fcntl23
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23 : 0
+
+RUN LTP CASE fcntl23_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl23_64 : 0
+
+RUN LTP CASE fcntl27
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27 : 0
+
+RUN LTP CASE fcntl27_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl27_64 : 0
+
+RUN LTP CASE fcntl29
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29 : 0
+
+RUN LTP CASE fcntl29_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl29_64 : 0
+
+RUN LTP CASE fcntl30
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30 : 0
+
+RUN LTP CASE fcntl30_64
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl30_64 : 0
+
+RUN LTP CASE fcntl31
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31 : 0
+
+RUN LTP CASE fcntl31_64
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl31_64 : 0
+
+RUN LTP CASE fcntl34
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34 : 0
+
+RUN LTP CASE fcntl34_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl34_64 : 0
+
+RUN LTP CASE fcntl35
+Summary
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE fcntl35 : 0
+
+RUN LTP CASE fcntl35_64
+Summary
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE fcntl35_64 : 0
+
+RUN LTP CASE fcntl36
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36 : 0
+
+RUN LTP CASE fcntl36_64
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl36_64 : 0
+
+RUN LTP CASE fcntl37
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37 : 0
+
+RUN LTP CASE fcntl37_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fcntl37_64 : 0
+
+RUN LTP CASE fcntl38
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl38 : 0
+
+RUN LTP CASE fcntl38_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl38_64 : 0
+
+RUN LTP CASE fcntl39
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl39 : 0
+
+RUN LTP CASE fcntl39_64
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fcntl39_64 : 0
+
+RUN LTP CASE fdatasync01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fdatasync01 : 0
+
+RUN LTP CASE fdatasync02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fdatasync02 : 0
+
+RUN LTP CASE fgetxattr01
+Summary
+passed   45
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr01 : 0
+
+RUN LTP CASE fgetxattr02
+Summary
+passed   13
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr02 : 0
+
+RUN LTP CASE fgetxattr03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fgetxattr03 : 0
+
+RUN LTP CASE flistxattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr01 : 0
+
+RUN LTP CASE flistxattr02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr02 : 0
+
+RUN LTP CASE flistxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flistxattr03 : 0
+
+RUN LTP CASE flock01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock01 : 0
+
+RUN LTP CASE flock03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock03 : 0
+
+RUN LTP CASE flock06
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE flock06 : 0
+
+RUN LTP CASE fork01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork01 : 0
+
+RUN LTP CASE fork03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork03 : 0
+
+RUN LTP CASE fork04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork04 : 0
+
+RUN LTP CASE fork06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork06 : 0
+
+RUN LTP CASE fork07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork07 : 0
+
+RUN LTP CASE fork08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork08 : 0
+
+RUN LTP CASE fork09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork09 : 0
+
+RUN LTP CASE fork10
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork10 : 0
+
+RUN LTP CASE fork11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fork11 : 0
+
+RUN LTP CASE fpathconf01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fpathconf01 : 0
+
+RUN LTP CASE fremovexattr01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr01 : 0
+
+RUN LTP CASE fremovexattr02
+Summary
+passed   27
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+
+RUN LTP CASE fstat02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat02 : 0
+
+RUN LTP CASE fstat02_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat02_64 : 0
+
+RUN LTP CASE fstat03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat03 : 0
+
+RUN LTP CASE fstat03_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstat03_64 : 0
+
+RUN LTP CASE fstatat01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatat01 : 0
+
+RUN LTP CASE fstatfs02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs02 : 0
+
+RUN LTP CASE fstatfs02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fstatfs02_64 : 0
+
+RUN LTP CASE fsync01
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fsync01 : 0
+
+RUN LTP CASE ftruncate01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ftruncate01 : 0
+
+RUN LTP CASE ftruncate01_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ftruncate01_64 : 0
+
+RUN LTP CASE getcwd02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getcwd02 : 0
+
+RUN LTP CASE getcwd03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getcwd03 : 0
+
+RUN LTP CASE getdents01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE getdents01 : 0
+
+RUN LTP CASE getdomainname01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getdomainname01 : 0
+
+RUN LTP CASE getegid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid01 : 0
+
+RUN LTP CASE getegid01_16
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid01_16 : 0
+
+RUN LTP CASE getegid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid02 : 0
+
+RUN LTP CASE getegid02_16
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getegid02_16 : 0
+
+RUN LTP CASE geteuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE geteuid01 : 0
+
+RUN LTP CASE geteuid02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE geteuid02 : 0
+
+RUN LTP CASE getgid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getgid01 : 0
+
+RUN LTP CASE getgid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getgid03 : 0
+
+RUN LTP CASE getgroups03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getgroups03 : 0
+
+RUN LTP CASE gethostbyname_r01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gethostbyname_r01 : 0
+
+RUN LTP CASE gethostname01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gethostname01 : 0
+
+RUN LTP CASE gethostname02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gethostname02 : 0
+
+RUN LTP CASE getitimer01
+Summary
+passed   30
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getitimer01 : 0
+
+RUN LTP CASE getitimer02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getitimer02 : 0
+
+RUN LTP CASE getpagesize01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpagesize01 : 0
+
+RUN LTP CASE getpgid02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpgid02 : 0
+
+RUN LTP CASE getpgrp01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpgrp01 : 0
+
+RUN LTP CASE getpid01
+Summary
+passed   100
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpid01 : 0
+
+RUN LTP CASE getpid02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpid02 : 0
+
+RUN LTP CASE getppid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getppid01 : 0
+
+RUN LTP CASE getppid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getppid02 : 0
+
+RUN LTP CASE getpriority01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpriority01 : 0
+
+RUN LTP CASE getpriority02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getpriority02 : 0
+
+RUN LTP CASE getrandom01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom01 : 0
+
+RUN LTP CASE getrandom02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom02 : 0
+
+RUN LTP CASE getrandom03
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom03 : 0
+
+RUN LTP CASE getrandom04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrandom04 : 0
+
+RUN LTP CASE getresgid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresgid01 : 0
+
+RUN LTP CASE getresgid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresgid02 : 0
+
+RUN LTP CASE getresgid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresgid03 : 0
+
+RUN LTP CASE getresuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresuid01 : 0
+
+RUN LTP CASE getresuid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresuid02 : 0
+
+RUN LTP CASE getresuid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getresuid03 : 0
+
+RUN LTP CASE getrlimit01
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrlimit01 : 0
+
+RUN LTP CASE getrlimit02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrlimit02 : 0
+
+RUN LTP CASE getrusage01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getrusage01 : 0
+
+RUN LTP CASE getrusage02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE getrusage02 : 0
+
+RUN LTP CASE getsid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsid01 : 0
+
+RUN LTP CASE getsid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsid02 : 0
+
+RUN LTP CASE getsockopt02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getsockopt02 : 0
+
+RUN LTP CASE gettid01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettid01 : 0
+
+RUN LTP CASE gettid02
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettid02 : 0
+
+RUN LTP CASE gettimeofday01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettimeofday01 : 0
+
+RUN LTP CASE gettimeofday02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE gettimeofday02 : 0
+
+RUN LTP CASE getuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getuid01 : 0
+
+RUN LTP CASE getuid03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getuid03 : 0
+
+RUN LTP CASE getxattr01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr01 : 0
+
+RUN LTP CASE getxattr02
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr02 : 0
+
+RUN LTP CASE getxattr03
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr03 : 0
+
+RUN LTP CASE getxattr04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE getxattr04 : 0
+
+RUN LTP CASE ioctl05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ioctl05 : 0
+
+RUN LTP CASE ioctl_ns07
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ioctl_ns07 : 0
+
+RUN LTP CASE fanotify01
+Summary
+passed   702
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify01 : 0
+
+RUN LTP CASE fanotify02
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify02 : 0
+
+RUN LTP CASE fanotify03
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify03 : 0
+
+RUN LTP CASE fanotify04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify04 : 0
+
+RUN LTP CASE fanotify05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify05 : 0
+
+RUN LTP CASE fanotify06
+Summary
+passed   9
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify06 : 0
+
+RUN LTP CASE fanotify07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify07 : 0
+
+RUN LTP CASE fanotify08
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify08 : 0
+
+RUN LTP CASE fanotify09
+Summary
+passed   76
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify09 : 0
+
+RUN LTP CASE fanotify10
+Summary
+passed   1047
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify10 : 0
+
+RUN LTP CASE fanotify11
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify11 : 0
+
+RUN LTP CASE fanotify12
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify12 : 0
+
+RUN LTP CASE fanotify13
+Summary
+passed   135
+failed   0
+broken   0
+skipped  216
+warnings 0
+FAIL LTP CASE fanotify13 : 0
+
+RUN LTP CASE fanotify14
+Summary
+passed   513
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify14 : 0
+
+RUN LTP CASE fanotify15
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify15 : 0
+
+RUN LTP CASE fanotify16
+Summary
+passed   1386
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify16 : 0
+
+RUN LTP CASE fanotify17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  3
+warnings 0
+FAIL LTP CASE fanotify17 : 0
+
+RUN LTP CASE fanotify18
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify18 : 0
+
+RUN LTP CASE fanotify19
+Summary
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify19 : 0
+
+RUN LTP CASE fanotify20
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify20 : 0
+
+RUN LTP CASE fanotify21
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify21 : 0
+
+RUN LTP CASE fanotify22
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE fanotify22 : 0
+
+RUN LTP CASE fanotify23
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify23 : 0
+
+RUN LTP CASE lchown01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lchown01 : 0
+
+RUN LTP CASE lgetxattr01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr01 : 0
+
+RUN LTP CASE lgetxattr02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lgetxattr02 : 0
+
+RUN LTP CASE link02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link02 : 0
+
+RUN LTP CASE link05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link05 : 0
+
+RUN LTP CASE listen01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listen01 : 0
+
+RUN LTP CASE listxattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr01 : 0
+
+RUN LTP CASE listxattr02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr02 : 0
+
+RUN LTP CASE listxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE listxattr03 : 0
+
+RUN LTP CASE llistxattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr01 : 0
+
+RUN LTP CASE llistxattr02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr02 : 0
+
+RUN LTP CASE llistxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llistxattr03 : 0
+
+RUN LTP CASE llseek02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llseek02 : 0
+
+RUN LTP CASE llseek03
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE llseek03 : 0
+
+RUN LTP CASE lremovexattr01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lremovexattr01 : 0
+
+RUN LTP CASE lseek01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lseek01 : 0
+
+RUN LTP CASE lseek07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lseek07 : 0
+
+RUN LTP CASE lstat01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat01 : 0
+
+RUN LTP CASE lstat01_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE lstat01_64 : 0
+
+RUN LTP CASE memset01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE memset01 : 0
+
+RUN LTP CASE memcmp01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE memcmp01 : 0
+
+RUN LTP CASE memcpy01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE memcpy01 : 0
+
+RUN LTP CASE mlockall01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlockall01 : 0
+
+RUN LTP CASE mlockall02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE mlockall02 : 0
+
+RUN LTP CASE mkdirat01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mkdirat01 : 0
+
+RUN LTP CASE mknod01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod01 : 0
+
+RUN LTP CASE mknod02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod02 : 0
+
+RUN LTP CASE mknod03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod03 : 0
+
+RUN LTP CASE mknod04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod04 : 0
+
+RUN LTP CASE mknod05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod05 : 0
+
+RUN LTP CASE mknod06
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod06 : 0
+
+RUN LTP CASE mknod08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod08 : 0
+
+RUN LTP CASE mknod09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod09 : 0
+
+RUN LTP CASE mknodat01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat01 : 0
+
+RUN LTP CASE mlock01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock01 : 0
+
+RUN LTP CASE mlock03
+Summary
+passed   20
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock03 : 0
+
+RUN LTP CASE mlock04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mlock04 : 0
+
+RUN LTP CASE mmap02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap02 : 0
+
+RUN LTP CASE mmap05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap05 : 0
+
+RUN LTP CASE mmap09
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap09 : 0
+
+RUN LTP CASE mmap11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap11 : 0
+
+RUN LTP CASE mmap15
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap15 : 0
+
+RUN LTP CASE mmap17
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap17 : 0
+
+RUN LTP CASE mmap19
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap19 : 0
+
+RUN LTP CASE mmap20
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mmap20 : 0
+
+RUN LTP CASE mremap02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mremap02 : 0
+
+RUN LTP CASE msgctl03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msgctl03 : 0
+
+RUN LTP CASE msgctl12
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msgctl12 : 0
+
+RUN LTP CASE msync01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msync01 : 0
+
+RUN LTP CASE msync02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE msync02 : 0
+
+RUN LTP CASE munlock01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munlock01 : 0
+
+RUN LTP CASE munmap01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munmap01 : 0
+
+RUN LTP CASE munmap02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE munmap02 : 0
+
+RUN LTP CASE nanosleep02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nanosleep02 : 0
+
+RUN LTP CASE nanosleep04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE nanosleep04 : 0
+
+RUN LTP CASE open01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open01 : 0
+
+RUN LTP CASE open03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open03 : 0
+
+RUN LTP CASE open04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open04 : 0
+
+RUN LTP CASE open09
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE open09 : 0
+
+RUN LTP CASE open12
+Summary
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE open12 : 0
+
+RUN LTP CASE openat02
+Summary
+passed   1
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE openat02 : 0
+
+RUN LTP CASE madvise01
+Summary
+passed   20
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE madvise01 : 0
+
+RUN LTP CASE madvise05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE madvise05 : 0
+
+RUN LTP CASE newuname01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE newuname01 : 0
+
+RUN LTP CASE pathconf01
+Summary
+passed   17
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pathconf01 : 0
+
+RUN LTP CASE pidfd_open01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open01 : 0
+
+RUN LTP CASE pidfd_open03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open03 : 0
+
+RUN LTP CASE pidfd_open04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pidfd_open04 : 0
+
+RUN LTP CASE pipe01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe01 : 0
+
+RUN LTP CASE pipe02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe02 : 0
+
+RUN LTP CASE pipe03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe03 : 0
+
+RUN LTP CASE pipe04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe04 : 0
+
+RUN LTP CASE pipe05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe05 : 0
+
+RUN LTP CASE pipe06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe06 : 0
+
+RUN LTP CASE pipe07
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe07 : 0
+
+RUN LTP CASE pipe08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe08 : 0
+
+RUN LTP CASE pipe09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe09 : 0
+
+RUN LTP CASE pipe10
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe10 : 0
+
+RUN LTP CASE pipe11
+Summary
+passed   70
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe11 : 0
+
+RUN LTP CASE pipe12
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pipe12 : 0
+
+RUN LTP CASE poll01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE poll01 : 0
+
+RUN LTP CASE prctl05
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE prctl05 : 0
+
+RUN LTP CASE pread01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread01 : 0
+
+RUN LTP CASE pread01_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread01_64 : 0
+
+RUN LTP CASE pread02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread02 : 0
+
+RUN LTP CASE pread02_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pread02_64 : 0
+
+RUN LTP CASE preadv01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv01 : 0
+
+RUN LTP CASE preadv01_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv01_64 : 0
+
+RUN LTP CASE preadv02
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv02 : 0
+
+RUN LTP CASE preadv02_64
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv02_64 : 0
+
+RUN LTP CASE preadv201
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv201 : 0
+
+RUN LTP CASE preadv201_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv201_64 : 0
+
+RUN LTP CASE preadv202
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv202 : 0
+
+RUN LTP CASE preadv202_64
+Summary
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE preadv202_64 : 0
+
+RUN LTP CASE pselect02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect02 : 0
+
+RUN LTP CASE pselect02_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect02_64 : 0
+
+RUN LTP CASE pselect03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect03 : 0
+
+RUN LTP CASE pselect03_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pselect03_64 : 0
+
+RUN LTP CASE ptrace01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace01 : 0
+
+RUN LTP CASE ptrace03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace03 : 0
+
+RUN LTP CASE ptrace05
+Summary
+passed   63
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace05 : 0
+
+RUN LTP CASE ptrace06
+Summary
+passed   48
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace06 : 0
+
+RUN LTP CASE ptrace11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ptrace11 : 0
+
+RUN LTP CASE pwrite01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite01 : 0
+
+RUN LTP CASE pwrite02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite02 : 0
+
+RUN LTP CASE pwrite03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite03 : 0
+
+RUN LTP CASE pwrite04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite04 : 0
+
+RUN LTP CASE pwrite01_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite01_64 : 0
+
+RUN LTP CASE pwrite02_64
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite02_64 : 0
+
+RUN LTP CASE pwrite03_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite03_64 : 0
+
+RUN LTP CASE pwrite04_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwrite04_64 : 0
+
+RUN LTP CASE pwritev01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev01 : 0
+
+RUN LTP CASE pwritev01_64
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev01_64 : 0
+
+RUN LTP CASE pwritev02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev02 : 0
+
+RUN LTP CASE pwritev02_64
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev02_64 : 0
+
+RUN LTP CASE pwritev03
+Summary
+passed   24
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev03 : 0
+
+RUN LTP CASE pwritev03_64
+Summary
+passed   24
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev03_64 : 0
+
+RUN LTP CASE pwritev201
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev201 : 0
+
+RUN LTP CASE pwritev201_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev201_64 : 0
+
+RUN LTP CASE pwritev202
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev202 : 0
+
+RUN LTP CASE pwritev202_64
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE pwritev202_64 : 0
+
+RUN LTP CASE read01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE read01 : 0
+
+RUN LTP CASE read04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE read04 : 0
+
+RUN LTP CASE readdir01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readdir01 : 0
+
+RUN LTP CASE readlink01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readlink01 : 0
+
+RUN LTP CASE readv01
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE readv01 : 0
+
+RUN LTP CASE recv01
+Summary
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE recv01 : 0
+
+RUN LTP CASE recvfrom01
+Summary
+passed   2
+failed   0
+broken   2
+skipped  0
+warnings 0
+FAIL LTP CASE recvfrom01 : 0
+
+RUN LTP CASE recvmsg01
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE recvmsg01 : 0
+
+RUN LTP CASE recvmsg02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE recvmsg02 : 0
+
+RUN LTP CASE removexattr01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr01 : 0
+
+RUN LTP CASE removexattr02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE removexattr02 : 0
+
+RUN LTP CASE rename01
+Summary
+passed   72
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename01 : 0
+
+RUN LTP CASE rename03
+Summary
+passed   72
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename03 : 0
+
+RUN LTP CASE rename04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename04 : 0
+
+RUN LTP CASE rename05
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename05 : 0
+
+RUN LTP CASE rename06
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename06 : 0
+
+RUN LTP CASE rename08
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename08 : 0
+
+RUN LTP CASE rename10
+Summary
+passed   18
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename10 : 0
+
+RUN LTP CASE rename14
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rename14 : 0
+
+RUN LTP CASE rmdir01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rmdir01 : 0
+
+RUN LTP CASE rt_sigaction01
+Summary
+passed   155
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigaction01 : 0
+
+RUN LTP CASE rt_sigaction02
+Summary
+passed   155
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigaction02 : 0
+
+RUN LTP CASE rt_sigaction03
+Summary
+passed   155
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigaction03 : 0
+
+RUN LTP CASE rt_sigprocmask01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigprocmask01 : 0
+
+RUN LTP CASE rt_sigprocmask02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE rt_sigprocmask02 : 0
+
+RUN LTP CASE sbrk01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sbrk01 : 0
+
+RUN LTP CASE sbrk02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sbrk02 : 0
+
+RUN LTP CASE sched_yield01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sched_yield01 : 0
+
+RUN LTP CASE select03
+Summary
+passed   16
+failed   0
+broken   0
+skipped  24
+warnings 0
+FAIL LTP CASE select03 : 0
+
+RUN LTP CASE sendfile02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile02 : 0
+
+RUN LTP CASE sendfile02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile02_64 : 0
+
+RUN LTP CASE sendfile03
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03 : 0
+
+RUN LTP CASE sendfile03_64
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile03_64 : 0
+
+RUN LTP CASE sendfile04
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04 : 0
+
+RUN LTP CASE sendfile04_64
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile04_64 : 0
+
+RUN LTP CASE sendfile05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05 : 0
+
+RUN LTP CASE sendfile05_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile05_64 : 0
+
+RUN LTP CASE sendfile06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06 : 0
+
+RUN LTP CASE sendfile06_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile06_64 : 0
+
+RUN LTP CASE sendfile07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07 : 0
+
+RUN LTP CASE sendfile07_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile07_64 : 0
+
+RUN LTP CASE sendfile08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08 : 0
+
+RUN LTP CASE sendfile08_64
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sendfile08_64 : 0
+
+RUN LTP CASE set_robust_list01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE set_robust_list01 : 0
+
+RUN LTP CASE set_tid_address01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE set_tid_address01 : 0
+
+RUN LTP CASE setgid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgid01 : 0
+
+RUN LTP CASE setgid03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgid03 : 0
+
+RUN LTP CASE setgroups01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setgroups01 : 0
+
+RUN LTP CASE setpgrp01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setpgrp01 : 0
+
+RUN LTP CASE setpgrp02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setpgrp02 : 0
+
+RUN LTP CASE setregid01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid01 : 0
+
+RUN LTP CASE setregid02
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid02 : 0
+
+RUN LTP CASE setregid03
+Summary
+passed   22
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid03 : 0
+
+RUN LTP CASE setregid04
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setregid04 : 0
+
+RUN LTP CASE setresgid03
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid03 : 0
+
+RUN LTP CASE setresgid04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresgid04 : 0
+
+RUN LTP CASE setresuid01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid01 : 0
+
+RUN LTP CASE setresuid02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid02 : 0
+
+RUN LTP CASE setresuid03
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid03 : 0
+
+RUN LTP CASE setresuid04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid04 : 0
+
+RUN LTP CASE setresuid05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setresuid05 : 0
+
+RUN LTP CASE setreuid01
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid01 : 0
+
+RUN LTP CASE setreuid02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid02 : 0
+
+RUN LTP CASE setreuid03
+Summary
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid03 : 0
+
+RUN LTP CASE setreuid04
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid04 : 0
+
+RUN LTP CASE setreuid05
+Summary
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid05 : 0
+
+RUN LTP CASE setreuid06
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid06 : 0
+
+RUN LTP CASE setreuid07
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setreuid07 : 0
+
+RUN LTP CASE setsockopt03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE setsockopt03 : 0
+
+RUN LTP CASE setuid01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setuid01 : 0
+
+RUN LTP CASE setxattr01
+Summary
+passed   81
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr01 : 0
+
+RUN LTP CASE setxattr02
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr02 : 0
+
+RUN LTP CASE setxattr03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE setxattr03 : 0
+
+RUN LTP CASE shmat03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE shmat03 : 0
+
+RUN LTP CASE sigaction02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaction02 : 0
+
+RUN LTP CASE sigaltstack01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigaltstack01 : 0
+
+RUN LTP CASE sighold02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sighold02 : 0
+
+RUN LTP CASE signal01
+Summary
+passed   4
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE signal01 : 0
+
+RUN LTP CASE signal02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal02 : 0
+
+RUN LTP CASE signal03
+Summary
+passed   30
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal03 : 0
+
+RUN LTP CASE signal04
+Summary
+passed   28
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal04 : 0
+
+RUN LTP CASE signal05
+Summary
+passed   30
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signal05 : 0
+
+RUN LTP CASE signalfd01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signalfd01 : 0
+
+RUN LTP CASE signalfd4_01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signalfd4_01 : 0
+
+RUN LTP CASE signalfd4_02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE signalfd4_02 : 0
+
+RUN LTP CASE sigpending02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE sigpending02 : 0
+
+RUN LTP CASE sigprocmask01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigprocmask01 : 0
+
+RUN LTP CASE sigwait01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sigwait01 : 0
+
+RUN LTP CASE socket02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socket02 : 0
+
+RUN LTP CASE socketpair02
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE socketpair02 : 0
+
+RUN LTP CASE splice01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice01 : 0
+
+RUN LTP CASE splice02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice02 : 0
+
+RUN LTP CASE splice03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice03 : 0
+
+RUN LTP CASE splice04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice04 : 0
+
+RUN LTP CASE splice05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice05 : 0
+
+RUN LTP CASE splice07
+Summary
+passed   615
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice07 : 0
+
+RUN LTP CASE splice08
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice08 : 0
+
+RUN LTP CASE splice09
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE splice09 : 0
+
+RUN LTP CASE stat01
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat01 : 0
+
+RUN LTP CASE stat01_64
+Summary
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat01_64 : 0
+
+RUN LTP CASE stat02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat02 : 0
+
+RUN LTP CASE stat02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE stat02_64 : 0
+
+RUN LTP CASE statfs01
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs01 : 0
+
+RUN LTP CASE statfs01_64
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs01_64 : 0
+
+RUN LTP CASE statfs02
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs02 : 0
+
+RUN LTP CASE statfs02_64
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statfs02_64 : 0
+
+RUN LTP CASE statvfs01
+Summary
+passed   27
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statvfs01 : 0
+
+RUN LTP CASE statvfs02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statvfs02 : 0
+
+RUN LTP CASE string01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE string01 : 0
+
+RUN LTP CASE symlink01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink01 : 0
+
+RUN LTP CASE symlink02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink02 : 0
+
+RUN LTP CASE symlink04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE symlink04 : 0
+
+RUN LTP CASE syscall01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE syscall01 : 0
+
+RUN LTP CASE sysconf01
+Summary
+passed   46
+failed   0
+broken   0
+skipped  10
+warnings 0
+FAIL LTP CASE sysconf01 : 0
+
+RUN LTP CASE sysinfo01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sysinfo01 : 0
+
+RUN LTP CASE sysinfo02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE sysinfo02 : 0
+
+RUN LTP CASE tkill01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE tkill01 : 0
+
+RUN LTP CASE truncate02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate02 : 0
+
+RUN LTP CASE truncate02_64
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE truncate02_64 : 0
+
+RUN LTP CASE ulimit01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE ulimit01 : 0
+
+RUN LTP CASE umask01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE umask01 : 0
+
+RUN LTP CASE uname01
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE uname01 : 0
+
+RUN LTP CASE uname02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE uname02 : 0
+
+RUN LTP CASE uname04
+Summary
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE uname04 : 0
+
+RUN LTP CASE unlink05
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unlink05 : 0
+
+RUN LTP CASE unshare01
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE unshare01 : 0
+
+RUN LTP CASE umount01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE umount01 : 0
+
+RUN LTP CASE utime04
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime04 : 0
+
+RUN LTP CASE utime05
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime05 : 0
+
+RUN LTP CASE utime07
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime07 : 0
+
+RUN LTP CASE vfork02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE vfork02 : 0
+
+RUN LTP CASE wait01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait01 : 0
+
+RUN LTP CASE wait02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait02 : 0
+
+RUN LTP CASE wait401
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait401 : 0
+
+RUN LTP CASE wait402
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait402 : 0
+
+RUN LTP CASE wait403
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE wait403 : 0
+
+RUN LTP CASE waitpid01
+Summary
+passed   126
+failed   0
+broken   0
+skipped  2
+warnings 0
+FAIL LTP CASE waitpid01 : 0
+
+RUN LTP CASE waitpid03
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid03 : 0
+
+RUN LTP CASE waitpid04
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid04 : 0
+
+RUN LTP CASE waitpid06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid06 : 0
+
+RUN LTP CASE waitpid07
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid07 : 0
+
+RUN LTP CASE waitpid08
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid08 : 0
+
+RUN LTP CASE waitpid09
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid09 : 0
+
+RUN LTP CASE waitpid10
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid10 : 0
+
+RUN LTP CASE waitpid11
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid11 : 0
+
+RUN LTP CASE waitpid12
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid12 : 0
+
+RUN LTP CASE waitpid13
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitpid13 : 0
+
+RUN LTP CASE waitid01
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid01 : 0
+
+RUN LTP CASE waitid02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid02 : 0
+
+RUN LTP CASE waitid03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid03 : 0
+
+RUN LTP CASE waitid04
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid04 : 0
+
+RUN LTP CASE waitid05
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid05 : 0
+
+RUN LTP CASE waitid06
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid06 : 0
+
+RUN LTP CASE waitid07
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid07 : 0
+
+RUN LTP CASE waitid08
+Summary
+passed   10
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid08 : 0
+
+RUN LTP CASE waitid09
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid09 : 0
+
+RUN LTP CASE waitid10
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid10 : 0
+
+RUN LTP CASE waitid11
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE waitid11 : 0
+
+RUN LTP CASE write01
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write01 : 0
+
+RUN LTP CASE write02
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write02 : 0
+
+RUN LTP CASE write03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write03 : 0
+
+RUN LTP CASE write05
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write05 : 0
+
+RUN LTP CASE write06
+Summary
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE write06 : 0
+
+RUN LTP CASE writev01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev01 : 0
+
+RUN LTP CASE writev02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev02 : 0
+
+RUN LTP CASE writev05
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev05 : 0
+
+RUN LTP CASE writev06
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE writev06 : 0
+
+RUN LTP CASE futex_cmp_requeue02
+Summary
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_cmp_requeue02 : 0
+
+RUN LTP CASE futex_wait01
+Summary
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait01 : 0
+
+RUN LTP CASE futex_wait02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait02 : 0
+
+RUN LTP CASE futex_wait03
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait03 : 0
+
+RUN LTP CASE futex_wait04
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait04 : 0
+
+RUN LTP CASE futex_wait05
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wait05 : 0
+
+RUN LTP CASE futex_wake01
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wake01 : 0
+
+RUN LTP CASE futex_wake02
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wake02 : 0
+
+RUN LTP CASE futex_wake03
+Summary
+passed   11
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE futex_wake03 : 0
+
+RUN LTP CASE futex_wake04
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE futex_wake04 : 0
+
+RUN LTP CASE memfd_create01
+Summary
+passed   2
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE memfd_create01 : 0
+
+RUN LTP CASE statx01
+Summary
+passed   10
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE statx01 : 0
+
+RUN LTP CASE statx02
+Summary
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx02 : 0
+
+RUN LTP CASE statx03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx03 : 0
+
+RUN LTP CASE statx04
+Summary
+passed   30
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx04 : 0
+
+RUN LTP CASE statx05
+Summary
+passed   0
+failed   0
+broken   1
+skipped  0
+warnings 1
+FAIL LTP CASE statx05 : 0
+
+RUN LTP CASE statx08
+Summary
+passed   90
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx08 : 0
+
+RUN LTP CASE statx09
+Summary
+passed   0
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE statx09 : 0
+
+RUN LTP CASE statx12
+Summary
+passed   36
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE statx12 : 0
+
+RUN LTP CASE io_uring01
+Summary
+passed   1
+failed   0
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE io_uring01 : 0
+
+Summary
+passed   20176
+failed   2388
+broken   73
+skipped  619
+warnings 17

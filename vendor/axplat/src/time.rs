@@ -1,5 +1,7 @@
 //! Time-related operations.
 
+use core::sync::atomic::{AtomicI64, Ordering};
+
 pub use core::time::Duration;
 
 /// A measurement of the system clock.
@@ -18,6 +20,8 @@ pub const NANOS_PER_SEC: u64 = 1_000_000_000;
 pub const NANOS_PER_MILLIS: u64 = 1_000_000;
 /// Number of nanoseconds in a microsecond.
 pub const NANOS_PER_MICROS: u64 = 1_000;
+
+static REALTIME_OFFSET_NANOS: AtomicI64 = AtomicI64::new(0);
 
 /// Time-related interfaces.
 #[def_plat_interface]
@@ -65,6 +69,34 @@ pub fn wall_time_nanos() -> u64 {
 /// Returns the time elapsed since epoch (also known as realtime) in [`TimeValue`].
 pub fn wall_time() -> TimeValue {
     TimeValue::from_nanos(monotonic_time_nanos() + epochoffset_nanos())
+}
+
+/// Sets the offset applied to realtime clock reads.
+pub fn set_realtime_offset_nanos(offset: i64) {
+    REALTIME_OFFSET_NANOS.store(offset, Ordering::Relaxed);
+}
+
+/// Returns the offset applied to realtime clock reads.
+pub fn realtime_offset_nanos() -> i64 {
+    REALTIME_OFFSET_NANOS.load(Ordering::Relaxed)
+}
+
+fn add_realtime_offset(nanos: u64, offset: i64) -> u64 {
+    if offset >= 0 {
+        nanos.saturating_add(offset as u64)
+    } else {
+        nanos.saturating_sub(offset.unsigned_abs())
+    }
+}
+
+/// Returns adjusted realtime nanoseconds elapsed since epoch.
+pub fn realtime_time_nanos() -> u64 {
+    add_realtime_offset(wall_time_nanos(), realtime_offset_nanos())
+}
+
+/// Returns adjusted realtime elapsed since epoch.
+pub fn realtime_time() -> TimeValue {
+    TimeValue::from_nanos(realtime_time_nanos())
 }
 
 /// Busy waiting for the given duration.

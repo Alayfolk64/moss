@@ -149,6 +149,30 @@ impl CowBackend {
         Ok(())
     }
 
+    fn share_existing_at(
+        &self,
+        vaddr: VirtAddr,
+        paddr: PhysAddr,
+        flags: MappingFlags,
+        old_pt: &mut PageTableMut,
+        new_pt: &mut PageTableMut,
+    ) -> AxResult {
+        let frame = FRAME_TABLE
+            .lock()
+            .get_frame_ref(paddr)
+            .ok_or(AxError::BadAddress)?;
+        let mut frame = frame.lock();
+        assert!(frame.0 > 0, "referencing unreferenced frame");
+        let Some(new_ref_cnt) = frame.0.checked_add(1) else {
+            warn!("frame reference count overflow");
+            return Err(AxError::BadAddress);
+        };
+        old_pt.protect(vaddr, flags)?;
+        new_pt.map(vaddr, paddr, self.size, flags)?;
+        frame.0 = new_ref_cnt;
+        Ok(())
+    }
+
     fn handle_cow_fault(
         &self,
         vaddr: VirtAddr,
@@ -257,9 +281,10 @@ impl BackendOps for CowBackend {
         new_pt: &mut PageTableMut,
         _new_aspace: &Arc<Mutex<AddrSpace>>,
     ) -> AxResult<Backend> {
+        let eager_share_file = self.file.is_some() && !flags.contains(MappingFlags::WRITE);
         // Forking untouched lazy COW regions is common (e.g. fork14). In that
         // case, there is nothing in page tables to duplicate.
-        if self.mapped_pages.load(Ordering::Relaxed) == 0 {
+        if self.mapped_pages.load(Ordering::Relaxed) == 0 && !eager_share_file {
             return Ok(Backend::Cow(self.clone()));
         }
 
@@ -274,19 +299,17 @@ impl BackendOps for CowBackend {
                     // - Update its permissions in the old page table using `flags`.
                     // - Map the same physical page into the new page table at the same
                     // virtual address, with the same page size and `flags`.
-                    let frame = FRAME_TABLE
-                        .lock()
-                        .get_frame_ref(paddr)
-                        .ok_or(AxError::BadAddress)?;
-                    let mut frame = frame.lock();
-                    assert!(frame.0 > 0, "referencing unreferenced frame");
-                    let Some(new_ref_cnt) = frame.0.checked_add(1) else {
-                        warn!("frame reference count overflow");
-                        return Err(AxError::BadAddress);
-                    };
-                    old_pt.protect(vaddr, cow_flags)?;
-                    new_pt.map(vaddr, paddr, self.size, cow_flags)?;
-                    frame.0 = new_ref_cnt;
+                    self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)?;
+                }
+                Err(PagingError::NotMapped) if eager_share_file => {
+                    // Read-only private file mappings are safe to share across
+                    // fork. Populate them in the parent before cloning so a
+                    // fork storm does not allocate the same executable/library
+                    // pages independently in every child.
+                    self.alloc_new_at(vaddr, cow_flags, old_pt)?;
+                    let (paddr, _, page_size) = old_pt.query(vaddr)?;
+                    assert_eq!(page_size, self.size);
+                    self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)?;
                 }
                 // If the page is not mapped, skip it.
                 Err(PagingError::NotMapped) => {}

@@ -3,7 +3,7 @@ use core::ffi::{c_char, c_void};
 use axdriver::prelude::{BaseDriverOps, BlockDriverOps, DevError, DevResult, DeviceType};
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FileBackend};
-use linux_raw_sys::general::{MS_BIND, MS_RDONLY};
+use linux_raw_sys::general::{MS_BIND, MS_NOSYMFOLLOW, MS_RDONLY, MS_REMOUNT};
 use starry_vm::VmPtr;
 
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
 };
 
 const LOOP_BLOCK_SIZE: usize = 512;
+const SUPPORTED_MOUNT_FLAGS: u32 = MS_RDONLY | MS_NOSYMFOLLOW;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum MountKind {
@@ -169,8 +170,13 @@ pub fn sys_mount(
 ) -> AxResult<isize> {
     let source = source.nullable().map(vm_load_string).transpose()?;
     let target = vm_load_string(target)?;
-    let fs_type = vm_load_string(fs_type)?;
+    let fs_type = fs_type
+        .nullable()
+        .map(vm_load_string)
+        .transpose()?
+        .unwrap_or_default();
     debug!("sys_mount <= source: {source:?}, target: {target:?}, fs_type: {fs_type:?}");
+    let mount_flags = flags as u32 & SUPPORTED_MOUNT_FLAGS;
 
     if flags as u32 & MS_BIND != 0 {
         let Some(source) = source.as_deref() else {
@@ -183,13 +189,22 @@ pub fn sys_mount(
         return Ok(0);
     }
 
+    if flags as u32 & MS_REMOUNT != 0 {
+        let target = FS_CONTEXT.lock().resolve(target)?;
+        if !target.is_root_of_mount() {
+            return Err(AxError::InvalidInput);
+        }
+        target.mountpoint().set_mount_flags(mount_flags);
+        return Ok(0);
+    }
+
     let Some(kind) = detect_mount_kind(&fs_type) else {
         return Err(AxError::NoSuchDevice);
     };
 
     match kind {
         MountKind::Tmpfs | MountKind::CompatMemory => {
-            let fs = MemoryFs::new_with_flags(flags as u32 & MS_RDONLY);
+            let fs = MemoryFs::new();
             if kind == MountKind::CompatMemory {
                 debug!(
                     "mount: use tmpfs-compatible backend for fs_type={fs_type:?}, \
@@ -197,7 +212,7 @@ pub fn sys_mount(
                 );
             }
             let target = FS_CONTEXT.lock().resolve(target)?;
-            target.mount(&fs)?;
+            target.mount_with_flags(&fs, mount_flags)?;
             Ok(0)
         }
         MountKind::Ext4 => {
@@ -228,7 +243,7 @@ pub fn sys_mount(
                         return Err(err.into());
                     }
                 };
-                if let Err(err) = target.mount(&fs) {
+                if let Err(err) = target.mount_with_flags(&fs, mount_flags) {
                     warn!("mount ext4: source={source} mount target failed: {err:?}");
                     return Err(err.into());
                 }
@@ -271,7 +286,7 @@ pub fn sys_mount(
                     return Err(err.into());
                 }
             };
-            if let Err(err) = target.mount(&fs) {
+            if let Err(err) = target.mount_with_flags(&fs, mount_flags) {
                 warn!(
                     "mount ext4: source={source} index={} mount target failed: {err:?}",
                     dev_idx
