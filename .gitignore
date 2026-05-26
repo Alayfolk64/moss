@@ -28,3 +28,6 @@
 *.xz
 /output_rv.txt
 /output_la.txt
+/summary_la.txt
+/summary_rv.txt
+/total.txt
