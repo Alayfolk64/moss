@@ -6,10 +6,11 @@ use core::{
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileFlags, OpenOptions};
+use axfs_ng_vfs::NodeType;
 use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
-use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD};
+use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD, O_ACCMODE, O_WRONLY};
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
@@ -208,6 +209,32 @@ pub fn sys_fadvise64(
     if advice > 5 {
         return Err(AxError::InvalidInput);
     }
+    Ok(0)
+}
+
+pub fn sys_readahead(fd: c_int, offset: __kernel_off_t, _count: usize) -> AxResult<isize> {
+    debug!("sys_readahead <= fd: {fd}, offset: {offset}");
+    if offset < 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let file_like = get_file_like(fd)?;
+    if file_like.path().as_ref() == "anon_inode:[pidfd]" {
+        return Ok(0);
+    }
+    if file_like.downcast_ref::<Pipe>().is_some() {
+        return Err(AxError::from(LinuxError::ESPIPE));
+    }
+    let Some(file) = file_like.downcast_ref::<File>() else {
+        return Err(AxError::InvalidInput);
+    };
+    if file.inner().is_path() || file.status_flags() & O_ACCMODE == O_WRONLY {
+        return Err(AxError::BadFileDescriptor);
+    }
+    if file.inner().location().metadata()?.node_type != NodeType::RegularFile {
+        return Err(AxError::InvalidInput);
+    }
+
     Ok(0)
 }
 

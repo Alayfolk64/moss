@@ -9,7 +9,9 @@ use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
-use axfs_ng_vfs::{DirEntry, FileNode, Location, NodeType, Reference, VfsError, path::Path};
+use axfs_ng_vfs::{
+    DirEntry, FileNode, Location, NodePermission, NodeType, Reference, VfsError, path::Path,
+};
 use axio::{Seek, SeekFrom};
 use axtask::{current, yield_now};
 use bitflags::bitflags;
@@ -188,6 +190,34 @@ fn check_protected_symlink_follow(dirfd: c_int, path: &str, flags: u32, uid: u32
     })
 }
 
+fn creation_mode_and_owner(
+    dirfd: c_int,
+    path: &str,
+    flags: u32,
+    mode: __kernel_mode_t,
+    (uid, gid): (u32, u32),
+) -> AxResult<(__kernel_mode_t, (u32, u32))> {
+    if flags & O_CREAT == 0 {
+        return Ok((mode, (uid, gid)));
+    }
+
+    let mut mode = mode;
+    // Linux clears setuid/setgid bits for newly-created regular files.
+    mode &= !((S_ISUID | S_ISGID) as __kernel_mode_t);
+
+    let gid = with_fs(dirfd, |fs| {
+        let (parent, _) = fs.resolve_parent(Path::new(path))?;
+        let metadata = parent.metadata()?;
+        Ok(if metadata.mode.contains(NodePermission::SET_GID) {
+            metadata.gid
+        } else {
+            gid
+        })
+    })?;
+
+    Ok((mode, (uid, gid)))
+}
+
 fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
     let f: Arc<dyn FileLike> = match result {
         OpenResult::File(mut file) => {
@@ -258,13 +288,10 @@ pub fn sys_openat(
     }
     debug!("sys_openat <= {dirfd} {path:?} {flags:#o} {mode:#o}");
 
-    let mut mode = mode & !current().as_thread().proc_data.umask();
+    let mode = mode & !current().as_thread().proc_data.umask();
     let flags_u32 = flags as u32;
-    if flags_u32 & O_CREAT != 0 {
-        // VFS clears setuid/setgid bits for regular-file creation.
-        mode &= !((S_ISUID | S_ISGID) as __kernel_mode_t);
-    }
     let ids = (sys_geteuid()? as u32, sys_getegid()? as u32);
+    let (mode, ids) = creation_mode_and_owner(dirfd, path.as_str(), flags_u32, mode, ids)?;
     let existed_before_create =
         flags_u32 & O_CREAT != 0 && resolve_at(dirfd, Some(path.as_str()), 0).is_ok();
 

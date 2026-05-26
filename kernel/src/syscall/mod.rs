@@ -178,6 +178,14 @@ pub fn handle_syscall(uctx: &mut UserContext) {
 
         // fd ops
         #[cfg(target_arch = "x86_64")]
+        Sysno::creat => sys_open(
+            uctx.arg0() as _,
+            (linux_raw_sys::general::O_CREAT
+                | linux_raw_sys::general::O_WRONLY
+                | linux_raw_sys::general::O_TRUNC) as _,
+            uctx.arg1() as _,
+        ),
+        #[cfg(target_arch = "x86_64")]
         Sysno::open => sys_open(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::openat => sys_openat(
             uctx.arg0() as _,
@@ -222,6 +230,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg2() as _,
             uctx.arg3() as _,
         ),
+        Sysno::readahead => sys_readahead(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::pread64 => sys_pread64(
             uctx.arg0() as _,
             uctx.arg1() as _,

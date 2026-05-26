@@ -103,7 +103,7 @@ creat05 creat05
 creat06 creat06
 # creat07 creat07
 # creat08 creat08
-# creat09 creat09
+creat09 creat09
 # delete_module02 delete_module02
 dup01 dup01
 dup02 dup02
@@ -528,7 +528,7 @@ mlockall02 mlockall02
 # mkdir03 mkdir03
 # mkdir04 mkdir04
 # mkdir05 mkdir05
-# mkdir09 mkdir09
+mkdir09 mkdir09
 mkdirat01 mkdirat01
 mkdirat02 mkdirat02
 mknod01 mknod01
@@ -789,8 +789,8 @@ read01 read01
 read02 read02
 # read03 read03
 read04 read04
-# readahead01 readahead01
-# readahead02 readahead02
+readahead01 readahead01
+readahead02 readahead02
 readdir01 readdir01
 # readlink01A symlink01 -T readlink01
 readlink01 readlink01

@@ -266,7 +266,12 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases=""
+    some_testcases="
+    creat09 creat09
+    mkdir09 mkdir09
+    readahead01 readahead01
+    readahead02 readahead02
+    "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
