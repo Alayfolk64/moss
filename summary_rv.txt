@@ -1,111 +1,3 @@
-RUN LTP CASE copy_file_range01
-Summary
-passed   30
-failed   864
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE copy_file_range01 : 0
-
-RUN LTP CASE copy_file_range01
-Summary
-passed   30
-failed   864
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE copy_file_range01 : 0
-
-RUN LTP CASE mount07
-Summary
-passed   54
-failed   30
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mount07 : 0
-
-RUN LTP CASE mount07
-Summary
-passed   54
-failed   30
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mount07 : 0
-
-RUN LTP CASE utimensat01
-Summary
-passed   20
-failed   15
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utimensat01 : 0
-
-RUN LTP CASE utimensat01
-Summary
-passed   20
-failed   15
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utimensat01 : 0
-
-RUN LTP CASE utime01
-Summary
-passed   21
-failed   14
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime01 : 0
-
-RUN LTP CASE utime02
-Summary
-passed   21
-failed   14
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime02 : 0
-
-RUN LTP CASE utime03
-Summary
-passed   7
-failed   14
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime03 : 0
-
-RUN LTP CASE utime01
-Summary
-passed   21
-failed   14
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime01 : 0
-
-RUN LTP CASE utime02
-Summary
-passed   21
-failed   14
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime02 : 0
-
-RUN LTP CASE utime03
-Summary
-passed   7
-failed   14
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE utime03 : 0
-
 RUN LTP CASE chdir01
 Summary
 passed   135
@@ -412,15 +304,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE chown04 : 0
 
-RUN LTP CASE fremovexattr02
-Summary
-passed   24
-failed   3
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fremovexattr02 : 0
-
 RUN LTP CASE getdents02
 Summary
 passed   9
@@ -456,15 +339,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mlock202 : 0
-
-RUN LTP CASE mount03
-Summary
-passed   0
-failed   3
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE mount03 : 0
 
 RUN LTP CASE readlink03
 Summary
@@ -556,15 +430,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE chown04 : 0
 
-RUN LTP CASE fremovexattr02
-Summary
-passed   24
-failed   3
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE fremovexattr02 : 0
-
 RUN LTP CASE link04
 Summary
 passed   11
@@ -582,15 +447,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mlock202 : 0
-
-RUN LTP CASE mount03
-Summary
-passed   0
-failed   3
-broken   1
-skipped  0
-warnings 0
-FAIL LTP CASE mount03 : 0
 
 RUN LTP CASE readlink03
 Summary
@@ -772,15 +628,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE lchown02 : 0
 
-RUN LTP CASE link08
-Summary
-passed   2
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE link08 : 0
-
 RUN LTP CASE linkat02
 Summary
 passed   4
@@ -825,6 +672,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mmap18 : 0
+
+RUN LTP CASE mount03
+Summary
+passed   1
+failed   2
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE mount03 : 0
 
 RUN LTP CASE mremap05
 Summary
@@ -1051,15 +907,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE lchown02 : 0
 
-RUN LTP CASE link08
-Summary
-passed   2
-failed   2
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE link08 : 0
-
 RUN LTP CASE linkat02
 Summary
 passed   4
@@ -1104,6 +951,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mmap18 : 0
+
+RUN LTP CASE mount03
+Summary
+passed   1
+failed   2
+broken   1
+skipped  0
+warnings 0
+FAIL LTP CASE mount03 : 0
 
 RUN LTP CASE mremap05
 Summary
@@ -1411,6 +1267,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE lchown03 : 0
 
+RUN LTP CASE link08
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link08 : 0
+
 RUN LTP CASE llseek01
 Summary
 passed   1
@@ -1419,24 +1284,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llseek01 : 0
-
-RUN LTP CASE mknod07
-Summary
-passed   5
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mknod07 : 0
-
-RUN LTP CASE mknodat02
-Summary
-passed   3
-failed   1
-broken   2
-skipped  0
-warnings 0
-FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE nftw01
 Summary
@@ -1699,15 +1546,6 @@ skipped  0
 warnings 0
 FAIL LTP CASE abort01 : 0
 
-RUN LTP CASE acct02
-Summary
-passed   0
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE acct02 : 0
-
 RUN LTP CASE clock_nanosleep01
 Summary
 passed   11
@@ -1870,6 +1708,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE lchown03 : 0
 
+RUN LTP CASE link08
+Summary
+passed   3
+failed   1
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE link08 : 0
+
 RUN LTP CASE llseek01
 Summary
 passed   1
@@ -1878,24 +1725,6 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE llseek01 : 0
-
-RUN LTP CASE mknod07
-Summary
-passed   5
-failed   1
-broken   0
-skipped  0
-warnings 0
-FAIL LTP CASE mknod07 : 0
-
-RUN LTP CASE mknodat02
-Summary
-passed   3
-failed   1
-broken   2
-skipped  0
-warnings 0
-FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE nftw01
 Summary
@@ -4138,6 +3967,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr01 : 0
 
+RUN LTP CASE fremovexattr02
+Summary
+passed   27
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+
 RUN LTP CASE fstat02
 Summary
 passed   6
@@ -5191,6 +5029,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE mknod06 : 0
 
+RUN LTP CASE mknod07
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod07 : 0
+
 RUN LTP CASE mknod08
 Summary
 passed   1
@@ -5217,6 +5064,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mknodat01 : 0
+
+RUN LTP CASE mknodat02
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE mlock01
 Summary
@@ -5316,6 +5172,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mmap20 : 0
+
+RUN LTP CASE mount07
+Summary
+passed   84
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount07 : 0
 
 RUN LTP CASE mremap02
 Summary
@@ -7144,6 +7009,33 @@ skipped  0
 warnings 0
 FAIL LTP CASE umount01 : 0
 
+RUN LTP CASE utime01
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime01 : 0
+
+RUN LTP CASE utime02
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime02 : 0
+
+RUN LTP CASE utime03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime03 : 0
+
 RUN LTP CASE utime04
 Summary
 passed   21
@@ -7170,6 +7062,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE utime07 : 0
+
+RUN LTP CASE utimensat01
+Summary
+passed   34
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utimensat01 : 0
 
 RUN LTP CASE vfork02
 Summary
@@ -7517,7 +7418,7 @@ RUN LTP CASE futex_cmp_requeue01
 Summary
 passed   5
 failed   0
-broken   1
+broken   2
 skipped  0
 warnings 0
 FAIL LTP CASE futex_cmp_requeue01 : 0
@@ -7620,6 +7521,15 @@ broken   1
 skipped  0
 warnings 0
 FAIL LTP CASE memfd_create01 : 0
+
+RUN LTP CASE copy_file_range01
+Summary
+passed   18
+failed   0
+broken   0
+skipped  18
+warnings 0
+FAIL LTP CASE copy_file_range01 : 0
 
 RUN LTP CASE statx01
 Summary
@@ -7773,6 +7683,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE acct01 : 0
+
+RUN LTP CASE acct02
+Summary
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE acct02 : 0
 
 RUN LTP CASE add_key01
 Summary
@@ -9691,6 +9610,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE fremovexattr01 : 0
 
+RUN LTP CASE fremovexattr02
+Summary
+passed   27
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fremovexattr02 : 0
+
 RUN LTP CASE fstat02
 Summary
 passed   6
@@ -10762,6 +10690,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE mknod06 : 0
 
+RUN LTP CASE mknod07
+Summary
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknod07 : 0
+
 RUN LTP CASE mknod08
 Summary
 passed   1
@@ -10788,6 +10725,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mknodat01 : 0
+
+RUN LTP CASE mknodat02
+Summary
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mknodat02 : 0
 
 RUN LTP CASE mlock01
 Summary
@@ -10887,6 +10833,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE mmap20 : 0
+
+RUN LTP CASE mount07
+Summary
+passed   84
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE mount07 : 0
 
 RUN LTP CASE mremap02
 Summary
@@ -11043,9 +10998,9 @@ FAIL LTP CASE madvise01 : 0
 
 RUN LTP CASE madvise05
 Summary
-passed   1
+passed   0
 failed   0
-broken   0
+broken   2
 skipped  0
 warnings 0
 FAIL LTP CASE madvise05 : 0
@@ -12715,6 +12670,33 @@ skipped  0
 warnings 0
 FAIL LTP CASE umount01 : 0
 
+RUN LTP CASE utime01
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime01 : 0
+
+RUN LTP CASE utime02
+Summary
+passed   21
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime02 : 0
+
+RUN LTP CASE utime03
+Summary
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utime03 : 0
+
 RUN LTP CASE utime04
 Summary
 passed   21
@@ -12741,6 +12723,15 @@ broken   0
 skipped  0
 warnings 0
 FAIL LTP CASE utime07 : 0
+
+RUN LTP CASE utimensat01
+Summary
+passed   34
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE utimensat01 : 0
 
 RUN LTP CASE vfork02
 Summary
@@ -13183,6 +13174,15 @@ skipped  0
 warnings 0
 FAIL LTP CASE memfd_create01 : 0
 
+RUN LTP CASE copy_file_range01
+Summary
+passed   18
+failed   0
+broken   0
+skipped  18
+warnings 0
+FAIL LTP CASE copy_file_range01 : 0
+
 RUN LTP CASE statx01
 Summary
 passed   10
@@ -13265,8 +13265,8 @@ warnings 0
 FAIL LTP CASE io_uring01 : 0
 
 Summary
-passed   20121
-failed   2401
-broken   70
-skipped  642
+passed   20209
+failed   484
+broken   69
+skipped  678
 warnings 17

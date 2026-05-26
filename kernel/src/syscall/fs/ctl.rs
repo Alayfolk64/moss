@@ -2,12 +2,13 @@ use alloc::{ffi::CString, string::ToString, vec, vec::Vec};
 use core::{
     ffi::{c_char, c_int},
     mem::offset_of,
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FsContext};
-use axfs_ng_vfs::{DeviceId, MetadataUpdate, NodePermission, NodeType, path::Path};
+use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
 use axtask::current;
 use linux_raw_sys::{
@@ -32,6 +33,25 @@ use crate::{
     task::AsThread,
     time::TimeValueLike,
 };
+
+static PROTECTED_HARDLINKS: AtomicBool = AtomicBool::new(true);
+static PROTECTED_SYMLINKS: AtomicBool = AtomicBool::new(true);
+
+pub fn protected_hardlinks_enabled() -> bool {
+    PROTECTED_HARDLINKS.load(Ordering::Relaxed)
+}
+
+pub fn set_protected_hardlinks(enabled: bool) {
+    PROTECTED_HARDLINKS.store(enabled, Ordering::Relaxed);
+}
+
+pub fn protected_symlinks_enabled() -> bool {
+    PROTECTED_SYMLINKS.load(Ordering::Relaxed)
+}
+
+pub fn set_protected_symlinks(enabled: bool) {
+    PROTECTED_SYMLINKS.store(enabled, Ordering::Relaxed);
+}
 
 /// The ioctl() system call manipulates the underlying device parameters
 /// of special files.
@@ -75,6 +95,7 @@ pub fn sys_chdir(path: *const c_char) -> AxResult<isize> {
 
     let mut fs = FS_CONTEXT.lock();
     let entry = fs.resolve(path)?;
+    check_chdir_access(&entry)?;
     fs.set_current_dir(entry)?;
     Ok(0)
 }
@@ -83,8 +104,36 @@ pub fn sys_fchdir(dirfd: i32) -> AxResult<isize> {
     debug!("sys_fchdir <= dirfd: {dirfd}");
 
     let entry = with_fs(dirfd, |fs| Ok(fs.current_dir().clone()))?;
+    check_chdir_access(&entry)?;
     FS_CONTEXT.lock().set_current_dir(entry)?;
     Ok(0)
+}
+
+fn check_chdir_access(entry: &Location) -> AxResult<()> {
+    let metadata = entry.metadata()?;
+    if metadata.node_type != NodeType::Directory {
+        return Err(AxError::NotADirectory);
+    }
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    if euid == 0 {
+        return Ok(());
+    }
+
+    let egid = proc_data.egid();
+    let shift = if euid == metadata.uid {
+        6
+    } else if egid == metadata.gid {
+        3
+    } else {
+        0
+    };
+    if metadata.mode.bits() as u32 & (0o1 << shift) == 0 {
+        return Err(AxError::PermissionDenied);
+    }
+    Ok(())
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -108,12 +157,53 @@ pub fn sys_chroot(path: *const c_char) -> AxResult<isize> {
 pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize> {
     let path = vm_load_string(path)?;
     debug!("sys_mkdirat <= dirfd: {dirfd}, path: {path}, mode: {mode}");
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
 
-    let mode = mode & !current().as_thread().proc_data.umask();
-    let mode = NodePermission::from_bits_truncate(mode as u16);
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let mode = mode & !proc_data.umask();
+    let euid = proc_data.euid();
+    let egid = proc_data.egid();
 
     with_fs(dirfd, |fs| {
-        fs.create_dir(path.as_str(), mode)?;
+        let path = Path::new(path.as_str());
+        if fs.resolve_no_follow(path).is_ok() {
+            return Err(AxError::AlreadyExists);
+        }
+
+        let (dir, name) = fs.resolve_nonexistent(path)?;
+        let dir_stat = dir.metadata()?;
+        if dir.mount_flags() & MS_RDONLY != 0 {
+            return Err(AxError::ReadOnlyFilesystem);
+        }
+        if euid != 0
+            && !can_write_dir(
+                dir_stat.mode.bits() as u32,
+                dir_stat.uid,
+                dir_stat.gid,
+                euid,
+                egid,
+            )
+        {
+            return Err(AxError::PermissionDenied);
+        }
+
+        let mut permission = NodePermission::from_bits_truncate(mode as u16);
+        let gid = if dir_stat.mode.contains(NodePermission::SET_GID) {
+            permission.insert(NodePermission::SET_GID);
+            dir_stat.gid
+        } else {
+            egid
+        };
+
+        let loc = dir.create(name, NodeType::Directory, permission)?;
+        loc.update_metadata(MetadataUpdate {
+            owner: Some((euid, gid)),
+            mode: Some(permission),
+            ..Default::default()
+        })?;
         Ok(0)
     })?;
     notify_fanotify_create(dirfd, &path, true);
@@ -218,6 +308,45 @@ fn can_write_dir(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
     };
     let required = 0o3 << shift;
     mode & required == required
+}
+
+fn can_write_file(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
+    let shift = if euid == uid {
+        6
+    } else if egid == gid {
+        3
+    } else {
+        0
+    };
+    mode & (0o2 << shift) != 0
+}
+
+fn check_protected_hardlink(target: &Location) -> AxResult<()> {
+    if !protected_hardlinks_enabled() {
+        return Ok(());
+    }
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    if euid == 0 {
+        return Ok(());
+    }
+
+    let metadata = target.metadata()?;
+    if euid == metadata.uid
+        || can_write_file(
+            metadata.mode.bits() as u32,
+            metadata.uid,
+            metadata.gid,
+            euid,
+            proc_data.egid(),
+        )
+    {
+        Ok(())
+    } else {
+        Err(AxError::OperationNotPermitted)
+    }
 }
 
 // Directory buffer for getdents64 syscall
@@ -327,6 +456,7 @@ pub fn sys_linkat(
     if old.is_dir() {
         return Err(AxError::OperationNotPermitted);
     }
+    check_protected_hardlink(&old)?;
     let (new_dir, new_name) =
         with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
 
@@ -424,8 +554,17 @@ pub fn sys_symlinkat(
     let linkpath = vm_load_string(linkpath)?;
     debug!("sys_symlinkat <= target: {target:?}, new_dirfd: {new_dirfd}, linkpath: {linkpath:?}");
 
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    let egid = proc_data.egid();
     with_fs(new_dirfd, |fs| {
-        fs.symlink(target, linkpath)?;
+        let loc = fs.symlink(target, linkpath)?;
+        loc.update_metadata(MetadataUpdate {
+            owner: Some((euid, egid)),
+            mode: Some(NodePermission::from_bits_truncate(0o777)),
+            ..Default::default()
+        })?;
         Ok(0)
     })
 }

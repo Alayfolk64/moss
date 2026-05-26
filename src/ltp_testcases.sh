@@ -748,7 +748,7 @@ preadv202_64 preadv202_64
 # process_vm_readv03 process_vm_readv03
 # process_vm_writev01 process_vm01
 # process_vm_writev02 process_vm_writev02
-# prot_hsymlinks prot_hsymlinks
+prot_hsymlinks prot_hsymlinks
 # dirtyc0w dirtyc0w
 # dirtyc0w_shmem dirtyc0w_shmem
 # dirtypipe dirtypipe
