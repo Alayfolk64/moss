@@ -266,9 +266,7 @@ run_ltp() {
 
     cd ltp/testcases/bin
 
-    some_testcases="
-        prot_hsymlinks prot_hsymlinks
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
