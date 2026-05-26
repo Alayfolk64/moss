@@ -9,7 +9,7 @@ use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
-use axfs_ng_vfs::{DirEntry, FileNode, Location, NodeType, Reference};
+use axfs_ng_vfs::{DirEntry, FileNode, Location, NodeType, Reference, VfsError, path::Path};
 use axio::{Seek, SeekFrom};
 use axtask::{current, yield_now};
 use bitflags::bitflags;
@@ -19,9 +19,12 @@ use scope_local::ActiveScope;
 use spin::RwLock;
 use starry_signal::Signo;
 
-use super::fanotify::{
-    check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
-    notify_fanotify_fd_close, notify_fanotify_open,
+use super::{
+    fanotify::{
+        check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
+        notify_fanotify_fd_close, notify_fanotify_open,
+    },
+    protected_symlinks_enabled,
 };
 use crate::{
     file::{
@@ -151,6 +154,40 @@ fn check_open_access(dirfd: c_int, path: &str, flags: u32, (uid, gid): (u32, u32
     }
 }
 
+fn check_protected_symlink_follow(dirfd: c_int, path: &str, flags: u32, uid: u32) -> AxResult {
+    if !protected_symlinks_enabled() || flags & O_NOFOLLOW != 0 {
+        return Ok(());
+    }
+
+    with_fs(dirfd, |fs| {
+        let (parent, name) = fs.resolve_parent(Path::new(path))?;
+        let symlink = match parent.lookup_no_follow(name.as_ref()) {
+            Ok(symlink) => symlink,
+            Err(err) if flags & O_CREAT != 0 && err.canonicalize() == VfsError::NotFound => {
+                return Ok(());
+            }
+            Err(err) => return Err(err.into()),
+        };
+        if symlink.node_type() != NodeType::Symlink {
+            return Ok(());
+        }
+
+        let parent_meta = parent.metadata()?;
+        let parent_mode = parent_meta.mode.bits() as u32;
+        let sticky_world_writable = parent_mode & S_ISVTX != 0 && parent_mode & S_IWOTH != 0;
+        if !sticky_world_writable {
+            return Ok(());
+        }
+
+        let symlink_meta = symlink.metadata()?;
+        if uid == symlink_meta.uid || parent_meta.uid == symlink_meta.uid {
+            Ok(())
+        } else {
+            Err(AxError::PermissionDenied)
+        }
+    })
+}
+
 fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
     let f: Arc<dyn FileLike> = match result {
         OpenResult::File(mut file) => {
@@ -238,6 +275,7 @@ pub fn sys_openat(
         let open_options = flags_to_options(open_flags, mode, ids);
 
         if flags_u32 & O_EXCL == 0 {
+            check_protected_symlink_follow(dirfd, path.as_str(), flags_u32, ids.0)?;
             check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
             match with_fs(dirfd, |fs| open_options.open(fs, path.as_str())) {
                 Ok(result) => {
@@ -265,6 +303,7 @@ pub fn sys_openat(
     }
 
     let options = flags_to_options(flags, mode, ids);
+    check_protected_symlink_follow(dirfd, path.as_str(), flags_u32, ids.0)?;
     check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
     let fd = with_fs(dirfd, |fs| options.open(fs, path.as_str()))
         .and_then(|it| add_to_fd(it, flags as _))?;

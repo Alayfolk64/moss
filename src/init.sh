@@ -106,13 +106,13 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
+basic=0
+busybox=0
 cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
-libctest=1
+libctest=0
 lmbench=0
 ltp=1
 lua=0

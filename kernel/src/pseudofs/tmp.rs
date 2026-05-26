@@ -240,6 +240,15 @@ impl MemoryNode {
         Arc::new(Self { fs, inode, this })
     }
 
+    fn dirent_cookie(name: &str) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        for byte in name.as_bytes() {
+            hash ^= *byte as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash.max(1)
+    }
+
     fn new_entry(&self, name: &str, node_type: NodeType, inode: Arc<Inode>) -> VfsResult<DirEntry> {
         let fs = self.fs.clone();
         let reference = Reference::new(
@@ -408,22 +417,31 @@ impl Pollable for MemoryNode {
 
 impl DirNodeOps for MemoryNode {
     fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
+        let mut entries = {
+            let dir = self.inode.as_dir()?;
+            let entries = dir.entries.lock();
+            entries
+                .iter()
+                .map(|(name, entry)| {
+                    let inode = entry.get();
+                    let node_type = inode.metadata.lock().node_type;
+                    (
+                        Self::dirent_cookie(&name.0),
+                        name.0.clone(),
+                        entry.ino,
+                        node_type,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+
         let mut count = 0;
-        for (i, (name, entry)) in self
-            .inode
-            .as_dir()?
-            .entries
-            .lock()
-            .iter()
-            .enumerate()
-            .skip(offset as usize)
-        {
-            if !sink.accept(
-                &name.0,
-                entry.ino,
-                entry.get().metadata.lock().node_type,
-                i as u64 + 1,
-            ) {
+        for (cookie, name, ino, node_type) in entries {
+            if cookie <= offset {
+                continue;
+            }
+            if !sink.accept(&name, ino, node_type, cookie) {
                 return Ok(count);
             }
             count += 1;

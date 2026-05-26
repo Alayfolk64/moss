@@ -181,6 +181,32 @@ fn proc_rw_file(fs: Arc<SimpleFs>, initial: impl Into<Vec<u8>>) -> Arc<SimpleFil
     )
 }
 
+fn proc_bool_sysctl_file(
+    fs: Arc<SimpleFs>,
+    read: fn() -> bool,
+    write: fn(bool),
+) -> Arc<SimpleFile> {
+    SimpleFile::new_regular(
+        fs,
+        RwFile::new(move |req| match req {
+            SimpleFileOperation::Read => Ok(Some(
+                format!("{}\n", if read() { 1 } else { 0 }).into_bytes(),
+            )),
+            SimpleFileOperation::Write(input) => {
+                let input = str::from_utf8(input)
+                    .map_err(|_| VfsError::InvalidInput)?
+                    .trim();
+                match input {
+                    "0" => write(false),
+                    "1" => write(true),
+                    _ => return Err(VfsError::InvalidInput),
+                }
+                Ok(None::<Vec<u8>>)
+            }
+        }),
+    )
+}
+
 fn proc_setgroups_file(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
     let data = Arc::new(Mutex::new(b"allow\n".to_vec()));
     SimpleFile::new_regular(
@@ -601,6 +627,22 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             fs_sys.add(
                 "pipe-max-size",
                 SimpleFile::new_regular(fs.clone(), || Ok(format!("{PIPE_MAX_SIZE}\n"))),
+            );
+            fs_sys.add(
+                "protected_hardlinks",
+                proc_bool_sysctl_file(
+                    fs.clone(),
+                    crate::syscall::protected_hardlinks_enabled,
+                    crate::syscall::set_protected_hardlinks,
+                ),
+            );
+            fs_sys.add(
+                "protected_symlinks",
+                proc_bool_sysctl_file(
+                    fs.clone(),
+                    crate::syscall::protected_symlinks_enabled,
+                    crate::syscall::set_protected_symlinks,
+                ),
             );
             fs_sys.add("fanotify", {
                 let mut fanotify = DirMapping::new();

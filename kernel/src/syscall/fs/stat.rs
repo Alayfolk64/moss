@@ -22,7 +22,7 @@ use spin::RwLock;
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use crate::{
-    file::{Directory, File, FileLike, add_file_like, get_file_like, resolve_at},
+    file::{Directory, File, FileLike, Pipe, add_file_like, get_file_like, resolve_at},
     mm::vm_load_string,
     syscall::task::current_has_cap,
     task::AsThread,
@@ -448,6 +448,16 @@ fn statfs(loc: &Location) -> AxResult<statfs> {
     Ok(result)
 }
 
+fn pseudo_statfs(fs_type: u32) -> statfs {
+    // FIXME: Zeroable
+    let mut result: statfs = unsafe { core::mem::zeroed() };
+    result.f_type = fs_type as _;
+    result.f_bsize = 4096;
+    result.f_namelen = 255;
+    result.f_frsize = 4096;
+    result
+}
+
 pub fn sys_statfs(path: *const c_char, buf: *mut statfs) -> AxResult<isize> {
     let path = vm_load_string(path)?;
     debug!("sys_statfs <= path: {path:?}");
@@ -465,6 +475,20 @@ pub fn sys_statfs(path: *const c_char, buf: *mut statfs) -> AxResult<isize> {
 pub fn sys_fstatfs(fd: i32, buf: *mut statfs) -> AxResult<isize> {
     debug!("sys_fstatfs <= fd: {fd}");
 
-    buf.vm_write(statfs(File::from_fd(fd)?.inner().location())?)?;
+    const PIPEFS_MAGIC: u32 = 0x5049_5045;
+    const ANON_INODE_FS_MAGIC: u32 = 0x0904_1934;
+
+    let file = get_file_like(fd)?;
+    let stat = if let Some(file) = file.downcast_ref::<File>() {
+        statfs(file.inner().location())?
+    } else if let Some(dir) = file.downcast_ref::<Directory>() {
+        statfs(dir.inner())?
+    } else if file.downcast_ref::<Pipe>().is_some() {
+        pseudo_statfs(PIPEFS_MAGIC)
+    } else {
+        pseudo_statfs(ANON_INODE_FS_MAGIC)
+    };
+
+    buf.vm_write(stat)?;
     Ok(0)
 }
