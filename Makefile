@@ -276,7 +276,7 @@ docker:
 	  --platform linux/amd64 \
 	  -w /work \
 	  -v $(CURDIR):/work \
-	  docker.io/zhouzhouyi/os-contest:20260104 \
+	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
 .PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la debug-rv debug-la debug-rv-timerfd debug-la-timerfd contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell docker

@@ -184,8 +184,6 @@ echo
 run_ltp() {
     echo "#### OS COMP TEST GROUP START ltp-$1 ####"
 
-    export LTP_TIMEOUT_MUL=2
-
     all_testcases="${LTP_CASES:-}"
     if [ -z "$all_testcases" ] && [ -f ./ltp_testcases.sh ]; then
         all_testcases="$(awk 'NF && $1 !~ /^#/ { print }' ./ltp_testcases.sh)"
