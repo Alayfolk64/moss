@@ -10,13 +10,16 @@ use axfs_ng_vfs::NodeType;
 use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
-use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD, O_ACCMODE, O_WRONLY};
+use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD, IN_ACCESS, IN_MODIFY, O_ACCMODE, O_WRONLY};
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
-use super::fanotify::{
-    check_fanotify_access_permission, notify_fanotify_access, notify_fanotify_modify,
-    notify_fanotify_modify_path,
+use super::{
+    fanotify::{
+        check_fanotify_access_permission, notify_fanotify_access, notify_fanotify_modify,
+        notify_fanotify_modify_path,
+    },
+    inotify::{notify_inotify_file, notify_inotify_path},
 };
 #[cfg(feature = "net")]
 use crate::file::Socket;
@@ -60,6 +63,7 @@ pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
     }
     let read = f.read(&mut VmBytesMut::new(buf, len))?;
     if read > 0 {
+        notify_inotify_file(f.clone(), IN_ACCESS);
         notify_fanotify_access(f);
     }
     Ok(read as _)
@@ -74,6 +78,7 @@ pub fn sys_readv(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     }
     let read = f.read(&mut iov.into_io())?;
     if read > 0 {
+        notify_inotify_file(f.clone(), IN_ACCESS);
         notify_fanotify_access(f);
     }
     Ok(read as _)
@@ -90,6 +95,7 @@ pub fn sys_write(fd: i32, buf: *const u8, len: usize) -> AxResult<isize> {
     let f = get_file_like(fd)?;
     let written = f.write(&mut VmBytes::new(buf, len))?;
     if written > 0 {
+        notify_inotify_file(f.clone(), IN_MODIFY);
         notify_fanotify_modify(f);
     }
     Ok(written as _)
@@ -100,6 +106,7 @@ pub fn sys_writev(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> 
     let f = get_file_like(fd)?;
     let written = f.write(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
     if written > 0 {
+        notify_inotify_file(f.clone(), IN_MODIFY);
         notify_fanotify_modify(f);
     }
     Ok(written as _)
@@ -128,6 +135,7 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxRes
         .open(&FS_CONTEXT.lock(), path)?
         .into_file()?;
     file.access(FileFlags::WRITE)?.set_len(length as _)?;
+    notify_inotify_path(AT_FDCWD, path, IN_MODIFY);
     notify_fanotify_modify_path(AT_FDCWD, path);
     Ok(0)
 }
@@ -136,6 +144,7 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> AxResult<isize> {
     debug!("sys_ftruncate <= {fd} {length}");
     let f = File::from_fd(fd)?;
     f.inner().access(FileFlags::WRITE)?.set_len(length as _)?;
+    notify_inotify_file(f.clone(), IN_MODIFY);
     notify_fanotify_modify(f);
     Ok(0)
 }

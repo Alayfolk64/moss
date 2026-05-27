@@ -26,6 +26,7 @@ use super::{
         check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
         notify_fanotify_fd_close, notify_fanotify_open,
     },
+    inotify::{notify_inotify_dirent, notify_inotify_file},
     protected_symlinks_enabled,
 };
 use crate::{
@@ -266,6 +267,7 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
     let opened = f.clone();
     check_fanotify_open_permission(opened.clone())?;
     let fd = add_file_like(f, flags & O_CLOEXEC != 0)?;
+    notify_inotify_file(opened.clone(), IN_OPEN);
     notify_fanotify_open(opened);
     Ok(fd)
 }
@@ -306,6 +308,9 @@ pub fn sys_openat(
             check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
             match with_fs(dirfd, |fs| open_options.open(fs, path.as_str())) {
                 Ok(result) => {
+                    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                        notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
+                    }
                     let fd = add_to_fd(result, flags_u32)?;
                     if flags_u32 & O_CREAT != 0 && !existed_before_create {
                         notify_fanotify_create(dirfd, &path, false);
@@ -321,6 +326,9 @@ pub fn sys_openat(
         let create_options = flags_to_options(create_flags, mode, ids);
         with_fs(dirfd, |fs| create_options.open(fs, path.as_str()))?;
 
+        if !existed_before_create {
+            notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
+        }
         let fd = with_fs(dirfd, |fs| open_options.open(fs, path.as_str()))
             .and_then(|it| add_to_fd(it, flags_u32))?;
         if !existed_before_create {
@@ -332,11 +340,15 @@ pub fn sys_openat(
     let options = flags_to_options(flags, mode, ids);
     check_protected_symlink_follow(dirfd, path.as_str(), flags_u32, ids.0)?;
     check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
+    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+        let result = with_fs(dirfd, |fs| options.open(fs, path.as_str()))?;
+        notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
+        let fd = add_to_fd(result, flags as _)?;
+        notify_fanotify_create(dirfd, &path, false);
+        return Ok(fd as isize);
+    }
     let fd = with_fs(dirfd, |fs| options.open(fs, path.as_str()))
         .and_then(|it| add_to_fd(it, flags as _))?;
-    if flags_u32 & O_CREAT != 0 && !existed_before_create {
-        notify_fanotify_create(dirfd, &path, false);
-    }
     Ok(fd as isize)
 }
 
@@ -357,6 +369,14 @@ pub fn sys_close(fd: c_int) -> AxResult<isize> {
     release_file_lease_for_file_like(&file_like);
     notify_fanotify_fd_close(&file_like);
     close_file_like(fd)?;
+    notify_inotify_file(
+        file_like.clone(),
+        if writable {
+            IN_CLOSE_WRITE
+        } else {
+            IN_CLOSE_NOWRITE
+        },
+    );
     notify_fanotify_close(file_like.clone(), writable);
     release_bsd_flocks_for_file_like_if_last(&file_like);
     Ok(0)

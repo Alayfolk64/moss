@@ -418,18 +418,16 @@ ioctl05      ioctl05
 ioctl_ns07 ioctl_ns07
 inotify_init1_01 inotify_init1_01
 inotify_init1_02 inotify_init1_02
-# inotify01 inotify01
-# inotify02 inotify02
-# inotify03 inotify03
-# inotify04 inotify04
-# inotify05 inotify05
-# inotify06 inotify06
-# inotify07 inotify07
-# inotify08 inotify08
-# inotify09 inotify09
-# inotify10 inotify10
-# inotify11 inotify11
-# inotify12 inotify12
+inotify01 inotify01
+inotify02 inotify02
+inotify03 inotify03
+inotify04 inotify04
+inotify05 inotify05
+inotify06 inotify06
+inotify09 inotify09
+inotify10 inotify10
+inotify11 inotify11
+inotify12 inotify12
 fanotify01 fanotify01
 fanotify02 fanotify02
 fanotify03 fanotify03
