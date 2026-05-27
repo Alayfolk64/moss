@@ -17,12 +17,19 @@ use linux_raw_sys::{
 };
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
-use super::fanotify::{
-    commit_fanotify_path_alias, fanotify_path_is_dir, fanotify_prepared_event_is_dir,
-    notify_fanotify_create, notify_fanotify_delete, notify_fanotify_move_from,
-    notify_fanotify_move_to, notify_fanotify_prepared_event, prepare_fanotify_delete_event,
-    prepare_fanotify_delete_self_event, prepare_fanotify_move_from_event,
-    prepare_fanotify_move_self_event, prepare_fanotify_path_alias, prepare_fanotify_rename_event,
+use super::{
+    fanotify::{
+        commit_fanotify_path_alias, fanotify_path_is_dir, fanotify_prepared_event_is_dir,
+        notify_fanotify_create, notify_fanotify_delete, notify_fanotify_move_from,
+        notify_fanotify_move_to, notify_fanotify_prepared_event, prepare_fanotify_delete_event,
+        prepare_fanotify_delete_self_event, prepare_fanotify_move_from_event,
+        prepare_fanotify_move_self_event, prepare_fanotify_path_alias,
+        prepare_fanotify_rename_event,
+    },
+    inotify::{
+        next_inotify_cookie, notify_inotify_dirent, notify_inotify_path, notify_inotify_target,
+        prepare_inotify_target,
+    },
 };
 use crate::{
     file::{
@@ -206,6 +213,7 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
         })?;
         Ok(0)
     })?;
+    notify_inotify_dirent(dirfd, &path, IN_CREATE, true, 0);
     notify_fanotify_create(dirfd, &path, true);
     Ok(0)
 }
@@ -294,6 +302,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         register_special_node(path.to_string(), mode, dev_id_from_raw(dev));
     }
 
+    notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
     notify_fanotify_create(dirfd, &path, false);
     Ok(0)
 }
@@ -461,6 +470,7 @@ pub fn sys_linkat(
         with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
 
     new_dir.link(new_name, &old)?;
+    notify_inotify_dirent(new_dirfd, &new_path, IN_CREATE, false, 0);
     Ok(0)
 }
 
@@ -485,6 +495,7 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         .map(fanotify_prepared_event_is_dir)
         .unwrap_or(flags == AT_REMOVEDIR as _);
     let dirent_event = prepare_fanotify_delete_event(dirfd, &path, is_dir);
+    let inotify_target = prepare_inotify_target(dirfd, &path);
     with_fs(dirfd, |fs| {
         if flags == AT_REMOVEDIR as _ {
             fs.remove_dir(path.as_str())?;
@@ -499,11 +510,18 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
             notify_fanotify_prepared_event(event);
         }
     }
+    if !is_dir && let Some(target) = inotify_target {
+        notify_inotify_target(target, IN_ATTRIB);
+    }
+    if let Some(target) = inotify_target {
+        notify_inotify_target(target, IN_DELETE_SELF);
+    }
     if let Some(event) = dirent_event {
         notify_fanotify_prepared_event(event);
     } else {
         notify_fanotify_delete(dirfd, &path, is_dir);
     }
+    notify_inotify_dirent(dirfd, &path, IN_DELETE, is_dir, 0);
     if let Some(event) = self_event {
         notify_fanotify_prepared_event(event);
     }
@@ -559,14 +577,16 @@ pub fn sys_symlinkat(
     let euid = proc_data.euid();
     let egid = proc_data.egid();
     with_fs(new_dirfd, |fs| {
-        let loc = fs.symlink(target, linkpath)?;
+        let loc = fs.symlink(target, &linkpath)?;
         loc.update_metadata(MetadataUpdate {
             owner: Some((euid, egid)),
             mode: Some(NodePermission::from_bits_truncate(0o777)),
             ..Default::default()
         })?;
         Ok(0)
-    })
+    })?;
+    notify_inotify_dirent(new_dirfd, &linkpath, IN_CREATE, false, 0);
+    Ok(0)
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -657,6 +677,9 @@ pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> A
             mode: Some(NodePermission::from_bits_truncate(mode as u16)),
             ..Default::default()
         })?;
+    if let Some(path) = path.as_deref() {
+        notify_inotify_path(dirfd, path, IN_ATTRIB);
+    }
     Ok(0)
 }
 
@@ -714,6 +737,9 @@ fn update_times(
         mtime: mtime.duration(),
         ..Default::default()
     })?;
+    if let Some(path) = path.as_deref() {
+        notify_inotify_path(dirfd, path, IN_ATTRIB);
+    }
     Ok(())
 }
 
@@ -837,6 +863,8 @@ pub fn sys_renameat2(
     let rename_event =
         prepare_fanotify_rename_event(old_dirfd, &old_path, new_dirfd, &new_path, is_dir);
     let path_alias = prepare_fanotify_path_alias(old_dirfd, &old_path, new_dirfd, &new_path);
+    let inotify_target = prepare_inotify_target(old_dirfd, &old_path);
+    let cookie = next_inotify_cookie();
 
     old_dir.rename(&old_name, &new_dir, new_name)?;
     commit_fanotify_path_alias(path_alias);
@@ -855,6 +883,11 @@ pub fn sys_renameat2(
         notify_fanotify_move_from(old_dirfd, &old_path, is_dir);
     }
     notify_fanotify_move_to(new_dirfd, &new_path, is_dir);
+    notify_inotify_dirent(old_dirfd, &old_path, IN_MOVED_FROM, is_dir, cookie);
+    notify_inotify_dirent(new_dirfd, &new_path, IN_MOVED_TO, is_dir, cookie);
+    if let Some(target) = inotify_target {
+        notify_inotify_target(target, IN_MOVE_SELF);
+    }
     if let Some(event) = move_self_event {
         notify_fanotify_prepared_event(event);
     }

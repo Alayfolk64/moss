@@ -9,6 +9,7 @@ use starry_vm::VmPtr;
 use crate::{
     mm::vm_load_string,
     pseudofs::{Device, MemoryFs, dev::r#loop::LoopDevice},
+    syscall::fs::inotify::notify_inotify_unmount_dev,
 };
 
 const LOOP_BLOCK_SIZE: usize = 512;
@@ -312,7 +313,9 @@ pub fn sys_umount2(target: *const c_char, flags: i32) -> AxResult<isize> {
     let target = vm_load_string(target)?;
     debug!("sys_umount2 <= target: {target:?}, flags: {flags:#x}");
     let target = FS_CONTEXT.lock().resolve(target)?;
+    let dev = target.metadata()?.device;
     target.filesystem().flush()?;
     target.unmount()?;
+    notify_inotify_unmount_dev(dev);
     Ok(0)
 }

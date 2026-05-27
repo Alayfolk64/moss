@@ -207,6 +207,26 @@ fn proc_bool_sysctl_file(
     )
 }
 
+fn proc_usize_sysctl_file(
+    fs: Arc<SimpleFs>,
+    read: fn() -> usize,
+    write: fn(usize),
+) -> Arc<SimpleFile> {
+    SimpleFile::new_regular(
+        fs,
+        RwFile::new(move |req| match req {
+            SimpleFileOperation::Read => Ok(Some(format!("{}\n", read()).into_bytes())),
+            SimpleFileOperation::Write(input) => {
+                let input = str::from_utf8(input)
+                    .map_err(|_| VfsError::InvalidInput)?
+                    .trim();
+                write(input.parse().map_err(|_| VfsError::InvalidInput)?);
+                Ok(None::<Vec<u8>>)
+            }
+        }),
+    )
+}
+
 fn proc_setgroups_file(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
     let data = Arc::new(Mutex::new(b"allow\n".to_vec()));
     SimpleFile::new_regular(
@@ -667,6 +687,28 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                 );
 
                 SimpleDir::new_maker(fs.clone(), Arc::new(fanotify))
+            });
+            fs_sys.add("inotify", {
+                let mut inotify = DirMapping::new();
+
+                inotify.add(
+                    "max_queued_events",
+                    proc_usize_sysctl_file(
+                        fs.clone(),
+                        crate::syscall::inotify_max_queued_events,
+                        crate::syscall::set_inotify_max_queued_events,
+                    ),
+                );
+                inotify.add(
+                    "max_user_instances",
+                    proc_rw_file(fs.clone(), b"8192\n".to_vec()),
+                );
+                inotify.add(
+                    "max_user_watches",
+                    proc_rw_file(fs.clone(), b"1048576\n".to_vec()),
+                );
+
+                SimpleDir::new_maker(fs.clone(), Arc::new(inotify))
             });
 
             SimpleDir::new_maker(fs.clone(), Arc::new(fs_sys))

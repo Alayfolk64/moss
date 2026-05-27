@@ -753,9 +753,15 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg4() as _,
         ),
 
+        // inotify
+        Sysno::inotify_init1 => sys_inotify_init1(uctx.arg0() as _),
+        Sysno::inotify_add_watch => {
+            sys_inotify_add_watch(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
+        }
+        Sysno::inotify_rm_watch => sys_inotify_rm_watch(uctx.arg0() as _, uctx.arg1() as _),
+
         // dummy fds
-        Sysno::inotify_init1
-        | Sysno::userfaultfd
+        Sysno::userfaultfd
         | Sysno::perf_event_open
         | Sysno::io_uring_setup
         | Sysno::fsopen

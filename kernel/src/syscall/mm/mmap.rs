@@ -12,6 +12,7 @@ use crate::{
     file::{File, FileLike},
     mm::{Backend, SharedPages},
     pseudofs::{Device, DeviceMmap},
+    syscall::notify_inotify_file,
     task::AsThread,
 };
 
@@ -177,6 +178,7 @@ pub fn sys_mmap(
     } else {
         None
     };
+    let notify_file = file.as_ref().map(|file| file.clone() as Arc<dyn FileLike>);
 
     let backend = match map_type {
         MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => {
@@ -245,6 +247,12 @@ pub fn sys_mmap(
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
     aspace.map(start, length, permission_flags.into(), populate, backend)?;
+    if map_type.intersects(MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE)
+        && permission_flags.contains(MmapProt::WRITE)
+        && let Some(file) = notify_file
+    {
+        notify_inotify_file(file, IN_MODIFY);
+    }
 
     Ok(start.as_usize() as _)
 }
