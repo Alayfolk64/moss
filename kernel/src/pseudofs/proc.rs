@@ -413,10 +413,9 @@ impl SimpleDirOps for ThreadDir {
                 "})
             })
             .into(),
-            "mounts" => SimpleFile::new_regular(fs, move || {
-                Ok("proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n")
-            })
-            .into(),
+            "mounts" => {
+                SimpleFile::new_regular(fs, move || Ok(crate::syscall::proc_mounts())).into()
+            }
             "cmdline" => SimpleFile::new_regular(fs, move || {
                 let cmdline = task.as_thread().proc_data.cmdline.read();
                 let mut buf = Vec::new();
@@ -540,9 +539,7 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     let mut root = DirMapping::new();
     root.add(
         "mounts",
-        SimpleFile::new_regular(fs.clone(), || {
-            Ok("proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n")
-        }),
+        SimpleFile::new_regular(fs.clone(), || Ok(crate::syscall::proc_mounts())),
     );
     root.add(
         "meminfo",
