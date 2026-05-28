@@ -17,9 +17,11 @@ use core::any::Any;
 use axerrno::AxError;
 use axfs_ng_vfs::{DeviceId, Filesystem, NodeFlags, NodeType, VfsResult};
 use axsync::Mutex;
+use linux_raw_sys::ioctl::RNDGETENTCNT;
 #[cfg(feature = "dev-log")]
 pub use log::bind_dev_log;
 use rand::{Rng, SeedableRng, rngs::SmallRng};
+use starry_vm::VmMutPtr;
 
 use crate::pseudofs::{Device, DeviceOps, DirMaker, DirMapping, SimpleDir, SimpleFs};
 
@@ -90,6 +92,14 @@ impl DeviceOps for Random {
 
     fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
         Ok(buf.len())
+    }
+
+    fn ioctl(&self, cmd: u32, arg: usize) -> VfsResult<usize> {
+        if cmd != RNDGETENTCNT {
+            return Err(AxError::NotATty);
+        }
+        (arg as *mut i32).vm_write(256)?;
+        Ok(0)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -237,6 +247,15 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             NodeType::CharacterDevice,
             DeviceId::new(5, 0),
             Arc::new(tty::CurrentTty),
+        ),
+    );
+    root.add(
+        "tty0",
+        Device::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(4, 0),
+            tty::N_TTY.clone(),
         ),
     );
     root.add(

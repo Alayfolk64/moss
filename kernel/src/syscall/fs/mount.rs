@@ -6,6 +6,7 @@ use alloc::{
 };
 use core::{
     ffi::{c_char, c_int, c_void},
+    sync::atomic::Ordering,
     task::Context,
 };
 
@@ -206,7 +207,7 @@ impl BlockDriverOps for LoopFileBlockDevice {
     }
 }
 
-fn loop_file_block_device(source: &str) -> AxResult<Option<LoopFileBlockDevice>> {
+fn loop_file_block_device(source: &str, mount_flags: u32) -> AxResult<Option<LoopFileBlockDevice>> {
     if parse_loop_source_index(source).is_none() {
         return Ok(None);
     }
@@ -218,6 +219,9 @@ fn loop_file_block_device(source: &str) -> AxResult<Option<LoopFileBlockDevice>>
         .as_any()
         .downcast_ref::<LoopDevice>()
         .ok_or(AxError::NoSuchDevice)?;
+    if loop_device.ro.load(Ordering::Relaxed) && mount_flags & MS_RDONLY == 0 {
+        return Err(AxError::PermissionDenied);
+    }
     let file = loop_device.clone_file()?;
     Ok(Some(LoopFileBlockDevice::new(file)?))
 }
@@ -242,7 +246,7 @@ fn create_filesystem(
             }
 
             let Some(dev_idx) = parse_block_source_index(source) else {
-                let Some(dev) = loop_file_block_device(source)? else {
+                let Some(dev) = loop_file_block_device(source, mount_flags)? else {
                     warn!("mount ext4: unsupported source path: {source}");
                     return Err(AxError::NoSuchDevice);
                 };

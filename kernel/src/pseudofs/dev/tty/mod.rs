@@ -21,7 +21,7 @@ use starry_vm::{VmMutPtr, VmPtr};
 use self::terminal::{
     Terminal, WindowSize,
     ldisc::{LineDiscipline, ProcessMode, TtyConfig, TtyRead, TtyWrite},
-    termios::{Termios, Termios2},
+    termios::{Termio, Termios, Termios2},
 };
 pub use self::{
     ntty::{N_TTY, NTtyDriver},
@@ -108,6 +108,10 @@ impl<R: TtyRead, W: TtyWrite> DeviceOps for Tty<R, W> {
     fn ioctl(&self, cmd: u32, arg: usize) -> AxResult<usize> {
         use linux_raw_sys::ioctl::*;
         match cmd {
+            TCGETA => {
+                (arg as *mut Termio)
+                    .vm_write(self.terminal.termios.lock().as_ref().deref().to_termio())?;
+            }
             TCGETS => {
                 (arg as *mut Termios).vm_write(*self.terminal.termios.lock().as_ref().deref())?;
             }
@@ -122,6 +126,14 @@ impl<R: TtyRead, W: TtyWrite> DeviceOps for Tty<R, W> {
                     self.ldisc.lock().drain_input();
                 }
             }
+            TCSETA | TCSETAF | TCSETAW => {
+                *self.terminal.termios.lock() = Arc::new(Termios2::new(Termios::from_termio(
+                    (arg as *const Termio).vm_read()?,
+                )));
+                if cmd == TCSETAF {
+                    self.ldisc.lock().drain_input();
+                }
+            }
             TCSETS2 | TCSETSF2 | TCSETSW2 => {
                 // TODO: drain output?
                 *self.terminal.termios.lock() = Arc::new((arg as *const Termios2).vm_read()?);
@@ -129,6 +141,7 @@ impl<R: TtyRead, W: TtyWrite> DeviceOps for Tty<R, W> {
                     self.ldisc.lock().drain_input();
                 }
             }
+            TCFLSH => {}
             TIOCGPGRP => {
                 let foreground = self
                     .terminal

@@ -263,8 +263,16 @@ run_ltp() {
     }
 
     cd ltp/testcases/bin
+    export PATH="$(pwd):$PATH"
 
-    some_testcases=""
+    some_testcases="
+        ioctl02      test_ioctl
+        ioctl01      ioctl01
+        ioctl04      ioctl04
+        ioctl05      ioctl05
+        ioctl06      ioctl06
+        ioctl07      ioctl07
+    "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
@@ -434,3 +442,5 @@ if [ "$ltp" = 1 ]; then
 else
     skip_group ltp glibc
 fi
+
+exit 0

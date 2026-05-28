@@ -13,7 +13,9 @@ use axhal::time::realtime_time;
 use axtask::current;
 use linux_raw_sys::{
     general::*,
-    ioctl::{FIONBIO, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS, TCGETA, TCGETS, TCGETS2, TIOCGWINSZ},
+    ioctl::{
+        FIONBIO, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS, TCGETA, TCGETS, TCGETS2, TIOCGPTPEER, TIOCGWINSZ,
+    },
 };
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
@@ -88,7 +90,9 @@ pub fn sys_ioctl(fd: i32, cmd: u32, arg: usize) -> AxResult<isize> {
             if *err == AxError::NotATty {
                 // libc/test harnesses commonly probe stdio fds with terminal
                 // ioctls. Returning ENOTTY is correct; keep the log quiet.
-                if matches!(cmd, TCGETS | TCGETA | TCGETS2 | TIOCGWINSZ) {
+                if matches!(cmd, TCGETS | TCGETA | TCGETS2 | TIOCGWINSZ | TIOCGPTPEER)
+                    || cmd == 9_999_999
+                {
                     return;
                 }
                 warn!("Unsupported ioctl command: {cmd} for fd: {fd}");

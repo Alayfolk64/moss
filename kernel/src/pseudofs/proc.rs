@@ -625,6 +625,14 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                 "core_pattern",
                 SimpleFile::new_regular(fs.clone(), || Ok("core\n")),
             );
+            kernel.add("random", {
+                let mut random = DirMapping::new();
+                random.add(
+                    "entropy_avail",
+                    SimpleFile::new_regular(fs.clone(), || Ok("256\n")),
+                );
+                SimpleDir::new_maker(fs.clone(), Arc::new(random))
+            });
             kernel.add("keys", {
                 let mut keys = DirMapping::new();
 

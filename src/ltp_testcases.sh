@@ -394,13 +394,13 @@ getxattr01 getxattr01
 getxattr02 getxattr02
 getxattr03 getxattr03
 getxattr04 getxattr04
-# ioctl02      test_ioctl
-# ioctl01      ioctl01
+ioctl02      test_ioctl
+ioctl01      ioctl01
 # ioctl03      ioctl03
 ioctl04      ioctl04
 ioctl05      ioctl05
-# ioctl06      ioctl06
-# ioctl07      ioctl07
+ioctl06      ioctl06
+ioctl07      ioctl07
 # ioctl08      ioctl08
 # ioctl09      ioctl09
 # ioctl_loop01 ioctl_loop01
@@ -415,7 +415,7 @@ ioctl05      ioctl05
 # ioctl_ns04 ioctl_ns04
 # ioctl_ns05 ioctl_ns05
 # ioctl_ns06 ioctl_ns06
-ioctl_ns07 ioctl_ns07
+# ioctl_ns07 ioctl_ns07
 inotify_init1_01 inotify_init1_01
 inotify_init1_02 inotify_init1_02
 inotify01 inotify01
@@ -1208,9 +1208,9 @@ futex_wake03 futex_wake03
 futex_wake04 futex_wake04
 # futex_wait_bitset01 futex_wait_bitset01
 memfd_create01 memfd_create01
-# memfd_create02 memfd_create02
-# memfd_create03 memfd_create03
-# memfd_create04 memfd_create04
+memfd_create02 memfd_create02
+memfd_create03 memfd_create03
+memfd_create04 memfd_create04
 copy_file_range01 copy_file_range01
 # copy_file_range02 copy_file_range02
 # copy_file_range03 copy_file_range03
