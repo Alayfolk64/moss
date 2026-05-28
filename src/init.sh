@@ -266,12 +266,11 @@ run_ltp() {
     export PATH="$(pwd):$PATH"
 
     some_testcases="
-        ioctl02      test_ioctl
-        ioctl01      ioctl01
-        ioctl04      ioctl04
-        ioctl05      ioctl05
-        ioctl06      ioctl06
-        ioctl07      ioctl07
+        fsconfig01 fsconfig01
+        fsconfig02 fsconfig02
+        fsconfig03 fsconfig03
+        fsopen01 fsopen01
+        fsopen02 fsopen02
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

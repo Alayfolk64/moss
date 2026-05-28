@@ -300,13 +300,13 @@ fork11 fork_procs -n 100
 fpathconf01 fpathconf01
 fremovexattr01 fremovexattr01
 fremovexattr02 fremovexattr02
-# fsconfig01 fsconfig01
-# fsconfig02 fsconfig02
-# fsconfig03 fsconfig03
+fsconfig01 fsconfig01
+fsconfig02 fsconfig02
+fsconfig03 fsconfig03
 fsmount01 fsmount01
 fsmount02 fsmount02
-# fsopen01 fsopen01
-# fsopen02 fsopen02
+fsopen01 fsopen01
+fsopen02 fsopen02
 # fspick01 fspick01
 # fspick02 fspick02
 fstat02 fstat02
