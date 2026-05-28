@@ -31,8 +31,14 @@ const LOOP_BLOCK_SIZE: usize = 512;
 const SUPPORTED_MOUNT_FLAGS: u32 = MS_RDONLY | MS_NOSYMFOLLOW;
 const FSOPEN_CLOEXEC: u32 = 1;
 const FSMOUNT_CLOEXEC: u32 = 1;
+const FSCONFIG_SET_FLAG: u32 = 0;
 const FSCONFIG_SET_STRING: u32 = 1;
+const FSCONFIG_SET_BINARY: u32 = 2;
+const FSCONFIG_SET_PATH: u32 = 3;
+const FSCONFIG_SET_PATH_EMPTY: u32 = 4;
+const FSCONFIG_SET_FD: u32 = 5;
 const FSCONFIG_CMD_CREATE: u32 = 6;
+const FSCONFIG_CMD_RECONFIGURE: u32 = 7;
 const MOVE_MOUNT_F_EMPTY_PATH: u32 = 4;
 const VALID_FSMOUNT_ATTRS: u32 = 0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x80;
 static MOUNTED_PATHS: RwLock<Vec<String>> = RwLock::new(Vec::new());
@@ -341,23 +347,55 @@ pub fn sys_fsconfig(
     cmd: u32,
     key: *const c_char,
     value: *const c_void,
-    _aux: c_int,
+    aux: c_int,
 ) -> AxResult<isize> {
-    let ctx = get_file_like(fd)?
+    if fd < 0 {
+        return Err(AxError::InvalidInput);
+    }
+    let ctx = get_file_like(fd)
+        .map_err(|_| AxError::InvalidInput)?
         .downcast_arc::<FsContextFd>()
         .map_err(|_| AxError::InvalidInput)?;
     match cmd {
+        FSCONFIG_SET_FLAG => {
+            if key.is_null() || !value.is_null() || aux != 0 {
+                return Err(AxError::InvalidInput);
+            }
+            vm_load_string(key)?;
+        }
         FSCONFIG_SET_STRING => {
+            if key.is_null() || value.is_null() || aux != 0 {
+                return Err(AxError::InvalidInput);
+            }
             let key = vm_load_string(key)?;
             if key != "source" {
                 return Err(AxError::InvalidInput);
             }
             *ctx.source.lock() = Some(vm_load_string(value.cast())?);
         }
+        FSCONFIG_SET_PATH | FSCONFIG_SET_PATH_EMPTY => {
+            if key.is_null() || value.is_null() || (aux < 0 && aux != AT_FDCWD) {
+                return Err(AxError::InvalidInput);
+            }
+            vm_load_string(key)?;
+            vm_load_string(value.cast())?;
+        }
+        FSCONFIG_SET_FD => {
+            if key.is_null() || !value.is_null() || aux < 0 {
+                return Err(AxError::InvalidInput);
+            }
+            vm_load_string(key)?;
+        }
+        FSCONFIG_SET_BINARY | FSCONFIG_CMD_RECONFIGURE => {
+            return Err(AxError::InvalidInput);
+        }
         FSCONFIG_CMD_CREATE => {
+            if !key.is_null() || !value.is_null() || aux != 0 {
+                return Err(AxError::InvalidInput);
+            }
             *ctx.created.lock() = true;
         }
-        _ => return Err(AxError::InvalidInput),
+        _ => return Err(AxError::OperationNotSupported),
     }
     Ok(0)
 }
