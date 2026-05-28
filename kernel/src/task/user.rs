@@ -31,13 +31,36 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 match reason {
                     ReturnReason::Syscall => handle_syscall(&mut uctx),
                     ReturnReason::PageFault(addr, flags) => {
-                        if !thr.proc_data.aspace.lock().handle_page_fault(addr, flags) {
+                        let fault_signal = {
+                            let mut aspace = thr.proc_data.aspace.lock();
+                            if crate::syscall::is_mmap_sigbus_fault(
+                                thr.proc_data.proc.pid(),
+                                addr,
+                                flags,
+                            ) {
+                                Some(Signo::SIGBUS)
+                            } else if aspace.handle_page_fault(addr, flags)
+                                || crate::syscall::try_growdown_fault(
+                                    thr.proc_data.proc.pid(),
+                                    &mut aspace,
+                                    addr,
+                                    flags,
+                                )
+                            {
+                                None
+                            } else if aspace.is_accessible_fault(addr, flags) {
+                                Some(Signo::SIGBUS)
+                            } else {
+                                Some(Signo::SIGSEGV)
+                            }
+                        };
+                        if let Some(signo) = fault_signal {
                             info!(
-                                "{:?}: segmentation fault at {:#x} {:?}",
-                                thr.proc_data.proc, addr, flags
+                                "{:?}: user fault {:?} at {:#x} {:?}",
+                                thr.proc_data.proc, signo, addr, flags
                             );
-                            raise_signal_fatal(SignalInfo::new_kernel(Signo::SIGSEGV))
-                                .expect("Failed to send SIGSEGV");
+                            raise_signal_fatal(SignalInfo::new_kernel(signo))
+                                .expect("Failed to send fault signal");
                         }
                     }
                     ReturnReason::Interrupt => {}

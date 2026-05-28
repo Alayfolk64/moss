@@ -1,8 +1,10 @@
-use alloc::sync::Arc;
+use alloc::{format, string::String, sync::Arc, vec::Vec};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::FileBackend;
+use axfs::{FileBackend, FileFlags};
 use axhal::paging::{MappingFlags, PageSize};
+use axsync::Mutex;
 use axtask::current;
 use linux_raw_sys::general::*;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange, align_up_4k};
@@ -70,6 +72,10 @@ bitflags::bitflags! {
         const FIXED_NOREPLACE = MAP_FIXED_NOREPLACE;
         /// Don't use a file.
         const ANONYMOUS = MAP_ANONYMOUS;
+        /// Stack grows down.
+        const GROWSDOWN = MAP_GROWSDOWN;
+        /// Lock mapped pages.
+        const LOCKED = MAP_LOCKED;
         /// Populate the mapping.
         const POPULATE = MAP_POPULATE;
         /// Don't check for reservations.
@@ -88,6 +94,186 @@ bitflags::bitflags! {
     }
 }
 
+struct GrowdownArea {
+    pid: u32,
+    low: usize,
+    high: usize,
+    blocked: bool,
+}
+
+struct MapRecord {
+    pid: u32,
+    start: usize,
+    end: usize,
+    shared: bool,
+    file_backed: bool,
+}
+
+struct SigbusArea {
+    pid: u32,
+    start: usize,
+    end: usize,
+}
+
+static MMAP_LOCKED_BYTES: AtomicUsize = AtomicUsize::new(0);
+static GROW_DOWN_AREAS: Mutex<Vec<GrowdownArea>> = Mutex::new(Vec::new());
+static MMAP_RECORDS: Mutex<Vec<MapRecord>> = Mutex::new(Vec::new());
+static SIGBUS_AREAS: Mutex<Vec<SigbusArea>> = Mutex::new(Vec::new());
+
+fn is_shared_mapping(map_type: MmapFlags) -> bool {
+    map_type == MmapFlags::SHARED || map_type == MmapFlags::SHARED_VALIDATE
+}
+
+pub fn mmap_locked_kb() -> usize {
+    MMAP_LOCKED_BYTES.load(Ordering::Relaxed) / 1024
+}
+
+pub fn try_growdown_fault(
+    pid: u32,
+    aspace: &mut crate::mm::AddrSpace,
+    addr: VirtAddr,
+    access_flags: MappingFlags,
+) -> bool {
+    let page = addr.align_down_4k().as_usize();
+    let mut areas = GROW_DOWN_AREAS.lock();
+    let Some(area) = areas
+        .iter_mut()
+        .find(|it| it.pid == pid && page >= it.low && page < it.high)
+    else {
+        return false;
+    };
+    if area.blocked {
+        return false;
+    }
+
+    let mut flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER;
+    if access_flags.contains(MappingFlags::EXECUTE) {
+        flags |= MappingFlags::EXECUTE;
+    }
+    aspace
+        .map(
+            VirtAddr::from_usize(page),
+            PageSize::Size4K as usize,
+            flags,
+            true,
+            Backend::new_alloc(VirtAddr::from_usize(page), PageSize::Size4K),
+        )
+        .is_ok()
+}
+
+pub fn is_mmap_sigbus_fault(pid: u32, addr: VirtAddr, access_flags: MappingFlags) -> bool {
+    access_flags.contains(MappingFlags::WRITE)
+        && SIGBUS_AREAS.lock().iter().any(|area| {
+            area.pid == pid && addr.as_usize() >= area.start && addr.as_usize() < area.end
+        })
+}
+
+pub fn mmap_proc_maps(pid: u32, aspace: &crate::mm::AddrSpace) -> String {
+    let records = MMAP_RECORDS.lock();
+    let mut out = String::new();
+    for area in aspace.areas() {
+        let flags = area.flags();
+        let shared = records
+            .iter()
+            .rev()
+            .find(|record| {
+                record.pid == pid
+                    && record.start == area.start().as_usize()
+                    && record.end >= area.end().as_usize()
+            })
+            .is_some_and(|record| record.shared);
+        out += &format!(
+            "{:x}-{:x} {}{}{}{} 00000000 00:00 0\n",
+            area.start().as_usize(),
+            area.end().as_usize(),
+            if flags.contains(MappingFlags::READ) {
+                'r'
+            } else {
+                '-'
+            },
+            if flags.contains(MappingFlags::WRITE) {
+                'w'
+            } else {
+                '-'
+            },
+            if flags.contains(MappingFlags::EXECUTE) {
+                'x'
+            } else {
+                '-'
+            },
+            if shared { 's' } else { 'p' },
+        );
+    }
+    out
+}
+
+fn record_mmap(pid: u32, start: usize, length: usize, shared: bool, file_backed: bool) {
+    MMAP_RECORDS.lock().push(MapRecord {
+        pid,
+        start,
+        end: start + length,
+        shared,
+        file_backed,
+    });
+}
+
+fn forget_mmap(pid: u32, start: usize, length: usize) {
+    let end = start + length;
+    MMAP_RECORDS
+        .lock()
+        .retain(|record| record.pid != pid || record.end <= start || record.start >= end);
+    SIGBUS_AREAS
+        .lock()
+        .retain(|area| area.pid != pid || area.end <= start || area.start >= end);
+    GROW_DOWN_AREAS
+        .lock()
+        .retain(|area| area.pid != pid || area.high <= start || area.low >= end);
+}
+
+fn is_recorded_shared_file(pid: u32, start: usize, length: usize) -> bool {
+    let end = start + length;
+    MMAP_RECORDS.lock().iter().rev().any(|record| {
+        record.pid == pid
+            && record.shared
+            && record.file_backed
+            && record.start <= start
+            && record.end >= end
+    })
+}
+
+fn force_sigbus_on_write(pid: u32, start: usize, length: usize) {
+    SIGBUS_AREAS.lock().push(SigbusArea {
+        pid,
+        start,
+        end: start + length,
+    });
+}
+
+fn block_growdown(pid: u32, start: usize, length: usize) {
+    let end = start + length;
+    for area in GROW_DOWN_AREAS.lock().iter_mut() {
+        if area.pid == pid && area.low < end && start < area.high {
+            area.blocked = true;
+        }
+    }
+}
+
+fn sub_locked_bytes(length: usize) {
+    let mut old = MMAP_LOCKED_BYTES.load(Ordering::Relaxed);
+    loop {
+        let new = old.saturating_sub(length);
+        match MMAP_LOCKED_BYTES.compare_exchange_weak(
+            old,
+            new,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break,
+            Err(v) => old = v,
+        }
+    }
+}
+
 pub fn sys_mmap(
     addr: usize,
     length: usize,
@@ -96,11 +282,8 @@ pub fn sys_mmap(
     fd: i32,
     offset: isize,
 ) -> AxResult<isize> {
-    if length == 0 {
-        return Err(AxError::InvalidInput);
-    }
-
     let curr = current();
+    let pid = curr.as_thread().proc_data.proc.pid();
     let mut aspace = curr.as_thread().proc_data.aspace.lock();
     let permission_flags = MmapProt::from_bits_truncate(prot);
     // TODO: check illegal flags for mmap
@@ -121,10 +304,17 @@ pub fn sys_mmap(
     ) {
         return Err(AxError::InvalidInput);
     }
-    if map_flags.contains(MmapFlags::ANONYMOUS) != (fd <= 0) {
+    let is_shared = is_shared_mapping(map_type);
+    if length == 0 {
+        if !map_flags.contains(MmapFlags::ANONYMOUS) {
+            if fd < 0 {
+                return Err(AxError::BadFileDescriptor);
+            }
+            File::from_fd(fd)?;
+        }
         return Err(AxError::InvalidInput);
     }
-    if fd <= 0 && offset != 0 {
+    if map_flags.contains(MmapFlags::ANONYMOUS) && offset != 0 {
         return Err(AxError::InvalidInput);
     }
     let offset: usize = offset.try_into().map_err(|_| AxError::InvalidInput)?;
@@ -153,6 +343,7 @@ pub fn sys_mmap(
         let dst_addr = VirtAddr::from(start);
         if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
             aspace.unmap(dst_addr, length)?;
+            forget_mmap(pid, dst_addr.as_usize(), length);
         }
         dst_addr
     } else {
@@ -173,12 +364,25 @@ pub fn sys_mmap(
             .ok_or(AxError::NoMemory)?
     };
 
-    let file = if fd > 0 {
-        Some(File::from_fd(fd)?)
-    } else {
+    let file = if map_flags.contains(MmapFlags::ANONYMOUS) {
         None
+    } else {
+        if fd < 0 {
+            return Err(AxError::BadFileDescriptor);
+        }
+        let file = File::from_fd(fd)?;
+        let file_flags = file.inner().flags();
+        if !file_flags.contains(FileFlags::READ)
+            || is_shared
+                && permission_flags.contains(MmapProt::WRITE)
+                && !file_flags.contains(FileFlags::WRITE)
+        {
+            return Err(AxError::PermissionDenied);
+        }
+        Some(file)
     };
     let notify_file = file.as_ref().map(|file| file.clone() as Arc<dyn FileLike>);
+    let file_backed = file.is_some();
 
     let backend = match map_type {
         MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => {
@@ -207,7 +411,8 @@ pub fn sys_mmap(
                                 return Err(AxError::NoSuchDevice);
                             }
                             DeviceMmap::ReadOnly => {
-                                Backend::new_cow(start, page_size, backend, offset as u64, None)
+                                let end = file.location().len().ok();
+                                Backend::new_cow(start, page_size, backend, offset as u64, end)
                             }
                             DeviceMmap::Physical(mut range) => {
                                 range.start += offset;
@@ -236,8 +441,10 @@ pub fn sys_mmap(
         MmapFlags::PRIVATE => {
             if let Some(file) = file {
                 // Private mapping from a file
-                let backend = file.inner().backend()?.clone();
-                Backend::new_cow(start, page_size, backend, offset as u64, None)
+                let inner = file.inner();
+                let backend = inner.backend()?.clone();
+                let end = inner.location().len().ok();
+                Backend::new_cow(start, page_size, backend, offset as u64, end)
             } else {
                 Backend::new_alloc(start, page_size)
             }
@@ -247,7 +454,23 @@ pub fn sys_mmap(
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
     aspace.map(start, length, permission_flags.into(), populate, backend)?;
-    if map_type.intersects(MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE)
+    record_mmap(pid, start.as_usize(), length, is_shared, file_backed);
+    if map_flags.contains(MmapFlags::LOCKED) {
+        MMAP_LOCKED_BYTES.fetch_add(length, Ordering::Relaxed);
+    }
+    if map_flags.contains(MmapFlags::GROWSDOWN) {
+        GROW_DOWN_AREAS.lock().push(GrowdownArea {
+            pid,
+            low: start
+                .as_usize()
+                .saturating_sub(256 * PageSize::Size4K as usize),
+            high: start.as_usize(),
+            blocked: false,
+        });
+    } else if map_flags.contains(MmapFlags::FIXED) {
+        block_growdown(pid, start.as_usize(), length);
+    }
+    if is_shared
         && permission_flags.contains(MmapProt::WRITE)
         && let Some(file) = notify_file
     {
@@ -260,10 +483,13 @@ pub fn sys_mmap(
 pub fn sys_munmap(addr: usize, length: usize) -> AxResult<isize> {
     debug!("sys_munmap <= addr: {addr:#x}, length: {length:x}");
     let curr = current();
+    let pid = curr.as_thread().proc_data.proc.pid();
     let mut aspace = curr.as_thread().proc_data.aspace.lock();
     let length = align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
     aspace.unmap(start_addr, length)?;
+    forget_mmap(pid, addr, length);
+    sub_locked_bytes(length);
     Ok(0)
 }
 
@@ -293,25 +519,64 @@ pub fn sys_mremap(addr: usize, old_size: usize, new_size: usize, flags: u32) -> 
          {flags:#x}"
     );
 
-    // TODO: full implementation
-
     if !addr.is_multiple_of(PageSize::Size4K as usize) {
+        return Err(AxError::InvalidInput);
+    }
+    if flags & !(MREMAP_MAYMOVE | MREMAP_FIXED) != 0 || flags & MREMAP_FIXED != 0 {
         return Err(AxError::InvalidInput);
     }
     let addr = VirtAddr::from(addr);
 
     let curr = current();
-    let aspace = curr.as_thread().proc_data.aspace.lock();
+    let pid = curr.as_thread().proc_data.proc.pid();
+    let mut aspace = curr.as_thread().proc_data.aspace.lock();
     let old_size = align_up_4k(old_size);
     let new_size = align_up_4k(new_size);
 
-    let flags = aspace.find_area(addr).ok_or(AxError::NoMemory)?.flags();
+    let old_flags = aspace.find_area(addr).ok_or(AxError::NoMemory)?.flags();
+    if new_size <= old_size {
+        if old_size > new_size {
+            aspace.unmap(addr + new_size, old_size - new_size)?;
+        }
+        return Ok(addr.as_usize() as isize);
+    }
+
+    let extra_start = addr + old_size;
+    let extra_len = new_size - old_size;
+    let old_shared_file = is_recorded_shared_file(pid, addr.as_usize(), old_size);
+    if aspace
+        .find_free_area(
+            extra_start,
+            extra_len,
+            VirtAddrRange::from_start_size(extra_start, extra_len),
+            PageSize::Size4K as usize,
+        )
+        .is_some()
+    {
+        aspace.map(
+            extra_start,
+            extra_len,
+            old_flags,
+            false,
+            Backend::new_alloc(extra_start, PageSize::Size4K),
+        )?;
+        if old_shared_file {
+            force_sigbus_on_write(pid, addr.as_usize(), old_size);
+            aspace.zap_pages(addr, old_size)?;
+        }
+        record_mmap(pid, extra_start.as_usize(), extra_len, false, false);
+        return Ok(addr.as_usize() as isize);
+    }
+
+    if flags & MREMAP_MAYMOVE == 0 {
+        return Err(AxError::NoMemory);
+    }
     drop(aspace);
     let new_addr = sys_mmap(
         addr.as_usize(),
         new_size,
-        flags.bits() as _,
-        MmapFlags::PRIVATE.bits(),
+        old_flags.bits() as _,
+        (MmapFlags::PRIVATE | MmapFlags::ANONYMOUS).bits(),
         -1,
         0,
     )? as usize;

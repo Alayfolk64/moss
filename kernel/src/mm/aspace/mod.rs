@@ -4,7 +4,7 @@ use core::{fmt, ops::DerefMut};
 use axerrno::{AxError, AxResult, ax_bail};
 use axhal::{
     mem::phys_to_virt,
-    paging::{MappingFlags, PageTable},
+    paging::{MappingFlags, PageTable, PagingError},
     trap::PageFaultFlags,
 };
 use axsync::Mutex;
@@ -187,6 +187,19 @@ impl AddrSpace {
         Ok(())
     }
 
+    pub fn zap_pages(&mut self, start: VirtAddr, size: usize) -> AxResult {
+        self.validate_region(start, size)?;
+        let end = start + size;
+        let mut modify = self.pt.modify();
+        for vaddr in PageIter4K::new(start, end).ok_or(AxError::InvalidInput)? {
+            match modify.unmap(vaddr) {
+                Ok(_) | Err(PagingError::NotMapped) => {}
+                Err(_) => return Err(AxError::BadAddress),
+            }
+        }
+        Ok(())
+    }
+
     /// To process data in this area with the given function.
     ///
     /// Now it supports reading and writing data in the given interval.
@@ -296,6 +309,12 @@ impl AddrSpace {
         }
 
         false
+    }
+
+    pub fn is_accessible_fault(&self, vaddr: VirtAddr, access_flags: MappingFlags) -> bool {
+        self.areas
+            .find(vaddr)
+            .is_some_and(|area| area.flags().contains(access_flags))
     }
 
     /// Handles a page fault at the given address.

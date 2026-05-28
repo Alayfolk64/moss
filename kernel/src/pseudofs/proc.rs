@@ -156,13 +156,27 @@ fn task_status(task: &AxTaskRef) -> String {
         Pid:\t{}\n\
         Uid:\t0 0 0 0\n\
         Gid:\t0 0 0 0\n\
+        VmLck:\t{} kB\n\
         Cpus_allowed:\t1\n\
         Cpus_allowed_list:\t0\n\
         Mems_allowed:\t1\n\
         Mems_allowed_list:\t0",
         task.as_thread().proc_data.proc.pid(),
-        task.id().as_u64()
+        task.id().as_u64(),
+        crate::syscall::mmap_locked_kb(),
     )
+}
+
+fn proc_pagemap(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
+    const LEN: usize = 1024 * 1024;
+    SimpleFile::new_regular(fs, || {
+        let entry = (1u64 << 63).to_ne_bytes();
+        let mut data = vec![0; LEN];
+        for chunk in data.chunks_exact_mut(entry.len()) {
+            chunk.copy_from_slice(&entry);
+        }
+        Ok(data)
+    })
 }
 
 fn proc_rw_file(fs: Arc<SimpleFs>, initial: impl Into<Vec<u8>>) -> Arc<SimpleFile> {
@@ -353,6 +367,7 @@ impl SimpleDirOps for ThreadDir {
                 "oom_score_adj",
                 "task",
                 "maps",
+                "pagemap",
                 "mounts",
                 "cmdline",
                 "comm",
@@ -405,14 +420,12 @@ impl SimpleDirOps for ThreadDir {
             )
             .into(),
             "maps" => SimpleFile::new_regular(fs, move || {
-                Ok(indoc! {"
-                    7f000000-7f001000 r--p 00000000 00:00 0          [vdso]
-                    7f001000-7f003000 r-xp 00001000 00:00 0          [vdso]
-                    7f003000-7f005000 r--p 00003000 00:00 0          [vdso]
-                    7f005000-7f007000 rw-p 00005000 00:00 0          [vdso]
-                "})
+                let pid = task.as_thread().proc_data.proc.pid();
+                let aspace = task.as_thread().proc_data.aspace.lock();
+                Ok(crate::syscall::mmap_proc_maps(pid, &aspace))
             })
             .into(),
+            "pagemap" => proc_pagemap(fs).into(),
             "mounts" => {
                 SimpleFile::new_regular(fs, move || Ok(crate::syscall::proc_mounts())).into()
             }
