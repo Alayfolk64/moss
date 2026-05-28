@@ -12,6 +12,17 @@ use starry_signal::Signo;
 
 #[repr(C)]
 #[derive(Clone, Copy, AnyBitPattern)]
+pub struct Termio {
+    c_iflag: u16,
+    c_oflag: u16,
+    c_cflag: u16,
+    c_lflag: u16,
+    c_line: u8,
+    c_cc: [u8; 8],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, AnyBitPattern)]
 pub struct Termios {
     c_iflag: tcflag_t,
     c_oflag: tcflag_t,
@@ -56,6 +67,32 @@ impl Default for Termios {
 }
 
 impl Termios {
+    pub fn from_termio(termio: Termio) -> Self {
+        let mut termios = Self {
+            c_iflag: termio.c_iflag as _,
+            c_oflag: termio.c_oflag as _,
+            c_cflag: termio.c_cflag as _,
+            c_lflag: termio.c_lflag as _,
+            c_line: termio.c_line,
+            c_cc: [0; 19],
+        };
+        termios.c_cc[..termio.c_cc.len()].copy_from_slice(&termio.c_cc);
+        termios
+    }
+
+    pub fn to_termio(self) -> Termio {
+        let mut c_cc = [0; 8];
+        c_cc.copy_from_slice(&self.c_cc[..8]);
+        Termio {
+            c_iflag: self.c_iflag as _,
+            c_oflag: self.c_oflag as _,
+            c_cflag: self.c_cflag as _,
+            c_lflag: self.c_lflag as _,
+            c_line: self.c_line,
+            c_cc,
+        }
+    }
+
     pub fn special_char(&self, index: u32) -> u8 {
         self.c_cc[index as usize]
     }
