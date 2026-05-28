@@ -549,20 +549,20 @@ mlock04 mlock04
 mlock202 mlock202
 # mlock203 mlock203
 # qmm01 mmap001 -m 1
-# mmap01 mmap01
+mmap01 mmap01
 mmap02 mmap02
-# mmap03 mmap03
-# mmap04 mmap04
+mmap03 mmap03
+mmap04 mmap04
 mmap05 mmap05
 mmap06 mmap06
-# mmap08 mmap08
+mmap08 mmap08
 mmap09 mmap09
-# mmap12 mmap12
-# mmap13 mmap13
-# mmap14 mmap14
+mmap12 mmap12
+mmap13 mmap13
+mmap14 mmap14
 mmap11 mmap11 -i 30000
 mmap15 mmap15
-# mmap16 mmap16
+mmap16 mmap16
 mmap17 mmap17
 mmap18 mmap18
 mmap19 mmap19

@@ -266,11 +266,24 @@ run_ltp() {
     export PATH="$(pwd):$PATH"
 
     some_testcases="
-        fsconfig01 fsconfig01
-        fsconfig02 fsconfig02
-        fsconfig03 fsconfig03
-        fsopen01 fsopen01
-        fsopen02 fsopen02
+        mmap01 mmap01
+        mmap02 mmap02
+        mmap03 mmap03
+        mmap04 mmap04
+        mmap05 mmap05
+        mmap06 mmap06
+        mmap08 mmap08
+        mmap09 mmap09
+        mmap12 mmap12
+        mmap13 mmap13
+        mmap14 mmap14
+        mmap11 mmap11 -i 30000
+        mmap15 mmap15
+        mmap16 mmap16
+        mmap17 mmap17
+        mmap18 mmap18
+        mmap19 mmap19
+        mmap20 mmap20
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

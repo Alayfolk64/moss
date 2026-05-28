@@ -147,8 +147,12 @@ impl BackendOps for FileBackend {
         let mut pages = 0;
         let mut to_be_evicted = Vec::new();
         let start_page = ((range.start - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
+        let file_len = self.0.cache.location().len().ok();
         for (i, addr) in pages_in(range, PageSize::Size4K)?.enumerate() {
             let pn = start_page + i as u32;
+            if file_len.is_some_and(|len| u64::from(pn) * PAGE_SIZE_4K as u64 >= len) {
+                return Err(AxError::Io);
+            }
             match pt.query(addr) {
                 Ok((paddr, page_flags, _)) => {
                     if access_flags.contains(MappingFlags::WRITE)
