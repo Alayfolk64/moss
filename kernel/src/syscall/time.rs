@@ -1,4 +1,5 @@
-use alloc::{collections::BTreeMap, format};
+use alloc::{collections::BTreeMap, format, string::String};
+use core::time::Duration;
 
 use axerrno::{AxError, AxResult};
 use axhal::time::{
@@ -58,6 +59,19 @@ const ADJ_VALID_MODES: u32 = ADJ_OFFSET
 const TIME_OK: isize = 0;
 const MIN_TICK: isize = 9000;
 const MAX_TICK: isize = 11000;
+const NANOS_PER_SEC_I64: i64 = 1_000_000_000;
+
+#[derive(Clone, Copy, Default)]
+struct TimensOffsets {
+    active_monotonic_ns: i64,
+    active_boottime_ns: i64,
+    child_monotonic_ns: i64,
+    child_boottime_ns: i64,
+}
+
+lazy_static! {
+    static ref TIMENS_OFFSETS: Mutex<BTreeMap<Pid, TimensOffsets>> = Mutex::new(BTreeMap::new());
+}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -126,7 +140,7 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
         | CLOCK_MONOTONIC_RAW
         | CLOCK_MONOTONIC_COARSE
         | CLOCK_BOOTTIME
-        | CLOCK_BOOTTIME_ALARM => monotonic_time(),
+        | CLOCK_BOOTTIME_ALARM => timens_clock_now(clock_id as u32),
         CLOCK_PROCESS_CPUTIME_ID => {
             process_cpu_time(current().as_thread().proc_data.proc.pid()).unwrap_or(TimeValue::ZERO)
         }
@@ -142,6 +156,44 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
     };
     ts.vm_write(timespec::from_time_value(now))?;
     Ok(0)
+}
+
+pub(crate) fn inherit_child_timens_offsets(parent: Pid, child: Pid) {
+    let mut offsets = TIMENS_OFFSETS.lock();
+    let parent = offsets.get(&parent).copied().unwrap_or_default();
+    offsets.insert(
+        child,
+        TimensOffsets {
+            active_monotonic_ns: parent.child_monotonic_ns,
+            active_boottime_ns: parent.child_boottime_ns,
+            child_monotonic_ns: parent.child_monotonic_ns,
+            child_boottime_ns: parent.child_boottime_ns,
+        },
+    );
+}
+
+pub(crate) fn read_child_timens_offsets() -> String {
+    let pid = current().as_thread().proc_data.proc.pid();
+    let offsets = TIMENS_OFFSETS.lock().get(&pid).copied().unwrap_or_default();
+    let (mono_sec, mono_nsec) = split_offset_ns(offsets.child_monotonic_ns);
+    let (boot_sec, boot_nsec) = split_offset_ns(offsets.child_boottime_ns);
+    format!("monotonic {mono_sec} {mono_nsec}\nboottime {boot_sec} {boot_nsec}\n")
+}
+
+pub(crate) fn set_child_timens_offset(clock_id: u32, secs: i64, nsecs: i64) -> AxResult<()> {
+    if !(0..NANOS_PER_SEC_I64).contains(&nsecs) {
+        return Err(AxError::InvalidInput);
+    }
+    let offset_ns = secs.saturating_mul(NANOS_PER_SEC_I64).saturating_add(nsecs);
+    let pid = current().as_thread().proc_data.proc.pid();
+    let mut offsets = TIMENS_OFFSETS.lock();
+    let entry = offsets.entry(pid).or_default();
+    match clock_id {
+        CLOCK_MONOTONIC => entry.child_monotonic_ns = offset_ns,
+        CLOCK_BOOTTIME => entry.child_boottime_ns = offset_ns,
+        _ => return Err(AxError::InvalidInput),
+    }
+    Ok(())
 }
 
 pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> AxResult<isize> {
@@ -662,6 +714,47 @@ fn posix_timer_clock_now(clock_id: u32, pid: Pid, tid: Pid) -> Option<TimeValue>
 
 fn realtime_now() -> TimeValue {
     realtime_time()
+}
+
+pub(crate) fn timens_clock_now(clock_id: u32) -> TimeValue {
+    let base = match clock_id {
+        CLOCK_BOOTTIME | CLOCK_BOOTTIME_ALARM => monotonic_time(),
+        CLOCK_MONOTONIC | CLOCK_MONOTONIC_RAW | CLOCK_MONOTONIC_COARSE => monotonic_time(),
+        _ => return monotonic_time(),
+    };
+    add_timens_offset(base, current_timens_offset(clock_id))
+}
+
+pub(crate) fn current_timens_offset(clock_id: u32) -> i64 {
+    let task = current();
+    let Some(thread) = task.try_as_thread() else {
+        return 0;
+    };
+    let pid = thread.proc_data.proc.pid();
+    let offsets = TIMENS_OFFSETS.lock().get(&pid).copied().unwrap_or_default();
+    match clock_id {
+        CLOCK_BOOTTIME | CLOCK_BOOTTIME_ALARM => offsets.active_boottime_ns,
+        CLOCK_MONOTONIC | CLOCK_MONOTONIC_RAW | CLOCK_MONOTONIC_COARSE => {
+            offsets.active_monotonic_ns
+        }
+        _ => 0,
+    }
+}
+
+fn add_timens_offset(base: TimeValue, offset_ns: i64) -> TimeValue {
+    if offset_ns >= 0 {
+        base.checked_add(Duration::from_nanos(offset_ns as u64))
+            .unwrap_or(TimeValue::MAX)
+    } else {
+        base.saturating_sub(Duration::from_nanos(offset_ns.unsigned_abs()))
+    }
+}
+
+fn split_offset_ns(ns: i64) -> (i64, i64) {
+    (
+        ns.div_euclid(NANOS_PER_SEC_I64),
+        ns.rem_euclid(NANOS_PER_SEC_I64),
+    )
 }
 
 fn task_cpu_time(task: &axtask::AxTaskRef) -> TimeValue {

@@ -69,6 +69,8 @@ bitflags! {
         const NEWPID = CLONE_NEWPID as u64;
         /// Create the process in a new network namespace.
         const NEWNET = CLONE_NEWNET as u64;
+        /// Create the process in a new time namespace.
+        const NEWTIME = CLONE_NEWTIME as u64;
         /// The new process shares an I/O context with the calling process.
         const IO = CLONE_IO as u64;
         /// Clear signal handlers on clone (since Linux 5.5).
@@ -121,7 +123,8 @@ impl CloneArgs {
             | CloneFlags::NEWPID
             | CloneFlags::NEWUSER
             | CloneFlags::NEWUTS
-            | CloneFlags::NEWCGROUP;
+            | CloneFlags::NEWCGROUP
+            | CloneFlags::NEWTIME;
 
         if flags.intersects(namespace_flags) {
             warn!("sys_clone/sys_clone3: namespace flags detected, stub support only");
@@ -236,6 +239,10 @@ impl CloneArgs {
             proc_data.set_gid(old_proc_data.gid());
             proc_data.set_egid(old_proc_data.egid());
             proc_data.set_sgid(old_proc_data.sgid());
+            crate::syscall::inherit_child_timens_offsets(
+                old_proc_data.proc.pid(),
+                proc_data.proc.pid(),
+            );
 
             {
                 let mut scope = proc_data.scope.write();
@@ -367,7 +374,8 @@ pub fn sys_unshare(flags: u64) -> AxResult<isize> {
         | CloneFlags::NEWPID
         | CloneFlags::NEWUSER
         | CloneFlags::NEWUTS
-        | CloneFlags::NEWCGROUP;
+        | CloneFlags::NEWCGROUP
+        | CloneFlags::NEWTIME;
 
     if !supported_unshare.contains(flags) {
         return Err(AxError::InvalidInput);
@@ -380,7 +388,8 @@ pub fn sys_unshare(flags: u64) -> AxResult<isize> {
             | CloneFlags::NEWPID
             | CloneFlags::NEWUSER
             | CloneFlags::NEWUTS
-            | CloneFlags::NEWCGROUP,
+            | CloneFlags::NEWCGROUP
+            | CloneFlags::NEWTIME,
     ) {
         warn!("sys_unshare: namespace flags detected, stub support only");
     }

@@ -39,6 +39,7 @@ echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
 echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
 echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
 echo "CONFIG_BSD_PROCESS_ACCT=y" >>/lib/modules/10.0.0/build/.config
+echo "CONFIG_TIME_NS=y" >>/lib/modules/10.0.0/build/.config
 
 rm -f /bin/useradd /bin/userdel /bin/groupdel
 cat >/bin/useradd <<'EOF'
@@ -265,15 +266,7 @@ run_ltp() {
     cd ltp/testcases/bin
     export PATH="$(pwd):$PATH"
 
-    some_testcases="
-        mount01 mount01
-        mount02 mount02
-        mount03 mount03
-        mount04 mount04
-        mount05 mount05
-        mount06 mount06
-        mount07 mount07
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi

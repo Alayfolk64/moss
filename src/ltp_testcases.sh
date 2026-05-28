@@ -1091,26 +1091,22 @@ sysinfo02 sysinfo02
 # tgkill01 tgkill01
 # tgkill02 tgkill02
 # tgkill03 tgkill03
-# time01 time01
-# times01 times01
-# times03 times03
-# timerfd01 timerfd01
-# timerfd02 timerfd02
-# timerfd04 timerfd04
-# timerfd_create01 timerfd_create01
-# timerfd_gettime01 timerfd_gettime01
-# timerfd_settime01 timerfd_settime01
-# timerfd_settime02 timerfd_settime02
-# timer_create01 timer_create01
-# timer_create02 timer_create02
-# timer_create03 timer_create03
-# timer_delete01 timer_delete01
-# timer_delete02 timer_delete02
-# timer_getoverrun01 timer_getoverrun01
-# timer_gettime01 timer_gettime01
-# timer_settime01 timer_settime01
-# timer_settime02 timer_settime02
-# timer_settime03 timer_settime03
+time01 time01
+times01 times01
+times03 times03
+timerfd01 timerfd01
+timerfd02 timerfd02
+timerfd04 timerfd04
+timerfd_create01 timerfd_create01
+timerfd_gettime01 timerfd_gettime01
+timerfd_settime01 timerfd_settime01
+timer_delete01 timer_delete01
+timer_delete02 timer_delete02
+timer_getoverrun01 timer_getoverrun01
+timer_gettime01 timer_gettime01
+timer_settime01 timer_settime01
+timer_settime02 timer_settime02
+timer_settime03 timer_settime03
 tkill01 tkill01
 tkill02 tkill02
 truncate02 truncate02
