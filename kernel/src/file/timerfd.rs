@@ -2,6 +2,7 @@ use alloc::{borrow::Cow, sync::Arc};
 use core::{
     sync::atomic::{AtomicBool, Ordering},
     task::Context,
+    time::Duration,
 };
 
 use axerrno::{AxError, AxResult};
@@ -36,6 +37,7 @@ struct TimerFdState {
 
 pub struct TimerFd {
     clock_id: u32,
+    timens_offset_ns: i64,
     non_blocking: AtomicBool,
     worker_running: AtomicBool,
     state: Mutex<TimerFdState>,
@@ -47,6 +49,7 @@ impl TimerFd {
     pub fn new(clock_id: u32) -> Arc<Self> {
         Arc::new(Self {
             clock_id,
+            timens_offset_ns: crate::syscall::current_timens_offset(clock_id),
             non_blocking: AtomicBool::new(false),
             worker_running: AtomicBool::new(false),
             state: Mutex::new(TimerFdState {
@@ -66,13 +69,15 @@ impl TimerFd {
             interval: state.interval,
             value: state
                 .deadline
-                .map(|deadline| deadline.saturating_sub(timer_clock_now(self.clock_id)))
+                .map(|deadline| {
+                    deadline.saturating_sub(timer_clock_now(self.clock_id, self.timens_offset_ns))
+                })
                 .unwrap_or(TimeValue::ZERO),
         }
     }
 
     pub fn settime(self: &Arc<Self>, spec: KernelTimerSpec, abstime: bool) -> KernelTimerSpec {
-        let now = timer_clock_now(self.clock_id);
+        let now = timer_clock_now(self.clock_id, self.timens_offset_ns);
         let mut state = self.state.lock();
         let old = KernelTimerSpec {
             interval: state.interval,
@@ -129,7 +134,7 @@ impl TimerFd {
     }
 
     fn fire(&self, generation: u64) -> bool {
-        let now = timer_clock_now(self.clock_id);
+        let now = timer_clock_now(self.clock_id, self.timens_offset_ns);
         let mut state = self.state.lock();
         if state.generation != generation {
             return false;
@@ -239,7 +244,11 @@ async fn timerfd_task_inner(timerfd: Arc<TimerFd>) {
         }
 
         if timeout_at(
-            Some(timerfd_wait_deadline(timerfd.clock_id, deadline)),
+            Some(timerfd_wait_deadline(
+                timerfd.clock_id,
+                timerfd.timens_offset_ns,
+                deadline,
+            )),
             listener,
         )
         .await
@@ -259,17 +268,26 @@ fn stop_timerfd_task(timerfd: &Arc<TimerFd>) {
     }
 }
 
-fn timer_clock_now(clock_id: u32) -> TimeValue {
+fn timer_clock_now(clock_id: u32, timens_offset_ns: i64) -> TimeValue {
     match clock_id {
         CLOCK_REALTIME | CLOCK_REALTIME_ALARM | CLOCK_TAI => axhal::time::realtime_time(),
-        _ => axhal::time::monotonic_time(),
+        _ => add_timens_offset(axhal::time::monotonic_time(), timens_offset_ns),
     }
 }
 
-fn timerfd_wait_deadline(clock_id: u32, deadline: TimeValue) -> TimeValue {
+fn timerfd_wait_deadline(clock_id: u32, timens_offset_ns: i64, deadline: TimeValue) -> TimeValue {
     wall_time()
-        .checked_add(deadline.saturating_sub(timer_clock_now(clock_id)))
+        .checked_add(deadline.saturating_sub(timer_clock_now(clock_id, timens_offset_ns)))
         .unwrap_or(TimeValue::MAX)
+}
+
+fn add_timens_offset(base: TimeValue, offset_ns: i64) -> TimeValue {
+    if offset_ns >= 0 {
+        base.checked_add(Duration::from_nanos(offset_ns as u64))
+            .unwrap_or(TimeValue::MAX)
+    } else {
+        base.saturating_sub(Duration::from_nanos(offset_ns.unsigned_abs()))
+    }
 }
 
 fn duration_mul(duration: TimeValue, count: u128) -> TimeValue {

@@ -17,6 +17,7 @@ use axfs_ng_vfs::{Filesystem, NodeType, VfsError, VfsResult};
 use axsync::Mutex;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use indoc::indoc;
+use linux_raw_sys::general::{CLOCK_BOOTTIME, CLOCK_MONOTONIC};
 use starry_process::Process;
 
 use crate::{
@@ -189,6 +190,41 @@ fn proc_rw_file(fs: Arc<SimpleFs>, initial: impl Into<Vec<u8>>) -> Arc<SimpleFil
                 let mut data = data.lock();
                 data.clear();
                 data.extend_from_slice(input);
+                Ok(None::<Vec<u8>>)
+            }
+        }),
+    )
+}
+
+fn proc_timens_offsets_file(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
+    SimpleFile::new_regular(
+        fs,
+        RwFile::new(move |req| match req {
+            SimpleFileOperation::Read => Ok(Some(
+                crate::syscall::read_child_timens_offsets().into_bytes(),
+            )),
+            SimpleFileOperation::Write(input) => {
+                let input = str::from_utf8(input).map_err(|_| VfsError::InvalidInput)?;
+                let mut parts = input.split_whitespace();
+                while let Some(clock) = parts.next() {
+                    let secs = parts
+                        .next()
+                        .ok_or(VfsError::InvalidInput)?
+                        .parse()
+                        .map_err(|_| VfsError::InvalidInput)?;
+                    let nsecs = parts
+                        .next()
+                        .ok_or(VfsError::InvalidInput)?
+                        .parse()
+                        .map_err(|_| VfsError::InvalidInput)?;
+                    let clock_id = match clock {
+                        "monotonic" => CLOCK_MONOTONIC,
+                        "boottime" => CLOCK_BOOTTIME,
+                        _ => clock.parse().map_err(|_| VfsError::InvalidInput)?,
+                    };
+                    crate::syscall::set_child_timens_offset(clock_id, secs, nsecs)
+                        .map_err(|_| VfsError::InvalidInput)?;
+                }
                 Ok(None::<Vec<u8>>)
             }
         }),
@@ -377,6 +413,7 @@ impl SimpleDirOps for ThreadDir {
                 "setgroups",
                 "uid_map",
                 "gid_map",
+                "timens_offsets",
             ]
             .into_iter()
             .map(Cow::Borrowed),
@@ -504,6 +541,7 @@ impl SimpleDirOps for ThreadDir {
                 ),
             )
             .into(),
+            "timens_offsets" => proc_timens_offsets_file(fs).into(),
             _ => return Err(VfsError::NotFound),
         })
     }
