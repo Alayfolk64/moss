@@ -36,7 +36,7 @@ use super::{
 use crate::{
     file::{
         Directory, File, FileLike, get_file_like, inode_flags, register_special_node, resolve_at,
-        set_inode_flags, with_fs,
+        set_inode_flags, update_atime_for_access, with_fs,
     },
     mm::vm_load_string,
     task::AsThread,
@@ -282,16 +282,13 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         } else {
             egid
         };
-        match dir.create(name, node_type, permission) {
+        let create_type = if special {
+            NodeType::RegularFile
+        } else {
+            node_type
+        };
+        match dir.create(name, create_type, permission) {
             Ok(loc) => {
-                loc.update_metadata(MetadataUpdate {
-                    owner: Some((euid, gid)),
-                    ..Default::default()
-                })?;
-                Ok(loc)
-            }
-            Err(_) if special => {
-                let loc = dir.create(name, NodeType::RegularFile, permission)?;
                 loc.update_metadata(MetadataUpdate {
                     owner: Some((euid, gid)),
                     ..Default::default()
@@ -430,6 +427,7 @@ pub fn sys_getdents64(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
             *dir_offset = offset;
             true
         })?;
+    update_atime_for_access(dir.inner(), true);
 
     if has_remaining && buffer.offset == 0 {
         return Err(AxError::InvalidInput);

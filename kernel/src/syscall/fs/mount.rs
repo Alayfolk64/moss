@@ -11,12 +11,16 @@ use core::{
 };
 
 use axdriver::prelude::{BaseDriverOps, BlockDriverOps, DevError, DevResult, DeviceType};
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileBackend};
 use axfs_ng_vfs::Filesystem;
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
-use linux_raw_sys::general::{AT_FDCWD, MS_BIND, MS_NOSYMFOLLOW, MS_RDONLY, MS_REMOUNT};
+use axtask::current;
+use linux_raw_sys::general::{
+    AT_FDCWD, MS_BIND, MS_MOVE, MS_NOATIME, MS_NODEV, MS_NODIRATIME, MS_NOEXEC, MS_NOSUID,
+    MS_NOSYMFOLLOW, MS_PRIVATE, MS_RDONLY, MS_REMOUNT, MS_STRICTATIME,
+};
 use spin::RwLock;
 use starry_vm::VmPtr;
 
@@ -25,10 +29,19 @@ use crate::{
     mm::vm_load_string,
     pseudofs::{Device, MemoryFs, dev::r#loop::LoopDevice},
     syscall::fs::inotify::notify_inotify_unmount_dev,
+    task::AsThread,
 };
 
 const LOOP_BLOCK_SIZE: usize = 512;
-const SUPPORTED_MOUNT_FLAGS: u32 = MS_RDONLY | MS_NOSYMFOLLOW;
+const SUPPORTED_MOUNT_FLAGS: u32 = MS_RDONLY
+    | MS_NODEV
+    | MS_NOEXEC
+    | MS_NOSUID
+    | MS_NOATIME
+    | MS_NODIRATIME
+    | MS_REMOUNT
+    | MS_NOSYMFOLLOW
+    | MS_STRICTATIME;
 const FSOPEN_CLOEXEC: u32 = 1;
 const FSMOUNT_CLOEXEC: u32 = 1;
 const FSCONFIG_SET_FLAG: u32 = 0;
@@ -252,6 +265,12 @@ fn create_filesystem(
             }
 
             let Some(dev_idx) = parse_block_source_index(source) else {
+                if parse_loop_source_index(source).is_none()
+                    && let Ok(loc) = FS_CONTEXT.lock().resolve(source)
+                    && loc.metadata()?.node_type != axfs_ng_vfs::NodeType::BlockDevice
+                {
+                    return Err(AxError::from(LinuxError::ENOTBLK));
+                }
                 let Some(dev) = loop_file_block_device(source, mount_flags)? else {
                     warn!("mount ext4: unsupported source path: {source}");
                     return Err(AxError::NoSuchDevice);
@@ -299,6 +318,9 @@ fn mount_filesystem_at(
     let path = target
         .absolute_path()
         .map_or_else(|_| target_path.to_string(), |path| path.to_string());
+    if MOUNTED_PATHS.read().iter().any(|it| it == &path) {
+        return Err(AxError::ResourceBusy);
+    }
     if let Err(err) = target.mount_with_flags(&fs, mount_flags) {
         warn!("mount target={target_path} failed: {err:?}");
         return Err(err.into());
@@ -445,12 +467,13 @@ pub fn sys_mount(
 ) -> AxResult<isize> {
     let source = source.nullable().map(vm_load_string).transpose()?;
     let target = vm_load_string(target)?;
-    let fs_type = fs_type
-        .nullable()
-        .map(vm_load_string)
-        .transpose()?
-        .unwrap_or_default();
+    let fs_type = fs_type.nullable().map(vm_load_string).transpose()?;
     debug!("sys_mount <= source: {source:?}, target: {target:?}, fs_type: {fs_type:?}");
+
+    if current().as_thread().proc_data.euid() != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+
     let mount_flags = flags as u32 & SUPPORTED_MOUNT_FLAGS;
 
     if flags as u32 & MS_BIND != 0 {
@@ -459,21 +482,62 @@ pub fn sys_mount(
         };
         let fs_context = FS_CONTEXT.lock();
         let source = fs_context.resolve(source)?;
-        let target = fs_context.resolve(target)?;
+        let target = fs_context.resolve(target.as_str())?;
+        let path = target
+            .absolute_path()
+            .map_or_else(|_| target.name().to_string(), |path| path.to_string());
         target.bind_mount(&source)?;
+        let mut paths = MOUNTED_PATHS.write();
+        if !paths.iter().any(|it| it == &path) {
+            paths.push(path);
+        }
+        return Ok(0);
+    }
+
+    if flags as u32 & MS_PRIVATE != 0 {
+        FS_CONTEXT.lock().resolve(target.as_str())?;
+        return Ok(0);
+    }
+
+    if flags as u32 & MS_MOVE != 0 {
+        let Some(source) = source.as_deref() else {
+            return Err(AxError::InvalidInput);
+        };
+        let fs_context = FS_CONTEXT.lock();
+        let source = fs_context.resolve(source)?;
+        let target = fs_context.resolve(target.as_str())?;
+        let source_path = source.absolute_path().ok().map(|path| path.to_string());
+        let target_path = target
+            .absolute_path()
+            .map_or_else(|_| target.name().to_string(), |path| path.to_string());
+        target.bind_mount(&source)?;
+        source.unmount()?;
+        if let Some(source_path) = source_path {
+            unregister_mount_path(&source_path);
+        }
+        let mut paths = MOUNTED_PATHS.write();
+        if !paths.iter().any(|it| it == &target_path) {
+            paths.push(target_path);
+        }
         return Ok(0);
     }
 
     if flags as u32 & MS_REMOUNT != 0 {
-        let target = FS_CONTEXT.lock().resolve(target)?;
+        let target = FS_CONTEXT.lock().resolve(target.as_str())?;
         if !target.is_root_of_mount() {
             return Err(AxError::InvalidInput);
+        }
+        if mount_flags & MS_RDONLY != 0 {
+            return Err(AxError::ResourceBusy);
         }
         target.mountpoint().set_mount_flags(mount_flags);
         return Ok(0);
     }
 
-    let fs = create_filesystem(&fs_type, source.as_deref(), mount_flags)?;
+    let Some(fs_type) = fs_type.as_deref() else {
+        return Err(AxError::InvalidInput);
+    };
+    let fs = create_filesystem(fs_type, source.as_deref(), mount_flags)?;
     mount_filesystem_at(fs, mount_flags, AT_FDCWD, &target)?;
     Ok(0)
 }

@@ -37,7 +37,8 @@ pub use self::{
         BpfProgramKind,
     },
     fs::{
-        Directory, File, inode_flags, register_special_node, resolve_at, set_inode_flags, with_fs,
+        Directory, File, inode_flags, register_special_node, resolve_at, set_inode_flags,
+        update_atime_for_access, with_fs,
     },
     pidfd::PidFd,
     pipe::{PIPE_MAX_SIZE, Pipe},

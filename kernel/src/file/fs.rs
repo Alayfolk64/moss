@@ -13,13 +13,15 @@ use core::{
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, FileFlags, FsContext};
-use axfs_ng_vfs::{Location, Metadata, NodeFlags};
+use axfs_ng_vfs::{Location, Metadata, MetadataUpdate, NodeFlags};
+use axhal::time::realtime_time;
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::future::{block_on, poll_io};
 use linux_raw_sys::general::{
     AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, FS_APPEND_FL, FS_COMPR_FL, FS_IMMUTABLE_FL,
-    FS_NODUMP_FL, O_APPEND, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY, STATX_ATTR_MOUNT_ROOT,
+    FS_NODUMP_FL, MS_NOATIME, MS_NODIRATIME, O_APPEND, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY,
+    STATX_ATTR_MOUNT_ROOT,
 };
 use spin::RwLock;
 
@@ -48,6 +50,17 @@ pub fn inode_flags(path: &str) -> u32 {
 pub fn set_inode_flags(path: String, flags: u32) {
     const SUPPORTED: u32 = FS_COMPR_FL | FS_IMMUTABLE_FL | FS_APPEND_FL | FS_NODUMP_FL;
     INODE_FLAGS.write().insert(path, flags & SUPPORTED);
+}
+
+pub fn update_atime_for_access(loc: &Location, is_dir: bool) {
+    let flags = loc.mount_flags();
+    if flags & MS_NOATIME != 0 || (is_dir && flags & MS_NODIRATIME != 0) {
+        return;
+    }
+    let _ = loc.update_metadata(MetadataUpdate {
+        atime: Some(realtime_time()),
+        ..Default::default()
+    });
 }
 
 pub fn with_fs<R>(dirfd: c_int, f: impl FnOnce(&mut FsContext) -> AxResult<R>) -> AxResult<R> {
@@ -202,13 +215,17 @@ fn path_for(loc: &Location) -> Cow<'static, str> {
 impl FileLike for File {
     fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
         let inner = self.inner();
-        if likely(self.is_blocking()) {
+        let read = if likely(self.is_blocking()) {
             inner.read(dst)
         } else {
             block_on(poll_io(self, IoEvents::IN, self.nonblocking(), || {
                 inner.read(&mut *dst)
             }))
+        };
+        if read.is_ok() {
+            update_atime_for_access(inner.location(), false);
         }
+        read
     }
 
     fn write(&self, src: &mut IoSrc) -> AxResult<usize> {
