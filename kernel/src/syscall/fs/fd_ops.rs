@@ -191,6 +191,78 @@ fn check_protected_symlink_follow(dirfd: c_int, path: &str, flags: u32, uid: u32
     })
 }
 
+fn check_nosymfollow_mount_open(dirfd: c_int, path: &str, flags: u32) -> AxResult {
+    if flags & (O_NOFOLLOW | O_PATH) != 0 {
+        return Ok(());
+    }
+
+    with_fs(dirfd, |fs| {
+        let (parent, name) = match fs.resolve_parent(Path::new(path)) {
+            Ok(result) => result,
+            Err(err) if err.canonicalize() == VfsError::InvalidInput => return Ok(()),
+            Err(err) => return Err(err.into()),
+        };
+        match parent.lookup_no_follow(name.as_ref()) {
+            Ok(loc)
+                if loc.node_type() == NodeType::Symlink
+                    && loc.mount_flags() & MS_NOSYMFOLLOW != 0 =>
+            {
+                Err(AxError::FilesystemLoop)
+            }
+            Ok(_) => Ok(()),
+            Err(err) if flags & O_CREAT != 0 && err.canonicalize() == VfsError::NotFound => Ok(()),
+            Err(err) => Err(err.into()),
+        }
+    })
+}
+
+fn check_mount_open_constraints(dirfd: c_int, path: &str, flags: u32) -> AxResult {
+    check_nosymfollow_mount_open(dirfd, path, flags)?;
+
+    let wants_write = flags & O_PATH == 0
+        && ((flags & O_ACCMODE) != O_RDONLY || flags & (O_CREAT | O_TRUNC) != 0);
+    let resolve_flags = if flags & O_NOFOLLOW != 0 {
+        AT_SYMLINK_NOFOLLOW
+    } else {
+        0
+    };
+
+    match resolve_at(dirfd, Some(path), resolve_flags) {
+        Ok(result) => {
+            let stat = result.stat()?;
+            let Some(loc) = result.into_file() else {
+                return Ok(());
+            };
+            if wants_write
+                && flags & (O_CREAT | O_EXCL) != (O_CREAT | O_EXCL)
+                && loc.mount_flags() & MS_RDONLY != 0
+            {
+                return Err(AxError::ReadOnlyFilesystem);
+            }
+            let node_type = loc.metadata()?.node_type;
+            if loc.mount_flags() & MS_NODEV != 0
+                && (matches!(node_type, NodeType::CharacterDevice | NodeType::BlockDevice)
+                    || matches!(stat.mode & S_IFMT, S_IFCHR | S_IFBLK))
+            {
+                return Err(AxError::PermissionDenied);
+            }
+        }
+        Err(err) if flags & O_CREAT != 0 && err.canonicalize() == AxError::NotFound => {
+            if wants_write {
+                with_fs(dirfd, |fs| {
+                    let (dir, _) = fs.resolve_parent(Path::new(path))?;
+                    if dir.mount_flags() & MS_RDONLY != 0 {
+                        return Err(AxError::ReadOnlyFilesystem);
+                    }
+                    Ok(())
+                })?;
+            }
+        }
+        Err(err) => return Err(err),
+    }
+    Ok(())
+}
+
 fn creation_mode_and_owner(
     dirfd: c_int,
     path: &str,
@@ -296,6 +368,7 @@ pub fn sys_openat(
     let (mode, ids) = creation_mode_and_owner(dirfd, path.as_str(), flags_u32, mode, ids)?;
     let existed_before_create =
         flags_u32 & O_CREAT != 0 && resolve_at(dirfd, Some(path.as_str()), 0).is_ok();
+    check_mount_open_constraints(dirfd, path.as_str(), flags_u32)?;
 
     // axfs::OpenOptions rejects (read-only + create), but Linux permits
     // O_RDONLY|O_CREAT. Handle it locally without modifying third-party crates.

@@ -571,11 +571,11 @@ mmap20 mmap20
 # modify_ldt02 modify_ldt02
 # modify_ldt03 modify_ldt03
 mount01 mount01
-# mount02 mount02
+mount02 mount02
 mount03 mount03
-# mount04 mount04
-# mount05 mount05
-# mount06 mount06
+mount04 mount04
+mount05 mount05
+mount06 mount06
 mount07 mount07
 # mount_setattr01 mount_setattr01
 # move_mount01 move_mount01

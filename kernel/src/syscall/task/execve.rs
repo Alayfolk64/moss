@@ -10,7 +10,7 @@ use axfs::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{Location, NodeType};
 use axhal::uspace::UserContext;
 use axtask::current;
-use linux_raw_sys::general::{AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW};
+use linux_raw_sys::general::{AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, MS_NOEXEC};
 use starry_vm::vm_load_until_nul;
 
 use super::ptrace_on_exec;
@@ -171,6 +171,9 @@ fn execve_common(
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
     if let Some(exec_loc) = &exec_loc {
+        if exec_loc.mount_flags() & MS_NOEXEC != 0 {
+            return Err(AxError::PermissionDenied);
+        }
         if !has_exec_permission(exec_loc, proc_data.euid(), proc_data.egid())? {
             return Err(AxError::PermissionDenied);
         }
