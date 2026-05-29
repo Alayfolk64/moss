@@ -247,7 +247,7 @@ impl Pollable for Pipe {
             events.set(IoEvents::IN, buf.occupied_len() > 0);
             events.set(IoEvents::HUP, self.closed());
         } else {
-            events.set(IoEvents::OUT, buf.vacant_len() > 0);
+            events.set(IoEvents::OUT, buf.vacant_len() >= PAGE_SIZE_4K);
         }
         events
     }
