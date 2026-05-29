@@ -77,6 +77,9 @@ pub fn sys_epoll_ctl(
     };
     match op {
         EPOLL_CTL_ADD => {
+            if fd == epfd {
+                return Err(AxError::InvalidInput);
+            }
             let (event, flags) = parse_event()?;
             epoll.add(fd, event, flags)?;
         }
@@ -110,9 +113,16 @@ fn do_epoll_wait(
     }
     let events = events.get_as_mut_slice(maxevents as usize)?;
 
-    with_blocked_signals(
-        nullable!(sigmask.get_as_ref())?.copied(),
-        || match block_on(future::timeout(
+    with_blocked_signals(nullable!(sigmask.get_as_ref())?.copied(), || {
+        if timeout == Some(Duration::ZERO) {
+            return match epoll.poll_events(events) {
+                Ok(n) => Ok(n as _),
+                Err(AxError::WouldBlock) => Ok(0),
+                Err(err) => Err(err),
+            };
+        }
+
+        match block_on(future::timeout(
             timeout,
             poll_io(epoll.as_ref(), IoEvents::IN, false, || {
                 epoll.poll_events(events)
@@ -120,8 +130,8 @@ fn do_epoll_wait(
         )) {
             Ok(r) => r.map(|n| n as _),
             Err(_) => Ok(0),
-        },
-    )
+        }
+    })
 }
 
 pub fn sys_epoll_pwait(

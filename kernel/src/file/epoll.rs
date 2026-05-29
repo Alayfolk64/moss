@@ -11,6 +11,7 @@ use alloc::{
     collections::vec_deque::VecDeque,
     sync::{Arc, Weak},
     task::Wake,
+    vec::Vec,
 };
 use core::{
     hash::{Hash, Hasher},
@@ -25,7 +26,7 @@ use hashbrown::HashMap;
 use kspin::SpinNoPreempt;
 use linux_raw_sys::general::{EPOLLET, EPOLLONESHOT, epoll_event};
 
-use crate::file::{FileLike, get_file_like};
+use crate::file::{Directory, FileLike, get_file_like};
 
 pub struct EpollEvent {
     pub events: IoEvents,
@@ -315,8 +316,67 @@ impl Epoll {
         }
     }
 
+    fn inner_ptr(&self) -> *const EpollInner {
+        Arc::as_ptr(&self.inner)
+    }
+
+    fn contains_epoll_inner(
+        &self,
+        needle: *const EpollInner,
+        seen: &mut Vec<*const EpollInner>,
+    ) -> bool {
+        let this = self.inner_ptr();
+        if this == needle {
+            return true;
+        }
+        if seen.contains(&this) {
+            return false;
+        }
+        seen.push(this);
+
+        self.inner.interests.lock().values().any(|interest| {
+            interest
+                .key
+                .get_file()
+                .and_then(|file| file.downcast_arc::<Epoll>().ok())
+                .is_some_and(|epoll| epoll.contains_epoll_inner(needle, seen))
+        })
+    }
+
+    fn nesting_depth(&self, seen: &mut Vec<*const EpollInner>) -> usize {
+        let this = self.inner_ptr();
+        if seen.contains(&this) {
+            return 0;
+        }
+        seen.push(this);
+
+        1 + self
+            .inner
+            .interests
+            .lock()
+            .values()
+            .filter_map(|interest| interest.key.get_file())
+            .filter_map(|file| file.downcast_arc::<Epoll>().ok())
+            .map(|epoll| epoll.nesting_depth(seen))
+            .max()
+            .unwrap_or(0)
+    }
+
     pub fn add(&self, fd: i32, event: EpollEvent, flags: EpollFlags) -> AxResult<()> {
         let key = EntryKey::new(fd)?;
+        let file = key.get_file().ok_or(AxError::BadFileDescriptor)?;
+        if file.downcast_ref::<Directory>().is_some() {
+            return Err(AxError::OperationNotPermitted);
+        }
+        if let Some(epoll) = file.downcast_ref::<Epoll>() {
+            if epoll.contains_epoll_inner(self.inner_ptr(), &mut Vec::new()) {
+                return Err(AxError::FilesystemLoop);
+            }
+            if epoll.nesting_depth(&mut Vec::new()) >= 5 {
+                return Err(AxError::InvalidInput);
+            }
+        }
+
         let interest = Arc::new(EpollInterest::new(key.clone(), event, flags));
         let mut guard = self.inner.interests.lock();
         if guard.contains_key(&key) {
@@ -365,6 +425,7 @@ impl Epoll {
     pub fn poll_events(&self, out: &mut [epoll_event]) -> AxResult<usize> {
         trace!("Epoll: poll_events called, out.len()={}", out.len());
         let mut count = 0;
+        let mut requeue = Vec::new();
         loop {
             let weak_interest = {
                 let mut queue = self.inner.ready_queue.lock();
@@ -403,10 +464,7 @@ impl Epoll {
                         data: event.user_data,
                     };
                     count += 1;
-                    self.inner
-                        .ready_queue
-                        .lock()
-                        .push_back(Arc::downgrade(&interest));
+                    requeue.push(Arc::downgrade(&interest));
                 }
                 ConsumeResult::EventAndRemove(event) => {
                     out[count] = epoll_event {
@@ -422,6 +480,10 @@ impl Epoll {
                     self.register_waker_only(&interest);
                 }
             }
+        }
+
+        if !requeue.is_empty() {
+            self.inner.ready_queue.lock().extend(requeue);
         }
 
         if count == 0 {

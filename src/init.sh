@@ -268,16 +268,18 @@ run_ltp() {
     export PATH="$(pwd):$PATH"
 
     some_testcases="
-        ioprio_get01 ioprio_get01
-        ioprio_set01 ioprio_set01
-        ioprio_set02 ioprio_set02
-        ioprio_set03 ioprio_set03
-        io_cancel01 io_cancel01
-        io_destroy02 io_destroy02
-        io_getevents01 io_getevents01
-        io_setup02 io_setup02
-        io_submit02 io_submit02
-        io_submit03 io_submit03
+        epoll_ctl01 epoll_ctl01
+        epoll_ctl02 epoll_ctl02
+        epoll_ctl03 epoll_ctl03
+        epoll_ctl04 epoll_ctl04
+        epoll_ctl05 epoll_ctl05
+        epoll_wait01 epoll_wait01
+        epoll_wait02 epoll_wait02
+        epoll_wait03 epoll_wait03
+        epoll_wait04 epoll_wait04
+        epoll_wait05 epoll_wait05
+        epoll_wait06 epoll_wait06
+        epoll_wait07 epoll_wait07
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

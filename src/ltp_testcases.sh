@@ -129,15 +129,15 @@ epoll01 epoll-ltp
 epoll_ctl01 epoll_ctl01
 epoll_ctl02 epoll_ctl02
 epoll_ctl03 epoll_ctl03
-# epoll_ctl04 epoll_ctl04
-# epoll_ctl05 epoll_ctl05
-# epoll_wait01 epoll_wait01
-# epoll_wait02 epoll_wait02
-# epoll_wait03 epoll_wait03
-# epoll_wait04 epoll_wait04
-# epoll_wait05 epoll_wait05
-# epoll_wait06 epoll_wait06
-# epoll_wait07 epoll_wait07
+epoll_ctl04 epoll_ctl04
+epoll_ctl05 epoll_ctl05
+epoll_wait01 epoll_wait01
+epoll_wait02 epoll_wait02
+epoll_wait03 epoll_wait03
+epoll_wait04 epoll_wait04
+epoll_wait05 epoll_wait05
+epoll_wait06 epoll_wait06
+epoll_wait07 epoll_wait07
 epoll_pwait01 epoll_pwait01
 epoll_pwait02 epoll_pwait02
 # epoll_pwait03 epoll_pwait03
