@@ -40,6 +40,7 @@ echo "CONFIG_USER_NS=y" >>/lib/modules/10.0.0/build/.config
 echo "CONFIG_NET_NS=y" >>/lib/modules/10.0.0/build/.config
 echo "CONFIG_BSD_PROCESS_ACCT=y" >>/lib/modules/10.0.0/build/.config
 echo "CONFIG_TIME_NS=y" >>/lib/modules/10.0.0/build/.config
+echo "CONFIG_AIO=y" >>/lib/modules/10.0.0/build/.config
 
 rm -f /bin/useradd /bin/userdel /bin/groupdel
 cat >/bin/useradd <<'EOF'
@@ -266,7 +267,18 @@ run_ltp() {
     cd ltp/testcases/bin
     export PATH="$(pwd):$PATH"
 
-    some_testcases=""
+    some_testcases="
+        ioprio_get01 ioprio_get01
+        ioprio_set01 ioprio_set01
+        ioprio_set02 ioprio_set02
+        ioprio_set03 ioprio_set03
+        io_cancel01 io_cancel01
+        io_destroy02 io_destroy02
+        io_getevents01 io_getevents01
+        io_setup02 io_setup02
+        io_submit02 io_submit02
+        io_submit03 io_submit03
+    "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi

@@ -230,6 +230,7 @@ pub struct ProcessData {
 
     /// The default mask for file permissions.
     umask: AtomicU32,
+    ioprio: AtomicU32,
     uid: AtomicU32,
     euid: AtomicU32,
     suid: AtomicU32,
@@ -273,6 +274,7 @@ impl ProcessData {
             child_cpu_time: SpinNoIrq::new((0, 0)),
 
             umask: AtomicU32::new(0o022),
+            ioprio: AtomicU32::new((2 << 13) | 4),
             uid: AtomicU32::new(0),
             euid: AtomicU32::new(0),
             suid: AtomicU32::new(0),
@@ -311,6 +313,14 @@ impl ProcessData {
     /// Set the umask and return the old value.
     pub fn replace_umask(&self, umask: u32) -> u32 {
         self.umask.swap(umask, Ordering::SeqCst)
+    }
+
+    pub fn ioprio(&self) -> u32 {
+        self.ioprio.load(Ordering::SeqCst)
+    }
+
+    pub fn set_ioprio(&self, ioprio: u32) {
+        self.ioprio.store(ioprio, Ordering::SeqCst);
     }
 
     pub fn uid(&self) -> u32 {

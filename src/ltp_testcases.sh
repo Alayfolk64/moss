@@ -451,16 +451,16 @@ fanotify20 fanotify20
 fanotify21 fanotify21
 fanotify22 fanotify22
 fanotify23 fanotify23
-# ioprio_get01 ioprio_get01
-# ioprio_set01 ioprio_set01
-# ioprio_set02 ioprio_set02
-# ioprio_set03 ioprio_set03
-# io_cancel01 io_cancel01
-# io_destroy02 io_destroy02
-# io_getevents01 io_getevents01
-# io_setup02 io_setup02
-# io_submit02 io_submit02
-# io_submit03 io_submit03
+ioprio_get01 ioprio_get01
+ioprio_set01 ioprio_set01
+ioprio_set02 ioprio_set02
+ioprio_set03 ioprio_set03
+io_cancel01 io_cancel01
+io_destroy02 io_destroy02
+io_getevents01 io_getevents01
+io_setup02 io_setup02
+io_submit02 io_submit02
+io_submit03 io_submit03
 # keyctl01 keyctl01
 # keyctl02 keyctl02
 # keyctl03 keyctl03

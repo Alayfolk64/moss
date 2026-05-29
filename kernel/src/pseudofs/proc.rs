@@ -705,6 +705,14 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                 SimpleFile::new_regular(fs.clone(), || Ok(format!("{PIPE_MAX_SIZE}\n"))),
             );
             fs_sys.add(
+                "aio-max-nr",
+                SimpleFile::new_regular(fs.clone(), StaticFile::new(b"1024\n")),
+            );
+            fs_sys.add(
+                "aio-nr",
+                SimpleFile::new_regular(fs.clone(), StaticFile::new(b"0\n")),
+            );
+            fs_sys.add(
                 "protected_hardlinks",
                 proc_bool_sysctl_file(
                     fs.clone(),

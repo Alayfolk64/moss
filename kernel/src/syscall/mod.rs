@@ -218,6 +218,17 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         ),
         Sysno::fsync => sys_fsync(uctx.arg0() as _),
         Sysno::fdatasync => sys_fdatasync(uctx.arg0() as _),
+        Sysno::io_setup => sys_io_setup(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::io_destroy => sys_io_destroy(uctx.arg0() as _),
+        Sysno::io_submit => sys_io_submit(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::io_cancel => sys_io_cancel(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::io_getevents => sys_io_getevents(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
         Sysno::sync_file_range => sys_sync_file_range(
             uctx.arg0() as _,
             uctx.arg1() as _,
@@ -468,6 +479,8 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         }
         Sysno::sched_getparam => sys_sched_getparam(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::getpriority => sys_getpriority(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::ioprio_get => sys_ioprio_get(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::ioprio_set => sys_ioprio_set(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 
         // task ops
         Sysno::execve => sys_execve(uctx, uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),

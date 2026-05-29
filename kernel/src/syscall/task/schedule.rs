@@ -176,3 +176,36 @@ pub fn sys_getpriority(which: u32, who: u32) -> AxResult<isize> {
         _ => Err(AxError::InvalidInput),
     }
 }
+
+const IOPRIO_WHO_PROCESS: u32 = 1;
+const IOPRIO_CLASS_NONE: u32 = 0;
+const IOPRIO_CLASS_RT: u32 = 1;
+const IOPRIO_CLASS_BE: u32 = 2;
+const IOPRIO_CLASS_IDLE: u32 = 3;
+const IOPRIO_CLASS_SHIFT: u32 = 13;
+const IOPRIO_PRIO_MASK: u32 = (1 << IOPRIO_CLASS_SHIFT) - 1;
+const IOPRIO_PRIO_NUM: u32 = 8;
+
+pub fn sys_ioprio_get(which: u32, who: u32) -> AxResult<isize> {
+    if which != IOPRIO_WHO_PROCESS {
+        return Err(AxError::InvalidInput);
+    }
+    Ok(get_process_data(who)?.ioprio() as _)
+}
+
+pub fn sys_ioprio_set(which: u32, who: u32, ioprio: u32) -> AxResult<isize> {
+    if which != IOPRIO_WHO_PROCESS {
+        return Err(AxError::InvalidInput);
+    }
+
+    let class = ioprio >> IOPRIO_CLASS_SHIFT;
+    let prio = ioprio & IOPRIO_PRIO_MASK;
+    match class {
+        IOPRIO_CLASS_NONE if prio == 0 => {}
+        IOPRIO_CLASS_RT | IOPRIO_CLASS_BE | IOPRIO_CLASS_IDLE if prio < IOPRIO_PRIO_NUM => {}
+        _ => return Err(AxError::InvalidInput),
+    }
+
+    get_process_data(who)?.set_ioprio(ioprio);
+    Ok(0)
+}
