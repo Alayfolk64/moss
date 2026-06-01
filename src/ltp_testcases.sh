@@ -473,16 +473,16 @@ io_submit03 io_submit03
 # kcmp01 kcmp01
 # kcmp02 kcmp02
 # kcmp03 kcmp03
-# kill02 kill02
-# kill03 kill03
-# kill05 kill05
-# kill06 kill06
-# kill07 kill07
-# kill08 kill08
-# kill09 kill09
-# kill10 kill10
-# kill11 kill11
-# kill12 kill12
+kill02 kill02
+kill03 kill03
+kill05 kill05
+kill06 kill06
+kill07 kill07
+kill08 kill08
+kill09 kill09
+kill10 kill10
+kill11 kill11
+kill12 kill12
 lchown01 lchown01
 lchown02  lchown02
 lchown03  lchown03

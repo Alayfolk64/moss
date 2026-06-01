@@ -1,7 +1,8 @@
 use alloc::vec::Vec;
-use core::{fmt, time::Duration};
+use core::fmt;
 
 use axerrno::{AxError, AxResult};
+use axhal::{time::TimeValue, uspace::UserContext};
 use axpoll::IoEvents;
 use axtask::future::{self, block_on, poll_io};
 use bitmaps::Bitmap;
@@ -11,7 +12,7 @@ use linux_raw_sys::{
 };
 use starry_signal::SignalSet;
 
-use super::FdPollSet;
+use super::{FdPollSet, poll::wait_for_signal_or_timeout};
 use crate::{
     file::FD_TABLE,
     mm::{UserConstPtr, UserPtr, nullable},
@@ -43,11 +44,12 @@ impl fmt::Debug for FdSet {
 }
 
 fn do_select(
+    uctx: Option<&mut UserContext>,
     nfds: u32,
     readfds: UserPtr<__kernel_fd_set>,
     writefds: UserPtr<__kernel_fd_set>,
     exceptfds: UserPtr<__kernel_fd_set>,
-    timeout: Option<Duration>,
+    timeout: Option<TimeValue>,
     sigmask: UserConstPtr<SignalSetWithSize>,
 ) -> AxResult<isize> {
     if nfds > __FD_SETSIZE {
@@ -56,7 +58,7 @@ fn do_select(
     let sigmask = if let Some(sigmask) = nullable!(sigmask.get_as_ref())? {
         check_sigset_size(sigmask.sigsetsize)?;
         let set = sigmask.set;
-        nullable!(set.get_as_ref())?
+        nullable!(set.get_as_ref())?.copied()
     } else {
         None
     };
@@ -98,6 +100,12 @@ fn do_select(
     drop(fd_table);
     let fds = FdPollSet(fds);
 
+    if fds.0.is_empty()
+        && let Some(uctx) = uctx
+    {
+        return wait_for_signal_or_timeout(uctx, timeout, sigmask);
+    }
+
     if let Some(readfds) = readfds.as_deref_mut() {
         unsafe { FD_ZERO(readfds) };
     }
@@ -107,7 +115,7 @@ fn do_select(
     if let Some(exceptfds) = exceptfds.as_deref_mut() {
         unsafe { FD_ZERO(exceptfds) };
     }
-    with_blocked_signals(sigmask.copied(), || {
+    with_blocked_signals(sigmask, || {
         match block_on(future::timeout(
             timeout,
             poll_io(&fds, IoEvents::empty(), false, || {
@@ -155,6 +163,7 @@ pub fn sys_select(
     timeout: UserConstPtr<timeval>,
 ) -> AxResult<isize> {
     do_select(
+        None,
         nfds,
         readfds,
         writefds,
@@ -174,6 +183,7 @@ pub struct SignalSetWithSize {
 }
 
 pub fn sys_pselect6(
+    uctx: &mut UserContext,
     nfds: u32,
     readfds: UserPtr<__kernel_fd_set>,
     writefds: UserPtr<__kernel_fd_set>,
@@ -182,6 +192,7 @@ pub fn sys_pselect6(
     sigmask: UserConstPtr<SignalSetWithSize>,
 ) -> AxResult<isize> {
     do_select(
+        Some(uctx),
         nfds,
         readfds,
         writefds,
