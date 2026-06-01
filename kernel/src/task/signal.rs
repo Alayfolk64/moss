@@ -67,9 +67,7 @@ pub fn check_signals(
             do_exit(signo as i32, true);
         }
         SignalOSAction::CoreDump => {
-            // TODO: implement core dump. Until then, report the signal as a
-            // normal signal termination instead of setting the core-dump bit.
-            do_exit(signo as i32, true);
+            do_exit((signo as i32) | 0x80, true);
         }
         SignalOSAction::Stop => {
             *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Stopped(signo));

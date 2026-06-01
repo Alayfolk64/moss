@@ -268,18 +268,16 @@ run_ltp() {
     export PATH="$(pwd):$PATH"
 
     some_testcases="
-        epoll_ctl01 epoll_ctl01
-        epoll_ctl02 epoll_ctl02
-        epoll_ctl03 epoll_ctl03
-        epoll_ctl04 epoll_ctl04
-        epoll_ctl05 epoll_ctl05
-        epoll_wait01 epoll_wait01
-        epoll_wait02 epoll_wait02
-        epoll_wait03 epoll_wait03
-        epoll_wait04 epoll_wait04
-        epoll_wait05 epoll_wait05
-        epoll_wait06 epoll_wait06
-        epoll_wait07 epoll_wait07
+        kill02 kill02
+        kill03 kill03
+        kill05 kill05
+        kill06 kill06
+        kill07 kill07
+        kill08 kill08
+        kill09 kill09
+        kill10 kill10
+        kill11 kill11
+        kill12 kill12
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
