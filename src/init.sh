@@ -110,15 +110,15 @@ RUN_LA=1
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=0
 busybox=0
-cyclictest=0
-iozone=0
-iperf=0
-libcbench=0
+cyclictest=1
+iozone=1
+iperf=1
+libcbench=1
 libctest=0
-lmbench=0
-ltp=1
-lua=0
-netperf=0
+lmbench=1
+ltp=0
+lua=1
+netperf=1
 
 if [ "$ARCH" = RISCV ] && [ "$RUN_RV" = 0 ]; then
     basic=0
