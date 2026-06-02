@@ -267,20 +267,7 @@ run_ltp() {
     cd ltp/testcases/bin
     export PATH="$(pwd):$PATH"
 
-    some_testcases="
-        epoll_ctl01 epoll_ctl01
-        epoll_ctl02 epoll_ctl02
-        epoll_ctl03 epoll_ctl03
-        epoll_ctl04 epoll_ctl04
-        epoll_ctl05 epoll_ctl05
-        epoll_wait01 epoll_wait01
-        epoll_wait02 epoll_wait02
-        epoll_wait03 epoll_wait03
-        epoll_wait04 epoll_wait04
-        epoll_wait05 epoll_wait05
-        epoll_wait06 epoll_wait06
-        epoll_wait07 epoll_wait07
-    "
+    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi
