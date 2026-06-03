@@ -644,30 +644,30 @@ nftw6401 nftw6401
 # nice04 nice04
 # nice05 nice05
 open01 open01
-# open01A symlink01 -T open01
+open01A symlink01 -T open01
 open02 open02
 open03 open03
 open04 open04
-# open06 open06
+open06 open06
 open07 open07
 open08 open08
 open09 open09
 open10 open10
-# open11 open11
+open11 open11
 open12 open12
 open13 open13
-# open14 open14
-# openat01 openat01
+open14 open14
+openat01 openat01
 openat02 openat02
-# openat03 openat03
-# openat04 openat04
-# openat201 openat201
-# openat202 openat202
-# openat203 openat203
-# open_by_handle_at01 open_by_handle_at01
-# open_by_handle_at02 open_by_handle_at02
-# open_tree01 open_tree01
-# open_tree02 open_tree02
+openat03 openat03
+openat04 openat04
+openat201 openat201
+openat202 openat202
+openat203 openat203
+open_by_handle_at01 open_by_handle_at01
+open_by_handle_at02 open_by_handle_at02
+open_tree01 open_tree01
+open_tree02 open_tree02
 # mincore01 mincore01
 # mincore02 mincore02
 # mincore03 mincore03
