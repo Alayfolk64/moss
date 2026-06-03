@@ -268,16 +268,31 @@ run_ltp() {
     export PATH="$(pwd):$PATH"
 
     some_testcases="
-        kill02 kill02
-        kill03 kill03
-        kill05 kill05
-        kill06 kill06
-        kill07 kill07
-        kill08 kill08
-        kill09 kill09
-        kill10 kill10
-        kill11 kill11
-        kill12 kill12
+        open01 open01
+        open01A symlink01 -T open01
+        open02 open02
+        open03 open03
+        open04 open04
+        open06 open06
+        open07 open07
+        open08 open08
+        open09 open09
+        open10 open10
+        open11 open11
+        open12 open12
+        open13 open13
+        open14 open14
+        openat01 openat01
+        openat02 openat02
+        openat03 openat03
+        openat04 openat04
+        openat201 openat201
+        openat202 openat202
+        openat203 openat203
+        open_by_handle_at01 open_by_handle_at01
+        open_by_handle_at02 open_by_handle_at02
+        open_tree01 open_tree01
+        open_tree02 open_tree02
     "
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"

@@ -627,7 +627,41 @@ pub fn sys_lchown(path: *const c_char, uid: i32, gid: i32) -> AxResult<isize> {
 }
 
 pub fn sys_fchown(fd: i32, uid: i32, gid: i32) -> AxResult<isize> {
+    if is_o_path_fd(fd) {
+        return Err(AxError::BadFileDescriptor);
+    }
     sys_fchownat(fd, core::ptr::null(), uid, gid, AT_EMPTY_PATH)
+}
+
+fn is_o_path_fd(fd: i32) -> bool {
+    File::from_fd(fd).is_ok_and(|file| file.is_path())
+}
+
+fn proc_fd_path_fd(path: &str) -> Option<i32> {
+    for prefix in ["/proc/self/fd/", "/dev/fd/"] {
+        if let Some(fd) = path.strip_prefix(prefix) {
+            return fd.parse().ok();
+        }
+    }
+
+    let rest = path.strip_prefix("/proc/")?;
+    let (pid, fd) = rest.split_once("/fd/")?;
+    if pid.parse::<u32>().ok()? != current().as_thread().proc_data.proc.pid() {
+        return None;
+    }
+    fd.parse().ok()
+}
+
+fn reject_o_path_metadata_fd(dirfd: i32, path: Option<&str>, flags: u32) -> AxResult {
+    if flags & AT_EMPTY_PATH != 0 && path.is_none_or(str::is_empty) && is_o_path_fd(dirfd) {
+        return Err(AxError::BadFileDescriptor);
+    }
+    if let Some(fd) = path.and_then(proc_fd_path_fd)
+        && is_o_path_fd(fd)
+    {
+        return Err(AxError::BadFileDescriptor);
+    }
+    Ok(())
 }
 
 pub fn sys_fchownat(
@@ -638,6 +672,7 @@ pub fn sys_fchownat(
     flags: u32,
 ) -> AxResult<isize> {
     let path = path.nullable().map(vm_load_string).transpose()?;
+    reject_o_path_metadata_fd(dirfd, path.as_deref(), flags)?;
     let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
@@ -667,11 +702,15 @@ pub fn sys_chmod(path: *const c_char, mode: u32) -> AxResult<isize> {
 }
 
 pub fn sys_fchmod(fd: i32, mode: u32) -> AxResult<isize> {
+    if is_o_path_fd(fd) {
+        return Err(AxError::BadFileDescriptor);
+    }
     sys_fchmodat(fd, core::ptr::null(), mode, AT_EMPTY_PATH)
 }
 
 pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> AxResult<isize> {
     let path = path.nullable().map(vm_load_string).transpose()?;
+    reject_o_path_metadata_fd(dirfd, path.as_deref(), flags)?;
     resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?

@@ -20,8 +20,8 @@ use axsync::Mutex;
 use axtask::future::{block_on, poll_io};
 use linux_raw_sys::general::{
     AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, FS_APPEND_FL, FS_COMPR_FL, FS_IMMUTABLE_FL,
-    FS_NODUMP_FL, MS_NOATIME, MS_NODIRATIME, O_APPEND, O_NONBLOCK, O_RDONLY, O_RDWR, O_WRONLY,
-    STATX_ATTR_MOUNT_ROOT,
+    FS_NODUMP_FL, MS_NOATIME, MS_NODIRATIME, O_APPEND, O_NOATIME, O_NONBLOCK, O_PATH, O_RDONLY,
+    O_RDWR, O_WRONLY, STATX_ATTR_MOUNT_ROOT,
 };
 use spin::RwLock;
 
@@ -186,10 +186,15 @@ impl File {
     }
 
     pub fn new(inner: axfs::File) -> Self {
+        Self::new_with_status_flags(inner, 0)
+    }
+
+    pub fn new_with_status_flags(inner: axfs::File, open_flags: u32) -> Self {
         let mut status_flags = Self::open_mode_from_flags(inner.flags());
         if inner.flags().contains(FileFlags::APPEND) {
             status_flags |= O_APPEND;
         }
+        status_flags |= open_flags & (O_NOATIME | O_PATH);
 
         Self {
             inner,
@@ -200,6 +205,10 @@ impl File {
 
     pub fn inner(&self) -> &axfs::File {
         &self.inner
+    }
+
+    pub fn is_path(&self) -> bool {
+        self.inner.flags().contains(FileFlags::PATH)
     }
 
     fn is_blocking(&self) -> bool {
@@ -222,7 +231,7 @@ impl FileLike for File {
                 inner.read(&mut *dst)
             }))
         };
-        if read.is_ok() {
+        if read.is_ok() && self.status_flags() & O_NOATIME == 0 {
             update_atime_for_access(inner.location(), false);
         }
         read
