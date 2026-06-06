@@ -9,6 +9,7 @@ use crate::{
     task::AsThread,
 };
 
+///brk：主要扩展堆，传统 malloc 会用到
 pub fn sys_brk(addr: usize) -> AxResult<isize> {
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;

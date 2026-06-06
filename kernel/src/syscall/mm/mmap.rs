@@ -18,6 +18,7 @@ use crate::{
     task::AsThread,
 };
 
+///bitflags! 是一个宏，专门用来定义“可以组合的标志位”
 bitflags::bitflags! {
     /// `PROT_*` flags for use with [`sys_mmap`].
     ///
@@ -274,13 +275,15 @@ fn sub_locked_bytes(length: usize) {
     }
 }
 
+///mmap: memory map，内存映射
+
 pub fn sys_mmap(
-    addr: usize,
-    length: usize,
-    prot: u32,
-    flags: u32,
-    fd: i32,
-    offset: isize,
+    addr: usize,   //希望映射到哪个虚拟地址，可以只是建议
+    length: usize, //要多大一块内存
+    prot: u32,     //这块内存能读、写、执行吗
+    flags: u32,    //映射方式，比如共享、私有、匿名、固定地址
+    fd: i32,       //如果映射文件，这里是文件描述符
+    offset: isize, //从文件的哪个位置开始映射
 ) -> AxResult<isize> {
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
