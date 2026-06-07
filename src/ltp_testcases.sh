@@ -488,12 +488,12 @@ lchown02  lchown02
 lchown03  lchown03
 lgetxattr01 lgetxattr01
 lgetxattr02 lgetxattr02
-# link01 symlink01 -T link01
+link01 symlink01 -T link01
 link02 link02
 link04 link04
 link05 link05
 link08 link08
-# linkat01 linkat01
+linkat01 linkat01
 linkat02 linkat02
 listen01 listen01
 listxattr01 listxattr01
@@ -522,10 +522,10 @@ memcpy01 memcpy01
 mlockall01 mlockall01
 mlockall02 mlockall02
 # mlockall03 mlockall03
-# mkdir02 mkdir02
-# mkdir03 mkdir03
-# mkdir04 mkdir04
-# mkdir05 mkdir05
+mkdir02 mkdir02
+mkdir03 mkdir03
+mkdir04 mkdir04
+mkdir05 mkdir05
 mkdir09 mkdir09
 mkdirat01 mkdirat01
 mkdirat02 mkdirat02
@@ -578,8 +578,8 @@ mount05 mount05
 mount06 mount06
 mount07 mount07
 # mount_setattr01 mount_setattr01
-# move_mount01 move_mount01
-# move_mount02 move_mount02
+move_mount01 move_mount01
+move_mount02 move_mount02
 # mprotect01 mprotect01
 # mprotect02 mprotect02
 # mprotect03 mprotect03

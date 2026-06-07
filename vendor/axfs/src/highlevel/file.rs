@@ -1,5 +1,6 @@
 use alloc::{
     boxed::Box,
+    collections::BTreeMap,
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -373,6 +374,12 @@ impl CachedFileShared {
     }
 }
 
+type InMemoryCacheKey = (usize, u64);
+
+static IN_MEMORY_FILE_CACHES: spin::Lazy<
+    RwLock<BTreeMap<InMemoryCacheKey, Weak<CachedFileShared>>>,
+> = spin::Lazy::new(|| RwLock::new(BTreeMap::new()));
+
 pub struct CachedFile {
     inner: Location,
     shared: Arc<CachedFileShared>,
@@ -408,21 +415,33 @@ impl FileUserData {
 }
 
 impl CachedFile {
+    fn in_memory_cache_key(location: &Location) -> InMemoryCacheKey {
+        let fs_ptr: *const dyn axfs_ng_vfs::FilesystemOps = location.filesystem();
+        (fs_ptr as *const () as usize, location.inode())
+    }
+
     pub fn get_or_create(location: Location) -> Self {
         let in_memory = location.filesystem().name() == "tmpfs";
 
         let mut guard = location.user_data();
         let shared = if let Some(shared) = guard.get::<FileUserData>().and_then(|it| it.get()) {
             shared
-        } else {
-            let (shared, user_data) = if in_memory {
-                let shared = Arc::new(CachedFileShared::new_unbounded());
-                (shared.clone(), FileUserData::Strong(shared))
-            } else {
-                let shared = Arc::new(CachedFileShared::new());
-                let user_data = FileUserData::Weak(Arc::downgrade(&shared));
-                (shared, user_data)
+        } else if in_memory {
+            let key = Self::in_memory_cache_key(&location);
+            let mut caches = IN_MEMORY_FILE_CACHES.write();
+            let shared = match caches.get(&key).and_then(Weak::upgrade) {
+                Some(shared) => shared,
+                None => {
+                    let shared = Arc::new(CachedFileShared::new_unbounded());
+                    caches.insert(key, Arc::downgrade(&shared));
+                    shared
+                }
             };
+            guard.insert(FileUserData::Strong(shared.clone()));
+            shared
+        } else {
+            let shared = Arc::new(CachedFileShared::new());
+            let user_data = FileUserData::Weak(Arc::downgrade(&shared));
             guard.insert(user_data);
             shared
         };

@@ -31,3 +31,5 @@
 /summary_la.txt
 /summary_rv.txt
 /total.txt
+/.claude
+/syscall_code
