@@ -104,23 +104,7 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
-some_testcases="
-    ioctl08      ioctl08
-    ioctl09      ioctl09
-    ioctl_loop01 ioctl_loop01
-    ioctl_loop02 ioctl_loop02
-    ioctl_loop03 ioctl_loop03
-    ioctl_loop04 ioctl_loop04
-    ioctl_loop06 ioctl_loop06
-    ioctl_loop07 ioctl_loop07
-    ioctl_ns01 ioctl_ns01
-    ioctl_ns02 ioctl_ns02
-    ioctl_ns03 ioctl_ns03
-    ioctl_ns04 ioctl_ns04
-    ioctl_ns05 ioctl_ns05
-    ioctl_ns06 ioctl_ns06
-    ioctl_ns07 ioctl_ns07
-"
+some_testcases=""
 
 RUN_RV=1
 RUN_LA=1
@@ -129,14 +113,14 @@ RUN_LA=1
 basic=1
 busybox=1
 cyclictest=0
-iozone=0
-iperf=0
-libcbench=0
+iozone=1
+iperf=1
+libcbench=1
 libctest=1
-lmbench=0
+lmbench=1
 ltp=1
-lua=0
-netperf=0
+lua=1
+netperf=1
 
 if [ -n "$some_testcases" ]; then
     basic=0
