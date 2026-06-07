@@ -8,11 +8,11 @@ pub struct StatFs {
     pub fs_type: u32,
     pub block_size: u32,
     pub blocks: u64,
-    pub blocks_free: u64,
-    pub blocks_available: u64,
+    pub blocks_free: u64,      // 空闲块数
+    pub blocks_available: u64, // 可用块数
 
     pub file_count: u64,
-    pub free_file_count: u64,
+    pub free_file_count: u64, // 可创建的文件数
 
     pub name_length: u32,
     pub fragment_size: u32,

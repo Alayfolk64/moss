@@ -28,7 +28,7 @@ impl FatFilesystemInner {
 }
 
 pub struct FatFilesystem {
-    inner: Mutex<FatFilesystemInner>,
+    inner: Mutex<FatFilesystemInner>, // 文件系统内部数据
     root_dir: Mutex<Option<DirEntry>>,
 }
 
@@ -69,6 +69,7 @@ impl FatFilesystem {
     }
 }
 
+//FAT 实现 FilesystemOps 接口
 impl FilesystemOps for FatFilesystem {
     fn name(&self) -> &str {
         "vfat"
