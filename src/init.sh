@@ -112,7 +112,7 @@ RUN_LA=1
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=1
 busybox=1
-cyclictest=0
+cyclictest=1
 iozone=1
 iperf=1
 libcbench=1
