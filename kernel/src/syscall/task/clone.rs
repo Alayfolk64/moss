@@ -231,6 +231,12 @@ impl CloneArgs {
                 signal_actions,
                 exit_signal,
             );
+            proc_data.inherit_namespaces_from(
+                old_proc_data,
+                flags.contains(CloneFlags::NEWPID),
+                flags.contains(CloneFlags::NEWUSER),
+                flags.contains(CloneFlags::NEWUTS),
+            );
             proc_data.set_umask(old_proc_data.umask());
             proc_data.set_heap_top(old_proc_data.get_heap_top());
             proc_data.set_uid(old_proc_data.uid());

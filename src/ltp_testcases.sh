@@ -401,21 +401,21 @@ ioctl04      ioctl04
 ioctl05      ioctl05
 ioctl06      ioctl06
 ioctl07      ioctl07
-# ioctl08      ioctl08
-# ioctl09      ioctl09
-# ioctl_loop01 ioctl_loop01
-# ioctl_loop02 ioctl_loop02
-# ioctl_loop03 ioctl_loop03
-# ioctl_loop04 ioctl_loop04
-# ioctl_loop06 ioctl_loop06
-# ioctl_loop07 ioctl_loop07
-# ioctl_ns01 ioctl_ns01
-# ioctl_ns02 ioctl_ns02
-# ioctl_ns03 ioctl_ns03
-# ioctl_ns04 ioctl_ns04
-# ioctl_ns05 ioctl_ns05
-# ioctl_ns06 ioctl_ns06
-# ioctl_ns07 ioctl_ns07
+ioctl08      ioctl08
+ioctl09      ioctl09
+ioctl_loop01 ioctl_loop01
+ioctl_loop02 ioctl_loop02
+ioctl_loop03 ioctl_loop03
+ioctl_loop04 ioctl_loop04
+ioctl_loop06 ioctl_loop06
+ioctl_loop07 ioctl_loop07
+ioctl_ns01 ioctl_ns01
+ioctl_ns02 ioctl_ns02
+ioctl_ns03 ioctl_ns03
+ioctl_ns04 ioctl_ns04
+ioctl_ns05 ioctl_ns05
+ioctl_ns06 ioctl_ns06
+ioctl_ns07 ioctl_ns07
 inotify_init1_01 inotify_init1_01
 inotify_init1_02 inotify_init1_02
 inotify01 inotify01
