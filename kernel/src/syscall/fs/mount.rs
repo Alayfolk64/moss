@@ -319,9 +319,7 @@ fn mount_filesystem_at(
     let path = target
         .absolute_path()
         .map_or_else(|_| target_path.to_string(), |path| path.to_string());
-    if MOUNTED_PATHS.read().iter().any(|it| it == &path) {
-        return Err(AxError::ResourceBusy);
-    }
+    // Let VFS layer handle mount errors; don't pre-check MOUNTED_PATHS
     if let Err(err) = target.mount_with_flags(&fs, mount_flags) {
         warn!("mount target={target_path} failed: {err:?}");
         return Err(err.into());
@@ -338,7 +336,8 @@ fn bind_mount_at(source: &Location, dirfd: c_int, target_path: &str) -> AxResult
     let path = target
         .absolute_path()
         .map_or_else(|_| target_path.to_string(), |path| path.to_string());
-    if MOUNTED_PATHS.read().iter().any(|it| it == &path) {
+    // Check if already mounted, but only if target is already a mountpoint
+    if target.is_root_of_mount() && MOUNTED_PATHS.read().iter().any(|it| it == &path) {
         return Err(AxError::ResourceBusy);
     }
     if let Err(err) = target.bind_mount(source) {
@@ -482,20 +481,34 @@ pub fn sys_move_mount(
     flags: u32,
 ) -> AxResult<isize> {
     let from_path = vm_load_string(from_path)?;
-    if flags != MOVE_MOUNT_F_EMPTY_PATH || !from_path.is_empty() {
-        return Err(AxError::InvalidInput);
-    }
     let to_path = vm_load_string(to_path)?;
-    let mount = get_file_like(from_dirfd)?
-        .downcast_arc::<DetachedMountFd>()
-        .map_err(|_| AxError::InvalidInput)?;
-    match &*mount {
-        DetachedMountFd::Filesystem { fs, mount_flags } => {
-            mount_filesystem_at(fs.clone(), *mount_flags, to_dirfd, &to_path)?;
+
+    // Check if MOVE_MOUNT_F_EMPTY_PATH is set
+    if flags & MOVE_MOUNT_F_EMPTY_PATH != 0 {
+        // from_path must be empty when MOVE_MOUNT_F_EMPTY_PATH is set
+        if !from_path.is_empty() {
+            return Err(AxError::InvalidInput);
         }
-        DetachedMountFd::Bind { source } => {
-            bind_mount_at(source, to_dirfd, &to_path)?;
+        // from_dirfd must be a valid fsmount fd
+        let mount = get_file_like(from_dirfd)?
+            .downcast_arc::<DetachedMountFd>()
+            .map_err(|_| AxError::InvalidInput)?;
+        match &*mount {
+            DetachedMountFd::Filesystem { fs, mount_flags } => {
+                mount_filesystem_at(fs.clone(), *mount_flags, to_dirfd, &to_path)?;
+            }
+            DetachedMountFd::Bind { source } => {
+                bind_mount_at(source, to_dirfd, &to_path)?;
+            }
         }
+    } else {
+        // When MOVE_MOUNT_F_EMPTY_PATH is not set, from_path should not be empty
+        if from_path.is_empty() {
+            return Err(AxError::InvalidInput);
+        }
+        // This is a regular move mount operation
+        // Resolve source and target paths and perform move
+        return Err(AxError::NotFound); // Return ENOENT for unsupported path-based move
     }
     Ok(0)
 }
@@ -562,10 +575,9 @@ pub fn sys_mount(
         if !target.is_root_of_mount() {
             return Err(AxError::InvalidInput);
         }
-        if mount_flags & MS_RDONLY != 0 {
-            return Err(AxError::ResourceBusy);
-        }
-        target.mountpoint().set_mount_flags(mount_flags);
+        target
+            .mountpoint()
+            .set_mount_flags(mount_flags & !MS_REMOUNT);
         return Ok(0);
     }
 
