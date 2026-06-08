@@ -9,6 +9,7 @@ use core::{
     hint::likely,
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
     task::Context,
+    time::Duration,
 };
 
 use axerrno::{AxError, AxResult};
@@ -20,8 +21,8 @@ use axsync::Mutex;
 use axtask::future::{block_on, poll_io};
 use linux_raw_sys::general::{
     AT_EMPTY_PATH, AT_FDCWD, AT_SYMLINK_NOFOLLOW, FS_APPEND_FL, FS_COMPR_FL, FS_IMMUTABLE_FL,
-    FS_NODUMP_FL, MS_NOATIME, MS_NODIRATIME, O_APPEND, O_NOATIME, O_NONBLOCK, O_PATH, O_RDONLY,
-    O_RDWR, O_WRONLY, STATX_ATTR_MOUNT_ROOT,
+    FS_NODUMP_FL, MS_NOATIME, MS_NODIRATIME, MS_STRICTATIME, O_APPEND, O_NOATIME, O_NONBLOCK,
+    O_PATH, O_RDONLY, O_RDWR, O_WRONLY, STATX_ATTR_MOUNT_ROOT,
 };
 use spin::RwLock;
 
@@ -57,8 +58,23 @@ pub fn update_atime_for_access(loc: &Location, is_dir: bool) {
     if flags & MS_NOATIME != 0 || (is_dir && flags & MS_NODIRATIME != 0) {
         return;
     }
+    let now = realtime_time();
+    if flags & MS_STRICTATIME == 0 {
+        let Ok(metadata) = loc.metadata() else {
+            return;
+        };
+        let stale_by_time = now
+            .checked_sub(metadata.atime)
+            .map_or(false, |elapsed| elapsed >= Duration::from_secs(24 * 60 * 60));
+        if metadata.atime > metadata.mtime
+            && metadata.atime > metadata.ctime
+            && !stale_by_time
+        {
+            return;
+        }
+    }
     let _ = loc.update_metadata(MetadataUpdate {
-        atime: Some(realtime_time()),
+        atime: Some(now),
         ..Default::default()
     });
 }

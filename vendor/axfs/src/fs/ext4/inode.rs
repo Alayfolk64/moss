@@ -146,6 +146,8 @@ impl NodeOps for Inode {
     fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()> {
         let mut fs = self.fs.lock();
         fs.with_inode_ref(self.ino, |inode| {
+            let update_ctime =
+                update.mode.is_some() || update.owner.is_some() || update.mtime.is_some();
             if let Some(mode) = update.mode {
                 inode.set_mode((inode.mode() & !0xfff) | (mode.bits() as u32));
             }
@@ -158,7 +160,9 @@ impl NodeOps for Inode {
             if let Some(mtime) = update.mtime {
                 inode.set_mtime(&mtime);
             }
-            inode.update_ctime();
+            if update_ctime {
+                inode.update_ctime();
+            }
             Ok(())
         })
         .map_err(into_vfs_err)?;

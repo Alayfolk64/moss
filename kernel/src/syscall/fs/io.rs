@@ -10,7 +10,9 @@ use axfs_ng_vfs::NodeType;
 use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
-use linux_raw_sys::general::{__kernel_off_t, AT_FDCWD, IN_ACCESS, IN_MODIFY, O_ACCMODE, O_WRONLY};
+use linux_raw_sys::general::{
+    __kernel_off_t, AT_FDCWD, IN_ACCESS, IN_MODIFY, O_ACCMODE, O_WRONLY, POSIX_FADV_WILLNEED,
+};
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
 
@@ -206,31 +208,9 @@ pub fn sys_sync_file_range(
     Ok(0)
 }
 
-pub fn sys_fadvise64(
-    fd: c_int,
-    offset: __kernel_off_t,
-    len: __kernel_off_t,
-    advice: u32,
-) -> AxResult<isize> {
-    debug!("sys_fadvise64 <= fd: {fd}, offset: {offset}, len: {len}, advice: {advice}");
-    if Pipe::from_fd(fd).is_ok() {
-        return Err(AxError::BrokenPipe);
-    }
-    if advice > 5 {
-        return Err(AxError::InvalidInput);
-    }
-    Ok(0)
-}
-
-pub fn sys_readahead(fd: c_int, offset: __kernel_off_t, _count: usize) -> AxResult<isize> {
-    debug!("sys_readahead <= fd: {fd}, offset: {offset}");
-    if offset < 0 {
-        return Err(AxError::InvalidInput);
-    }
-
-    let file_like = get_file_like(fd)?;
+fn file_for_readahead(file_like: &Arc<dyn FileLike>) -> AxResult<Option<&File>> {
     if file_like.path().as_ref() == "anon_inode:[pidfd]" {
-        return Ok(0);
+        return Ok(None);
     }
     if file_like.downcast_ref::<Pipe>().is_some() {
         return Err(AxError::from(LinuxError::ESPIPE));
@@ -244,7 +224,48 @@ pub fn sys_readahead(fd: c_int, offset: __kernel_off_t, _count: usize) -> AxResu
     if file.inner().location().metadata()?.node_type != NodeType::RegularFile {
         return Err(AxError::InvalidInput);
     }
+    Ok(Some(file))
+}
 
+pub fn sys_fadvise64(
+    fd: c_int,
+    offset: __kernel_off_t,
+    len: __kernel_off_t,
+    advice: u32,
+) -> AxResult<isize> {
+    debug!("sys_fadvise64 <= fd: {fd}, offset: {offset}, len: {len}, advice: {advice}");
+    if offset < 0 || len < 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if Pipe::from_fd(fd).is_ok() {
+        return Err(AxError::BrokenPipe);
+    }
+    if advice > 5 {
+        return Err(AxError::InvalidInput);
+    }
+    if advice == POSIX_FADV_WILLNEED && len > 0 {
+        let file_like = get_file_like(fd)?;
+        if let Some(file) = file_for_readahead(&file_like)? {
+            file.inner()
+                .backend()?
+                .readahead(offset as u64, len as usize)?;
+        }
+    }
+    Ok(0)
+}
+
+pub fn sys_readahead(fd: c_int, offset: __kernel_off_t, count: usize) -> AxResult<isize> {
+    debug!("sys_readahead <= fd: {fd}, offset: {offset}");
+    if offset < 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let file_like = get_file_like(fd)?;
+    if let Some(file) = file_for_readahead(&file_like)? {
+        file.inner()
+            .backend()?
+            .readahead(offset as u64, count)?;
+    }
     Ok(0)
 }
 

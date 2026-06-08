@@ -15,9 +15,9 @@ use axtask::current;
 use linux_raw_sys::general::{
     __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
     AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_FOLLOW, AT_SYMLINK_NOFOLLOW, MS_NOATIME,
-    MS_NODEV, MS_NODIRATIME, MS_NOEXEC, MS_NOSUID, MS_NOSYMFOLLOW, MS_RDONLY, O_ACCMODE, O_CLOEXEC,
-    O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK, S_IFMT, STATX__RESERVED,
-    W_OK, X_OK, stat, statfs, statx,
+    MS_NODEV, MS_NODIRATIME, MS_NOEXEC, MS_NOSUID, MS_NOSYMFOLLOW, MS_RDONLY, MS_RELATIME,
+    O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK,
+    S_IFMT, STATX__RESERVED, W_OK, X_OK, stat, statfs, statx,
 };
 use spin::RwLock;
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
@@ -96,6 +96,7 @@ fn mount_flags_to_statfs_flags(flags: u32) -> u32 {
             | MS_NOSUID
             | MS_NOATIME
             | MS_NODIRATIME
+            | MS_RELATIME
             | linux_raw_sys::general::MS_REMOUNT);
     if flags & MS_NOSYMFOLLOW != 0 {
         statfs_flags |= ST_NOSYMFOLLOW;

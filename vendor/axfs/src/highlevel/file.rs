@@ -302,6 +302,8 @@ impl Default for OpenOptions {
 }
 
 const PAGE_SIZE: usize = 4096;
+const DEFAULT_FILE_CACHE_PAGES: usize = 256;
+const MAX_READAHEAD_BYTES: usize = DEFAULT_FILE_CACHE_PAGES * PAGE_SIZE;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 
 #[derive(Debug)]
@@ -361,7 +363,9 @@ struct CachedFileShared {
 impl CachedFileShared {
     pub fn new() -> Self {
         Self {
-            page_cache: Mutex::new(LruCache::new(NonZeroUsize::new(64).unwrap())),
+            page_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(DEFAULT_FILE_CACHE_PAGES).unwrap(),
+            )),
             evict_listeners: Mutex::new(LinkedList::default()),
         }
     }
@@ -527,6 +531,37 @@ impl CachedFile {
         Ok((cache.get_mut(&pn).unwrap(), evicted))
     }
 
+    fn page_or_insert_zeroed<'a>(
+        &self,
+        file: &FileNode,
+        cache: &'a mut LruCache<u32, PageCache>,
+        pn: u32,
+    ) -> VfsResult<(&'a mut PageCache, Option<(u32, PageCache)>)> {
+        if cache.contains(&pn) {
+            return Ok((cache.get_mut(&pn).unwrap(), None));
+        }
+        let mut evicted = None;
+        if cache.len() == cache.cap().get() {
+            if let Some((pn, mut page)) = cache.pop_lru() {
+                self.evict_cache(file, pn, &mut page)?;
+                evicted = Some((pn, page));
+            }
+        }
+
+        let mut page = PageCache::new()?;
+        page.data().fill(0);
+        cache.put(pn, page);
+        Ok((cache.get_mut(&pn).unwrap(), evicted))
+    }
+
+    fn can_zero_fill_write_page(old_len: u64, page_start: u64, range: &Range<usize>) -> bool {
+        if page_start >= old_len {
+            return true;
+        }
+        let old_valid_end = (old_len - page_start).min(PAGE_SIZE as u64) as usize;
+        range.start == 0 && range.end >= old_valid_end
+    }
+
     pub fn with_page<R>(&self, pn: u32, f: impl FnOnce(Option<&mut PageCache>) -> R) -> R {
         f(self.shared.page_cache.lock().get_mut(&pn))
     }
@@ -589,6 +624,29 @@ impl CachedFile {
         )
     }
 
+    pub fn readahead(&self, offset: u64, count: usize) -> VfsResult<()> {
+        if count == 0 || self.in_memory {
+            return Ok(());
+        }
+
+        let len = self.inner.len()?;
+        if offset >= len {
+            return Ok(());
+        }
+        let count = count.min(MAX_READAHEAD_BYTES);
+        let end = offset.saturating_add(count as u64).min(len);
+        let file = self.inner.entry().as_file()?;
+        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+
+        for pn in start_page..end_page {
+            let mut guard = self.shared.page_cache.lock();
+            self.page_or_insert(file, &mut guard, pn)?;
+        }
+
+        Ok(())
+    }
+
     fn read_at_in_memory(
         &self,
         mut dst: impl Write + IoBufMut,
@@ -627,23 +685,36 @@ impl CachedFile {
         if self.in_memory {
             return self.write_at_in_memory(buf, offset, end);
         }
-        self.with_pages(
-            offset..end,
-            |file| {
-                if end > file.len()? {
-                    file.set_len(end)?;
-                }
-                Ok(0)
-            },
-            |written, page, range| {
-                let len = range.end - range.start;
-                buf.read(&mut page.data()[range.start..range.end])?;
-                if !self.in_memory {
-                    page.dirty = true;
-                }
-                Ok(written + len)
-            },
-        )
+
+        let file = self.inner.entry().as_file()?;
+        let old_len = file.len()?;
+        if end > old_len {
+            file.set_len(end)?;
+        }
+
+        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+        let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
+        let mut written = 0;
+
+        for pn in start_page..end_page {
+            let page_start = pn as u64 * PAGE_SIZE as u64;
+            let range = page_offset..(end - page_start).min(PAGE_SIZE as u64) as usize;
+            let len = range.end - range.start;
+
+            let mut guard = self.shared.page_cache.lock();
+            let page = if Self::can_zero_fill_write_page(old_len, page_start, &range) {
+                self.page_or_insert_zeroed(file, &mut guard, pn)?.0
+            } else {
+                self.page_or_insert(file, &mut guard, pn)?.0
+            };
+            buf.read(&mut page.data()[range.start..range.end])?;
+            page.dirty = true;
+            written += len;
+            page_offset = 0;
+        }
+
+        Ok(written)
     }
 
     fn write_at_in_memory(
@@ -818,6 +889,13 @@ impl FileBackend {
                         offset += *written as u64;
                     })
             })),
+        }
+    }
+
+    pub fn readahead(&self, offset: u64, count: usize) -> VfsResult<()> {
+        match self {
+            Self::Cached(cached) => cached.readahead(offset, count),
+            Self::Direct(_) => Ok(()),
         }
     }
 
