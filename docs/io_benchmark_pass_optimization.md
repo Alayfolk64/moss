@@ -241,3 +241,162 @@ inotify 的 watch 数会在 add_watch、remove_watch 和 InotifyFd drop 时维�
 - iperf：主要是网络测试，收益不明显，只会间接受益于少量 fd open/close 开销降低。
 
 这项优化不改变 inotify/fanotify 的正常语义：一旦存在 watch/mark，仍然会走原来的事件匹配、权限请求和队列投递逻辑。它只是让“无人监听”的常见 benchmark 场景更快跳过通知子系统。
+
+## 10. dirty page 批量写回
+
+代码位置：
+
+- `vendor/axfs/src/highlevel/file.rs`
+- `CachedFile::writeback_cached_pages`
+- `CachedFile::writeback_dirty_pages`
+- `CachedFile::writeback_dirty_run`
+
+这次优化主要服务 lmbench 里的：
+
+```text
+lmdd ... of=/var/tmp/XXX move=1m fsync=1
+```
+
+它的行为可以简单理解为：
+
+```text
+写一个 1MiB 文件
+然后 fsync，要求把脏数据真正写回底层文件系统
+```
+
+原来的 cached file 全量写回路径会不断从 LRU 里弹出页，然后一页一页通过 `evict_cache` 写回。页大小是 4KiB，所以连续写 1MiB 文件时，可能变成很多次 4KiB 写回。
+
+这就像搬东西时一件一件搬：
+
+```text
+写回第 0 页 4KiB
+写回第 1 页 4KiB
+写回第 2 页 4KiB
+...
+```
+
+现在在 `sync/drop` 这类全量写回路径里，会先把 dirty 页收集起来，再按页号排序，把连续 dirty 页合并成一批写回。
+
+当前批量大小是：
+
+```text
+WRITEBACK_BATCH_PAGES = 16
+16 页 * 4KiB = 64KiB
+```
+
+新的流程大致是：
+
+```text
+从页缓存弹出所有页
+  -> clean 页只通知 mmap eviction listener，不写底层
+  -> dirty 页收集起来
+
+dirty 页按页号排序
+  -> 连续页合并
+  -> 最多 64KiB 一批
+  -> 用一个 bounce buffer 调用一次 file.write_at()
+```
+
+这样做的好处是：
+
+- 减少 `file.write_at()` 调用次数。
+- 减少进入 ext4/lwext4 的次数。
+- 减少全量 `fsync` 时的小块写回开销。
+- 对 lmbench `lmdd fsync=1` 更有针对性。
+
+正确性上仍然保守：
+
+- 单页 LRU eviction 路径没有改，仍然按原来的 4KiB 页写回。
+- 文件尾页会按 `file.len()` 裁剪，避免写超过 EOF。
+- dirty 页写成功后才清 dirty。
+- clean 页不会写底层，只做 eviction 通知。
+
+## 11. mmap 顺序 fault 轻量预热
+
+代码位置：
+
+- `kernel/src/mm/aspace/backend/file.rs`
+- `FileBackendInner::last_fault_page`
+- `FileBackendInner::next_readahead_page`
+- `FileBackend::maybe_readahead_after_fault`
+- `FileBackend::populate`
+
+这次优化主要服务 lmbench 里的：
+
+```text
+bw_mmap_rd 512k mmap_only
+bw_mmap_rd 512k open2close
+```
+
+这类测试会把文件 mmap 到内存，然后连续扫描这段内存。程序表面上是在读内存，实际上每访问到一个还没准备好的文件页时，内核会触发 page fault，再把对应文件页读进页缓存并建立映射。
+
+原来的行为更接近：
+
+```text
+访问第 0 页 -> fault -> 读第 0 页
+访问第 1 页 -> fault -> 读第 1 页
+访问第 2 页 -> fault -> 读第 2 页
+...
+```
+
+这对顺序扫文件来说比较碎。
+
+现在增加了一个很保守的顺序检测：
+
+```text
+第一次 fault：
+    只处理当前页，不额外预读
+
+如果刚 fault 过 page N，
+下一次紧接着 fault page N+1：
+    认为可能是顺序扫描
+    best-effort 预热后面 4 页到页缓存
+```
+
+预热窗口是：
+
+```text
+MMAP_FAULT_READAHEAD_PAGES = 4
+4 页 * 4KiB = 16KiB
+```
+
+这里的“预热”只做一件事：
+
+```text
+调用 CachedFile::readahead()
+把后续文件页提前放进页缓存
+```
+
+它不会提前建立页表映射。也就是说，后续访问这些页时仍然可能发生 page fault，但 fault 时更可能不用再等底层文件系统读页，只需要把已经在页缓存里的页映射进去。
+
+这样设计是为了兼顾两个 lmbench 项：
+
+- `bw_mmap_rd`：连续扫文件，能吃到页缓存预热收益。
+- `lat_pagefault`：它测单次 fault 延迟，而且访问页顺序是随机 permutation，不容易触发连续 fault 检测。
+
+所以这次没有做激进的“每次 fault 都预读很多页”，避免把 `lat_pagefault` 的单次 fault 成本拉高。
+
+当前边界：
+
+- 只优化 file-backed shared mmap 的页缓存预热。
+- 不提前映射未来页。
+- 不做异步后台预读。
+- 预读失败会被忽略，不影响当前 page fault 是否成功。
+- fork/clone 出来的新 mapping 不继承旧 mapping 的预读窗口状态，避免误判。
+
+## 12. 第三刀和第四刀的预期影响
+
+这两刀更偏向 lmbench，而不是 lua/cyclictest 这类测试。
+
+预期收益：
+
+- `lmdd ... fsync=1`：dirty 页批量写回减少小块写回次数。
+- `bw_mmap_rd 512k`：顺序 mmap 读时，后续页更容易命中页缓存。
+- `lat_mmap`：本轮没有在 `mmap()` 建立时强制 populate，理论上不应明显变慢。
+- `lat_pagefault`：只有连续 fault 才预热，随机 fault 基本不触发，尽量不伤单次 fault 延迟。
+
+不明显受益：
+
+- Lua：主要是解释器、字符串、数学和简单 open/close，重 I/O 很少。
+- libcbench：只有 `stdio tmpfile putc/getc` 部分可能受益，malloc/string/pthread/regex 基本不受影响。
+- cyclictest：测 timer/scheduler/wakeup latency，和页缓存、mmap 文件读写不是一个方向。

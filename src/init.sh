@@ -340,6 +340,22 @@ else
     skip_group busybox musl
 fi
 
+if [ "$libctest" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./libctest_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group libctest musl
+fi
+
+if [ "$ltp" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    run_ltp musl
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group ltp musl
+fi
+
 if [ "$cyclictest" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./cyclictest_testcode.sh
@@ -372,14 +388,6 @@ else
     skip_group libcbench musl
 fi
 
-if [ "$libctest" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./libctest_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group libctest musl
-fi
-
 if [ "$lmbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./lmbench_testcode.sh
@@ -404,14 +412,6 @@ else
     skip_group netperf musl
 fi
 
-if [ "$ltp" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    run_ltp musl
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group ltp musl
-fi
-
 cd /glibc
 
 glibc_runtime
@@ -429,6 +429,14 @@ if [ "$busybox" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox glibc
+fi
+
+if [ "$ltp" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    run_ltp glibc
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group ltp glibc
 fi
 
 if [ "$cyclictest" = 1 ]; then
@@ -485,14 +493,6 @@ if [ "$netperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group netperf glibc
-fi
-
-if [ "$ltp" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    run_ltp glibc
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group ltp glibc
 fi
 
 exit 0
