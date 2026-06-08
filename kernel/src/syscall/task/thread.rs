@@ -4,7 +4,7 @@ use axtask::current;
 use crate::task::AsThread;
 
 pub fn sys_getpid() -> AxResult<isize> {
-    Ok(current().as_thread().proc_data.proc.pid() as _)
+    Ok(current().as_thread().proc_data.visible_pid() as _)
 }
 
 pub fn sys_getppid() -> AxResult<isize> {

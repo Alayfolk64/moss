@@ -32,8 +32,9 @@ pub fn sys_getpgid(pid: Pid) -> AxResult<isize> {
 
 pub fn sys_setpgid(pid: Pid, pgid: Pid) -> AxResult<isize> {
     let proc = &get_process_data(pid)?.proc;
+    let pgid = if pgid == 0 { proc.pid() } else { pgid };
 
-    if pgid == 0 {
+    if pgid == proc.pid() {
         if let Some(group) = proc.create_group() {
             add_process_group_to_table(&group);
         }

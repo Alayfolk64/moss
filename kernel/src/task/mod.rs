@@ -12,7 +12,7 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{
     cell::RefCell,
     ops::Deref,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicUsize, Ordering},
 };
 
 use axpoll::PollSet;
@@ -34,6 +34,53 @@ use crate::mm::AddrSpace;
 pub enum ProcessWaitStatus {
     Stopped(Signo),
     Continued(Signo),
+}
+
+const INIT_PID_NS_INODE: u64 = 0x0f00_0001;
+const INIT_UTS_NS_INODE: u64 = 0x0f00_0002;
+const INIT_USER_NS_INODE: u64 = 0x0f00_0003;
+static NEXT_NAMESPACE_INODE: AtomicU64 = AtomicU64::new(0x0f00_0100);
+
+#[derive(Debug, Clone, Copy)]
+pub struct NamespaceState {
+    pub inode: u64,
+    pub parent_inode: Option<u64>,
+    pub init_pid: Option<u32>,
+}
+
+impl NamespaceState {
+    const fn init(inode: u64) -> Self {
+        Self {
+            inode,
+            parent_inode: None,
+            init_pid: None,
+        }
+    }
+
+    fn child_of(parent: Self, init_pid: Option<u32>) -> Self {
+        Self {
+            inode: NEXT_NAMESPACE_INODE.fetch_add(1, Ordering::Relaxed),
+            parent_inode: Some(parent.inode),
+            init_pid,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProcessNamespaces {
+    pub pid: NamespaceState,
+    pub uts: NamespaceState,
+    pub user: NamespaceState,
+}
+
+impl ProcessNamespaces {
+    const fn init() -> Self {
+        Self {
+            pid: NamespaceState::init(INIT_PID_NS_INODE),
+            uts: NamespaceState::init(INIT_UTS_NS_INODE),
+            user: NamespaceState::init(INIT_USER_NS_INODE),
+        }
+    }
 }
 
 ///  A wrapper type that assumes the inner type is `Sync`.
@@ -227,6 +274,7 @@ pub struct ProcessData {
     futex_table: Arc<FutexTable>,
     /// Accumulated child CPU time in USER_HZ ticks.
     pub child_cpu_time: SpinNoIrq<(u64, u64)>,
+    namespaces: SpinNoIrq<ProcessNamespaces>,
 
     /// The default mask for file permissions.
     umask: AtomicU32,
@@ -272,6 +320,7 @@ impl ProcessData {
 
             futex_table: Arc::new(FutexTable::new()),
             child_cpu_time: SpinNoIrq::new((0, 0)),
+            namespaces: SpinNoIrq::new(ProcessNamespaces::init()),
 
             umask: AtomicU32::new(0o022),
             ioprio: AtomicU32::new((2 << 13) | 4),
@@ -298,6 +347,39 @@ impl ProcessData {
     /// signal other than SIGCHLD to its parent upon termination.
     pub fn is_clone_child(&self) -> bool {
         self.exit_signal != Some(Signo::SIGCHLD)
+    }
+
+    pub fn namespaces(&self) -> ProcessNamespaces {
+        *self.namespaces.lock()
+    }
+
+    pub fn inherit_namespaces_from(
+        &self,
+        parent: &ProcessData,
+        new_pid: bool,
+        new_user: bool,
+        new_uts: bool,
+    ) {
+        let mut namespaces = parent.namespaces();
+        if new_pid {
+            namespaces.pid = NamespaceState::child_of(namespaces.pid, Some(self.proc.pid()));
+        }
+        if new_user {
+            namespaces.user = NamespaceState::child_of(namespaces.user, None);
+        }
+        if new_uts {
+            namespaces.uts = NamespaceState::child_of(namespaces.uts, None);
+        }
+        *self.namespaces.lock() = namespaces;
+    }
+
+    pub fn visible_pid(&self) -> u32 {
+        let namespaces = self.namespaces.lock();
+        if namespaces.pid.init_pid == Some(self.proc.pid()) {
+            1
+        } else {
+            self.proc.pid()
+        }
     }
 
     /// Get the umask.

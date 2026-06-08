@@ -140,6 +140,7 @@ pub fn ptrace_take_wait_event(tracer: Pid, raw_pid: i32) -> Option<PtraceWaitEve
     })
 }
 
+//被调试进程自己卡住
 pub fn ptrace_wait_if_stopped(thr: &Thread) {
     let pid = thr.proc_data.proc.pid();
 
@@ -162,7 +163,7 @@ pub fn ptrace_wait_if_stopped(thr: &Thread) {
             return;
         }
 
-        yield_now();
+        yield_now(); //“先让出 CPU，让别人跑” 不是睡死，而是不断让调度器切换
     }
 }
 
@@ -218,6 +219,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
     let curr_pid = curr_thr.proc_data.proc.pid();
 
     match request {
+        //请求让父进程调试自己
         PTRACE_TRACEME => {
             let mut table = PTRACE_TABLE.lock();
             if table.contains_key(&curr_pid) {
@@ -239,6 +241,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             );
             Ok(0)
         }
+        //当前进程主动附加到另一个进程上，成为它的调试者
         PTRACE_ATTACH => {
             let pid = resolve_tracee_pid(pid);
 
@@ -296,6 +299,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             );
             Ok(0)
         }
+        //让已经暂停的被调试进程继续运行
         PTRACE_CONT | PTRACE_SYSCALL | PTRACE_SINGLESTEP => {
             let pid = resolve_tracee_pid(pid);
             get_process_data(pid)?;
@@ -313,6 +317,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             }
             Ok(0)
         }
+        //解除调试关系，让目标不再受 ptrace 控制
         PTRACE_DETACH => {
             let pid = resolve_tracee_pid(pid);
             get_process_data(pid)?;
@@ -328,6 +333,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             }
             Ok(0)
         }
+        //向被调试进程发送 SIGKILL，强制杀掉它
         PTRACE_KILL => {
             let pid = resolve_tracee_pid(pid);
             get_process_data(pid)?;
@@ -342,6 +348,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             Ok(0)
         }
         // Minimal behavior to satisfy ptrace06: bad access must fail with EIO/EFAULT.
+        //Linux 原意是读目标进程代码、数据、用户寄存器区。MOSS 这里只做权限检查，然后返回 EIO，表示不支持真实读取
         PTRACE_PEEKTEXT | PTRACE_PEEKDATA | PTRACE_PEEKUSER | PTRACE_POKETEXT | PTRACE_POKEDATA
         | PTRACE_POKEUSER | PTRACE_GETREGS | PTRACE_SETREGS | PTRACE_GETSIGINFO
         | PTRACE_SETSIGINFO | PTRACE_GETREGSET | PTRACE_SETREGSET => {

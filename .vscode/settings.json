@@ -2,5 +2,37 @@
   "rust-analyzer.cargo.target": "riscv64gc-unknown-none-elf",
   // "rust-analyzer.cargo.target": "loongarch64-unknown-none-softfloat",
   "rust-analyzer.cargo.allTargets": false,
-  "rust-analyzer.cargo.features": ["qemu"]
+  "rust-analyzer.cargo.features": [
+    "qemu"
+  ],
+  // === 关键：只分析单个项目，避免循环依赖 ===
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml"
+  ],
+  // === 防循环配置 ===
+  "rust-analyzer.checkOnSave.enable": false,
+  "rust-analyzer.cargo.buildScripts.enable": false,
+  "rust-analyzer.procMacro.enable": false,
+  "rust-analyzer.cachePriming.enable": false,
+  // === 文件监控排除 ===
+  "files.watcherExclude": {
+    "**/target/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/rootfs/**": true,
+    "**/disk_img/**": true
+  },
+  // === 搜索排除 ===
+  "search.exclude": {
+    "**/target": true,
+    "**/rootfs": true,
+    "**/disk_img": true,
+    "**/.git": true
+  },
+  // === 错误抑制 ===
+  "rust-analyzer.diagnostics.disabled": [
+    "unresolved-proc-macro",
+    "macro-error"
+  ]
 }

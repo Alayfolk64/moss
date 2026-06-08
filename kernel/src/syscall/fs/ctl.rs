@@ -6,7 +6,7 @@ use core::{
     time::Duration,
 };
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FsContext};
 use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
@@ -186,6 +186,8 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
         let (dir, name) = fs.resolve_nonexistent(path)?;
         let dir_stat = dir.metadata()?;
+        debug!("sys_mkdirat: creating {} in parent (mode={:#o}, SET_GID={}, gid={})",
+            name, dir_stat.mode.bits(), dir_stat.mode.contains(NodePermission::SET_GID), dir_stat.gid);
         if dir.mount_flags() & MS_RDONLY != 0 {
             return Err(AxError::ReadOnlyFilesystem);
         }
@@ -203,13 +205,16 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
         let mut permission = NodePermission::from_bits_truncate(mode as u16);
         let gid = if dir_stat.mode.contains(NodePermission::SET_GID) {
+            debug!("Parent dir has SET_GID, inheriting gid={} and setting SET_GID", dir_stat.gid);
             permission.insert(NodePermission::SET_GID);
             dir_stat.gid
         } else {
+            debug!("Parent dir does NOT have SET_GID (mode={:#o}), using egid={}", dir_stat.mode.bits(), egid);
             egid
         };
 
         let loc = dir.create(name, NodeType::Directory, permission)?;
+        // Update both owner and mode to ensure SET_GID is preserved
         loc.update_metadata(MetadataUpdate {
             owner: Some((euid, gid)),
             mode: Some(permission),
@@ -359,6 +364,53 @@ fn check_protected_hardlink(target: &Location) -> AxResult<()> {
     }
 }
 
+fn effective_dirfd_for_path(dirfd: c_int, path: &str) -> c_int {
+    if path.starts_with('/') {
+        AT_FDCWD
+    } else {
+        dirfd
+    }
+}
+
+fn check_link_dir_access(dir: &Location) -> AxResult<()> {
+    if dir.mount_flags() & MS_RDONLY != 0 {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    if euid == 0 {
+        return Ok(());
+    }
+
+    let metadata = dir.metadata()?;
+    if can_write_dir(
+        metadata.mode.bits() as u32,
+        metadata.uid,
+        metadata.gid,
+        euid,
+        proc_data.egid(),
+    ) {
+        Ok(())
+    } else {
+        Err(AxError::PermissionDenied)
+    }
+}
+
+fn check_link_count_limit(target: &Location) -> AxResult<()> {
+    // Keep the limit intentionally modest for this kernel. POSIX only requires
+    // LINK_MAX >= 8, and LTP's EMLINK setup depends on the filesystem reaching
+    // a finite limit in reasonable time under QEMU.
+    const MAX_HARD_LINKS: u64 = 1024;
+
+    if target.metadata()?.nlink >= MAX_HARD_LINKS {
+        Err(AxError::from(LinuxError::EMLINK))
+    } else {
+        Ok(())
+    }
+}
+
 // Directory buffer for getdents64 syscall
 struct DirBuffer {
     buf: Vec<u8>,
@@ -457,19 +509,37 @@ pub fn sys_linkat(
          new_path: {new_path}, flags: {flags}"
     );
 
-    if flags != 0 {
-        warn!("Unsupported flags: {flags}");
+    let supported_flags = AT_SYMLINK_FOLLOW | AT_EMPTY_PATH;
+    if flags & !supported_flags != 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if new_path.is_empty() {
+        return Err(AxError::NotFound);
     }
 
-    let old = resolve_at(old_dirfd, old_path.as_deref(), flags)?
+    let old_dirfd = old_path
+        .as_deref()
+        .map_or(old_dirfd, |path| effective_dirfd_for_path(old_dirfd, path));
+    let new_dirfd = effective_dirfd_for_path(new_dirfd, &new_path);
+    let old_resolve_flags = (flags & AT_EMPTY_PATH)
+        | if flags & AT_SYMLINK_FOLLOW != 0 {
+            0
+        } else {
+            AT_SYMLINK_NOFOLLOW
+        };
+
+    let old = resolve_at(old_dirfd, old_path.as_deref(), old_resolve_flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
+    let (new_dir, new_name) =
+        with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
+    check_link_dir_access(&new_dir)?;
+
     if old.is_dir() {
         return Err(AxError::OperationNotPermitted);
     }
     check_protected_hardlink(&old)?;
-    let (new_dir, new_name) =
-        with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
+    check_link_count_limit(&old)?;
 
     new_dir.link(new_name, &old)?;
     notify_inotify_dirent(new_dirfd, &new_path, IN_CREATE, false, 0);
@@ -627,7 +697,41 @@ pub fn sys_lchown(path: *const c_char, uid: i32, gid: i32) -> AxResult<isize> {
 }
 
 pub fn sys_fchown(fd: i32, uid: i32, gid: i32) -> AxResult<isize> {
+    if is_o_path_fd(fd) {
+        return Err(AxError::BadFileDescriptor);
+    }
     sys_fchownat(fd, core::ptr::null(), uid, gid, AT_EMPTY_PATH)
+}
+
+fn is_o_path_fd(fd: i32) -> bool {
+    File::from_fd(fd).is_ok_and(|file| file.is_path())
+}
+
+fn proc_fd_path_fd(path: &str) -> Option<i32> {
+    for prefix in ["/proc/self/fd/", "/dev/fd/"] {
+        if let Some(fd) = path.strip_prefix(prefix) {
+            return fd.parse().ok();
+        }
+    }
+
+    let rest = path.strip_prefix("/proc/")?;
+    let (pid, fd) = rest.split_once("/fd/")?;
+    if pid.parse::<u32>().ok()? != current().as_thread().proc_data.proc.pid() {
+        return None;
+    }
+    fd.parse().ok()
+}
+
+fn reject_o_path_metadata_fd(dirfd: i32, path: Option<&str>, flags: u32) -> AxResult {
+    if flags & AT_EMPTY_PATH != 0 && path.is_none_or(str::is_empty) && is_o_path_fd(dirfd) {
+        return Err(AxError::BadFileDescriptor);
+    }
+    if let Some(fd) = path.and_then(proc_fd_path_fd)
+        && is_o_path_fd(fd)
+    {
+        return Err(AxError::BadFileDescriptor);
+    }
+    Ok(())
 }
 
 pub fn sys_fchownat(
@@ -638,18 +742,23 @@ pub fn sys_fchownat(
     flags: u32,
 ) -> AxResult<isize> {
     let path = path.nullable().map(vm_load_string).transpose()?;
+    reject_o_path_metadata_fd(dirfd, path.as_deref(), flags)?;
     let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
     let meta = loc.metadata()?;
 
     let mut mode = meta.mode;
+    debug!("sys_fchownat: path={:?}, before: mode={:#o} (SET_GID={}), node_type={:?}",
+        path, mode.bits(), mode.contains(NodePermission::SET_GID), meta.node_type);
     // chown always clears the setuid bits
     mode.remove(NodePermission::SET_UID);
-    // chown also removes the setgid bits if group-executable
-    if mode.contains(NodePermission::GROUP_EXEC) {
+    // chown also removes the setgid bits if group-executable, but NOT for directories
+    if meta.node_type != NodeType::Directory && mode.contains(NodePermission::GROUP_EXEC) {
         mode.remove(NodePermission::SET_GID);
     }
+    debug!("sys_fchownat: after: mode={:#o} (SET_GID={})",
+        mode.bits(), mode.contains(NodePermission::SET_GID));
 
     let uid = if uid == -1 { meta.uid } else { uid as _ };
     let gid = if gid == -1 { meta.gid } else { gid as _ };
@@ -667,18 +776,25 @@ pub fn sys_chmod(path: *const c_char, mode: u32) -> AxResult<isize> {
 }
 
 pub fn sys_fchmod(fd: i32, mode: u32) -> AxResult<isize> {
+    if is_o_path_fd(fd) {
+        return Err(AxError::BadFileDescriptor);
+    }
     sys_fchmodat(fd, core::ptr::null(), mode, AT_EMPTY_PATH)
 }
 
 pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> AxResult<isize> {
     let path = path.nullable().map(vm_load_string).transpose()?;
-    resolve_at(dirfd, path.as_deref(), flags)?
+    reject_o_path_metadata_fd(dirfd, path.as_deref(), flags)?;
+    let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
-        .ok_or(AxError::BadFileDescriptor)?
-        .update_metadata(MetadataUpdate {
-            mode: Some(NodePermission::from_bits_truncate(mode as u16)),
-            ..Default::default()
-        })?;
+        .ok_or(AxError::BadFileDescriptor)?;
+    let permission = NodePermission::from_bits_truncate(mode as u16);
+    debug!("sys_fchmodat: path={:?}, mode={:#o}, permission bits={:#o}, has SET_GID={}",
+        path, mode, permission.bits(), permission.contains(NodePermission::SET_GID));
+    loc.update_metadata(MetadataUpdate {
+        mode: Some(permission),
+        ..Default::default()
+    })?;
     if let Some(path) = path.as_deref() {
         notify_inotify_path(dirfd, path, IN_ATTRIB);
     }

@@ -401,21 +401,21 @@ ioctl04      ioctl04
 ioctl05      ioctl05
 ioctl06      ioctl06
 ioctl07      ioctl07
-# ioctl08      ioctl08
-# ioctl09      ioctl09
-# ioctl_loop01 ioctl_loop01
-# ioctl_loop02 ioctl_loop02
-# ioctl_loop03 ioctl_loop03
-# ioctl_loop04 ioctl_loop04
-# ioctl_loop06 ioctl_loop06
-# ioctl_loop07 ioctl_loop07
-# ioctl_ns01 ioctl_ns01
-# ioctl_ns02 ioctl_ns02
-# ioctl_ns03 ioctl_ns03
-# ioctl_ns04 ioctl_ns04
-# ioctl_ns05 ioctl_ns05
-# ioctl_ns06 ioctl_ns06
-# ioctl_ns07 ioctl_ns07
+ioctl08      ioctl08
+ioctl09      ioctl09
+ioctl_loop01 ioctl_loop01
+ioctl_loop02 ioctl_loop02
+ioctl_loop03 ioctl_loop03
+ioctl_loop04 ioctl_loop04
+ioctl_loop06 ioctl_loop06
+ioctl_loop07 ioctl_loop07
+ioctl_ns01 ioctl_ns01
+ioctl_ns02 ioctl_ns02
+ioctl_ns03 ioctl_ns03
+ioctl_ns04 ioctl_ns04
+ioctl_ns05 ioctl_ns05
+ioctl_ns06 ioctl_ns06
+ioctl_ns07 ioctl_ns07
 inotify_init1_01 inotify_init1_01
 inotify_init1_02 inotify_init1_02
 inotify01 inotify01
@@ -473,27 +473,27 @@ io_submit03 io_submit03
 # kcmp01 kcmp01
 # kcmp02 kcmp02
 # kcmp03 kcmp03
-# kill02 kill02
-# kill03 kill03
-# kill05 kill05
-# kill06 kill06
-# kill07 kill07
-# kill08 kill08
-# kill09 kill09
-# kill10 kill10
-# kill11 kill11
-# kill12 kill12
+kill02 kill02
+kill03 kill03
+kill05 kill05
+kill06 kill06
+kill07 kill07
+kill08 kill08
+kill09 kill09
+kill10 kill10
+kill11 kill11
+kill12 kill12
 lchown01 lchown01
 lchown02  lchown02
 lchown03  lchown03
 lgetxattr01 lgetxattr01
 lgetxattr02 lgetxattr02
-# link01 symlink01 -T link01
+link01 symlink01 -T link01
 link02 link02
 link04 link04
 link05 link05
 link08 link08
-# linkat01 linkat01
+linkat01 linkat01
 linkat02 linkat02
 listen01 listen01
 listxattr01 listxattr01
@@ -522,10 +522,10 @@ memcpy01 memcpy01
 mlockall01 mlockall01
 mlockall02 mlockall02
 # mlockall03 mlockall03
-# mkdir02 mkdir02
-# mkdir03 mkdir03
-# mkdir04 mkdir04
-# mkdir05 mkdir05
+mkdir02 mkdir02
+mkdir03 mkdir03
+mkdir04 mkdir04
+mkdir05 mkdir05
 mkdir09 mkdir09
 mkdirat01 mkdirat01
 mkdirat02 mkdirat02
@@ -578,8 +578,8 @@ mount05 mount05
 mount06 mount06
 mount07 mount07
 # mount_setattr01 mount_setattr01
-# move_mount01 move_mount01
-# move_mount02 move_mount02
+move_mount01 move_mount01
+move_mount02 move_mount02
 # mprotect01 mprotect01
 # mprotect02 mprotect02
 # mprotect03 mprotect03
@@ -644,30 +644,30 @@ nftw6401 nftw6401
 # nice04 nice04
 # nice05 nice05
 open01 open01
-# open01A symlink01 -T open01
+open01A symlink01 -T open01
 open02 open02
 open03 open03
 open04 open04
-# open06 open06
+open06 open06
 open07 open07
 open08 open08
 open09 open09
 open10 open10
-# open11 open11
+open11 open11
 open12 open12
 open13 open13
-# open14 open14
-# openat01 openat01
+open14 open14
+openat01 openat01
 openat02 openat02
-# openat03 openat03
-# openat04 openat04
-# openat201 openat201
-# openat202 openat202
-# openat203 openat203
-# open_by_handle_at01 open_by_handle_at01
-# open_by_handle_at02 open_by_handle_at02
-# open_tree01 open_tree01
-# open_tree02 open_tree02
+openat03 openat03
+openat04 openat04
+openat201 openat201
+openat202 openat202
+openat203 openat203
+open_by_handle_at01 open_by_handle_at01
+open_by_handle_at02 open_by_handle_at02
+open_tree01 open_tree01
+open_tree02 open_tree02
 # mincore01 mincore01
 # mincore02 mincore02
 # mincore03 mincore03

@@ -13,19 +13,20 @@ use core::{
 use axdriver::prelude::{BaseDriverOps, BlockDriverOps, DevError, DevResult, DeviceType};
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileBackend};
-use axfs_ng_vfs::Filesystem;
+use axfs_ng_vfs::{Filesystem, Location};
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::current;
 use linux_raw_sys::general::{
     AT_FDCWD, MS_BIND, MS_MOVE, MS_NOATIME, MS_NODEV, MS_NODIRATIME, MS_NOEXEC, MS_NOSUID,
-    MS_NOSYMFOLLOW, MS_PRIVATE, MS_RDONLY, MS_REMOUNT, MS_STRICTATIME,
+    MS_NOSYMFOLLOW, MS_PRIVATE, MS_RDONLY, MS_REMOUNT, MS_STRICTATIME, OPEN_TREE_CLOEXEC,
+    OPEN_TREE_CLONE,
 };
 use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{FileLike, add_file_like, get_file_like, with_fs},
+    file::{FileLike, add_file_like, get_file_like, resolve_at, with_fs},
     mm::vm_load_string,
     pseudofs::{Device, MemoryFs, dev::r#loop::LoopDevice},
     syscall::fs::inotify::notify_inotify_unmount_dev,
@@ -69,9 +70,9 @@ struct FsContextFd {
     created: Mutex<bool>,
 }
 
-struct DetachedMountFd {
-    fs: Filesystem,
-    mount_flags: u32,
+enum DetachedMountFd {
+    Filesystem { fs: Filesystem, mount_flags: u32 },
+    Bind { source: Location },
 }
 
 impl FileLike for FsContextFd {
@@ -318,11 +319,29 @@ fn mount_filesystem_at(
     let path = target
         .absolute_path()
         .map_or_else(|_| target_path.to_string(), |path| path.to_string());
-    if MOUNTED_PATHS.read().iter().any(|it| it == &path) {
-        return Err(AxError::ResourceBusy);
-    }
+    // Let VFS layer handle mount errors; don't pre-check MOUNTED_PATHS
     if let Err(err) = target.mount_with_flags(&fs, mount_flags) {
         warn!("mount target={target_path} failed: {err:?}");
+        return Err(err.into());
+    }
+    let mut paths = MOUNTED_PATHS.write();
+    if !paths.iter().any(|it| it == &path) {
+        paths.push(path);
+    }
+    Ok(())
+}
+
+fn bind_mount_at(source: &Location, dirfd: c_int, target_path: &str) -> AxResult {
+    let target = with_fs(dirfd, |fs_ctx| fs_ctx.resolve(target_path))?;
+    let path = target
+        .absolute_path()
+        .map_or_else(|_| target_path.to_string(), |path| path.to_string());
+    // Check if already mounted, but only if target is already a mountpoint
+    if target.is_root_of_mount() && MOUNTED_PATHS.read().iter().any(|it| it == &path) {
+        return Err(AxError::ResourceBusy);
+    }
+    if let Err(err) = target.bind_mount(source) {
+        warn!("bind mount target={target_path} failed: {err:?}");
         return Err(err.into());
     }
     let mut paths = MOUNTED_PATHS.write();
@@ -435,8 +454,23 @@ pub fn sys_fsmount(fd: c_int, flags: u32, mount_attrs: u32) -> AxResult<isize> {
     let mount_flags = mount_flags_from_attrs(mount_attrs);
     let source = ctx.source.lock().clone();
     let fs = create_filesystem(&ctx.fs_type, source.as_deref(), mount_flags)?;
-    let mount = Arc::new(DetachedMountFd { fs, mount_flags });
+    let mount = Arc::new(DetachedMountFd::Filesystem { fs, mount_flags });
     add_file_like(mount, flags & FSMOUNT_CLOEXEC != 0).map(|fd| fd as _)
+}
+
+pub fn sys_open_tree(dirfd: c_int, path: *const c_char, flags: u32) -> AxResult<isize> {
+    const VALID_FLAGS: u32 = OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC;
+
+    if flags & !VALID_FLAGS != 0 || flags & OPEN_TREE_CLONE == 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let path = vm_load_string(path)?;
+    let source = resolve_at(dirfd, Some(path.as_str()), 0)?
+        .into_file()
+        .ok_or(AxError::BadFileDescriptor)?;
+    let mount = Arc::new(DetachedMountFd::Bind { source });
+    add_file_like(mount, flags & OPEN_TREE_CLOEXEC != 0).map(|fd| fd as _)
 }
 
 pub fn sys_move_mount(
@@ -447,14 +481,35 @@ pub fn sys_move_mount(
     flags: u32,
 ) -> AxResult<isize> {
     let from_path = vm_load_string(from_path)?;
-    if flags != MOVE_MOUNT_F_EMPTY_PATH || !from_path.is_empty() {
-        return Err(AxError::InvalidInput);
-    }
     let to_path = vm_load_string(to_path)?;
-    let mount = get_file_like(from_dirfd)?
-        .downcast_arc::<DetachedMountFd>()
-        .map_err(|_| AxError::InvalidInput)?;
-    mount_filesystem_at(mount.fs.clone(), mount.mount_flags, to_dirfd, &to_path)?;
+
+    // Check if MOVE_MOUNT_F_EMPTY_PATH is set
+    if flags & MOVE_MOUNT_F_EMPTY_PATH != 0 {
+        // from_path must be empty when MOVE_MOUNT_F_EMPTY_PATH is set
+        if !from_path.is_empty() {
+            return Err(AxError::InvalidInput);
+        }
+        // from_dirfd must be a valid fsmount fd
+        let mount = get_file_like(from_dirfd)?
+            .downcast_arc::<DetachedMountFd>()
+            .map_err(|_| AxError::InvalidInput)?;
+        match &*mount {
+            DetachedMountFd::Filesystem { fs, mount_flags } => {
+                mount_filesystem_at(fs.clone(), *mount_flags, to_dirfd, &to_path)?;
+            }
+            DetachedMountFd::Bind { source } => {
+                bind_mount_at(source, to_dirfd, &to_path)?;
+            }
+        }
+    } else {
+        // When MOVE_MOUNT_F_EMPTY_PATH is not set, from_path should not be empty
+        if from_path.is_empty() {
+            return Err(AxError::InvalidInput);
+        }
+        // This is a regular move mount operation
+        // Resolve source and target paths and perform move
+        return Err(AxError::NotFound); // Return ENOENT for unsupported path-based move
+    }
     Ok(0)
 }
 
@@ -482,15 +537,8 @@ pub fn sys_mount(
         };
         let fs_context = FS_CONTEXT.lock();
         let source = fs_context.resolve(source)?;
-        let target = fs_context.resolve(target.as_str())?;
-        let path = target
-            .absolute_path()
-            .map_or_else(|_| target.name().to_string(), |path| path.to_string());
-        target.bind_mount(&source)?;
-        let mut paths = MOUNTED_PATHS.write();
-        if !paths.iter().any(|it| it == &path) {
-            paths.push(path);
-        }
+        drop(fs_context);
+        bind_mount_at(&source, AT_FDCWD, target.as_str())?;
         return Ok(0);
     }
 
@@ -527,10 +575,9 @@ pub fn sys_mount(
         if !target.is_root_of_mount() {
             return Err(AxError::InvalidInput);
         }
-        if mount_flags & MS_RDONLY != 0 {
-            return Err(AxError::ResourceBusy);
-        }
-        target.mountpoint().set_mount_flags(mount_flags);
+        target
+            .mountpoint()
+            .set_mount_flags(mount_flags & !MS_REMOUNT);
         return Ok(0);
     }
 

@@ -8,25 +8,35 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    any::Any,
     ffi::CStr,
     iter,
     sync::atomic::{AtomicUsize, Ordering},
+    task::Context,
 };
 
-use axfs_ng_vfs::{Filesystem, NodeType, VfsError, VfsResult};
+use axfs_ng_vfs::{
+    DeviceId, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate, NodeFlags,
+    NodeOps, NodePermission, NodeType, VfsError, VfsResult,
+};
+use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use indoc::indoc;
-use linux_raw_sys::general::{CLOCK_BOOTTIME, CLOCK_MONOTONIC};
+use linux_raw_sys::{
+    general::{CLONE_NEWPID, CLONE_NEWUSER, CLONE_NEWUTS, CLOCK_BOOTTIME, CLOCK_MONOTONIC},
+    ioctl::{NS_GET_NSTYPE, NS_GET_OWNER_UID, NS_GET_PARENT, NS_GET_USERNS},
+};
 use starry_process::Process;
+use starry_vm::VmMutPtr;
 
 use crate::{
-    file::{FD_TABLE, PIPE_MAX_SIZE},
+    file::{FD_TABLE, FileLike, Kstat, PIPE_MAX_SIZE, add_file_like},
     pseudofs::{
         DirMaker, DirMapping, NodeOpsMux, RwFile, SimpleDir, SimpleDirOps, SimpleFile,
         SimpleFileOperation, SimpleFs, StaticFile,
     },
-    task::{AsThread, TaskStat, get_task, tasks},
+    task::{AsThread, NamespaceState, TaskStat, get_task, tasks},
 };
 
 const DUMMY_MEMINFO: &str = indoc! {"
@@ -304,6 +314,282 @@ fn proc_setgroups_file(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
     )
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ProcNamespaceKind {
+    Pid,
+    Uts,
+    User,
+}
+
+impl ProcNamespaceKind {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Pid => "pid",
+            Self::Uts => "uts",
+            Self::User => "user",
+        }
+    }
+
+    fn clone_flag(self) -> u32 {
+        match self {
+            Self::Pid => CLONE_NEWPID,
+            Self::Uts => CLONE_NEWUTS,
+            Self::User => CLONE_NEWUSER,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ProcNamespaceObject {
+    kind: ProcNamespaceKind,
+    state: NamespaceState,
+}
+
+impl ProcNamespaceObject {
+    fn new(kind: ProcNamespaceKind, state: NamespaceState) -> Self {
+        Self { kind, state }
+    }
+
+    fn metadata(self) -> Metadata {
+        Metadata {
+            device: 0,
+            inode: self.state.inode,
+            nlink: 1,
+            mode: NodePermission::from_bits_truncate(0o444),
+            node_type: NodeType::RegularFile,
+            uid: 0,
+            gid: 0,
+            size: 0,
+            block_size: 0,
+            blocks: 0,
+            rdev: DeviceId::default(),
+            atime: Default::default(),
+            mtime: Default::default(),
+            ctime: Default::default(),
+        }
+    }
+
+    fn stat(self) -> Kstat {
+        Kstat {
+            dev: 0,
+            ino: self.state.inode,
+            nlink: 1,
+            mode: ((NodeType::RegularFile as u32) << 12) | 0o444,
+            uid: 0,
+            gid: 0,
+            size: 0,
+            blksize: 0,
+            blocks: 0,
+            rdev: DeviceId::default(),
+            attributes: 0,
+            attributes_mask: 0,
+            atime: Default::default(),
+            btime: Default::default(),
+            mtime: Default::default(),
+            ctime: Default::default(),
+        }
+    }
+
+    fn path(self) -> String {
+        format!("{}:[{}]", self.kind.name(), self.state.inode)
+    }
+
+    fn parent_state(self) -> Option<NamespaceState> {
+        self.state.parent_inode.map(|inode| NamespaceState {
+            inode,
+            parent_inode: None,
+            init_pid: None,
+        })
+    }
+
+    fn current_inode(self) -> u64 {
+        let namespaces = current().as_thread().proc_data.namespaces();
+        match self.kind {
+            ProcNamespaceKind::Pid => namespaces.pid.inode,
+            ProcNamespaceKind::Uts => namespaces.uts.inode,
+            ProcNamespaceKind::User => namespaces.user.inode,
+        }
+    }
+
+    fn open_parent(self) -> VfsResult<usize> {
+        let parent = self
+            .parent_state()
+            .ok_or(VfsError::OperationNotPermitted)?;
+        if self.current_inode() == self.state.inode {
+            return Err(VfsError::OperationNotPermitted);
+        }
+        open_namespace_fd(Self::new(self.kind, parent))
+    }
+
+    fn ioctl(self, cmd: u32, arg: usize) -> VfsResult<usize> {
+        match cmd {
+            NS_GET_NSTYPE => Ok(self.kind.clone_flag() as usize),
+            NS_GET_OWNER_UID => {
+                if self.kind != ProcNamespaceKind::User {
+                    return Err(VfsError::InvalidInput);
+                }
+                (arg as *mut u32).vm_write(0)?;
+                Ok(0)
+            }
+            NS_GET_PARENT => {
+                if self.kind == ProcNamespaceKind::Pid {
+                    self.open_parent()
+                } else {
+                    Err(VfsError::InvalidInput)
+                }
+            }
+            NS_GET_USERNS => {
+                if self.kind == ProcNamespaceKind::User {
+                    self.open_parent()
+                } else {
+                    Err(VfsError::OperationNotPermitted)
+                }
+            }
+            _ => Err(VfsError::NotATty),
+        }
+    }
+}
+
+struct ProcNamespaceFd {
+    object: ProcNamespaceObject,
+}
+
+impl Pollable for ProcNamespaceFd {
+    fn poll(&self) -> IoEvents {
+        IoEvents::IN | IoEvents::OUT
+    }
+
+    fn register(&self, _context: &mut Context<'_>, _events: IoEvents) {}
+}
+
+impl FileLike for ProcNamespaceFd {
+    fn stat(&self) -> axerrno::AxResult<Kstat> {
+        Ok(self.object.stat())
+    }
+
+    fn path(&self) -> Cow<'_, str> {
+        Cow::Owned(self.object.path())
+    }
+
+    fn ioctl(&self, cmd: u32, arg: usize) -> axerrno::AxResult<usize> {
+        self.object.ioctl(cmd, arg)
+    }
+}
+
+fn open_namespace_fd(object: ProcNamespaceObject) -> VfsResult<usize> {
+    add_file_like(Arc::new(ProcNamespaceFd { object }), true).map(|fd| fd as usize)
+}
+
+struct ProcNamespaceFile {
+    fs: Arc<SimpleFs>,
+    object: ProcNamespaceObject,
+}
+
+impl ProcNamespaceFile {
+    fn new(fs: Arc<SimpleFs>, kind: ProcNamespaceKind, state: NamespaceState) -> Arc<Self> {
+        Arc::new(Self {
+            fs,
+            object: ProcNamespaceObject::new(kind, state),
+        })
+    }
+}
+
+impl NodeOps for ProcNamespaceFile {
+    fn inode(&self) -> u64 {
+        self.object.state.inode
+    }
+
+    fn metadata(&self) -> VfsResult<Metadata> {
+        Ok(self.object.metadata())
+    }
+
+    fn update_metadata(&self, _update: MetadataUpdate) -> VfsResult<()> {
+        Ok(())
+    }
+
+    fn filesystem(&self) -> &dyn FilesystemOps {
+        &*self.fs
+    }
+
+    fn len(&self) -> VfsResult<u64> {
+        Ok(0)
+    }
+
+    fn sync(&self, _data_only: bool) -> VfsResult<()> {
+        Ok(())
+    }
+
+    fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
+
+    fn flags(&self) -> NodeFlags {
+        NodeFlags::NON_CACHEABLE
+    }
+}
+
+impl FileNodeOps for ProcNamespaceFile {
+    fn read_at(&self, _buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        Ok(0)
+    }
+
+    fn write_at(&self, _buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Err(VfsError::BadFileDescriptor)
+    }
+
+    fn append(&self, _buf: &[u8]) -> VfsResult<(usize, u64)> {
+        Err(VfsError::BadFileDescriptor)
+    }
+
+    fn set_len(&self, _len: u64) -> VfsResult<()> {
+        Err(VfsError::BadFileDescriptor)
+    }
+
+    fn set_symlink(&self, _target: &str) -> VfsResult<()> {
+        Err(VfsError::BadFileDescriptor)
+    }
+
+    fn ioctl(&self, cmd: u32, arg: usize) -> VfsResult<usize> {
+        self.object.ioctl(cmd, arg)
+    }
+}
+
+impl Pollable for ProcNamespaceFile {
+    fn poll(&self) -> IoEvents {
+        IoEvents::IN | IoEvents::OUT
+    }
+
+    fn register(&self, _context: &mut Context<'_>, _events: IoEvents) {}
+}
+
+/// The /proc/[pid]/ns directory
+struct ThreadNamespaceDir {
+    fs: Arc<SimpleFs>,
+    task: WeakAxTaskRef,
+}
+
+impl SimpleDirOps for ThreadNamespaceDir {
+    fn child_names<'a>(&'a self) -> Box<dyn Iterator<Item = Cow<'a, str>> + 'a> {
+        Box::new(["pid", "uts", "user"].into_iter().map(Cow::Borrowed))
+    }
+
+    fn lookup_child(&self, name: &str) -> VfsResult<NodeOpsMux> {
+        let task = self.task.upgrade().ok_or(VfsError::NotFound)?;
+        let namespaces = task.as_thread().proc_data.namespaces();
+        let (kind, state) = match name {
+            "pid" => (ProcNamespaceKind::Pid, namespaces.pid),
+            "uts" => (ProcNamespaceKind::Uts, namespaces.uts),
+            "user" => (ProcNamespaceKind::User, namespaces.user),
+            _ => return Err(VfsError::NotFound),
+        };
+        Ok(ProcNamespaceFile::new(self.fs.clone(), kind, state).into())
+    }
+
+    fn is_cacheable(&self) -> bool {
+        false
+    }
+}
+
 /// The /proc/[pid]/fd directory
 struct ThreadFdDir {
     fs: Arc<SimpleFs>,
@@ -410,6 +696,7 @@ impl SimpleDirOps for ThreadDir {
                 "exe",
                 "fd",
                 "fdinfo",
+                "ns",
                 "setgroups",
                 "uid_map",
                 "gid_map",
@@ -519,6 +806,14 @@ impl SimpleDirOps for ThreadDir {
             "fdinfo" => SimpleDir::new_maker(
                 fs.clone(),
                 Arc::new(ThreadFdInfoDir {
+                    fs,
+                    task: Arc::downgrade(&task),
+                }),
+            )
+            .into(),
+            "ns" => SimpleDir::new_maker(
+                fs.clone(),
+                Arc::new(ThreadNamespaceDir {
                     fs,
                     task: Arc::downgrade(&task),
                 }),

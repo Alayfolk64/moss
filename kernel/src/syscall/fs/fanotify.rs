@@ -1476,15 +1476,19 @@ fn request_fanotify_target_permission(
     Ok(())
 }
 
-fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
-    let Ok(target) = target_from_file_like(&file) else {
+fn notify_fanotify_event(file: &Arc<dyn FileLike>, mask: u64) {
+    if !has_fanotify_interest(mask) {
+        return;
+    }
+
+    let Ok(target) = target_from_file_like(file) else {
         return;
     };
-    let path = path_from_file_like(&file);
+    let path = path_from_file_like(file);
     notify_fanotify_target_event(
         target,
         path,
-        file,
+        file.clone(),
         None,
         FANOTIFY_EVENT_INFO_TYPE_FID,
         None,
@@ -1495,13 +1499,17 @@ fn notify_fanotify_event(file: Arc<dyn FileLike>, mask: u64) {
     );
 }
 
-fn request_fanotify_permission(file: Arc<dyn FileLike>, mask: u64) -> AxResult {
-    let target = target_from_file_like(&file)?;
-    let path = path_from_file_like(&file);
+fn request_fanotify_permission(file: &Arc<dyn FileLike>, mask: u64) -> AxResult {
+    if !has_fanotify_interest(mask) {
+        return Ok(());
+    }
+
+    let target = target_from_file_like(file)?;
+    let path = path_from_file_like(file);
     request_fanotify_target_permission(
         target,
         path,
-        file,
+        file.clone(),
         None,
         FANOTIFY_EVENT_INFO_TYPE_FID,
         None,
@@ -1744,11 +1752,11 @@ pub(super) fn notify_fanotify_modify_path(dirfd: c_int, path: &str) {
     notify_fanotify_resolved_path(dirfd, path, FAN_MODIFY);
 }
 
-pub(super) fn notify_fanotify_open(file: Arc<dyn FileLike>) {
+pub(super) fn notify_fanotify_open(file: &Arc<dyn FileLike>) {
     notify_fanotify_event(file, FAN_OPEN);
 }
 
-pub(super) fn check_fanotify_open_permission(file: Arc<dyn FileLike>) -> AxResult {
+pub(super) fn check_fanotify_open_permission(file: &Arc<dyn FileLike>) -> AxResult {
     request_fanotify_permission(file, FAN_OPEN_PERM)
 }
 
@@ -1758,7 +1766,7 @@ pub(crate) fn notify_fanotify_open_exec_path(path: &str) {
     }
 
     if let Ok(file) = open_fanotify_event_file(path, 0) {
-        notify_fanotify_event(file, FAN_OPEN | FAN_OPEN_EXEC);
+        notify_fanotify_event(&file, FAN_OPEN | FAN_OPEN_EXEC);
     }
 }
 
@@ -1780,19 +1788,19 @@ pub(crate) fn check_fanotify_open_exec_permission_path(path: &str) -> AxResult {
     Ok(())
 }
 
-pub(super) fn notify_fanotify_access(file: Arc<dyn FileLike>) {
+pub(super) fn notify_fanotify_access(file: &Arc<dyn FileLike>) {
     notify_fanotify_event(file, FAN_ACCESS);
 }
 
-pub(super) fn check_fanotify_access_permission(file: Arc<dyn FileLike>) -> AxResult {
+pub(super) fn check_fanotify_access_permission(file: &Arc<dyn FileLike>) -> AxResult {
     request_fanotify_permission(file, FAN_ACCESS_PERM)
 }
 
-pub(super) fn notify_fanotify_modify(file: Arc<dyn FileLike>) {
+pub(super) fn notify_fanotify_modify(file: &Arc<dyn FileLike>) {
     notify_fanotify_event(file, FAN_MODIFY);
 }
 
-pub(super) fn notify_fanotify_close(file: Arc<dyn FileLike>, writable: bool) {
+pub(super) fn notify_fanotify_close(file: &Arc<dyn FileLike>, writable: bool) {
     notify_fanotify_event(
         file,
         if writable {

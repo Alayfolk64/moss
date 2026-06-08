@@ -37,6 +37,7 @@ const VALID_INIT_FLAGS: u32 = IN_CLOEXEC | IN_NONBLOCK;
 const VALID_WATCH_MASK: u32 = USER_EVENTS | WATCH_FLAGS;
 
 static INOTIFY_FDS: RwLock<Vec<Weak<InotifyFd>>> = RwLock::new(Vec::new());
+static INOTIFY_WATCHES: AtomicUsize = AtomicUsize::new(0);
 static NEXT_COOKIE: AtomicU32 = AtomicU32::new(1);
 static MAX_QUEUED_EVENTS: AtomicUsize = AtomicUsize::new(16384);
 
@@ -183,6 +184,7 @@ impl InotifyFd {
             return false;
         };
         watches.remove(pos);
+        INOTIFY_WATCHES.fetch_sub(1, Ordering::AcqRel);
         drop(watches);
         if notify {
             self.push_event(Event {
@@ -193,6 +195,15 @@ impl InotifyFd {
             });
         }
         true
+    }
+}
+
+impl Drop for InotifyFd {
+    fn drop(&mut self) {
+        let count = self.watches.lock().len();
+        if count != 0 {
+            INOTIFY_WATCHES.fetch_sub(count, Ordering::AcqRel);
+        }
     }
 }
 
@@ -354,7 +365,14 @@ fn notify_target(
     for_each_fd(|fd| fd.queue_matching(target, mask, name, is_dir, cookie, skip_excl_unlink));
 }
 
-pub fn notify_inotify_file(file: Arc<dyn FileLike>, mask: u32) {
+pub(super) fn has_inotify_watchers() -> bool {
+    INOTIFY_WATCHES.load(Ordering::Acquire) != 0
+}
+
+pub fn notify_inotify_file(file: &dyn FileLike, mask: u32) {
+    if !has_inotify_watchers() {
+        return;
+    }
     let Ok(stat) = file.stat() else {
         return;
     };
@@ -366,6 +384,9 @@ pub fn notify_inotify_file(file: Arc<dyn FileLike>, mask: u32) {
 }
 
 pub fn notify_inotify_path(dirfd: c_int, path: &str, mask: u32) {
+    if !has_inotify_watchers() {
+        return;
+    }
     let Ok((target, _)) = target_from_path(dirfd, path, 0) else {
         return;
     };
@@ -381,6 +402,9 @@ pub fn notify_inotify_path(dirfd: c_int, path: &str, mask: u32) {
 }
 
 pub fn notify_inotify_dirent(dirfd: c_int, path: &str, mask: u32, is_dir: bool, cookie: u32) {
+    if !has_inotify_watchers() {
+        return;
+    }
     if let Some((parent, name)) = parent_target(dirfd, path) {
         notify_target(parent, mask, Some(&name), is_dir, cookie, false);
         if mask == IN_DELETE {
@@ -390,12 +414,18 @@ pub fn notify_inotify_dirent(dirfd: c_int, path: &str, mask: u32, is_dir: bool, 
 }
 
 pub(crate) fn prepare_inotify_target(dirfd: c_int, path: &str) -> Option<InotifyTarget> {
+    if !has_inotify_watchers() {
+        return None;
+    }
     target_from_path(dirfd, path, 0)
         .ok()
         .map(|(target, _)| InotifyTarget(target))
 }
 
 pub(crate) fn notify_inotify_target(target: InotifyTarget, mask: u32) {
+    if !has_inotify_watchers() {
+        return;
+    }
     notify_target(target.0, mask, None, target.0.is_dir, 0, false);
     if mask & IN_DELETE_SELF != 0 {
         remove_target(target.0);
@@ -403,6 +433,9 @@ pub(crate) fn notify_inotify_target(target: InotifyTarget, mask: u32) {
 }
 
 pub fn notify_inotify_unmount_dev(dev: u64) {
+    if !has_inotify_watchers() {
+        return;
+    }
     for_each_fd(|fd| fd.unmount_dev(dev));
 }
 
@@ -456,6 +489,7 @@ pub fn sys_inotify_add_watch(fd: c_int, path: *const c_char, mask: u32) -> AxRes
     }
     let wd = inotify.next_wd.fetch_add(1, Ordering::AcqRel);
     watches.push(Watch { wd, target, mask });
+    INOTIFY_WATCHES.fetch_add(1, Ordering::AcqRel);
     Ok(wd as _)
 }
 

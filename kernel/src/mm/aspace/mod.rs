@@ -127,6 +127,7 @@ impl AddrSpace {
         Ok(())
     }
 
+    //增加一块内存区域
     pub fn map(
         &mut self,
         start: VirtAddr,
@@ -147,6 +148,7 @@ impl AddrSpace {
 
     /// Populates the area with physical frames, returning false if the area
     /// contains unmapped area.
+    /// 真正分配物理页
     pub fn populate_area(
         &mut self,
         mut start: VirtAddr,
@@ -180,6 +182,7 @@ impl AddrSpace {
     ///
     /// Returns an error if the address range is out of the address space or not
     /// aligned.
+    /// 删除一块区域
     pub fn unmap(&mut self, start: VirtAddr, size: usize) -> AxResult {
         self.validate_region(start, size)?;
 
@@ -262,6 +265,7 @@ impl AddrSpace {
     ///
     /// Returns an error if the address range is out of the address space or not
     /// aligned.
+    /// 改权限，比如只读改成可读写
     pub fn protect(&mut self, start: VirtAddr, size: usize, flags: MappingFlags) -> AxResult {
         self.validate_region(start, size)?;
 

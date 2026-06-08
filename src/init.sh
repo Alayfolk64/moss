@@ -104,6 +104,8 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
+some_testcases=""
+
 RUN_RV=1
 RUN_LA=1
 
@@ -119,6 +121,20 @@ lmbench=1
 ltp=1
 lua=1
 netperf=1
+
+if [ -n "$some_testcases" ]; then
+    basic=0
+    busybox=0
+    cyclictest=0
+    iozone=0
+    iperf=0
+    libcbench=0
+    libctest=0
+    lmbench=0
+    ltp=1
+    lua=0
+    netperf=0
+fi
 
 if [ "$ARCH" = RISCV ] && [ "$RUN_RV" = 0 ]; then
     basic=0
@@ -267,7 +283,6 @@ run_ltp() {
     cd ltp/testcases/bin
     export PATH="$(pwd):$PATH"
 
-    some_testcases=""
     if [ -n "$some_testcases" ]; then
         all_testcases="$some_testcases"
     fi

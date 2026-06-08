@@ -59,12 +59,12 @@ pub fn sys_read(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
     debug!("sys_read <= fd: {fd}, buf: {buf:p}, len: {len}");
     let f = get_file_like(fd)?;
     if len > 0 {
-        check_fanotify_access_permission(f.clone())?;
+        check_fanotify_access_permission(&f)?;
     }
     let read = f.read(&mut VmBytesMut::new(buf, len))?;
     if read > 0 {
-        notify_inotify_file(f.clone(), IN_ACCESS);
-        notify_fanotify_access(f);
+        notify_inotify_file(f.as_ref(), IN_ACCESS);
+        notify_fanotify_access(&f);
     }
     Ok(read as _)
 }
@@ -74,12 +74,12 @@ pub fn sys_readv(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     let f = get_file_like(fd)?;
     let iov = IoVectorBuf::new(iov, iovcnt)?;
     if iovcnt > 0 {
-        check_fanotify_access_permission(f.clone())?;
+        check_fanotify_access_permission(&f)?;
     }
     let read = f.read(&mut iov.into_io())?;
     if read > 0 {
-        notify_inotify_file(f.clone(), IN_ACCESS);
-        notify_fanotify_access(f);
+        notify_inotify_file(f.as_ref(), IN_ACCESS);
+        notify_fanotify_access(&f);
     }
     Ok(read as _)
 }
@@ -95,8 +95,8 @@ pub fn sys_write(fd: i32, buf: *const u8, len: usize) -> AxResult<isize> {
     let f = get_file_like(fd)?;
     let written = f.write(&mut VmBytes::new(buf, len))?;
     if written > 0 {
-        notify_inotify_file(f.clone(), IN_MODIFY);
-        notify_fanotify_modify(f);
+        notify_inotify_file(f.as_ref(), IN_MODIFY);
+        notify_fanotify_modify(&f);
     }
     Ok(written as _)
 }
@@ -106,8 +106,8 @@ pub fn sys_writev(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> 
     let f = get_file_like(fd)?;
     let written = f.write(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
     if written > 0 {
-        notify_inotify_file(f.clone(), IN_MODIFY);
-        notify_fanotify_modify(f);
+        notify_inotify_file(f.as_ref(), IN_MODIFY);
+        notify_fanotify_modify(&f);
     }
     Ok(written as _)
 }
@@ -144,8 +144,9 @@ pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> AxResult<isize> {
     debug!("sys_ftruncate <= {fd} {length}");
     let f = File::from_fd(fd)?;
     f.inner().access(FileFlags::WRITE)?.set_len(length as _)?;
-    notify_inotify_file(f.clone(), IN_MODIFY);
-    notify_fanotify_modify(f);
+    notify_inotify_file(f.as_ref(), IN_MODIFY);
+    let f: Arc<dyn FileLike> = f;
+    notify_fanotify_modify(&f);
     Ok(0)
 }
 

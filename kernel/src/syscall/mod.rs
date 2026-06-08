@@ -307,6 +307,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         #[cfg(target_arch = "x86_64")]
         Sysno::poll => sys_poll(uctx.arg0().into(), uctx.arg1() as _, uctx.arg2() as _),
         Sysno::ppoll => sys_ppoll(
+            uctx,
             uctx.arg0().into(),
             uctx.arg1() as _,
             uctx.arg2().into(),
@@ -322,6 +323,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg4().into(),
         ),
         Sysno::pselect6 => sys_pselect6(
+            uctx,
             uctx.arg0() as _,
             uctx.arg1().into(),
             uctx.arg2().into(),
@@ -790,13 +792,13 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg3() as _,
             uctx.arg4() as _,
         ),
+        Sysno::open_tree => sys_open_tree(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 
         // dummy fds
         Sysno::userfaultfd
         | Sysno::perf_event_open
         | Sysno::io_uring_setup
         | Sysno::fspick
-        | Sysno::open_tree
         | Sysno::memfd_secret => sys_dummy_fd(sysno),
 
         Sysno::bpf => sys_bpf(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),

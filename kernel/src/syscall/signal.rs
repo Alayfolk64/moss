@@ -16,8 +16,8 @@ use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::{
     task::{
-        AsThread, block_next_signal, check_signals, processes, send_signal_to_process,
-        send_signal_to_process_group, send_signal_to_thread,
+        AsThread, ProcessData, block_next_signal, check_signals, get_process_data,
+        get_process_group, processes, send_signal_to_process, send_signal_to_thread,
     },
     time::TimeValueLike,
 };
@@ -110,36 +110,124 @@ fn make_siginfo(signo: u32, code: i32) -> AxResult<Option<SignalInfo>> {
     )))
 }
 
+fn can_send_signal(caller: &ProcessData, target: &ProcessData, signo: Option<Signo>) -> bool {
+    caller.euid() == 0
+        || caller.uid() == target.uid()
+        || caller.uid() == target.suid()
+        || caller.euid() == target.uid()
+        || caller.euid() == target.suid()
+        || (signo == Some(Signo::SIGCONT)
+            && caller.proc.group().session().sid() == target.proc.group().session().sid())
+}
+
+fn check_send_signal_permission(
+    caller: &ProcessData,
+    target: &ProcessData,
+    signo: Option<Signo>,
+) -> AxResult<()> {
+    if can_send_signal(caller, target, signo) {
+        Ok(())
+    } else {
+        Err(AxError::from(LinuxError::EPERM))
+    }
+}
+
+fn send_signal_to_process_checked(
+    caller: &ProcessData,
+    target: &ProcessData,
+    sig: Option<SignalInfo>,
+) -> AxResult<()> {
+    let signo = sig.as_ref().map(|sig| sig.signo());
+    check_send_signal_permission(caller, target, signo)?;
+    if let Some(sig) = sig {
+        send_signal_to_process(target.proc.pid(), Some(sig))?;
+    }
+    Ok(())
+}
+
+fn send_signal_to_process_group_checked(
+    caller: &ProcessData,
+    pgid: Pid,
+    sig: Option<SignalInfo>,
+) -> AxResult<()> {
+    let pg = get_process_group(pgid)?;
+    let signo = sig.as_ref().map(|sig| sig.signo());
+    let mut found = false;
+    let mut permitted = false;
+
+    for proc in pg.processes() {
+        let Ok(target) = get_process_data(proc.pid()) else {
+            continue;
+        };
+        found = true;
+
+        if can_send_signal(caller, &target, signo) {
+            permitted = true;
+            if let Some(sig) = sig.as_ref() {
+                let _ = send_signal_to_process(target.proc.pid(), Some(sig.clone()));
+            }
+        }
+    }
+
+    if permitted {
+        Ok(())
+    } else if found {
+        Err(AxError::from(LinuxError::EPERM))
+    } else {
+        Err(AxError::NoSuchProcess)
+    }
+}
+
 pub fn sys_kill(pid: i32, signo: u32) -> AxResult<isize> {
     debug!("sys_kill: pid = {pid}, signo = {signo}");
     let sig = make_siginfo(signo, SI_USER as _)?;
+    let sig_signo = sig.as_ref().map(|sig| sig.signo());
+    let curr = current();
+    let caller = &curr.as_thread().proc_data;
 
     match pid {
         1.. => {
-            send_signal_to_process(pid as _, sig)?;
+            let target = get_process_data(pid as _)?;
+            send_signal_to_process_checked(caller, &target, sig)?;
         }
         0 => {
-            let pgid = current().as_thread().proc_data.proc.group().pgid();
-            send_signal_to_process_group(pgid, sig)?;
+            let pgid = caller.proc.group().pgid();
+            send_signal_to_process_group_checked(caller, pgid, sig)?;
         }
         -1 => {
-            let curr_pid = current().as_thread().proc_data.proc.pid();
-            if let Some(sig) = sig {
-                for proc_data in processes() {
-                    // POSIX.1 requires that kill(-1,sig) send sig to all processes that
-                    //    the calling process may send signals to, except possibly for some
-                    //    implementation-defined system processes.  Linux allows a process
-                    //    to signal itself, but on Linux the call kill(-1,sig) does not
-                    //    signal the calling process.
-                    if proc_data.proc.is_init() || proc_data.proc.pid() == curr_pid {
-                        continue;
-                    }
-                    let _ = send_signal_to_process(proc_data.proc.pid(), Some(sig.clone()));
+            let curr_pid = caller.proc.pid();
+            let mut found = false;
+            let mut permitted = false;
+
+            for target in processes() {
+                // POSIX.1 requires that kill(-1,sig) send sig to all processes that
+                // the calling process may send signals to, except possibly for some
+                // implementation-defined system processes.  Linux does not signal
+                // the caller itself in this case.
+                if target.proc.is_init() || target.proc.pid() == curr_pid {
+                    continue;
                 }
+                found = true;
+
+                if can_send_signal(caller, &target, sig_signo) {
+                    permitted = true;
+                    if let Some(sig) = sig.as_ref() {
+                        let _ = send_signal_to_process(target.proc.pid(), Some(sig.clone()));
+                    }
+                }
+            }
+
+            if !permitted {
+                return if found {
+                    Err(AxError::from(LinuxError::EPERM))
+                } else {
+                    Err(AxError::NoSuchProcess)
+                };
             }
         }
         ..-1 => {
-            send_signal_to_process_group((-pid) as Pid, sig)?;
+            let pgid = pid.checked_neg().ok_or(AxError::NoSuchProcess)? as Pid;
+            send_signal_to_process_group_checked(caller, pgid, sig)?;
         }
     }
     Ok(0)

@@ -263,6 +263,58 @@ fn check_mount_open_constraints(dirfd: c_int, path: &str, flags: u32) -> AxResul
     Ok(())
 }
 
+fn check_open_target_constraints(
+    dirfd: c_int,
+    path: &str,
+    flags: u32,
+    (euid, _egid): (u32, u32),
+) -> AxResult {
+    let resolve_flags = if flags & O_NOFOLLOW != 0 {
+        AT_SYMLINK_NOFOLLOW
+    } else {
+        0
+    };
+    let loc = match resolve_at(dirfd, Some(path), resolve_flags) {
+        Ok(result) => match result.into_file() {
+            Some(loc) => loc,
+            None => return Ok(()),
+        },
+        Err(err) if flags & O_CREAT != 0 && err.canonicalize() == AxError::NotFound => {
+            return Ok(());
+        }
+        Err(err) => return Err(err),
+    };
+    let metadata = loc.metadata()?;
+
+    if flags & O_NOFOLLOW != 0
+        && flags & O_PATH == 0
+        && metadata.node_type == NodeType::Symlink
+    {
+        return Err(AxError::FilesystemLoop);
+    }
+
+    if flags & O_PATH == 0 && metadata.node_type == NodeType::Directory {
+        let wants_write = flags & O_ACCMODE != O_RDONLY || flags & O_TRUNC != 0;
+        let create_existing = flags & O_CREAT != 0 && flags & O_EXCL == 0;
+        if wants_write || create_existing {
+            return Err(AxError::IsADirectory);
+        }
+    }
+
+    if metadata.node_type == NodeType::Fifo
+        && flags & O_NONBLOCK != 0
+        && flags & O_ACCMODE == O_WRONLY
+    {
+        return Err(AxError::from(LinuxError::ENXIO));
+    }
+
+    if flags & O_NOATIME != 0 && euid != 0 && euid != metadata.uid {
+        return Err(AxError::from(LinuxError::EPERM));
+    }
+
+    Ok(())
+}
+
 fn creation_mode_and_owner(
     dirfd: c_int,
     path: &str,
@@ -275,10 +327,9 @@ fn creation_mode_and_owner(
     }
 
     let mut mode = mode;
-    // Linux clears setuid/setgid bits for newly-created regular files.
-    mode &= !((S_ISUID | S_ISGID) as __kernel_mode_t);
+    mode &= !(S_ISUID as __kernel_mode_t);
 
-    let gid = with_fs(dirfd, |fs| {
+    let file_gid = with_fs(dirfd, |fs| {
         let (parent, _) = fs.resolve_parent(Path::new(path))?;
         let metadata = parent.metadata()?;
         Ok(if metadata.mode.contains(NodePermission::SET_GID) {
@@ -288,7 +339,41 @@ fn creation_mode_and_owner(
         })
     })?;
 
-    Ok((mode, (uid, gid)))
+    if mode & S_ISGID as __kernel_mode_t != 0 && uid != 0 && file_gid != gid {
+        mode &= !(S_ISGID as __kernel_mode_t);
+    }
+
+    Ok((mode, (uid, file_gid)))
+}
+
+fn open_with_create_follow(
+    dirfd: c_int,
+    path: &str,
+    options: &OpenOptions,
+    flags: u32,
+) -> AxResult<OpenResult> {
+    match with_fs(dirfd, |fs| options.open(fs, path)) {
+        Err(err)
+            if flags & O_CREAT != 0
+                && flags & (O_EXCL | O_NOFOLLOW) == 0
+                && err.canonicalize() == AxError::NotFound =>
+        {
+            with_fs(dirfd, |fs| {
+                let (parent, name) = fs.resolve_parent(Path::new(path))?;
+                let symlink = parent.lookup_no_follow(name.as_ref())?;
+                if symlink.node_type() != NodeType::Symlink {
+                    return Err(AxError::NotFound);
+                }
+                let target = symlink.read_link()?;
+                if target.is_empty() {
+                    return Err(AxError::NotFound);
+                }
+                let fs = fs.with_current_dir(parent)?;
+                options.open(&fs, target.as_str()).map_err(Into::into)
+            })
+        }
+        result => result,
+    }
 }
 
 fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
@@ -329,18 +414,18 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
                     file = axfs::File::new(FileBackend::Direct(loc), file.flags());
                 }
             }
-            Arc::new(File::new(file))
+            Arc::new(File::new_with_status_flags(file, flags))
         }
         OpenResult::Dir(dir) => Arc::new(Directory::new(dir)),
     };
     if flags & O_NONBLOCK != 0 {
         f.set_nonblocking(true)?;
     }
+    check_fanotify_open_permission(&f)?;
     let opened = f.clone();
-    check_fanotify_open_permission(opened.clone())?;
     let fd = add_file_like(f, flags & O_CLOEXEC != 0)?;
-    notify_inotify_file(opened.clone(), IN_OPEN);
-    notify_fanotify_open(opened);
+    notify_inotify_file(opened.as_ref(), IN_OPEN);
+    notify_fanotify_open(&opened);
     Ok(fd)
 }
 
@@ -362,13 +447,18 @@ pub fn sys_openat(
     }
     debug!("sys_openat <= {dirfd} {path:?} {flags:#o} {mode:#o}");
 
-    let mode = mode & !current().as_thread().proc_data.umask();
     let flags_u32 = flags as u32;
+    if flags_u32 & __O_TMPFILE != 0 {
+        return Err(AxError::OperationNotSupported);
+    }
+
+    let mode = mode & !current().as_thread().proc_data.umask();
     let ids = (sys_geteuid()? as u32, sys_getegid()? as u32);
     let (mode, ids) = creation_mode_and_owner(dirfd, path.as_str(), flags_u32, mode, ids)?;
     let existed_before_create =
         flags_u32 & O_CREAT != 0 && resolve_at(dirfd, Some(path.as_str()), 0).is_ok();
     check_mount_open_constraints(dirfd, path.as_str(), flags_u32)?;
+    check_open_target_constraints(dirfd, path.as_str(), flags_u32, ids)?;
 
     // axfs::OpenOptions rejects (read-only + create), but Linux permits
     // O_RDONLY|O_CREAT. Handle it locally without modifying third-party crates.
@@ -379,7 +469,7 @@ pub fn sys_openat(
         if flags_u32 & O_EXCL == 0 {
             check_protected_symlink_follow(dirfd, path.as_str(), flags_u32, ids.0)?;
             check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
-            match with_fs(dirfd, |fs| open_options.open(fs, path.as_str())) {
+            match open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32) {
                 Ok(result) => {
                     if flags_u32 & O_CREAT != 0 && !existed_before_create {
                         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
@@ -397,12 +487,12 @@ pub fn sys_openat(
 
         let create_flags = ((flags_u32 & !O_ACCMODE) | O_WRONLY) as i32;
         let create_options = flags_to_options(create_flags, mode, ids);
-        with_fs(dirfd, |fs| create_options.open(fs, path.as_str()))?;
+        open_with_create_follow(dirfd, path.as_str(), &create_options, flags_u32)?;
 
         if !existed_before_create {
             notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         }
-        let fd = with_fs(dirfd, |fs| open_options.open(fs, path.as_str()))
+        let fd = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)
             .and_then(|it| add_to_fd(it, flags_u32))?;
         if !existed_before_create {
             notify_fanotify_create(dirfd, &path, false);
@@ -414,13 +504,13 @@ pub fn sys_openat(
     check_protected_symlink_follow(dirfd, path.as_str(), flags_u32, ids.0)?;
     check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
     if flags_u32 & O_CREAT != 0 && !existed_before_create {
-        let result = with_fs(dirfd, |fs| options.open(fs, path.as_str()))?;
+        let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         let fd = add_to_fd(result, flags as _)?;
         notify_fanotify_create(dirfd, &path, false);
         return Ok(fd as isize);
     }
-    let fd = with_fs(dirfd, |fs| options.open(fs, path.as_str()))
+    let fd = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)
         .and_then(|it| add_to_fd(it, flags as _))?;
     Ok(fd as isize)
 }
@@ -443,14 +533,14 @@ pub fn sys_close(fd: c_int) -> AxResult<isize> {
     notify_fanotify_fd_close(&file_like);
     close_file_like(fd)?;
     notify_inotify_file(
-        file_like.clone(),
+        file_like.as_ref(),
         if writable {
             IN_CLOSE_WRITE
         } else {
             IN_CLOSE_NOWRITE
         },
     );
-    notify_fanotify_close(file_like.clone(), writable);
+    notify_fanotify_close(&file_like, writable);
     release_bsd_flocks_for_file_like_if_last(&file_like);
     Ok(0)
 }

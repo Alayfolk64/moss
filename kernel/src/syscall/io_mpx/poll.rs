@@ -1,9 +1,13 @@
 use alloc::vec::Vec;
+use core::{future::poll_fn, task::Poll};
 
-use axerrno::{AxError, AxResult};
-use axhal::time::TimeValue;
+use axerrno::{AxError, AxResult, LinuxError};
+use axhal::{time::TimeValue, uspace::UserContext};
 use axpoll::IoEvents;
-use axtask::future::{self, block_on, poll_io};
+use axtask::{
+    current,
+    future::{self, block_on, poll_io},
+};
 use linux_raw_sys::general::{POLLNVAL, pollfd, timespec};
 use starry_signal::SignalSet;
 
@@ -12,7 +16,7 @@ use crate::{
     file::get_file_like,
     mm::{UserConstPtr, UserPtr, nullable},
     syscall::signal::check_sigset_size,
-    task::with_blocked_signals,
+    task::{AsThread, check_signals, with_blocked_signals},
     time::TimeValueLike,
 };
 
@@ -85,6 +89,40 @@ fn do_poll(
     })
 }
 
+pub(super) fn wait_for_signal_or_timeout(
+    uctx: &mut UserContext,
+    timeout: Option<TimeValue>,
+    sigmask: Option<SignalSet>,
+) -> AxResult<isize> {
+    let curr = current();
+    let thr = curr.as_thread();
+    let old_blocked = sigmask.map(|set| thr.signal.set_blocked(set));
+
+    uctx.set_retval(-LinuxError::EINTR.code() as usize);
+    let interrupted = block_on(future::timeout(
+        timeout,
+        poll_fn(|cx| {
+            if check_signals(thr, uctx, old_blocked) {
+                return Poll::Ready(());
+            }
+            if curr.poll_interrupt(cx).is_ready() {
+                cx.waker().wake_by_ref();
+            }
+            Poll::Pending
+        }),
+    ));
+
+    match interrupted {
+        Ok(()) => Err(AxError::Interrupted),
+        Err(_) => {
+            if let Some(old_blocked) = old_blocked {
+                thr.signal.set_blocked(old_blocked);
+            }
+            Ok(0)
+        }
+    }
+}
+
 #[cfg(target_arch = "x86_64")]
 pub fn sys_poll(fds: UserPtr<pollfd>, nfds: u32, timeout: i32) -> AxResult<isize> {
     let fds = fds.get_as_mut_slice(nfds as usize)?;
@@ -97,17 +135,26 @@ pub fn sys_poll(fds: UserPtr<pollfd>, nfds: u32, timeout: i32) -> AxResult<isize
 }
 
 pub fn sys_ppoll(
+    uctx: &mut UserContext,
     fds: UserPtr<pollfd>,
     nfds: i32,
     timeout: UserConstPtr<timespec>,
     sigmask: UserConstPtr<SignalSet>,
     sigsetsize: usize,
 ) -> AxResult<isize> {
-    check_sigset_size(sigsetsize)?;
-    let fds = fds.get_as_mut_slice(nfds.try_into().map_err(|_| AxError::InvalidInput)?)?;
+    let nfds = nfds.try_into().map_err(|_| AxError::InvalidInput)?;
     let timeout = nullable!(timeout.get_as_ref())?
         .map(|ts| ts.try_into_time_value())
         .transpose()?;
-    // TODO: handle signal
-    do_poll(fds, timeout, nullable!(sigmask.get_as_ref())?.copied())
+    let sigmask = nullable!(sigmask.get_as_ref())?;
+    if sigmask.is_some() {
+        check_sigset_size(sigsetsize)?;
+    }
+    let sigmask = sigmask.copied();
+
+    if nfds == 0 {
+        wait_for_signal_or_timeout(uctx, timeout, sigmask)
+    } else {
+        do_poll(fds.get_as_mut_slice(nfds)?, timeout, sigmask)
+    }
 }
