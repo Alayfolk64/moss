@@ -104,7 +104,11 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
-some_testcases=""
+some_testcases="
+    adjtimex02 adjtimex02
+    clock_adjtime02 clock_adjtime02
+    settimeofday02 settimeofday02
+"
 
 RUN_RV=1
 RUN_LA=1
@@ -325,67 +329,89 @@ cd /musl
 
 musl_runtime
 if [ "$basic" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./basic_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group basic musl
 fi
 
 if [ "$busybox" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./busybox_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox musl
 fi
 
 if [ "$cyclictest" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./cyclictest_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group cyclictest musl
 fi
 
 if [ "$iozone" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./iozone_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iozone musl
 fi
 
 if [ "$iperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./iperf_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iperf musl
 fi
 
 if [ "$libcbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./libcbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libcbench musl
 fi
 
 if [ "$libctest" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./libctest_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libctest musl
 fi
 
 if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lmbench musl
 fi
 
 if [ "$lua" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./lua_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lua musl
 fi
 
 if [ "$netperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./netperf_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group netperf musl
 fi
 
 if [ "$ltp" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     run_ltp musl
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group ltp musl
 fi
@@ -394,61 +420,81 @@ cd /glibc
 
 glibc_runtime
 if [ "$basic" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./basic_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group basic glibc
 fi
 
 if [ "$busybox" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./busybox_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox glibc
 fi
 
 if [ "$cyclictest" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./cyclictest_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group cyclictest glibc
 fi
 
 if [ "$iozone" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./iozone_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iozone glibc
 fi
 
 if [ "$iperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./iperf_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iperf glibc
 fi
 
 if [ "$libcbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./libcbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libcbench glibc
 fi
 
 if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lmbench glibc
 fi
 
 if [ "$lua" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./lua_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lua glibc
 fi
 
 if [ "$netperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     ./netperf_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group netperf glibc
 fi
 
 if [ "$ltp" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
     run_ltp glibc
+    date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group ltp glibc
 fi
