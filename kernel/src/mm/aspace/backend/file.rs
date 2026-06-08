@@ -3,7 +3,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use axerrno::{AxError, AxResult};
 use axfs::{CachedFile, FileFlags};
@@ -13,6 +13,9 @@ use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 
 use super::{AddrSpace, Backend, BackendOps, PopulateCallback, pages_in};
 
+const NO_FAULT_PAGE: u32 = u32::MAX;
+const MMAP_FAULT_READAHEAD_PAGES: u32 = 4;
+
 #[doc(hidden)]
 pub struct FileBackendInner {
     start: VirtAddr,
@@ -20,6 +23,8 @@ pub struct FileBackendInner {
     flags: FileFlags,
     offset_page: u32,
     handle: AtomicUsize,
+    last_fault_page: AtomicU32,
+    next_readahead_page: AtomicU32,
     futex_handle: Arc<()>,
 }
 impl Drop for FileBackendInner {
@@ -104,6 +109,24 @@ impl FileBackend {
     pub fn futex_handle(&self) -> Weak<()> {
         Arc::downgrade(&self.0.futex_handle)
     }
+
+    fn maybe_readahead_after_fault(&self, pn: u32) {
+        let last = self.0.last_fault_page.swap(pn, Ordering::Relaxed);
+        if last.checked_add(1) != Some(pn) {
+            return;
+        }
+
+        let start = pn.saturating_add(1);
+        if start < self.0.next_readahead_page.load(Ordering::Relaxed) {
+            return;
+        }
+
+        let end = start.saturating_add(MMAP_FAULT_READAHEAD_PAGES);
+        self.0.next_readahead_page.store(end, Ordering::Relaxed);
+        let offset = u64::from(start) * PAGE_SIZE_4K as u64;
+        let count = (end - start) as usize * PAGE_SIZE_4K;
+        let _ = self.0.cache.readahead(offset, count);
+    }
 }
 
 impl BackendOps for FileBackend {
@@ -147,6 +170,8 @@ impl BackendOps for FileBackend {
         let mut pages = 0;
         let mut to_be_evicted = Vec::new();
         let start_page = ((range.start - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
+        let fault_readahead =
+            range.end - range.start == PAGE_SIZE_4K && access_flags.contains(MappingFlags::READ);
         let file_len = self.0.cache.location().len().ok();
         for (i, addr) in pages_in(range, PageSize::Size4K)?.enumerate() {
             let pn = start_page + i as u32;
@@ -193,6 +218,9 @@ impl BackendOps for FileBackend {
                 Err(_) => return Err(AxError::BadAddress),
             }
         }
+        if pages > 0 && fault_readahead {
+            self.maybe_readahead_after_fault(start_page);
+        }
         Ok((
             pages,
             if to_be_evicted.is_empty() {
@@ -222,6 +250,8 @@ impl BackendOps for FileBackend {
             flags: self.0.flags,
             offset_page: self.0.offset_page,
             handle: AtomicUsize::new(0),
+            last_fault_page: AtomicU32::new(NO_FAULT_PAGE),
+            next_readahead_page: AtomicU32::new(0),
             futex_handle: self.0.futex_handle.clone(),
         });
         inner.register_listener(new_aspace);
@@ -244,6 +274,8 @@ impl Backend {
             flags,
             offset_page,
             handle: AtomicUsize::new(0),
+            last_fault_page: AtomicU32::new(NO_FAULT_PAGE),
+            next_readahead_page: AtomicU32::new(0),
             futex_handle: Arc::new(()),
         });
         inner.register_listener(aspace);

@@ -304,6 +304,8 @@ impl Default for OpenOptions {
 const PAGE_SIZE: usize = 4096;
 const DEFAULT_FILE_CACHE_PAGES: usize = 256;
 const MAX_READAHEAD_BYTES: usize = DEFAULT_FILE_CACHE_PAGES * PAGE_SIZE;
+const WRITEBACK_BATCH_PAGES: usize = 16;
+const WRITEBACK_BATCH_BYTES: usize = WRITEBACK_BATCH_PAGES * PAGE_SIZE;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 
 #[derive(Debug)]
@@ -486,10 +488,14 @@ impl CachedFile {
         cursor.remove();
     }
 
-    fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
+    fn notify_evict_listeners(&self, pn: u32, page: &PageCache) {
         for listener in self.shared.evict_listeners.lock().iter() {
             (listener.listener)(pn, page);
         }
+    }
+
+    fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
+        self.notify_evict_listeners(pn, page);
         if page.dirty {
             let page_start = pn as u64 * PAGE_SIZE as u64;
             let len = (file.len()?.saturating_sub(page_start)).min(PAGE_SIZE as u64) as usize;
@@ -811,15 +817,83 @@ impl CachedFile {
         Ok(())
     }
 
+    fn page_write_len(file_len: u64, pn: u32) -> usize {
+        let page_start = pn as u64 * PAGE_SIZE as u64;
+        file_len.saturating_sub(page_start).min(PAGE_SIZE as u64) as usize
+    }
+
+    fn writeback_dirty_run(
+        file: &FileNode,
+        file_len: u64,
+        run: &mut [(u32, PageCache)],
+    ) -> VfsResult<()> {
+        if run.is_empty() {
+            return Ok(());
+        }
+
+        let start = run[0].0 as u64 * PAGE_SIZE as u64;
+        let mut buf = Vec::new();
+        for (pn, page) in run.iter_mut() {
+            let len = Self::page_write_len(file_len, *pn);
+            if len > 0 {
+                buf.extend_from_slice(&page.data()[..len]);
+            }
+        }
+        if !buf.is_empty() {
+            file.write_at(&buf, start)?;
+        }
+        for (_, page) in run.iter_mut() {
+            page.dirty = false;
+        }
+        Ok(())
+    }
+
+    fn writeback_dirty_pages(
+        file: &FileNode,
+        dirty_pages: &mut Vec<(u32, PageCache)>,
+    ) -> VfsResult<()> {
+        dirty_pages.sort_by_key(|(pn, _)| *pn);
+        let file_len = file.len()?;
+
+        let mut start = 0;
+        while start < dirty_pages.len() {
+            let mut end = start + 1;
+            let mut bytes = Self::page_write_len(file_len, dirty_pages[start].0);
+            while end < dirty_pages.len() {
+                let pn = dirty_pages[end].0;
+                let prev_pn = dirty_pages[end - 1].0;
+                if pn != prev_pn + 1 {
+                    break;
+                }
+                let len = Self::page_write_len(file_len, pn);
+                if bytes > 0 && bytes + len > WRITEBACK_BATCH_BYTES {
+                    break;
+                }
+                bytes += len;
+                end += 1;
+            }
+            Self::writeback_dirty_run(file, file_len, &mut dirty_pages[start..end])?;
+            start = end;
+        }
+
+        Ok(())
+    }
+
     fn writeback_cached_pages(&self) -> VfsResult<()> {
         if self.in_memory {
             return Ok(());
         }
         let file = self.inner.entry().as_file()?;
+        let mut dirty_pages = Vec::new();
         let mut guard = self.shared.page_cache.lock();
         while let Some((pn, mut page)) = guard.pop_lru() {
-            self.evict_cache(file, pn, &mut page)?;
+            self.notify_evict_listeners(pn, &page);
+            if page.dirty {
+                dirty_pages.push((pn, page));
+            }
         }
+        drop(guard);
+        Self::writeback_dirty_pages(file, &mut dirty_pages)?;
         Ok(())
     }
 
