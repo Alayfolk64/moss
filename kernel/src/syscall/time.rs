@@ -21,6 +21,7 @@ use starry_process::Pid;
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
 
+use super::task::current_has_cap;
 use crate::{
     file::{FileLike, TimerFd, add_file_like, timerfd::KernelTimerSpec},
     task::{AsThread, ITimerType, get_process_data, get_task, send_signal_to_process},
@@ -60,6 +61,7 @@ const TIME_OK: isize = 0;
 const MIN_TICK: isize = 9000;
 const MAX_TICK: isize = 11000;
 const NANOS_PER_SEC_I64: i64 = 1_000_000_000;
+const CAP_SYS_TIME: u32 = 25;
 
 #[derive(Clone, Copy, Default)]
 struct TimensOffsets {
@@ -200,11 +202,12 @@ pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> A
     if clock_id as u32 != CLOCK_REALTIME {
         return Err(AxError::InvalidInput);
     }
-    if current().as_thread().proc_data.euid() != 0 {
+
+    let target = unsafe { ts.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
+    if current().as_thread().proc_data.euid() != 0 || !current_has_cap(CAP_SYS_TIME) {
         return Err(AxError::OperationNotPermitted);
     }
 
-    let target = unsafe { ts.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
     let target_nanos: i128 = target
         .as_nanos()
         .try_into()
@@ -228,7 +231,9 @@ pub fn sys_adjtimex(buf: *mut Timex) -> AxResult<isize> {
     if curr.modes & ADJ_TICK != 0 && !(MIN_TICK..=MAX_TICK).contains(&curr.tick) {
         return Err(AxError::InvalidInput);
     }
-    if curr.modes & !ADJ_READ_ONLY_MODES != 0 && current().as_thread().proc_data.euid() != 0 {
+    if curr.modes & !ADJ_READ_ONLY_MODES != 0
+        && (current().as_thread().proc_data.euid() != 0 || !current_has_cap(CAP_SYS_TIME))
+    {
         return Err(AxError::OperationNotPermitted);
     }
     buf.vm_write(Timex::snapshot(curr.modes))?;
