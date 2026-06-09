@@ -115,12 +115,12 @@ busybox=0
 cyclictest=0
 iozone=1
 iperf=0
-libcbench=1
+libcbench=0
 libctest=0
-lmbench=1
+lmbench=0
 ltp=0
-lua=1
-netperf=1
+lua=0
+netperf=0
 
 if [ -n "$some_testcases" ]; then
     basic=0
