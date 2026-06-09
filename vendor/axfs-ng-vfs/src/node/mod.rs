@@ -3,6 +3,7 @@ mod file;
 
 use alloc::{
     borrow::ToOwned,
+    collections::BTreeMap,
     string::String,
     sync::{Arc, Weak},
     vec,
@@ -14,6 +15,7 @@ use core::{
     fmt, iter,
     ops::Deref,
     task::Context,
+    time::Duration,
 };
 use smallvec::SmallVec;
 
@@ -204,6 +206,29 @@ impl TypeMap {
     }
 }
 
+struct InodeMetadataCache {
+    metadata: Metadata,
+    dirty_size: bool,
+    dirty_atime: bool,
+}
+
+type InodeMetadataCacheKey = (usize, u64);
+type SharedInodeMetadataCache = Arc<Mutex<InodeMetadataCache>>;
+
+static INODE_METADATA_CACHES: spin::Lazy<Mutex<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>>> =
+    spin::Lazy::new(|| Mutex::new(BTreeMap::new()));
+
+fn inode_metadata_cache_key(filesystem: &dyn FilesystemOps, inode: u64) -> InodeMetadataCacheKey {
+    let fs_ptr: *const dyn FilesystemOps = filesystem;
+    (fs_ptr as *const () as usize, inode)
+}
+
+pub(super) fn invalidate_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
+    INODE_METADATA_CACHES
+        .lock()
+        .remove(&inode_metadata_cache_key(filesystem, inode));
+}
+
 struct Inner {
     node: Node,
     node_type: NodeType,
@@ -248,14 +273,7 @@ impl DirEntry {
 
     pub fn filesystem(&self) -> &dyn FilesystemOps;
 
-    pub fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
-
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> VfsResult<u64>;
-
     pub fn flags(&self) -> NodeFlags;
-
-    pub fn sync(&self, data_only: bool) -> VfsResult<()>;
 
     pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()>;
 
@@ -285,11 +303,227 @@ impl DirEntry {
         }))
     }
 
-    pub fn metadata(&self) -> VfsResult<Metadata> {
+    fn cacheable_metadata(&self) -> bool {
+        !self.flags().contains(NodeFlags::NON_CACHEABLE)
+    }
+
+    fn metadata_cache_key(&self) -> InodeMetadataCacheKey {
+        inode_metadata_cache_key(self.filesystem(), self.inode())
+    }
+
+    fn raw_metadata(&self) -> VfsResult<Metadata> {
         self.0.node.metadata().map(|mut metadata| {
             metadata.node_type = self.0.node_type;
             metadata
         })
+    }
+
+    fn metadata_cache(&self) -> Option<SharedInodeMetadataCache> {
+        INODE_METADATA_CACHES
+            .lock()
+            .get(&self.metadata_cache_key())
+            .cloned()
+    }
+
+    fn ensure_metadata_cache(&self) -> VfsResult<SharedInodeMetadataCache> {
+        if let Some(cache) = self.metadata_cache() {
+            return Ok(cache);
+        }
+
+        let key = self.metadata_cache_key();
+        let metadata = self.raw_metadata()?;
+        let mut caches = INODE_METADATA_CACHES.lock();
+        Ok(caches
+            .entry(key)
+            .or_insert_with(|| {
+                Arc::new(Mutex::new(InodeMetadataCache {
+                    metadata,
+                    dirty_size: false,
+                    dirty_atime: false,
+                }))
+            })
+            .clone())
+    }
+
+    fn update_or_insert_metadata_cache(
+        &self,
+        metadata: Metadata,
+        f: impl FnOnce(&mut InodeMetadataCache, Metadata),
+    ) {
+        let key = self.metadata_cache_key();
+        let mut caches = INODE_METADATA_CACHES.lock();
+        let cache = caches
+            .entry(key)
+            .or_insert_with(|| {
+                Arc::new(Mutex::new(InodeMetadataCache {
+                    metadata: metadata.clone(),
+                    dirty_size: false,
+                    dirty_atime: false,
+                }))
+            })
+            .clone();
+        drop(caches);
+        let mut cache = cache.lock();
+        f(&mut *cache, metadata);
+    }
+
+    pub fn metadata(&self) -> VfsResult<Metadata> {
+        if !self.cacheable_metadata() {
+            return self.raw_metadata();
+        }
+        if let Some(cache) = self.metadata_cache() {
+            return Ok(cache.lock().metadata.clone());
+        }
+        Ok(self.ensure_metadata_cache()?.lock().metadata.clone())
+    }
+
+    pub fn cached_metadata(&self) -> Option<Metadata> {
+        self.metadata_cache()
+            .map(|cache| cache.lock().metadata.clone())
+    }
+
+    pub fn invalidate_metadata_cache(&self) {
+        invalidate_inode_metadata_cache(self.filesystem(), self.inode())
+    }
+
+    pub fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()> {
+        self.0.node.update_metadata(update.clone())?;
+        if !self.cacheable_metadata() {
+            return Ok(());
+        }
+
+        let metadata = self.raw_metadata()?;
+        self.update_or_insert_metadata_cache(metadata, |cache, mut metadata| {
+            let cached_size = cache.metadata.size;
+            let dirty_size = cache.dirty_size;
+            let dirty_atime = cache.dirty_atime && update.atime.is_none();
+            metadata.size = cached_size;
+            if dirty_atime {
+                metadata.atime = cache.metadata.atime;
+            }
+            *cache = InodeMetadataCache {
+                metadata,
+                dirty_size,
+                dirty_atime,
+            };
+        });
+        Ok(())
+    }
+
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> VfsResult<u64> {
+        if !self.cacheable_metadata() {
+            return self.0.node.len();
+        }
+        self.metadata().map(|metadata| metadata.size)
+    }
+
+    pub fn grow_cached_len(&self, len: u64, dirty: bool) -> VfsResult<u64> {
+        if !self.cacheable_metadata() {
+            return self.raw_metadata().map(|metadata| metadata.size);
+        }
+        let shared = self.ensure_metadata_cache()?;
+        let mut cache = shared.lock();
+        let old_len = cache.metadata.size;
+        if len > old_len {
+            cache.metadata.size = len;
+            cache.dirty_size |= dirty;
+        }
+        Ok(old_len)
+    }
+
+    pub fn set_cached_len(&self, len: u64, dirty: bool) -> VfsResult<()> {
+        if !self.cacheable_metadata() {
+            return Ok(());
+        }
+        let shared = self.ensure_metadata_cache()?;
+        let mut cache = shared.lock();
+        cache.metadata.size = len;
+        cache.dirty_size = dirty;
+        Ok(())
+    }
+
+    pub fn set_cached_len_if_present(&self, len: u64) {
+        if let Some(shared) = self.metadata_cache() {
+            let mut cache = shared.lock();
+            cache.metadata.size = len;
+            cache.dirty_size = false;
+        }
+    }
+
+    pub fn grow_cached_len_if_present(&self, len: u64) {
+        if let Some(shared) = self.metadata_cache() {
+            let mut cache = shared.lock();
+            if len > cache.metadata.size {
+                cache.metadata.size = len;
+            }
+        }
+    }
+
+    pub fn record_access(&self, atime: Duration, strict: bool) -> VfsResult<bool> {
+        if !self.cacheable_metadata() {
+            return Ok(false);
+        }
+        let shared = self.ensure_metadata_cache()?;
+        let mut cache = shared.lock();
+        let stale_by_time = atime
+            .checked_sub(cache.metadata.atime)
+            .map_or(false, |elapsed| elapsed >= Duration::from_secs(24 * 60 * 60));
+        let should_update = strict
+            || cache.metadata.atime <= cache.metadata.mtime
+            || cache.metadata.atime <= cache.metadata.ctime
+            || stale_by_time;
+        if should_update && atime > cache.metadata.atime {
+            cache.metadata.atime = atime;
+            cache.dirty_atime = true;
+        }
+        Ok(true)
+    }
+
+    pub fn flush_metadata_cache(&self, data_only: bool) -> VfsResult<()> {
+        if !self.cacheable_metadata() {
+            return Ok(());
+        }
+        let Some(shared) = self.metadata_cache() else {
+            return Ok(());
+        };
+        let (size, atime) = {
+            let mut cache = shared.lock();
+            let size = cache.dirty_size.then_some(cache.metadata.size);
+            let atime = (!data_only && cache.dirty_atime).then_some(cache.metadata.atime);
+            if size.is_none() && atime.is_none() {
+                return Ok(());
+            }
+            cache.dirty_size &= size.is_none();
+            cache.dirty_atime &= atime.is_none();
+            (size, atime)
+        };
+
+        if let Some(size) = size {
+            if let Err(err) = self.as_file()?.set_len(size) {
+                let mut cache = shared.lock();
+                cache.dirty_size = true;
+                if atime.is_some() {
+                    cache.dirty_atime = true;
+                }
+                return Err(err);
+            }
+        }
+        if let Some(atime) = atime
+            && let Err(err) = self.0.node.update_metadata(MetadataUpdate {
+                atime: Some(atime),
+                ..Default::default()
+            })
+        {
+            shared.lock().dirty_atime = true;
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    pub fn sync(&self, data_only: bool) -> VfsResult<()> {
+        self.flush_metadata_cache(data_only)?;
+        self.0.node.sync(data_only)
     }
 
     pub fn downcast<T: NodeOps>(&self) -> VfsResult<Arc<T>> {
@@ -396,7 +630,7 @@ impl DirEntry {
             return Err(VfsError::InvalidData);
         }
         let file = self.as_file()?;
-        let mut buf = vec![0; file.len()? as usize];
+        let mut buf = vec![0; self.len()? as usize];
         file.read_at(&mut buf, 0)?;
         String::from_utf8(buf).map_err(|_| VfsError::InvalidData)
     }

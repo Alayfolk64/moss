@@ -6,7 +6,7 @@ use core::{
 
 use hashbrown::HashMap;
 
-use super::DirEntry;
+use super::{DirEntry, invalidate_inode_metadata_cache};
 use crate::{
     MetadataUpdate, Mountpoint, Mutex, MutexGuard, NodeOps, NodePermission, NodeType, VfsError,
     VfsResult,
@@ -218,6 +218,8 @@ impl DirNode {
 
         self.ops.link(name, node).inspect(|entry| {
             self.cache.lock().insert(name.to_owned(), entry.clone());
+            invalidate_inode_metadata_cache(node.filesystem(), node.inode());
+            invalidate_inode_metadata_cache(self.filesystem(), self.inode());
         })
     }
 
@@ -234,6 +236,8 @@ impl DirNode {
         }
 
         self.ops.unlink(name).inspect(|_| {
+            invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
+            invalidate_inode_metadata_cache(self.filesystem(), self.inode());
             Self::forget_entry(&mut children, name);
         })
     }
@@ -261,6 +265,7 @@ impl DirNode {
     ) -> VfsResult<DirEntry> {
         let entry = self.ops.create(name, node_type, permission)?;
         children.insert(name.to_owned(), entry.clone());
+        invalidate_inode_metadata_cache(self.filesystem(), self.inode());
         Ok(entry)
     }
 
@@ -299,12 +304,14 @@ impl DirNode {
         let (mut src_children, mut dst_children) = self.lock_both_cache(dst_dir);
 
         let src = self.lookup_locked(src_name, &mut src_children)?;
-        if let Ok(dst) = dst_dir.lookup_locked(
+        let dst = dst_dir.lookup_locked(
             dst_name,
             dst_children
                 .as_mut()
                 .map_or_else(|| src_children.deref_mut(), DerefMut::deref_mut),
-        ) {
+        )
+        .ok();
+        if let Some(dst) = dst.as_ref() {
             if src.node_type() == NodeType::Directory {
                 if let Ok(dir) = dst.as_dir()
                     && dir.has_children()?
@@ -320,6 +327,12 @@ impl DirNode {
 
         self.ops.rename(src_name, dst_dir, dst_name).inspect(|_| {
             let (mut src_children, mut dst_children) = self.lock_both_cache(dst_dir);
+            invalidate_inode_metadata_cache(src.filesystem(), src.inode());
+            if let Some(dst) = dst.as_ref() {
+                invalidate_inode_metadata_cache(dst.filesystem(), dst.inode());
+            }
+            invalidate_inode_metadata_cache(self.filesystem(), self.inode());
+            invalidate_inode_metadata_cache(dst_dir.filesystem(), dst_dir.inode());
             Self::forget_entry(&mut src_children, src_name);
             Self::forget_entry(
                 dst_children

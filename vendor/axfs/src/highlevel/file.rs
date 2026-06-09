@@ -6,11 +6,12 @@ use alloc::{
 };
 #[cfg(feature = "times")]
 use core::sync::atomic::{AtomicU8, Ordering};
-use core::{num::NonZeroUsize, ops::Range, task::Context};
+use core::{num::NonZeroUsize, ops::Range, task::Context, time::Duration};
 
 use axalloc::{UsageKind, global_allocator};
 use axfs_ng_vfs::{
-    FileNode, Location, Metadata, NodeFlags, NodePermission, NodeType, VfsError, VfsResult,
+    FileNode, Location, Metadata, MetadataUpdate, NodeFlags, NodePermission, NodeType, VfsError,
+    VfsResult,
     path::Path,
 };
 use axhal::mem::{PhysAddr, VirtAddr, virt_to_phys};
@@ -202,7 +203,7 @@ impl OpenOptions {
         } else {
             // TODO(mivik): is this correct?
             let non_cacheable_type = matches!(
-                loc.metadata()?.node_type,
+                cached_metadata(&loc)?.node_type,
                 NodeType::CharacterDevice | NodeType::Fifo | NodeType::Socket
             );
 
@@ -360,43 +361,29 @@ struct EvictListener {
 
 intrusive_adapter!(EvictListenerAdapter = Box<EvictListener>: EvictListener { link: LinkedListAtomicLink });
 
-struct CachedFileLenState {
-    len: u64,
-    dirty: bool,
-}
-
 struct CachedFileShared {
     page_cache: Mutex<LruCache<u32, PageCache>>,
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
-    len: Mutex<CachedFileLenState>,
     /// Only one thread can append to the file at a time, while multiple writers
     /// are permitted.
     append_lock: RwLock<()>,
 }
 
 impl CachedFileShared {
-    pub fn new(initial_len: u64) -> Self {
+    pub fn new() -> Self {
         Self {
             page_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(DEFAULT_FILE_CACHE_PAGES).unwrap(),
             )),
             evict_listeners: Mutex::new(LinkedList::default()),
-            len: Mutex::new(CachedFileLenState {
-                len: initial_len,
-                dirty: false,
-            }),
             append_lock: RwLock::new(()),
         }
     }
 
-    pub fn new_unbounded(initial_len: u64) -> Self {
+    pub fn new_unbounded() -> Self {
         Self {
             page_cache: Mutex::new(LruCache::unbounded()),
             evict_listeners: Mutex::new(LinkedList::default()),
-            len: Mutex::new(CachedFileLenState {
-                len: initial_len,
-                dirty: false,
-            }),
             append_lock: RwLock::new(()),
         }
     }
@@ -455,11 +442,10 @@ impl CachedFile {
         caches
             .entry(key)
             .or_insert_with(|| {
-                let initial_len = location.len().unwrap_or_default();
                 let shared = if in_memory {
-                    Arc::new(CachedFileShared::new_unbounded(initial_len))
+                    Arc::new(CachedFileShared::new_unbounded())
                 } else {
-                    Arc::new(CachedFileShared::new(initial_len))
+                    Arc::new(CachedFileShared::new())
                 };
                 Arc::new(CachedFileRecord {
                     location: location.clone(),
@@ -518,40 +504,35 @@ impl CachedFile {
     }
 
     pub fn len(&self) -> VfsResult<u64> {
-        Ok(self.shared.len.lock().len)
+        self.inner.len()
     }
 
     pub fn metadata(&self) -> VfsResult<Metadata> {
-        let mut metadata = self.inner.metadata()?;
-        metadata.size = self.len()?;
-        Ok(metadata)
+        self.inner.metadata()
     }
 
-    fn grow_cached_len(&self, len: u64) -> u64 {
-        let mut state = self.shared.len.lock();
-        let old_len = state.len;
-        if len > old_len {
-            state.len = len;
-            if !self.in_memory {
-                state.dirty = true;
-            }
+    pub fn record_access(&self, atime: Duration, strict: bool) -> VfsResult<bool> {
+        self.inner.record_access(atime, strict)
+    }
+
+    fn grow_cached_len(&self, len: u64) -> VfsResult<u64> {
+        self.inner.grow_cached_len(len, !self.in_memory)
+    }
+
+    fn set_cached_len(&self, len: u64, dirty: bool) -> VfsResult<()> {
+        self.inner.set_cached_len(len, dirty)
+    }
+
+    fn commit_len(&self) -> VfsResult<u64> {
+        let len = self.len()?;
+        if !self.in_memory {
+            self.inner.flush_metadata_cache(true)?;
         }
-        old_len
+        Ok(len)
     }
 
-    fn set_cached_len_clean(&self, len: u64) {
-        let mut state = self.shared.len.lock();
-        state.len = len;
-        state.dirty = false;
-    }
-
-    fn commit_len(&self, file: &FileNode) -> VfsResult<u64> {
-        let mut state = self.shared.len.lock();
-        if !self.in_memory && state.dirty {
-            file.set_len(state.len)?;
-            state.dirty = false;
-        }
-        Ok(state.len)
+    fn commit_atime(&self) -> VfsResult<()> {
+        self.inner.flush_metadata_cache(false)
     }
 
     fn from_record(record: &CachedFileRecord) -> Self {
@@ -607,7 +588,7 @@ impl CachedFile {
     fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
         self.notify_evict_listeners(pn, page);
         if page.dirty {
-            let file_len = self.commit_len(file)?;
+            let file_len = self.commit_len()?;
             Self::writeback_page(file, file_len, pn, page)?;
         }
         Ok(())
@@ -799,7 +780,7 @@ impl CachedFile {
         }
 
         let file = self.inner.entry().as_file()?;
-        let old_len = self.grow_cached_len(end);
+        let old_len = self.grow_cached_len(end)?;
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
@@ -835,7 +816,7 @@ impl CachedFile {
         let file = self.inner.entry().as_file()?;
         if end > self.len()? {
             file.set_len(end)?;
-            self.set_cached_len_clean(end);
+            self.set_cached_len(end, false)?;
         }
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
@@ -886,7 +867,7 @@ impl CachedFile {
         let file = self.inner.entry().as_file()?;
         let old_len = self.len()?;
         file.set_len(len)?;
-        self.set_cached_len_clean(len);
+        self.set_cached_len(len, false)?;
 
         let old_last_page = (old_len / PAGE_SIZE as u64) as u32;
         if old_len < len {
@@ -988,7 +969,7 @@ impl CachedFile {
             return Ok(());
         }
         let file = self.inner.entry().as_file()?;
-        let file_len = self.commit_len(file)?;
+        let file_len = self.commit_len()?;
         let mut guard = self.shared.page_cache.lock();
         let dirty_page_numbers = guard
             .iter()
@@ -1014,7 +995,7 @@ impl CachedFile {
             return Ok(());
         }
         let file = self.inner.entry().as_file()?;
-        let file_len = self.commit_len(file)?;
+        let file_len = self.commit_len()?;
         let mut dirty_pages = Vec::new();
         let mut guard = self.shared.page_cache.lock();
         while let Some((pn, mut page)) = guard.pop_lru() {
@@ -1031,7 +1012,8 @@ impl CachedFile {
                 guard.put(pn, page);
             }
         }
-        result
+        result?;
+        self.commit_atime()
     }
 
     pub fn sync(&self, data_only: bool) -> VfsResult<()> {
@@ -1039,6 +1021,9 @@ impl CachedFile {
             return Ok(());
         }
         self.writeback_dirty_pages_in_cache()?;
+        if !data_only {
+            self.commit_atime()?;
+        }
         let file = self.inner.entry().as_file()?;
         file.sync(data_only)?;
         Ok(())
@@ -1074,24 +1059,36 @@ pub fn drop_global_file_caches() -> VfsResult<()> {
 pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     let key = CachedFile::file_cache_key(location);
     let Some(record) = FILE_CACHES.write().remove(&key) else {
+        location.invalidate_metadata_cache();
         return Ok(());
     };
     if record.in_memory {
+        location.invalidate_metadata_cache();
         return Ok(());
     }
-    CachedFile::from_record(&record).drop_cached_pages()
+    CachedFile::from_record(&record).drop_cached_pages()?;
+    location.invalidate_metadata_cache();
+    Ok(())
 }
 
 pub fn cached_file_len(location: &Location) -> Option<u64> {
-    CachedFile::shared_for_location(location).map(|shared| shared.len.lock().len)
+    location.cached_metadata().map(|metadata| metadata.size)
+}
+
+pub fn set_cached_len_clean(location: &Location, len: u64) {
+    location.set_cached_len_if_present(len);
+}
+
+pub fn update_cached_metadata(location: &Location, update: MetadataUpdate) -> VfsResult<()> {
+    location.update_metadata(update)
+}
+
+pub fn cached_metadata(location: &Location) -> VfsResult<Metadata> {
+    location.metadata()
 }
 
 pub fn metadata_with_cached_len(location: &Location) -> VfsResult<Metadata> {
-    let mut metadata = location.metadata()?;
-    if let Some(len) = cached_file_len(location) {
-        metadata.size = len;
-    }
-    Ok(metadata)
+    cached_metadata(location)
 }
 
 /// Low-level interface for file operations.
@@ -1124,14 +1121,18 @@ impl FileBackend {
     pub fn write_at(&self, mut src: impl Read + IoBuf, mut offset: u64) -> VfsResult<usize> {
         match self {
             Self::Cached(cached) => cached.write_at(src, offset),
-            Self::Direct(loc) => src.write_to(&mut axio::write_fn(|buf| {
-                loc.entry()
-                    .as_file()?
-                    .write_at(buf, offset)
-                    .inspect(|written| {
-                        offset += *written as u64;
-                    })
-            })),
+            Self::Direct(loc) => {
+                let written = src.write_to(&mut axio::write_fn(|buf| {
+                    loc.entry()
+                        .as_file()?
+                        .write_at(buf, offset)
+                        .inspect(|written| {
+                            offset += *written as u64;
+                        })
+                }))?;
+                loc.grow_cached_len_if_present(offset);
+                Ok(written)
+            }
         }
     }
 
@@ -1156,18 +1157,26 @@ impl FileBackend {
         }
     }
 
+    pub fn record_access(&self, atime: Duration, strict: bool) -> bool {
+        match self {
+            Self::Cached(cached) => cached.record_access(atime, strict).unwrap_or(false),
+            Self::Direct(_) => false,
+        }
+    }
+
     pub fn append(&self, mut src: impl Read + IoBuf) -> VfsResult<(usize, u64)> {
         match self {
             Self::Cached(cached) => cached.append(src),
             Self::Direct(loc) => {
                 let mut end = 0;
-                src.write_to(&mut axio::write_fn(|buf| {
+                let written = src.write_to(&mut axio::write_fn(|buf| {
                     loc.entry().as_file()?.append(buf).map(|(n, offset)| {
                         end = offset;
                         n
                     })
-                }))
-                .map(|n| (n, end))
+                }))?;
+                loc.set_cached_len_if_present(end);
+                Ok((written, end))
             }
         }
     }
@@ -1182,14 +1191,18 @@ impl FileBackend {
     pub fn sync(&self, data_only: bool) -> VfsResult<()> {
         match self {
             Self::Cached(cached) => cached.sync(data_only),
-            Self::Direct(loc) => loc.entry().as_file()?.sync(data_only),
+            Self::Direct(loc) => loc.sync(data_only),
         }
     }
 
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         match self {
             Self::Cached(cached) => cached.set_len(len),
-            Self::Direct(loc) => loc.entry().as_file()?.set_len(len),
+            Self::Direct(loc) => {
+                loc.entry().as_file()?.set_len(len)?;
+                loc.set_cached_len(len, false)?;
+                Ok(())
+            }
         }
     }
 }
@@ -1270,6 +1283,10 @@ impl File {
 
     pub fn metadata(&self) -> VfsResult<Metadata> {
         self.inner.metadata()
+    }
+
+    pub fn record_access(&self, atime: Duration, strict: bool) -> bool {
+        self.inner.record_access(atime, strict)
     }
 
     /// Reads a number of bytes starting from a given offset.

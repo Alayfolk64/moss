@@ -282,12 +282,14 @@ impl FsContext {
         target: impl AsRef<str>,
         link_path: impl AsRef<Path>,
     ) -> VfsResult<Location> {
+        let target = target.as_ref();
         let (dir, name) = self.resolve_nonexistent(link_path.as_ref())?;
         if dir.lookup_no_follow(name).is_ok() {
             return Err(VfsError::AlreadyExists);
         }
         let symlink = dir.create(name, NodeType::Symlink, NodePermission::default())?;
-        symlink.entry().as_file()?.set_symlink(target.as_ref())?;
+        symlink.entry().as_file()?.set_symlink(target)?;
+        symlink.set_cached_len(target.len() as u64, false)?;
         Ok(symlink)
     }
 

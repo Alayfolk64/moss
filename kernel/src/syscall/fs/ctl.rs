@@ -7,7 +7,9 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::{FS_CONTEXT, FsContext, invalidate_file_cache, sync_global_file_caches};
+use axfs::{
+    FS_CONTEXT, FsContext, invalidate_file_cache, sync_global_file_caches, update_cached_metadata,
+};
 use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
 use axtask::current;
@@ -215,7 +217,7 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
         let loc = dir.create(name, NodeType::Directory, permission)?;
         // Update both owner and mode to ensure SET_GID is preserved
-        loc.update_metadata(MetadataUpdate {
+        update_cached_metadata(&loc, MetadataUpdate {
             owner: Some((euid, gid)),
             mode: Some(permission),
             ..Default::default()
@@ -294,7 +296,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         };
         match dir.create(name, create_type, permission) {
             Ok(loc) => {
-                loc.update_metadata(MetadataUpdate {
+                update_cached_metadata(&loc, MetadataUpdate {
                     owner: Some((euid, gid)),
                     ..Default::default()
                 })?;
@@ -663,7 +665,7 @@ pub fn sys_symlinkat(
     let egid = proc_data.egid();
     with_fs(new_dirfd, |fs| {
         let loc = fs.symlink(target, &linkpath)?;
-        loc.update_metadata(MetadataUpdate {
+        update_cached_metadata(&loc, MetadataUpdate {
             owner: Some((euid, egid)),
             mode: Some(NodePermission::from_bits_truncate(0o777)),
             ..Default::default()
@@ -775,7 +777,7 @@ pub fn sys_fchownat(
 
     let uid = if uid == -1 { meta.uid } else { uid as _ };
     let gid = if gid == -1 { meta.gid } else { gid as _ };
-    loc.update_metadata(MetadataUpdate {
+    update_cached_metadata(&loc, MetadataUpdate {
         owner: Some((uid, gid)),
         mode: Some(mode),
         ..Default::default()
@@ -804,7 +806,7 @@ pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> A
     let permission = NodePermission::from_bits_truncate(mode as u16);
     debug!("sys_fchmodat: path={:?}, mode={:#o}, permission bits={:#o}, has SET_GID={}",
         path, mode, permission.bits(), permission.contains(NodePermission::SET_GID));
-    loc.update_metadata(MetadataUpdate {
+    update_cached_metadata(&loc, MetadataUpdate {
         mode: Some(permission),
         ..Default::default()
     })?;
@@ -863,7 +865,7 @@ fn update_times(
         }
     }
 
-    loc.update_metadata(MetadataUpdate {
+    update_cached_metadata(&loc, MetadataUpdate {
         atime: atime.duration(),
         mtime: mtime.duration(),
         ..Default::default()
