@@ -13,7 +13,7 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult};
-use axfs::{FS_CONTEXT, FileFlags, FsContext};
+use axfs::{FS_CONTEXT, FileFlags, FsContext, metadata_with_cached_len};
 use axfs_ng_vfs::{Location, Metadata, MetadataUpdate, NodeFlags};
 use axhal::time::realtime_time;
 use axpoll::{IoEvents, Pollable};
@@ -105,7 +105,7 @@ impl ResolveAtResult {
     pub fn stat(&self) -> AxResult<Kstat> {
         match self {
             Self::File(file) => {
-                let mut stat = file.metadata().map(|it| metadata_to_kstat(&it))?;
+                let mut stat = metadata_with_cached_len(file).map(|it| metadata_to_kstat(&it))?;
                 if let Ok(path) = file.absolute_path()
                     && let Some(special) = SPECIAL_NODES.read().get(path.as_str()).copied()
                 {
@@ -265,7 +265,7 @@ impl FileLike for File {
     }
 
     fn stat(&self) -> AxResult<Kstat> {
-        Ok(metadata_to_kstat(&self.inner().location().metadata()?))
+        Ok(metadata_to_kstat(&self.inner().metadata()?))
     }
 
     fn ioctl(&self, cmd: u32, arg: usize) -> AxResult<usize> {

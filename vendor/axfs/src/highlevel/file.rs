@@ -10,7 +10,8 @@ use core::{num::NonZeroUsize, ops::Range, task::Context};
 
 use axalloc::{UsageKind, global_allocator};
 use axfs_ng_vfs::{
-    FileNode, Location, NodeFlags, NodePermission, NodeType, VfsError, VfsResult, path::Path,
+    FileNode, Location, Metadata, NodeFlags, NodePermission, NodeType, VfsError, VfsResult,
+    path::Path,
 };
 use axhal::mem::{PhysAddr, VirtAddr, virt_to_phys};
 use axio::{SeekFrom, prelude::*};
@@ -359,25 +360,44 @@ struct EvictListener {
 
 intrusive_adapter!(EvictListenerAdapter = Box<EvictListener>: EvictListener { link: LinkedListAtomicLink });
 
+struct CachedFileLenState {
+    len: u64,
+    dirty: bool,
+}
+
 struct CachedFileShared {
     page_cache: Mutex<LruCache<u32, PageCache>>,
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
+    len: Mutex<CachedFileLenState>,
+    /// Only one thread can append to the file at a time, while multiple writers
+    /// are permitted.
+    append_lock: RwLock<()>,
 }
 
 impl CachedFileShared {
-    pub fn new() -> Self {
+    pub fn new(initial_len: u64) -> Self {
         Self {
             page_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(DEFAULT_FILE_CACHE_PAGES).unwrap(),
             )),
             evict_listeners: Mutex::new(LinkedList::default()),
+            len: Mutex::new(CachedFileLenState {
+                len: initial_len,
+                dirty: false,
+            }),
+            append_lock: RwLock::new(()),
         }
     }
 
-    pub fn new_unbounded() -> Self {
+    pub fn new_unbounded(initial_len: u64) -> Self {
         Self {
             page_cache: Mutex::new(LruCache::unbounded()),
             evict_listeners: Mutex::new(LinkedList::default()),
+            len: Mutex::new(CachedFileLenState {
+                len: initial_len,
+                dirty: false,
+            }),
+            append_lock: RwLock::new(()),
         }
     }
 }
@@ -397,9 +417,6 @@ pub struct CachedFile {
     inner: Location,
     shared: Arc<CachedFileShared>,
     in_memory: bool,
-    /// Only one thread can append to the file at a time, while multiple writers
-    /// are permitted.
-    append_lock: RwLock<()>,
 }
 
 impl Clone for CachedFile {
@@ -408,7 +425,6 @@ impl Clone for CachedFile {
             inner: self.inner.clone(),
             shared: self.shared.clone(),
             in_memory: self.in_memory,
-            append_lock: RwLock::new(()),
         }
     }
 }
@@ -439,10 +455,11 @@ impl CachedFile {
         caches
             .entry(key)
             .or_insert_with(|| {
+                let initial_len = location.len().unwrap_or_default();
                 let shared = if in_memory {
-                    Arc::new(CachedFileShared::new_unbounded())
+                    Arc::new(CachedFileShared::new_unbounded(initial_len))
                 } else {
-                    Arc::new(CachedFileShared::new())
+                    Arc::new(CachedFileShared::new(initial_len))
                 };
                 Arc::new(CachedFileRecord {
                     location: location.clone(),
@@ -476,7 +493,6 @@ impl CachedFile {
             inner: location,
             shared,
             in_memory,
-            append_lock: RwLock::new(()),
         }
     }
 
@@ -488,12 +504,61 @@ impl CachedFile {
         self.in_memory
     }
 
+    fn shared_for_location(location: &Location) -> Option<Arc<CachedFileShared>> {
+        let shared = {
+            let guard = location.user_data();
+            guard.get::<FileUserData>().and_then(|it| it.get())
+        };
+        if shared.is_some() {
+            return shared;
+        }
+
+        let key = Self::file_cache_key(location);
+        FILE_CACHES.read().get(&key).map(|it| it.shared.clone())
+    }
+
+    pub fn len(&self) -> VfsResult<u64> {
+        Ok(self.shared.len.lock().len)
+    }
+
+    pub fn metadata(&self) -> VfsResult<Metadata> {
+        let mut metadata = self.inner.metadata()?;
+        metadata.size = self.len()?;
+        Ok(metadata)
+    }
+
+    fn grow_cached_len(&self, len: u64) -> u64 {
+        let mut state = self.shared.len.lock();
+        let old_len = state.len;
+        if len > old_len {
+            state.len = len;
+            if !self.in_memory {
+                state.dirty = true;
+            }
+        }
+        old_len
+    }
+
+    fn set_cached_len_clean(&self, len: u64) {
+        let mut state = self.shared.len.lock();
+        state.len = len;
+        state.dirty = false;
+    }
+
+    fn commit_len(&self, file: &FileNode) -> VfsResult<u64> {
+        let mut state = self.shared.len.lock();
+        if !self.in_memory && state.dirty {
+            file.set_len(state.len)?;
+            state.dirty = false;
+        }
+        Ok(state.len)
+    }
+
     fn from_record(record: &CachedFileRecord) -> Self {
         Self {
             inner: record.location.clone(),
             shared: record.shared.clone(),
             in_memory: record.in_memory,
-            append_lock: RwLock::new(()),
         }
     }
 
@@ -522,10 +587,15 @@ impl CachedFile {
         }
     }
 
-    fn writeback_page(file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
+    fn writeback_page(
+        file: &FileNode,
+        file_len: u64,
+        pn: u32,
+        page: &mut PageCache,
+    ) -> VfsResult<()> {
         if page.dirty {
             let page_start = pn as u64 * PAGE_SIZE as u64;
-            let len = (file.len()?.saturating_sub(page_start)).min(PAGE_SIZE as u64) as usize;
+            let len = file_len.saturating_sub(page_start).min(PAGE_SIZE as u64) as usize;
             if len > 0 {
                 file.write_at(&page.data()[..len], page_start)?;
             }
@@ -536,7 +606,11 @@ impl CachedFile {
 
     fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
         self.notify_evict_listeners(pn, page);
-        Self::writeback_page(file, pn, page)
+        if page.dirty {
+            let file_len = self.commit_len(file)?;
+            Self::writeback_page(file, file_len, pn, page)?;
+        }
+        Ok(())
     }
 
     fn page_or_insert<'a>(
@@ -643,7 +717,7 @@ impl CachedFile {
     }
 
     pub fn read_at(&self, mut dst: impl Write + IoBufMut, offset: u64) -> VfsResult<usize> {
-        let len = self.inner.len()?;
+        let len = self.len()?;
         let end = (offset + dst.remaining_mut() as u64).min(len);
         if end <= offset {
             return Ok(0);
@@ -667,7 +741,7 @@ impl CachedFile {
             return Ok(());
         }
 
-        let len = self.inner.len()?;
+        let len = self.len()?;
         if offset >= len {
             return Ok(());
         }
@@ -725,10 +799,7 @@ impl CachedFile {
         }
 
         let file = self.inner.entry().as_file()?;
-        let old_len = file.len()?;
-        if end > old_len {
-            file.set_len(end)?;
-        }
+        let old_len = self.grow_cached_len(end);
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
@@ -762,8 +833,9 @@ impl CachedFile {
         end: u64,
     ) -> VfsResult<usize> {
         let file = self.inner.entry().as_file()?;
-        if end > file.len()? {
+        if end > self.len()? {
             file.set_len(end)?;
+            self.set_cached_len_clean(end);
         }
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
@@ -799,22 +871,22 @@ impl CachedFile {
     }
 
     pub fn write_at(&self, buf: impl Read + IoBuf, offset: u64) -> VfsResult<usize> {
-        let _guard = self.append_lock.read();
+        let _guard = self.shared.append_lock.read();
         self.write_at_locked(buf, offset)
     }
 
     pub fn append(&self, buf: impl Read + IoBuf) -> VfsResult<(usize, u64)> {
-        let _guard = self.append_lock.write();
-        let file = self.inner.entry().as_file()?;
-        let len = file.len()?;
+        let _guard = self.shared.append_lock.write();
+        let len = self.len()?;
         self.write_at_locked(buf, len)
             .map(|written| (written, len + written as u64))
     }
 
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         let file = self.inner.entry().as_file()?;
-        let old_len = file.len()?;
+        let old_len = self.len()?;
         file.set_len(len)?;
+        self.set_cached_len_clean(len);
 
         let old_last_page = (old_len / PAGE_SIZE as u64) as u32;
         if old_len < len {
@@ -882,10 +954,10 @@ impl CachedFile {
 
     fn writeback_dirty_pages(
         file: &FileNode,
+        file_len: u64,
         dirty_pages: &mut Vec<(u32, PageCache)>,
     ) -> VfsResult<()> {
         dirty_pages.sort_by_key(|(pn, _)| *pn);
-        let file_len = file.len()?;
 
         let mut start = 0;
         while start < dirty_pages.len() {
@@ -916,6 +988,7 @@ impl CachedFile {
             return Ok(());
         }
         let file = self.inner.entry().as_file()?;
+        let file_len = self.commit_len(file)?;
         let mut guard = self.shared.page_cache.lock();
         let dirty_page_numbers = guard
             .iter()
@@ -929,7 +1002,7 @@ impl CachedFile {
                 dirty_pages.push((pn, page));
             }
         }
-        let result = Self::writeback_dirty_pages(file, &mut dirty_pages);
+        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
         for (pn, page) in dirty_pages {
             guard.put(pn, page);
         }
@@ -941,6 +1014,7 @@ impl CachedFile {
             return Ok(());
         }
         let file = self.inner.entry().as_file()?;
+        let file_len = self.commit_len(file)?;
         let mut dirty_pages = Vec::new();
         let mut guard = self.shared.page_cache.lock();
         while let Some((pn, mut page)) = guard.pop_lru() {
@@ -950,7 +1024,7 @@ impl CachedFile {
             }
         }
         drop(guard);
-        let result = Self::writeback_dirty_pages(file, &mut dirty_pages);
+        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
         if result.is_err() {
             let mut guard = self.shared.page_cache.lock();
             for (pn, page) in dirty_pages {
@@ -1008,6 +1082,18 @@ pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     CachedFile::from_record(&record).drop_cached_pages()
 }
 
+pub fn cached_file_len(location: &Location) -> Option<u64> {
+    CachedFile::shared_for_location(location).map(|shared| shared.len.lock().len)
+}
+
+pub fn metadata_with_cached_len(location: &Location) -> VfsResult<Metadata> {
+    let mut metadata = location.metadata()?;
+    if let Some(len) = cached_file_len(location) {
+        metadata.size = len;
+    }
+    Ok(metadata)
+}
+
 /// Low-level interface for file operations.
 #[derive(Clone)]
 pub enum FileBackend {
@@ -1053,6 +1139,20 @@ impl FileBackend {
         match self {
             Self::Cached(cached) => cached.readahead(offset, count),
             Self::Direct(_) => Ok(()),
+        }
+    }
+
+    pub fn len(&self) -> VfsResult<u64> {
+        match self {
+            Self::Cached(cached) => cached.len(),
+            Self::Direct(loc) => loc.len(),
+        }
+    }
+
+    pub fn metadata(&self) -> VfsResult<Metadata> {
+        match self {
+            Self::Cached(cached) => cached.metadata(),
+            Self::Direct(loc) => loc.metadata(),
         }
     }
 
@@ -1109,7 +1209,7 @@ impl File {
             None
         } else {
             Some(Mutex::new(if flags.contains(FileFlags::APPEND) {
-                inner.location().len().unwrap_or_default()
+                inner.len().unwrap_or_default()
             } else {
                 0
             }))
@@ -1162,6 +1262,14 @@ impl File {
 
     pub fn location(&self) -> &Location {
         self.inner.location()
+    }
+
+    pub fn len(&self) -> VfsResult<u64> {
+        self.inner.len()
+    }
+
+    pub fn metadata(&self) -> VfsResult<Metadata> {
+        self.inner.metadata()
     }
 
     /// Reads a number of bytes starting from a given offset.
@@ -1251,7 +1359,7 @@ impl Seek for &File {
             let new_pos = match pos {
                 SeekFrom::Start(pos) => pos,
                 SeekFrom::End(off) => {
-                    let size = self.access(FileFlags::empty())?.location().len()?;
+                    let size = self.access(FileFlags::empty())?.len()?;
                     size.checked_add_signed(off).ok_or(VfsError::InvalidInput)?
                 }
                 SeekFrom::Current(off) => guard
