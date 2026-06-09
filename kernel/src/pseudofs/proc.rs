@@ -19,6 +19,7 @@ use axfs_ng_vfs::{
     DeviceId, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate, NodeFlags,
     NodeOps, NodePermission, NodeType, VfsError, VfsResult,
 };
+use axfs::drop_global_file_caches;
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
@@ -1090,6 +1091,7 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
                             let mut data = data.lock();
                             data.clear();
                             data.extend_from_slice(input);
+                            drop_global_file_caches()?;
                             crate::syscall::evict_fanotify_marks();
                             Ok(None::<Vec<u8>>)
                         }

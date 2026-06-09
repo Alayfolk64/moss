@@ -193,10 +193,9 @@ impl OpenOptions {
             }
             loc.check_is_dir()?;
         }
-        if self.truncate {
-            loc.entry().as_file()?.set_len(0)?;
+        if self.truncate && loc.is_dir() {
+            return Err(VfsError::IsADirectory);
         }
-
         Ok(if loc.is_dir() {
             OpenResult::Dir(loc)
         } else {
@@ -215,6 +214,9 @@ impl OpenOptions {
             } else {
                 FileBackend::new_direct(loc)
             };
+            if self.truncate {
+                backend.set_len(0)?;
+            }
             OpenResult::File(File::new(backend, flags))
         })
     }
@@ -380,11 +382,16 @@ impl CachedFileShared {
     }
 }
 
-type InMemoryCacheKey = (usize, u64);
+type FileCacheKey = (usize, u64);
 
-static IN_MEMORY_FILE_CACHES: spin::Lazy<
-    RwLock<BTreeMap<InMemoryCacheKey, Weak<CachedFileShared>>>,
-> = spin::Lazy::new(|| RwLock::new(BTreeMap::new()));
+struct CachedFileRecord {
+    location: Location,
+    shared: Arc<CachedFileShared>,
+    in_memory: bool,
+}
+
+static FILE_CACHES: spin::Lazy<RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>> =
+    spin::Lazy::new(|| RwLock::new(BTreeMap::new()));
 
 pub struct CachedFile {
     inner: Location,
@@ -421,9 +428,29 @@ impl FileUserData {
 }
 
 impl CachedFile {
-    fn in_memory_cache_key(location: &Location) -> InMemoryCacheKey {
+    fn file_cache_key(location: &Location) -> FileCacheKey {
         let fs_ptr: *const dyn axfs_ng_vfs::FilesystemOps = location.filesystem();
         (fs_ptr as *const () as usize, location.inode())
+    }
+
+    fn record_from_global_cache(location: &Location, in_memory: bool) -> Arc<CachedFileRecord> {
+        let key = Self::file_cache_key(location);
+        let mut caches = FILE_CACHES.write();
+        caches
+            .entry(key)
+            .or_insert_with(|| {
+                let shared = if in_memory {
+                    Arc::new(CachedFileShared::new_unbounded())
+                } else {
+                    Arc::new(CachedFileShared::new())
+                };
+                Arc::new(CachedFileRecord {
+                    location: location.clone(),
+                    shared,
+                    in_memory,
+                })
+            })
+            .clone()
     }
 
     pub fn get_or_create(location: Location) -> Self {
@@ -432,22 +459,14 @@ impl CachedFile {
         let mut guard = location.user_data();
         let shared = if let Some(shared) = guard.get::<FileUserData>().and_then(|it| it.get()) {
             shared
-        } else if in_memory {
-            let key = Self::in_memory_cache_key(&location);
-            let mut caches = IN_MEMORY_FILE_CACHES.write();
-            let shared = match caches.get(&key).and_then(Weak::upgrade) {
-                Some(shared) => shared,
-                None => {
-                    let shared = Arc::new(CachedFileShared::new_unbounded());
-                    caches.insert(key, Arc::downgrade(&shared));
-                    shared
-                }
-            };
-            guard.insert(FileUserData::Strong(shared.clone()));
-            shared
         } else {
-            let shared = Arc::new(CachedFileShared::new());
-            let user_data = FileUserData::Weak(Arc::downgrade(&shared));
+            let record = Self::record_from_global_cache(&location, in_memory);
+            let shared = record.shared.clone();
+            let user_data = if in_memory {
+                FileUserData::Strong(shared.clone())
+            } else {
+                FileUserData::Weak(Arc::downgrade(&shared))
+            };
             guard.insert(user_data);
             shared
         };
@@ -467,6 +486,15 @@ impl CachedFile {
 
     pub fn in_memory(&self) -> bool {
         self.in_memory
+    }
+
+    fn from_record(record: &CachedFileRecord) -> Self {
+        Self {
+            inner: record.location.clone(),
+            shared: record.shared.clone(),
+            in_memory: record.in_memory,
+            append_lock: RwLock::new(()),
+        }
     }
 
     pub fn add_evict_listener<F>(&self, listener: F) -> usize
@@ -494,8 +522,7 @@ impl CachedFile {
         }
     }
 
-    fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
-        self.notify_evict_listeners(pn, page);
+    fn writeback_page(file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
         if page.dirty {
             let page_start = pn as u64 * PAGE_SIZE as u64;
             let len = (file.len()?.saturating_sub(page_start)).min(PAGE_SIZE as u64) as usize;
@@ -505,6 +532,11 @@ impl CachedFile {
             page.dirty = false;
         }
         Ok(())
+    }
+
+    fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
+        self.notify_evict_listeners(pn, page);
+        Self::writeback_page(file, pn, page)
     }
 
     fn page_or_insert<'a>(
@@ -785,7 +817,6 @@ impl CachedFile {
         file.set_len(len)?;
 
         let old_last_page = (old_len / PAGE_SIZE as u64) as u32;
-        let new_last_page = (len / PAGE_SIZE as u64) as u32;
         if old_len < len {
             let mut guard = self.shared.page_cache.lock();
             if let Some(page) = guard.get_mut(&old_last_page) {
@@ -794,15 +825,16 @@ impl CachedFile {
                 let new_page_offset = (len - page_start).min(PAGE_SIZE as u64) as usize;
                 page.data()[old_page_offset..new_page_offset].fill(0);
             }
-        } else if old_last_page > new_last_page {
+        } else if old_len > len {
             // For truncating, we need to remove all pages that are beyond the
             // new length
             // TODO(mivik): can this be more efficient?
             let mut guard = self.shared.page_cache.lock();
+            let first_invalid_page = len.div_ceil(PAGE_SIZE as u64) as u32;
             let keys = guard
                 .iter()
                 .map(|(k, _)| *k)
-                .filter(|it| *it > new_last_page)
+                .filter(|it| *it >= first_invalid_page)
                 .collect::<Vec<_>>();
             for pn in keys {
                 if let Some(mut page) = guard.pop(&pn)
@@ -879,7 +911,32 @@ impl CachedFile {
         Ok(())
     }
 
-    fn writeback_cached_pages(&self) -> VfsResult<()> {
+    fn writeback_dirty_pages_in_cache(&self) -> VfsResult<()> {
+        if self.in_memory {
+            return Ok(());
+        }
+        let file = self.inner.entry().as_file()?;
+        let mut guard = self.shared.page_cache.lock();
+        let dirty_page_numbers = guard
+            .iter()
+            .filter_map(|(pn, page)| page.dirty.then_some(*pn))
+            .collect::<Vec<_>>();
+        let mut dirty_pages = Vec::new();
+        for pn in dirty_page_numbers {
+            if let Some(page) = guard.pop(&pn)
+                && page.dirty
+            {
+                dirty_pages.push((pn, page));
+            }
+        }
+        let result = Self::writeback_dirty_pages(file, &mut dirty_pages);
+        for (pn, page) in dirty_pages {
+            guard.put(pn, page);
+        }
+        result
+    }
+
+    fn drop_cached_pages(&self) -> VfsResult<()> {
         if self.in_memory {
             return Ok(());
         }
@@ -893,15 +950,21 @@ impl CachedFile {
             }
         }
         drop(guard);
-        Self::writeback_dirty_pages(file, &mut dirty_pages)?;
-        Ok(())
+        let result = Self::writeback_dirty_pages(file, &mut dirty_pages);
+        if result.is_err() {
+            let mut guard = self.shared.page_cache.lock();
+            for (pn, page) in dirty_pages {
+                guard.put(pn, page);
+            }
+        }
+        result
     }
 
     pub fn sync(&self, data_only: bool) -> VfsResult<()> {
         if self.in_memory {
             return Ok(());
         }
-        self.writeback_cached_pages()?;
+        self.writeback_dirty_pages_in_cache()?;
         let file = self.inner.entry().as_file()?;
         file.sync(data_only)?;
         Ok(())
@@ -912,17 +975,37 @@ impl CachedFile {
     }
 }
 
-impl Drop for CachedFile {
-    fn drop(&mut self) {
-        if Arc::strong_count(&self.shared) > 1 {
-            // If there are other references to this cached file, we don't
-            // need to drop it.
-            return;
+pub fn sync_global_file_caches() -> VfsResult<()> {
+    let records = FILE_CACHES.read().values().cloned().collect::<Vec<_>>();
+    for record in records {
+        if record.in_memory {
+            continue;
         }
-        if let Err(err) = self.writeback_cached_pages() {
-            warn!("Failed to write back cached file pages on drop: {err:?}");
-        }
+        CachedFile::from_record(&record).sync(false)?;
     }
+    Ok(())
+}
+
+pub fn drop_global_file_caches() -> VfsResult<()> {
+    let records = FILE_CACHES.read().values().cloned().collect::<Vec<_>>();
+    for record in records {
+        if record.in_memory {
+            continue;
+        }
+        CachedFile::from_record(&record).drop_cached_pages()?;
+    }
+    Ok(())
+}
+
+pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
+    let key = CachedFile::file_cache_key(location);
+    let Some(record) = FILE_CACHES.write().remove(&key) else {
+        return Ok(());
+    };
+    if record.in_memory {
+        return Ok(());
+    }
+    CachedFile::from_record(&record).drop_cached_pages()
 }
 
 /// Low-level interface for file operations.
