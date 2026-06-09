@@ -11,7 +11,7 @@ use core::{num::NonZeroUsize, ops::Range, task::Context, time::Duration};
 use axalloc::{UsageKind, global_allocator};
 use axfs_ng_vfs::{
     FileNode, Location, Metadata, MetadataUpdate, NodeFlags, NodePermission, NodeType, VfsError,
-    VfsResult,
+    VfsResult, flush_inode_metadata_caches,
     path::Path,
 };
 use axhal::mem::{PhysAddr, VirtAddr, virt_to_phys};
@@ -490,19 +490,6 @@ impl CachedFile {
         self.in_memory
     }
 
-    fn shared_for_location(location: &Location) -> Option<Arc<CachedFileShared>> {
-        let shared = {
-            let guard = location.user_data();
-            guard.get::<FileUserData>().and_then(|it| it.get())
-        };
-        if shared.is_some() {
-            return shared;
-        }
-
-        let key = Self::file_cache_key(location);
-        FILE_CACHES.read().get(&key).map(|it| it.shared.clone())
-    }
-
     pub fn len(&self) -> VfsResult<u64> {
         self.inner.len()
     }
@@ -513,6 +500,10 @@ impl CachedFile {
 
     pub fn record_access(&self, atime: Duration, strict: bool) -> VfsResult<bool> {
         self.inner.record_access(atime, strict)
+    }
+
+    pub fn record_modification(&self, mtime: Duration) -> VfsResult<bool> {
+        self.inner.record_modification(mtime)
     }
 
     fn grow_cached_len(&self, len: u64) -> VfsResult<u64> {
@@ -1042,6 +1033,7 @@ pub fn sync_global_file_caches() -> VfsResult<()> {
         }
         CachedFile::from_record(&record).sync(false)?;
     }
+    flush_inode_metadata_caches(false)?;
     Ok(())
 }
 
@@ -1079,7 +1071,12 @@ pub fn set_cached_len_clean(location: &Location, len: u64) {
     location.set_cached_len_if_present(len);
 }
 
-pub fn update_cached_metadata(location: &Location, update: MetadataUpdate) -> VfsResult<()> {
+pub fn update_cached_metadata(location: &Location, mut update: MetadataUpdate) -> VfsResult<()> {
+    if update.ctime.is_none()
+        && (update.mode.is_some() || update.owner.is_some() || update.mtime.is_some())
+    {
+        update.ctime = Some(axhal::time::realtime_time());
+    }
     location.update_metadata(update)
 }
 
@@ -1160,8 +1157,14 @@ impl FileBackend {
     pub fn record_access(&self, atime: Duration, strict: bool) -> bool {
         match self {
             Self::Cached(cached) => cached.record_access(atime, strict).unwrap_or(false),
-            Self::Direct(_) => false,
+            Self::Direct(loc) => loc.record_access(atime, strict).unwrap_or(false),
         }
+    }
+
+    pub fn record_modification(&self, mtime: Duration) -> bool {
+        self.location()
+            .record_modification(mtime)
+            .unwrap_or(false)
     }
 
     pub fn append(&self, mut src: impl Read + IoBuf) -> VfsResult<(usize, u64)> {
@@ -1236,6 +1239,13 @@ impl File {
         }
     }
 
+    #[cfg(feature = "times")]
+    fn mark_access_flag(&self, flag: u8) {
+        if self.access_flags.load(Ordering::Relaxed) & flag == 0 {
+            self.access_flags.fetch_or(flag, Ordering::Relaxed);
+        }
+    }
+
     pub fn open(context: &FsContext, path: impl AsRef<Path>) -> VfsResult<Self> {
         OpenOptions::new()
             .read(true)
@@ -1289,14 +1299,28 @@ impl File {
         self.inner.record_access(atime, strict)
     }
 
+    pub fn record_modification(&self, mtime: Duration) -> bool {
+        self.inner.record_modification(mtime)
+    }
+
     /// Reads a number of bytes starting from a given offset.
     pub fn read_at(&self, dst: impl Write + IoBufMut, offset: u64) -> VfsResult<usize> {
-        self.access(FileFlags::READ)?.read_at(dst, offset)
+        let read = self.access(FileFlags::READ)?.read_at(dst, offset)?;
+        #[cfg(feature = "times")]
+        if read > 0 {
+            self.mark_access_flag(1);
+        }
+        Ok(read)
     }
 
     /// Writes a number of bytes starting from a given offset.
     pub fn write_at(&self, src: impl Read + IoBuf, offset: u64) -> VfsResult<usize> {
-        self.access(FileFlags::WRITE)?.write_at(src, offset)
+        let written = self.access(FileFlags::WRITE)?.write_at(src, offset)?;
+        #[cfg(feature = "times")]
+        if written > 0 {
+            self.mark_access_flag(2);
+        }
+        Ok(written)
     }
 
     /// Attempts to sync OS-internal file content and metadata to disk.
@@ -1309,26 +1333,23 @@ impl File {
     }
 
     pub fn read(&self, dst: impl Write + IoBufMut) -> axio::Result<usize> {
-        #[cfg(feature = "times")]
-        {
-            self.access_flags.fetch_or(1, Ordering::AcqRel);
-        }
-        if let Some(pos) = self.position.as_ref() {
+        let read = if let Some(pos) = self.position.as_ref() {
             let mut pos = pos.lock();
-            self.read_at(dst, *pos).inspect(|n| {
+            self.access(FileFlags::READ)?.read_at(dst, *pos).inspect(|n| {
                 *pos += *n as u64;
             })
         } else {
-            self.read_at(dst, 0)
+            self.access(FileFlags::READ)?.read_at(dst, 0)
+        }?;
+        #[cfg(feature = "times")]
+        if read > 0 {
+            self.mark_access_flag(1);
         }
+        Ok(read)
     }
 
     pub fn write(&self, src: impl Read + IoBuf) -> axio::Result<usize> {
-        #[cfg(feature = "times")]
-        {
-            self.access_flags.fetch_or(3, Ordering::AcqRel);
-        }
-        if let Some(pos) = self.position.as_ref() {
+        let written = if let Some(pos) = self.position.as_ref() {
             let mut pos = pos.lock();
             if let Ok(f) = self.access(FileFlags::APPEND) {
                 f.append(src).map(|(written, new_size)| {
@@ -1336,13 +1357,18 @@ impl File {
                     written
                 })
             } else {
-                self.write_at(src, *pos).inspect(|n| {
+                self.access(FileFlags::WRITE)?.write_at(src, *pos).inspect(|n| {
                     *pos += *n as u64;
                 })
             }
         } else {
-            self.write_at(src, 0)
+            self.access(FileFlags::WRITE)?.write_at(src, 0)
+        }?;
+        #[cfg(feature = "times")]
+        if written > 0 {
+            self.mark_access_flag(2);
         }
+        Ok(written)
     }
 
     pub fn flush(&self) -> axio::Result {
@@ -1404,16 +1430,20 @@ impl Pollable for File {
 #[cfg(feature = "times")]
 impl Drop for File {
     fn drop(&mut self) {
-        let flags = self.access_flags.load(Ordering::Acquire);
+        let flags = self.access_flags.load(Ordering::Relaxed);
         if flags != 0 {
+            let now = axhal::time::realtime_time();
             let mut update = axfs_ng_vfs::MetadataUpdate::default();
-            if flags & 1 != 0 {
-                update.atime = Some(axhal::time::realtime_time());
+            if flags & 1 != 0 && !self.inner.record_access(now, false) {
+                update.atime = Some(now);
             }
-            if flags & 2 != 0 {
-                update.mtime = Some(axhal::time::realtime_time());
+            if flags & 2 != 0 && !self.inner.record_modification(now) {
+                update.mtime = Some(now);
+                update.ctime = Some(now);
             }
-            if let Err(err) = self.inner.location().update_metadata(update) {
+            if (update.atime.is_some() || update.mtime.is_some())
+                && let Err(err) = self.inner.location().update_metadata(update)
+            {
                 warn!("Failed to update file times on drop: {err:?}");
             }
         }

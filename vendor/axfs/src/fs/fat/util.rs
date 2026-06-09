@@ -111,6 +111,10 @@ pub fn update_file_metadata(file: &mut ff::File, update: MetadataUpdate) {
         #[allow(deprecated)]
         file.set_modified(unix_to_dos(mtime));
     }
+    if let Some(ctime) = update.ctime {
+        #[allow(deprecated)]
+        file.set_created(unix_to_dos(ctime));
+    }
 }
 
 pub fn into_vfs_err<E>(err: fatfs::Error<E>) -> VfsError {

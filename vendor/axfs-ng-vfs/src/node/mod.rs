@@ -23,6 +23,7 @@ use axpoll::{IoEvents, Pollable};
 pub use dir::*;
 pub use file::*;
 use inherit_methods_macro::inherit_methods;
+use log::warn;
 
 use crate::{
     FilesystemOps, Metadata, MetadataUpdate, Mutex, MutexGuard, NodeType, VfsError, VfsResult,
@@ -207,9 +208,11 @@ impl TypeMap {
 }
 
 struct InodeMetadataCache {
+    node: Arc<dyn NodeOps>,
+    file: Option<Arc<dyn FileNodeOps>>,
     metadata: Metadata,
     dirty_size: bool,
-    dirty_atime: bool,
+    dirty_update: MetadataUpdate,
 }
 
 type InodeMetadataCacheKey = (usize, u64);
@@ -224,9 +227,126 @@ fn inode_metadata_cache_key(filesystem: &dyn FilesystemOps, inode: u64) -> Inode
 }
 
 pub(super) fn invalidate_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
-    INODE_METADATA_CACHES
+    let key = inode_metadata_cache_key(filesystem, inode);
+    let shared = INODE_METADATA_CACHES.lock().remove(&key);
+    if let Some(shared) = shared
+        && let Err(err) = flush_metadata_cache_shared(&shared, false)
+    {
+        INODE_METADATA_CACHES.lock().entry(key).or_insert(shared);
+        warn!("Failed to flush inode metadata cache on invalidation: {err:?}");
+    }
+}
+
+fn metadata_update_is_empty(update: &MetadataUpdate) -> bool {
+    update.mode.is_none()
+        && update.owner.is_none()
+        && update.atime.is_none()
+        && update.mtime.is_none()
+        && update.ctime.is_none()
+}
+
+fn merge_metadata_update(target: &mut MetadataUpdate, update: &MetadataUpdate) {
+    if update.mode.is_some() {
+        target.mode = update.mode;
+    }
+    if update.owner.is_some() {
+        target.owner = update.owner;
+    }
+    if update.atime.is_some() {
+        target.atime = update.atime;
+    }
+    if update.mtime.is_some() {
+        target.mtime = update.mtime;
+    }
+    if update.ctime.is_some() {
+        target.ctime = update.ctime;
+    }
+}
+
+fn apply_metadata_update(metadata: &mut Metadata, update: &MetadataUpdate) {
+    if let Some(mode) = update.mode {
+        metadata.mode = mode;
+    }
+    if let Some((uid, gid)) = update.owner {
+        metadata.uid = uid;
+        metadata.gid = gid;
+    }
+    if let Some(atime) = update.atime {
+        metadata.atime = atime;
+    }
+    if let Some(mtime) = update.mtime {
+        metadata.mtime = mtime;
+    }
+    if let Some(ctime) = update.ctime {
+        metadata.ctime = ctime;
+    }
+}
+
+fn restore_metadata_dirty(
+    shared: &SharedInodeMetadataCache,
+    size: Option<u64>,
+    update: &MetadataUpdate,
+) {
+    let mut cache = shared.lock();
+    if size.is_some() {
+        cache.dirty_size = true;
+    }
+    merge_metadata_update(&mut cache.dirty_update, update);
+}
+
+fn flush_metadata_cache_shared(
+    shared: &SharedInodeMetadataCache,
+    data_only: bool,
+) -> VfsResult<()> {
+    let (size, update, file, node) = {
+        let mut cache = shared.lock();
+        let size = cache.dirty_size.then_some(cache.metadata.size);
+        let update = if data_only {
+            MetadataUpdate::default()
+        } else {
+            cache.dirty_update.clone()
+        };
+        if size.is_none() && metadata_update_is_empty(&update) {
+            return Ok(());
+        }
+        if size.is_some() {
+            cache.dirty_size = false;
+        }
+        if !data_only {
+            cache.dirty_update = MetadataUpdate::default();
+        }
+        (size, update, cache.file.clone(), cache.node.clone())
+    };
+
+    if let Some(size) = size {
+        let Some(file) = file else {
+            restore_metadata_dirty(shared, Some(size), &update);
+            return Err(VfsError::InvalidInput);
+        };
+        if let Err(err) = file.set_len(size) {
+            restore_metadata_dirty(shared, Some(size), &update);
+            return Err(err);
+        }
+    }
+    if !metadata_update_is_empty(&update)
+        && let Err(err) = node.update_metadata(update.clone())
+    {
+        restore_metadata_dirty(shared, None, &update);
+        return Err(err);
+    }
+    Ok(())
+}
+
+pub fn flush_inode_metadata_caches(data_only: bool) -> VfsResult<()> {
+    let caches = INODE_METADATA_CACHES
         .lock()
-        .remove(&inode_metadata_cache_key(filesystem, inode));
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    for cache in caches {
+        flush_metadata_cache_shared(&cache, data_only)?;
+    }
+    Ok(())
 }
 
 struct Inner {
@@ -337,34 +457,14 @@ impl DirEntry {
             .entry(key)
             .or_insert_with(|| {
                 Arc::new(Mutex::new(InodeMetadataCache {
+                    node: self.0.node.clone_inner(),
+                    file: self.as_file().ok().map(|file| file.inner().clone()),
                     metadata,
                     dirty_size: false,
-                    dirty_atime: false,
+                    dirty_update: MetadataUpdate::default(),
                 }))
             })
             .clone())
-    }
-
-    fn update_or_insert_metadata_cache(
-        &self,
-        metadata: Metadata,
-        f: impl FnOnce(&mut InodeMetadataCache, Metadata),
-    ) {
-        let key = self.metadata_cache_key();
-        let mut caches = INODE_METADATA_CACHES.lock();
-        let cache = caches
-            .entry(key)
-            .or_insert_with(|| {
-                Arc::new(Mutex::new(InodeMetadataCache {
-                    metadata: metadata.clone(),
-                    dirty_size: false,
-                    dirty_atime: false,
-                }))
-            })
-            .clone();
-        drop(caches);
-        let mut cache = cache.lock();
-        f(&mut *cache, metadata);
     }
 
     pub fn metadata(&self) -> VfsResult<Metadata> {
@@ -387,26 +487,14 @@ impl DirEntry {
     }
 
     pub fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()> {
-        self.0.node.update_metadata(update.clone())?;
         if !self.cacheable_metadata() {
-            return Ok(());
+            return self.0.node.update_metadata(update);
         }
 
-        let metadata = self.raw_metadata()?;
-        self.update_or_insert_metadata_cache(metadata, |cache, mut metadata| {
-            let cached_size = cache.metadata.size;
-            let dirty_size = cache.dirty_size;
-            let dirty_atime = cache.dirty_atime && update.atime.is_none();
-            metadata.size = cached_size;
-            if dirty_atime {
-                metadata.atime = cache.metadata.atime;
-            }
-            *cache = InodeMetadataCache {
-                metadata,
-                dirty_size,
-                dirty_atime,
-            };
-        });
+        let shared = self.ensure_metadata_cache()?;
+        let mut cache = shared.lock();
+        apply_metadata_update(&mut cache.metadata, &update);
+        merge_metadata_update(&mut cache.dirty_update, &update);
         Ok(())
     }
 
@@ -475,8 +563,21 @@ impl DirEntry {
             || stale_by_time;
         if should_update && atime > cache.metadata.atime {
             cache.metadata.atime = atime;
-            cache.dirty_atime = true;
+            cache.dirty_update.atime = Some(atime);
         }
+        Ok(true)
+    }
+
+    pub fn record_modification(&self, mtime: Duration) -> VfsResult<bool> {
+        if !self.cacheable_metadata() {
+            return Ok(false);
+        }
+        let shared = self.ensure_metadata_cache()?;
+        let mut cache = shared.lock();
+        cache.metadata.mtime = mtime;
+        cache.metadata.ctime = mtime;
+        cache.dirty_update.mtime = Some(mtime);
+        cache.dirty_update.ctime = Some(mtime);
         Ok(true)
     }
 
@@ -487,38 +588,7 @@ impl DirEntry {
         let Some(shared) = self.metadata_cache() else {
             return Ok(());
         };
-        let (size, atime) = {
-            let mut cache = shared.lock();
-            let size = cache.dirty_size.then_some(cache.metadata.size);
-            let atime = (!data_only && cache.dirty_atime).then_some(cache.metadata.atime);
-            if size.is_none() && atime.is_none() {
-                return Ok(());
-            }
-            cache.dirty_size &= size.is_none();
-            cache.dirty_atime &= atime.is_none();
-            (size, atime)
-        };
-
-        if let Some(size) = size {
-            if let Err(err) = self.as_file()?.set_len(size) {
-                let mut cache = shared.lock();
-                cache.dirty_size = true;
-                if atime.is_some() {
-                    cache.dirty_atime = true;
-                }
-                return Err(err);
-            }
-        }
-        if let Some(atime) = atime
-            && let Err(err) = self.0.node.update_metadata(MetadataUpdate {
-                atime: Some(atime),
-                ..Default::default()
-            })
-        {
-            shared.lock().dirty_atime = true;
-            return Err(err);
-        }
-        Ok(())
+        flush_metadata_cache_shared(&shared, data_only)
     }
 
     pub fn sync(&self, data_only: bool) -> VfsResult<()> {

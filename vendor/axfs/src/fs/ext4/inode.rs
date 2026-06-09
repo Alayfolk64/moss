@@ -160,7 +160,9 @@ impl NodeOps for Inode {
             if let Some(mtime) = update.mtime {
                 inode.set_mtime(&mtime);
             }
-            if update_ctime {
+            if let Some(ctime) = update.ctime {
+                inode.set_ctime(&ctime);
+            } else if update_ctime {
                 inode.update_ctime();
             }
             Ok(())

@@ -241,6 +241,10 @@ impl Location {
         self.entry.record_access(atime, strict)
     }
 
+    pub fn record_modification(&self, mtime: Duration) -> VfsResult<bool> {
+        self.entry.record_modification(mtime)
+    }
+
     pub fn flush_metadata_cache(&self, data_only: bool) -> VfsResult<()> {
         self.entry.flush_metadata_cache(data_only)
     }
