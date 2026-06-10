@@ -75,6 +75,8 @@ def norm(s: str) -> str:
 
 
 def parse_log(path: Path) -> dict[tuple[str, str, str], Result]:
+    if not path.exists():
+        return {}
     text = ANSI_RE.sub("", path.read_text(encoding="utf-8", errors="replace"))
     libc: str | None = None
     group: str | None = None
