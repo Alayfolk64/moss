@@ -746,7 +746,7 @@ fn normalize_range(file: &File, l_whence: i16, l_start: i64, l_len: i64) -> AxRe
     let base = match whence {
         v if v == SEEK_SET as i32 => 0_i128,
         v if v == SEEK_CUR as i32 => i128::from(file.inner().seek(SeekFrom::Current(0))?),
-        v if v == SEEK_END as i32 => i128::from(file.inner().location().metadata()?.size),
+        v if v == SEEK_END as i32 => i128::from(file.inner().len()?),
         _ => return Err(AxError::InvalidInput),
     };
 

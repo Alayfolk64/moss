@@ -261,6 +261,7 @@ impl<Hal: SystemHal> InodeRef<Hal> {
             }
             ext4_inode_set_size(self.inner.inode, target.len() as u64);
         }
+        self.mark_dirty();
 
         Ok(())
     }

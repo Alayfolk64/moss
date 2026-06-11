@@ -8,6 +8,7 @@ use core::{
     iter, mem,
     sync::atomic::{AtomicU32, AtomicU64, Ordering},
     task::Context,
+    time::Duration,
 };
 
 use axpoll::{IoEvents, Pollable};
@@ -211,6 +212,45 @@ impl Location {
         let mut metadata = self.entry.metadata()?;
         metadata.device = self.mountpoint.device();
         Ok(metadata)
+    }
+
+    pub fn cached_metadata(&self) -> Option<Metadata> {
+        self.entry.cached_metadata().map(|mut metadata| {
+            metadata.device = self.mountpoint.device();
+            metadata
+        })
+    }
+
+    pub fn grow_cached_len(&self, len: u64, dirty: bool) -> VfsResult<u64> {
+        self.entry.grow_cached_len(len, dirty)
+    }
+
+    pub fn set_cached_len(&self, len: u64, dirty: bool) -> VfsResult<()> {
+        self.entry.set_cached_len(len, dirty)
+    }
+
+    pub fn set_cached_len_if_present(&self, len: u64) {
+        self.entry.set_cached_len_if_present(len)
+    }
+
+    pub fn grow_cached_len_if_present(&self, len: u64) {
+        self.entry.grow_cached_len_if_present(len)
+    }
+
+    pub fn record_access(&self, atime: Duration, strict: bool) -> VfsResult<bool> {
+        self.entry.record_access(atime, strict)
+    }
+
+    pub fn record_modification(&self, mtime: Duration) -> VfsResult<bool> {
+        self.entry.record_modification(mtime)
+    }
+
+    pub fn flush_metadata_cache(&self, data_only: bool) -> VfsResult<()> {
+        self.entry.flush_metadata_cache(data_only)
+    }
+
+    pub fn invalidate_metadata_cache(&self) {
+        self.entry.invalidate_metadata_cache()
     }
 
     pub fn absolute_path(&self) -> VfsResult<PathBuf> {

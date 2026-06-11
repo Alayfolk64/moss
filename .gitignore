@@ -34,3 +34,4 @@
 /.claude
 /syscall_code
 .vscode/
+docs/iozone/__pycache__/get_result.cpython-313.pyc
