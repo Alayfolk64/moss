@@ -140,7 +140,7 @@ impl DeviceOps for LoopDevice {
     }
 
     fn len(&self) -> VfsResult<u64> {
-        self.clone_file()?.location().len()
+        self.clone_file()?.len()
     }
 
     fn ioctl(&self, cmd: u32, arg: usize) -> VfsResult<usize> {
@@ -187,7 +187,7 @@ impl DeviceOps for LoopDevice {
             // TODO: the following should apply to any block devices
             BLKGETSIZE | BLKGETSIZE64 => {
                 let file = self.clone_file()?;
-                let sectors = file.location().len()? / 512;
+                let sectors = file.len()? / 512;
                 if cmd == BLKGETSIZE {
                     (arg as *mut u32).vm_write(sectors as _)?;
                 } else {

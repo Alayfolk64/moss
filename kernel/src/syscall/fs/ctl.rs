@@ -7,7 +7,9 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::{FS_CONTEXT, FsContext};
+use axfs::{
+    FS_CONTEXT, FsContext, invalidate_file_cache, sync_global_file_caches, update_cached_metadata,
+};
 use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
 use axtask::current;
@@ -215,7 +217,7 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
         let loc = dir.create(name, NodeType::Directory, permission)?;
         // Update both owner and mode to ensure SET_GID is preserved
-        loc.update_metadata(MetadataUpdate {
+        update_cached_metadata(&loc, MetadataUpdate {
             owner: Some((euid, gid)),
             mode: Some(permission),
             ..Default::default()
@@ -294,7 +296,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         };
         match dir.create(name, create_type, permission) {
             Ok(loc) => {
-                loc.update_metadata(MetadataUpdate {
+                update_cached_metadata(&loc, MetadataUpdate {
                     owner: Some((euid, gid)),
                     ..Default::default()
                 })?;
@@ -568,6 +570,16 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         .unwrap_or(flags == AT_REMOVEDIR as _);
     let dirent_event = prepare_fanotify_delete_event(dirfd, &path, is_dir);
     let inotify_target = prepare_inotify_target(dirfd, &path);
+    let removed_file_cache = if !is_dir {
+        with_fs(dirfd, |fs| {
+            let file = fs.resolve_no_follow(path.as_str())?;
+            Ok((file.metadata()?.nlink <= 1).then_some(file))
+        })
+        .ok()
+        .flatten()
+    } else {
+        None
+    };
     with_fs(dirfd, |fs| {
         if flags == AT_REMOVEDIR as _ {
             fs.remove_dir(path.as_str())?;
@@ -596,6 +608,9 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     notify_inotify_dirent(dirfd, &path, IN_DELETE, is_dir, 0);
     if let Some(event) = self_event {
         notify_fanotify_prepared_event(event);
+    }
+    if let Some(file) = removed_file_cache {
+        invalidate_file_cache(&file)?;
     }
     Ok(0)
 }
@@ -650,7 +665,7 @@ pub fn sys_symlinkat(
     let egid = proc_data.egid();
     with_fs(new_dirfd, |fs| {
         let loc = fs.symlink(target, &linkpath)?;
-        loc.update_metadata(MetadataUpdate {
+        update_cached_metadata(&loc, MetadataUpdate {
             owner: Some((euid, egid)),
             mode: Some(NodePermission::from_bits_truncate(0o777)),
             ..Default::default()
@@ -762,7 +777,7 @@ pub fn sys_fchownat(
 
     let uid = if uid == -1 { meta.uid } else { uid as _ };
     let gid = if gid == -1 { meta.gid } else { gid as _ };
-    loc.update_metadata(MetadataUpdate {
+    update_cached_metadata(&loc, MetadataUpdate {
         owner: Some((uid, gid)),
         mode: Some(mode),
         ..Default::default()
@@ -791,7 +806,7 @@ pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> A
     let permission = NodePermission::from_bits_truncate(mode as u16);
     debug!("sys_fchmodat: path={:?}, mode={:#o}, permission bits={:#o}, has SET_GID={}",
         path, mode, permission.bits(), permission.contains(NodePermission::SET_GID));
-    loc.update_metadata(MetadataUpdate {
+    update_cached_metadata(&loc, MetadataUpdate {
         mode: Some(permission),
         ..Default::default()
     })?;
@@ -850,7 +865,7 @@ fn update_times(
         }
     }
 
-    loc.update_metadata(MetadataUpdate {
+    update_cached_metadata(&loc, MetadataUpdate {
         atime: atime.duration(),
         mtime: mtime.duration(),
         ..Default::default()
@@ -983,8 +998,16 @@ pub fn sys_renameat2(
     let path_alias = prepare_fanotify_path_alias(old_dirfd, &old_path, new_dirfd, &new_path);
     let inotify_target = prepare_inotify_target(old_dirfd, &old_path);
     let cookie = next_inotify_cookie();
+    let replaced_file_cache = new_dir
+        .lookup_no_follow(new_name)
+        .ok()
+        .filter(|loc| !loc.is_dir())
+        .and_then(|loc| loc.metadata().ok().is_some_and(|meta| meta.nlink <= 1).then_some(loc));
 
     old_dir.rename(&old_name, &new_dir, new_name)?;
+    if let Some(file) = replaced_file_cache {
+        invalidate_file_cache(&file)?;
+    }
     commit_fanotify_path_alias(path_alias);
     let mut move_self_event = move_self_event;
     if is_dir {
@@ -1013,12 +1036,14 @@ pub fn sys_renameat2(
 }
 
 pub fn sys_sync() -> AxResult<isize> {
+    sync_global_file_caches()?;
     // Flush the root filesystem (ext4 on contest images).
     FS_CONTEXT.lock().root_dir().filesystem().flush()?;
     Ok(0)
 }
 
 pub fn sys_syncfs(fd: i32) -> AxResult<isize> {
+    sync_global_file_caches()?;
     if let Ok(file) = File::from_fd(fd) {
         file.inner().location().filesystem().flush()?;
         return Ok(0);

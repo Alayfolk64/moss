@@ -414,7 +414,7 @@ pub fn sys_mmap(
                                 return Err(AxError::NoSuchDevice);
                             }
                             DeviceMmap::ReadOnly => {
-                                let end = file.location().len().ok();
+                                let end = backend.len().ok();
                                 Backend::new_cow(start, page_size, backend, offset as u64, end)
                             }
                             DeviceMmap::Physical(mut range) => {
@@ -446,7 +446,7 @@ pub fn sys_mmap(
                 // Private mapping from a file
                 let inner = file.inner();
                 let backend = inner.backend()?.clone();
-                let end = inner.location().len().ok();
+                let end = backend.len().ok();
                 Backend::new_cow(start, page_size, backend, offset as u64, end)
             } else {
                 Backend::new_alloc(start, page_size)

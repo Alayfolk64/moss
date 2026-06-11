@@ -13,7 +13,7 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult};
-use axfs::{FS_CONTEXT, FileFlags, FsContext};
+use axfs::{FS_CONTEXT, FileFlags, FsContext, cached_metadata, update_cached_metadata};
 use axfs_ng_vfs::{Location, Metadata, MetadataUpdate, NodeFlags};
 use axhal::time::realtime_time;
 use axpoll::{IoEvents, Pollable};
@@ -53,15 +53,14 @@ pub fn set_inode_flags(path: String, flags: u32) {
     INODE_FLAGS.write().insert(path, flags & SUPPORTED);
 }
 
-pub fn update_atime_for_access(loc: &Location, is_dir: bool) {
+fn should_update_atime_for_access(loc: &Location, is_dir: bool, now: Duration) -> bool {
     let flags = loc.mount_flags();
     if flags & MS_NOATIME != 0 || (is_dir && flags & MS_NODIRATIME != 0) {
-        return;
+        return false;
     }
-    let now = realtime_time();
     if flags & MS_STRICTATIME == 0 {
-        let Ok(metadata) = loc.metadata() else {
-            return;
+        let Ok(metadata) = cached_metadata(loc) else {
+            return false;
         };
         let stale_by_time = now
             .checked_sub(metadata.atime)
@@ -70,13 +69,42 @@ pub fn update_atime_for_access(loc: &Location, is_dir: bool) {
             && metadata.atime > metadata.ctime
             && !stale_by_time
         {
-            return;
+            return false;
         }
     }
-    let _ = loc.update_metadata(MetadataUpdate {
+    true
+}
+
+pub fn update_atime_for_access(loc: &Location, is_dir: bool) {
+    let now = realtime_time();
+    if !should_update_atime_for_access(loc, is_dir, now) {
+        return;
+    }
+    let _ = update_cached_metadata(loc, MetadataUpdate {
         atime: Some(now),
         ..Default::default()
     });
+}
+
+fn record_file_access(file: &axfs::File) {
+    let loc = file.location();
+    if loc.mount_flags() & MS_NOATIME != 0 {
+        return;
+    }
+    let now = realtime_time();
+    let strict = loc.mount_flags() & MS_STRICTATIME != 0;
+    if file.record_access(now, strict) {
+        return;
+    }
+    if should_update_atime_for_access(loc, false, now) {
+        let _ = update_cached_metadata(
+            loc,
+            MetadataUpdate {
+                atime: Some(now),
+                ..Default::default()
+            },
+        );
+    }
 }
 
 pub fn with_fs<R>(dirfd: c_int, f: impl FnOnce(&mut FsContext) -> AxResult<R>) -> AxResult<R> {
@@ -105,7 +133,7 @@ impl ResolveAtResult {
     pub fn stat(&self) -> AxResult<Kstat> {
         match self {
             Self::File(file) => {
-                let mut stat = file.metadata().map(|it| metadata_to_kstat(&it))?;
+                let mut stat = cached_metadata(file).map(|it| metadata_to_kstat(&it))?;
                 if let Ok(path) = file.absolute_path()
                     && let Some(special) = SPECIAL_NODES.read().get(path.as_str()).copied()
                 {
@@ -247,8 +275,8 @@ impl FileLike for File {
                 inner.read(&mut *dst)
             }))
         };
-        if read.is_ok() && self.status_flags() & O_NOATIME == 0 {
-            update_atime_for_access(inner.location(), false);
+        if read.as_ref().map_or(false, |n| *n > 0) && self.status_flags() & O_NOATIME == 0 {
+            record_file_access(inner);
         }
         read
     }
@@ -265,7 +293,7 @@ impl FileLike for File {
     }
 
     fn stat(&self) -> AxResult<Kstat> {
-        Ok(metadata_to_kstat(&self.inner().location().metadata()?))
+        Ok(metadata_to_kstat(&self.inner().metadata()?))
     }
 
     fn ioctl(&self, cmd: u32, arg: usize) -> AxResult<usize> {

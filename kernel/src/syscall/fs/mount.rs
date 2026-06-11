@@ -148,7 +148,7 @@ struct LoopFileBlockDevice {
 
 impl LoopFileBlockDevice {
     fn new(file: FileBackend) -> AxResult<Self> {
-        let blocks = file.location().len()? / LOOP_BLOCK_SIZE as u64;
+        let blocks = file.len()? / LOOP_BLOCK_SIZE as u64;
         if blocks == 0 {
             return Err(AxError::InvalidInput);
         }
