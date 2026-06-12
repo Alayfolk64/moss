@@ -1,6 +1,5 @@
 use alloc::vec;
 use core::{
-    net::{Ipv4Addr, SocketAddr},
     sync::atomic::{AtomicBool, Ordering},
     task::Context,
 };
@@ -13,15 +12,18 @@ use smoltcp::{
     iface::SocketHandle,
     socket::tcp as smol,
     time::Duration,
-    wire::{IpEndpoint, IpListenEndpoint},
+    wire::{IpAddress, IpEndpoint, IpListenEndpoint, TCP_HEADER_LEN},
 };
 
 use super::{LISTEN_TABLE, SOCKET_SET};
 use crate::{
     RecvFlags, RecvOptions, SERVICE, SendOptions, Shutdown, Socket, SocketAddrEx, SocketOps,
-    consts::{TCP_RX_BUF_LEN, TCP_TX_BUF_LEN},
+    consts::{
+        LOOPBACK_ADVERTISED_MSS, LOOPBACK_MTU, STANDARD_MTU, TCP_RX_BUF_LEN, TCP_TX_BUF_LEN,
+    },
+    family::IpFamily,
     general::GeneralOptions,
-    options::{Configurable, GetSocketOption, SetSocketOption},
+    options::{Configurable, GetSocketOption, SetSocketOption, TcpInfo},
     poll_interfaces,
     state::*,
 };
@@ -37,6 +39,7 @@ pub(crate) fn new_tcp_socket() -> smol::Socket<'static> {
 pub struct TcpSocket {
     state: StateLock,
     handle: SocketHandle,
+    family: IpFamily,
     ever_connected: AtomicBool,
 
     general: GeneralOptions,
@@ -49,10 +52,11 @@ unsafe impl Sync for TcpSocket {}
 
 impl TcpSocket {
     /// Creates a new TCP socket.
-    pub fn new() -> Self {
+    pub fn new(family: IpFamily) -> Self {
         Self {
             state: StateLock::new(State::Idle),
             handle: SOCKET_SET.add(new_tcp_socket()),
+            family,
             ever_connected: AtomicBool::new(false),
 
             general: GeneralOptions::new(),
@@ -63,10 +67,16 @@ impl TcpSocket {
     }
 
     /// Creates a new TCP socket that is already connected.
-    fn new_connected(handle: SocketHandle) -> Self {
+    fn new_connected(
+        handle: SocketHandle,
+        family: IpFamily,
+        rx_buf_len: usize,
+        tx_buf_len: usize,
+    ) -> Self {
         let result = Self {
             state: StateLock::new(State::Connected),
             handle,
+            family,
             ever_connected: AtomicBool::new(true),
 
             general: GeneralOptions::new(),
@@ -74,11 +84,20 @@ impl TcpSocket {
             rx_closed: AtomicBool::new(false),
             poll_rx_closed: PollSet::new(),
         };
-        result.with_smol_socket(|socket| {
-            result
-                .general
-                .set_device_mask(SERVICE.lock().device_mask_for(&socket.get_bound_endpoint()));
+        result.general.set_recv_buffer(rx_buf_len);
+        result.general.set_send_buffer(tx_buf_len);
+        let endpoint = result.with_smol_socket(|socket| {
+            socket
+                .local_endpoint()
+                .map(|endpoint| IpListenEndpoint {
+                    addr: Some(endpoint.addr),
+                    port: endpoint.port,
+                })
+                .unwrap_or_else(|| socket.get_bound_endpoint())
         });
+        result
+            .general
+            .set_device_mask(SERVICE.lock().device_mask_for(&endpoint));
         result
     }
 }
@@ -96,6 +115,84 @@ impl TcpSocket {
 
     fn with_smol_socket<R>(&self, f: impl FnOnce(&mut smol::Socket) -> R) -> R {
         SOCKET_SET.with_socket_mut::<smol::Socket, _, _>(self.handle, f)
+    }
+
+    fn configured_rx_buf_len(&self) -> usize {
+        self.general.recv_buffer(TCP_RX_BUF_LEN)
+    }
+
+    fn configured_tx_buf_len(&self) -> usize {
+        self.general.send_buffer(TCP_TX_BUF_LEN)
+    }
+
+    fn apply_configured_buffers(&self) -> AxResult {
+        let rx_len = self.configured_rx_buf_len();
+        let tx_len = self.configured_tx_buf_len();
+        self.with_smol_socket(|socket| {
+            if socket.is_open() {
+                return Err(ax_err_type!(
+                    InvalidInput,
+                    "socket buffers are already active"
+                ));
+            }
+
+            let nagle = socket.nagle_enabled();
+            let keep_alive = socket.keep_alive();
+            let timeout = socket.timeout();
+            let ack_delay = socket.ack_delay();
+            let hop_limit = socket.hop_limit();
+            let bound_endpoint = socket.get_bound_endpoint();
+
+            *socket = smol::Socket::new(
+                smol::SocketBuffer::new(vec![0; rx_len]),
+                smol::SocketBuffer::new(vec![0; tx_len]),
+            );
+            socket.set_nagle_enabled(nagle);
+            socket.set_keep_alive(keep_alive);
+            socket.set_timeout(timeout);
+            socket.set_ack_delay(ack_delay);
+            socket.set_hop_limit(hop_limit);
+            socket.set_bound_endpoint(bound_endpoint);
+            Ok(())
+        })
+    }
+
+    fn apply_configured_buffers_if_idle(&self) -> AxResult {
+        if self.with_smol_socket(|socket| socket.is_open()) {
+            return Ok(());
+        }
+        self.apply_configured_buffers()
+    }
+
+    fn path_mtu_and_mss(&self) -> (usize, usize) {
+        let addr = self.with_smol_socket(|socket| {
+            socket
+                .remote_endpoint()
+                .map(|endpoint| endpoint.addr)
+                .or_else(|| socket.get_bound_endpoint().addr)
+        });
+        let addr = addr.unwrap_or_else(|| self.family.unspecified_addr());
+        let mtu = if addr.is_loopback() {
+            LOOPBACK_MTU
+        } else {
+            STANDARD_MTU
+        };
+        let ip_header_len = match addr {
+            IpAddress::Ipv4(_) => 20,
+            IpAddress::Ipv6(_) => 40,
+        };
+        (mtu, mtu.saturating_sub(ip_header_len + TCP_HEADER_LEN))
+    }
+
+    fn advertised_path_mtu_and_mss(&self) -> (usize, usize) {
+        let (pmtu, mss) = self.path_mtu_and_mss();
+        (pmtu, mss.min(LOOPBACK_ADVERTISED_MSS))
+    }
+
+    fn endpoint_from_socket_addr(&self, addr: core::net::SocketAddr) -> AxResult<IpEndpoint> {
+        self.family
+            .endpoint_from_socket_addr(addr, self.general.ipv6_only())
+            .ok_or_else(|| AxError::from(LinuxError::EAFNOSUPPORT))
     }
 
     fn bound_endpoint(&self) -> AxResult<IpListenEndpoint> {
@@ -163,6 +260,9 @@ impl Configurable for TcpSocket {
         }
 
         match option {
+            O::Ipv6Only(ipv6_only) if self.family == IpFamily::Ipv6 => {
+                **ipv6_only = self.general.ipv6_only();
+            }
             O::NoDelay(no_delay) => {
                 **no_delay = self.with_smol_socket(|socket| !socket.nagle_enabled());
             }
@@ -170,17 +270,28 @@ impl Configurable for TcpSocket {
                 **keep_alive = self.with_smol_socket(|socket| socket.keep_alive().is_some());
             }
             O::MaxSegment(max_segment) => {
-                // TODO(mivik): get actual MSS
-                **max_segment = 1460;
+                **max_segment = self.advertised_path_mtu_and_mss().1;
             }
             O::SendBuffer(size) => {
-                **size = TCP_TX_BUF_LEN;
+                **size = self.with_smol_socket(|socket| socket.send_capacity());
             }
             O::ReceiveBuffer(size) => {
-                **size = TCP_RX_BUF_LEN;
+                **size = self.with_smol_socket(|socket| socket.recv_capacity());
             }
-            O::TcpInfo(_) => {
-                // TODO(mivik): implement TCP_INFO
+            O::TcpInfo(info) => {
+                let (pmtu, mss) = self.advertised_path_mtu_and_mss();
+                // Minimal Linux-compatible TCP_INFO: report deterministic values
+                // so user space does not consume stale stack contents.
+                **info = TcpInfo {
+                    tcpi_state: self.with_smol_socket(|socket| tcp_state_number(socket.state())),
+                    tcpi_snd_mss: mss as u32,
+                    tcpi_rcv_mss: mss as u32,
+                    tcpi_snd_ssthresh: u32::MAX,
+                    tcpi_snd_cwnd: 10,
+                    tcpi_advmss: mss as u32,
+                    tcpi_pmtu: pmtu as u32,
+                    ..TcpInfo::default()
+                };
             }
             _ => return Ok(false),
         }
@@ -190,11 +301,28 @@ impl Configurable for TcpSocket {
     fn set_option_inner(&self, option: SetSocketOption) -> AxResult<bool> {
         use SetSocketOption as O;
 
+        match option {
+            O::SendBuffer(size) | O::SendBufferForce(size) => {
+                self.general.set_send_buffer(*size);
+                self.apply_configured_buffers_if_idle()?;
+                return Ok(true);
+            }
+            O::ReceiveBuffer(size) => {
+                self.general.set_recv_buffer(*size);
+                self.apply_configured_buffers_if_idle()?;
+                return Ok(true);
+            }
+            _ => {}
+        }
+
         if self.general.set_option_inner(option)? {
             return Ok(true);
         }
 
         match option {
+            O::Ipv6Only(ipv6_only) if self.family == IpFamily::Ipv6 => {
+                self.general.set_ipv6_only(*ipv6_only);
+            }
             O::NoDelay(no_delay) => {
                 self.with_smol_socket(|socket| {
                     socket.set_nagle_enabled(!no_delay);
@@ -220,19 +348,20 @@ impl Configurable for TcpSocket {
 impl SocketOps for TcpSocket {
     fn bind(&self, local_addr: SocketAddrEx) -> AxResult {
         let mut local_addr = local_addr.into_ip()?;
+        let mut local_endpoint = self.endpoint_from_socket_addr(local_addr)?;
         self.state
             .lock(State::Idle)
             .map_err(|_| ax_err_type!(InvalidInput, "already bound"))?
             .transit(State::Idle, || {
                 if local_addr.port() == 0 {
                     local_addr.set_port(get_ephemeral_port()?);
+                    local_endpoint.port = local_addr.port();
                 }
-                let local_ip = local_addr.ip().into();
-                if !SERVICE.lock().can_bind_ip(&local_ip) {
+                if !SERVICE.lock().can_bind_ip(&local_endpoint.addr) {
                     return Err(AxError::from(LinuxError::EADDRNOTAVAIL));
                 }
                 if !self.general.reuse_address() {
-                    SOCKET_SET.bind_check(local_addr.ip().into(), local_addr.port())?;
+                    SOCKET_SET.bind_check_tcp(local_endpoint.addr, local_endpoint.port)?;
                 }
 
                 self.with_smol_socket(|socket| {
@@ -240,12 +369,12 @@ impl SocketOps for TcpSocket {
                         return Err(AxError::InvalidInput);
                     }
                     let endpoint = IpListenEndpoint {
-                        addr: if local_addr.ip().is_unspecified() {
+                        addr: if local_endpoint.addr.is_unspecified() {
                             None
                         } else {
-                            Some(local_addr.ip().into())
+                            Some(local_endpoint.addr)
                         },
-                        port: local_addr.port(),
+                        port: local_endpoint.port,
                     };
                     socket.set_bound_endpoint(endpoint);
                     self.general
@@ -259,6 +388,7 @@ impl SocketOps for TcpSocket {
 
     fn connect(&self, remote_addr: SocketAddrEx) -> AxResult {
         let remote_addr = remote_addr.into_ip()?;
+        let remote_endpoint = self.endpoint_from_socket_addr(remote_addr)?;
         if self.ever_connected.load(Ordering::Acquire) {
             return Err(ax_err_type!(AlreadyConnected));
         }
@@ -273,14 +403,14 @@ impl SocketOps for TcpSocket {
                 }
             })?
             .transit(State::Connecting, || {
+                self.apply_configured_buffers()?;
                 // TODO: check remote addr unreachable
                 // let (bound_endpoint, remote_endpoint) = self.get_endpoint_pair(remote_addr)?;
-                let remote_endpoint = IpEndpoint::from(remote_addr);
                 let mut bound_endpoint =
                     self.with_smol_socket(|socket| socket.get_bound_endpoint());
                 if bound_endpoint.addr.is_none() {
                     bound_endpoint.addr =
-                        Some(SERVICE.lock().get_source_address(&remote_endpoint.addr));
+                        Some(SERVICE.lock().get_source_address(&remote_endpoint.addr)?);
                 }
                 if bound_endpoint.port == 0 {
                     bound_endpoint.port = get_ephemeral_port()?;
@@ -332,8 +462,15 @@ impl SocketOps for TcpSocket {
     fn listen(&self) -> AxResult {
         if let Ok(guard) = self.state.lock(State::Idle) {
             guard.transit(State::Listening, || {
+                self.apply_configured_buffers()?;
                 let bound_endpoint = self.with_smol_socket(|socket| socket.get_bound_endpoint());
-                LISTEN_TABLE.listen(bound_endpoint)?;
+                LISTEN_TABLE.listen(
+                    bound_endpoint,
+                    self.family,
+                    self.general.ipv6_only(),
+                    self.configured_rx_buf_len(),
+                    self.configured_tx_buf_len(),
+                )?;
                 debug!("listening on {}", bound_endpoint);
                 Ok(())
             })?;
@@ -352,7 +489,12 @@ impl SocketOps for TcpSocket {
         self.general.recv_poller(self, || {
             poll_interfaces();
             LISTEN_TABLE.accept(bound_port).map(|handle| {
-                let socket = TcpSocket::new_connected(handle);
+                let socket = TcpSocket::new_connected(
+                    handle,
+                    self.family,
+                    self.configured_rx_buf_len(),
+                    self.configured_tx_buf_len(),
+                );
                 debug!(
                     "accepted connection from {}, {}",
                     handle,
@@ -365,8 +507,7 @@ impl SocketOps for TcpSocket {
 
     fn send(&self, mut src: impl Read, _options: SendOptions) -> AxResult<usize> {
         // SAFETY: `self.handle` should be initialized in a connected socket.
-        self.general.send_poller(self, || {
-            poll_interfaces();
+        let sent = self.general.network_send_poller(self, || {
             self.with_smol_socket(|socket| {
                 if !socket.is_active() {
                     Err(AxError::NotConnected)
@@ -384,15 +525,18 @@ impl SocketOps for TcpSocket {
                     Ok(len)
                 }
             })
-        })
+        })?;
+        if sent > 0 {
+            poll_interfaces();
+        }
+        Ok(sent)
     }
 
     fn recv(&self, mut dst: impl Write + IoBufMut, options: RecvOptions<'_>) -> AxResult<usize> {
         if self.rx_closed.load(Ordering::Acquire) {
             return Err(AxError::NotConnected);
         }
-        self.general.recv_poller(self, || {
-            poll_interfaces();
+        self.general.network_recv_poller(self, || {
             self.with_smol_socket(|socket| {
                 if !socket.is_active() {
                     Err(AxError::NotConnected)
@@ -421,23 +565,27 @@ impl SocketOps for TcpSocket {
 
     fn local_addr(&self) -> AxResult<SocketAddrEx> {
         self.with_smol_socket(|socket| {
-            let endpoint = socket.get_bound_endpoint();
-            Ok(SocketAddrEx::Ip(SocketAddr::new(
-                endpoint
-                    .addr
-                    .map_or_else(|| Ipv4Addr::UNSPECIFIED.into(), Into::into),
-                endpoint.port,
-            )))
+            let (addr, port) = if let Some(endpoint) = socket.local_endpoint() {
+                (endpoint.addr, endpoint.port)
+            } else {
+                let endpoint = socket.get_bound_endpoint();
+                (
+                    endpoint.addr.unwrap_or_else(|| self.family.unspecified_addr()),
+                    endpoint.port,
+                )
+            };
+            Ok(SocketAddrEx::Ip(
+                self.family.format_socket_addr(addr, port),
+            ))
         })
     }
 
     fn peer_addr(&self) -> AxResult<SocketAddrEx> {
         self.with_smol_socket(|socket| {
+            let endpoint = socket.remote_endpoint().ok_or(AxError::NotConnected)?;
             Ok(SocketAddrEx::Ip(
-                socket
-                    .remote_endpoint()
-                    .ok_or(AxError::NotConnected)?
-                    .into(),
+                self.family
+                    .format_socket_addr(endpoint.addr, endpoint.port),
             ))
         })
     }
@@ -477,9 +625,24 @@ impl SocketOps for TcpSocket {
     }
 }
 
+fn tcp_state_number(state: smol::State) -> u8 {
+    match state {
+        smol::State::Closed => 7,
+        smol::State::Listen => 10,
+        smol::State::SynSent => 2,
+        smol::State::SynReceived => 3,
+        smol::State::Established => 1,
+        smol::State::FinWait1 => 4,
+        smol::State::FinWait2 => 5,
+        smol::State::CloseWait => 8,
+        smol::State::Closing => 11,
+        smol::State::LastAck => 9,
+        smol::State::TimeWait => 6,
+    }
+}
+
 impl Pollable for TcpSocket {
     fn poll(&self) -> IoEvents {
-        poll_interfaces();
         let mut events = match self.state() {
             State::Connecting => self.poll_connect(),
             State::Connected | State::Idle | State::Closed => self.poll_stream(),
