@@ -62,7 +62,7 @@
 #let cover() = {
   // 顶部校徽 + 校名
   align(center)[
-    #image("pictrues/loogoo.png", width: 15cm)
+    //#image("pictrues/loogoo.png", width: 15cm)
   ]
 
   v(3cm)
