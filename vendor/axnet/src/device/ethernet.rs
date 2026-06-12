@@ -121,11 +121,13 @@ impl EthernetDevice {
 
         match repr.ethertype {
             EthernetProtocol::Ipv4 => {
-                buffer
-                    .enqueue(frame.payload().len(), ())
-                    .unwrap()
-                    .copy_from_slice(frame.payload());
-                return true;
+                return match buffer.enqueue(frame.payload().len(), ()) {
+                    Ok(buf) => {
+                        buf.copy_from_slice(frame.payload());
+                        true
+                    }
+                    Err(_) => false,
+                };
             }
             EthernetProtocol::Arp => self.process_arp(frame.payload(), timestamp),
             _ => {}
@@ -287,6 +289,16 @@ impl Device for EthernetDevice {
     }
 
     fn send(&mut self, next_hop: IpAddress, packet: &[u8], timestamp: Instant) -> bool {
+        if packet.len() > STANDARD_MTU {
+            warn!(
+                "Dropping oversized Ethernet packet to {}: {} > {}",
+                next_hop,
+                packet.len(),
+                STANDARD_MTU
+            );
+            return false;
+        }
+
         if next_hop.is_broadcast() || self.ip.broadcast().map(IpAddress::Ipv4) == Some(next_hop) {
             Self::send_to(
                 &mut self.inner,
