@@ -227,6 +227,21 @@ impl ChecksumCapabilities {
             icmpv6: Checksum::None,
         }
     }
+
+    pub fn loopback_transport(
+        &self,
+        src_addr: &crate::wire::IpAddress,
+        dst_addr: &crate::wire::IpAddress,
+    ) -> Self {
+        if src_addr.is_loopback() && dst_addr.is_loopback() {
+            let mut checksum = self.clone();
+            checksum.udp = Checksum::None;
+            checksum.tcp = Checksum::None;
+            checksum
+        } else {
+            self.clone()
+        }
+    }
 }
 
 /// A description of device capabilities.
@@ -258,6 +273,13 @@ pub struct DeviceCapabilities {
     /// Most common IP MTU is 1500. Minimum is 576 (for IPv4) or 1280 (for IPv6). Maximum is 9216 octets.
     pub max_transmission_unit: usize,
 
+    /// Optional IP MTU for loopback destinations.
+    ///
+    /// Some virtual IP devices aggregate loopback and physical routes. This allows the stack to
+    /// use a larger packet size for local traffic without advertising jumbo frames to external
+    /// links.
+    pub loopback_transmission_unit: Option<usize>,
+
     /// Maximum burst size, in terms of MTU.
     ///
     /// The network device is unable to send or receive bursts large than the value returned
@@ -285,6 +307,15 @@ impl DeviceCapabilities {
             Medium::Ip => self.max_transmission_unit,
             #[cfg(feature = "medium-ieee802154")]
             Medium::Ieee802154 => self.max_transmission_unit, // TODO(thvdveld): what is the MTU for Medium::IEEE802
+        }
+    }
+
+    pub fn ip_mtu_for_addr(&self, dst_addr: &crate::wire::IpAddress) -> usize {
+        if dst_addr.is_loopback() {
+            self.loopback_transmission_unit
+                .unwrap_or_else(|| self.ip_mtu())
+        } else {
+            self.ip_mtu()
         }
     }
 }
@@ -402,4 +433,8 @@ pub trait TxToken {
     /// The Packet ID to be associated with the frame to be transmitted by this [`TxToken`].
     #[allow(unused_variables)]
     fn set_meta(&mut self, meta: PacketMeta) {}
+
+    /// The destination IP address for the frame to be transmitted by this [`TxToken`].
+    #[allow(unused_variables)]
+    fn set_dst_addr(&mut self, dst_addr: crate::wire::IpAddress) {}
 }

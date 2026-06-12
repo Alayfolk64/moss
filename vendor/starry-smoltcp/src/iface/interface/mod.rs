@@ -787,6 +787,11 @@ impl InterfaceInner {
         self.caps.ip_mtu()
     }
 
+    #[allow(unused)] // unused depending on which sockets are enabled
+    pub(crate) fn ip_mtu_for_addr(&self, dst_addr: &IpAddress) -> usize {
+        self.caps.ip_mtu_for_addr(dst_addr)
+    }
+
     #[allow(unused)] // unused depending on which sockets are enabled, and in tests
     pub(crate) fn rand(&mut self) -> &mut Rand {
         &mut self.rand
@@ -1206,21 +1211,27 @@ impl InterfaceInner {
         };
 
         let total_ip_len = ip_repr.buffer_len();
+        let dst_addr = ip_repr.dst_addr();
+        let dst_ip_mtu = self.ip_mtu_for_addr(&dst_addr);
 
         match &mut ip_repr {
             #[cfg(feature = "proto-ipv4")]
             IpRepr::Ipv4(repr) => {
                 // If we have an IPv4 packet, then we need to check if we need to fragment it.
-                if total_ip_len > self.caps.ip_mtu() {
+                if total_ip_len > dst_ip_mtu {
                     #[cfg(feature = "proto-ipv4-fragmentation")]
                     {
                         net_debug!("start fragmentation");
 
                         // Calculate how much we will send now (including the Ethernet header).
-                        let tx_len = self.caps.max_transmission_unit;
+                        let mut tx_len = dst_ip_mtu;
+                        #[cfg(feature = "medium-ethernet")]
+                        if matches!(self.caps.medium, Medium::Ethernet) {
+                            tx_len += EthernetFrame::<&[u8]>::header_len();
+                        }
 
                         let ip_header_len = repr.buffer_len();
-                        let first_frag_ip_len = self.caps.ip_mtu();
+                        let first_frag_ip_len = dst_ip_mtu;
 
                         if frag.buffer.len() < total_ip_len {
                             net_debug!(
@@ -1288,6 +1299,7 @@ impl InterfaceInner {
                     }
                 } else {
                     tx_token.set_meta(meta);
+                    tx_token.set_dst_addr(repr.dst_addr.into());
 
                     // No fragmentation is required.
                     tx_token.consume(total_len, |mut tx_buffer| {
@@ -1306,10 +1318,13 @@ impl InterfaceInner {
             #[cfg(feature = "proto-ipv6")]
             IpRepr::Ipv6(_) => {
                 // Check if we need to fragment it.
-                if total_ip_len > self.caps.ip_mtu() {
+                if total_ip_len > dst_ip_mtu {
                     net_debug!("IPv6 fragmentation support is unimplemented. Dropping.");
                     Ok(())
                 } else {
+                    tx_token.set_meta(meta);
+                    tx_token.set_dst_addr(ip_repr.dst_addr());
+
                     tx_token.consume(total_len, |mut tx_buffer| {
                         #[cfg(feature = "medium-ethernet")]
                         if matches!(self.caps.medium, Medium::Ethernet) {

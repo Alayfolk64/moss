@@ -167,6 +167,16 @@ impl Address {
         }
     }
 
+    /// Query whether the address falls into the loopback range.
+    pub fn is_loopback(&self) -> bool {
+        match self {
+            #[cfg(feature = "proto-ipv4")]
+            Address::Ipv4(addr) => addr.octets()[0] == 127,
+            #[cfg(feature = "proto-ipv6")]
+            Address::Ipv6(addr) => addr.is_loopback(),
+        }
+    }
+
     /// If `self` is a CIDR-compatible subnet mask, return `Some(prefix_len)`,
     /// where `prefix_len` is the number of leading zeroes. Return `None` otherwise.
     pub fn prefix_len(&self) -> Option<u8> {

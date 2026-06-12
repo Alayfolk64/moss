@@ -16,12 +16,13 @@ impl InterfaceInner {
         ip_payload: &'frame [u8],
     ) -> Option<Packet<'frame>> {
         let (src_addr, dst_addr) = (ip_repr.src_addr(), ip_repr.dst_addr());
+        let checksum = self.caps.checksum.loopback_transport(&src_addr, &dst_addr);
         let udp_packet = check!(UdpPacket::new_checked(ip_payload));
         let udp_repr = check!(UdpRepr::parse(
             &udp_packet,
             &src_addr,
             &dst_addr,
-            &self.caps.checksum
+            &checksum
         ));
 
         #[cfg(feature = "socket-udp")]

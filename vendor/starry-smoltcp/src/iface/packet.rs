@@ -76,6 +76,9 @@ impl<'p> Packet<'p> {
         payload: &mut [u8],
         caps: &DeviceCapabilities,
     ) {
+        let transport_checksum = caps
+            .checksum
+            .loopback_transport(&_ip_repr.src_addr(), &_ip_repr.dst_addr());
         match self.payload() {
             #[cfg(feature = "proto-ipv4")]
             IpPayload::Icmpv4(icmpv4_repr) => {
@@ -138,7 +141,7 @@ impl<'p> Packet<'p> {
                 &_ip_repr.dst_addr(),
                 inner_payload.len(),
                 |buf| buf.copy_from_slice(inner_payload),
-                &caps.checksum,
+                &transport_checksum,
             ),
             #[cfg(feature = "socket-tcp")]
             IpPayload::Tcp(mut tcp_repr) => {
@@ -150,7 +153,7 @@ impl<'p> Packet<'p> {
                 //
                 // I'm really not happy about this "solution" but I don't know what else to do.
                 if let Some(max_burst_size) = caps.max_burst_size {
-                    let mut max_segment_size = caps.max_transmission_unit;
+                    let mut max_segment_size = caps.ip_mtu_for_addr(&_ip_repr.dst_addr());
                     max_segment_size -= _ip_repr.header_len();
                     max_segment_size -= tcp_repr.header_len();
 
@@ -164,7 +167,7 @@ impl<'p> Packet<'p> {
                     &mut TcpPacket::new_unchecked(payload),
                     &_ip_repr.src_addr(),
                     &_ip_repr.dst_addr(),
-                    &caps.checksum,
+                    &transport_checksum,
                 );
             }
             #[cfg(feature = "socket-dhcpv4")]
