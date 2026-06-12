@@ -19,6 +19,8 @@
 *.swp
 *.swo
 *.o
+__pycache__/
+*.py[cod]
 *.bin
 *.exec
 *.xz
