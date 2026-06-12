@@ -1,5 +1,5 @@
 use axerrno::{AxError, AxResult, LinuxError};
-use axnet::options::{Configurable, GetSocketOption, SetSocketOption};
+use axnet::options::{Configurable, GetSocketOption, SetSocketOption, TcpInfo};
 use linux_raw_sys::net::{SO_ATTACH_BPF, SOL_SOCKET, socklen_t};
 
 use crate::{
@@ -10,6 +10,7 @@ use crate::{
 const PROTO_TCP: u32 = linux_raw_sys::net::IPPROTO_TCP as u32;
 
 const PROTO_IP: u32 = linux_raw_sys::net::IPPROTO_IP as u32;
+const PROTO_IPV6: u32 = linux_raw_sys::net::IPPROTO_IPV6 as u32;
 const MCAST_JOIN_GROUP: u32 = linux_raw_sys::net::MCAST_JOIN_GROUP;
 const MCAST_LEAVE_GROUP: u32 = linux_raw_sys::net::MCAST_LEAVE_GROUP;
 
@@ -97,9 +98,9 @@ macro_rules! call_dispatch {
 
             (PROTO_TCP, TCP_NODELAY) => NoDelay as IntBool,
             (PROTO_TCP, TCP_MAXSEG) => MaxSegment as Int<usize>,
-            (PROTO_TCP, TCP_INFO) => TcpInfo,
 
             (PROTO_IP, IP_TTL) => Ttl as Int<u8>,
+            (PROTO_IPV6, IPV6_V6ONLY) => Ipv6Only as IntBool,
         }
     }};
     ($dispatch:ident, $in:expr, $($pat:pat => $which:ident $(as $conv:ty)?),* $(,)?) => {
@@ -140,6 +141,22 @@ pub fn sys_getsockopt(
     }
 
     let socket = Socket::from_fd(fd)?;
+    if level == PROTO_TCP && optname == linux_raw_sys::net::TCP_INFO {
+        if *optlen == 0 {
+            return Err(AxError::InvalidInput);
+        }
+        let mut info = TcpInfo::default();
+        socket.get_option(GetSocketOption::TcpInfo(&mut info))?;
+        let len = (*optlen as usize).min(size_of::<TcpInfo>());
+        let info_bytes =
+            unsafe { core::slice::from_raw_parts(&info as *const _ as *const u8, len) };
+        optval
+            .get_as_mut_slice(len)?
+            .copy_from_slice(info_bytes);
+        *optlen = len as socklen_t;
+        return Ok(0);
+    }
+
     macro_rules! dispatch {
         ($which:ident) => {
             socket.get_option(GetSocketOption::$which(get(optval, optlen)?))?;
