@@ -12,7 +12,7 @@ use linux_raw_sys::{
 };
 use starry_signal::SignalSet;
 
-use super::{FdPollSet, poll::wait_for_signal_or_timeout};
+use super::{FdPollSet, poll::wait_for_signal_or_timeout, poll_network_once};
 use crate::{
     file::FD_TABLE,
     mm::{UserConstPtr, UserPtr, nullable},
@@ -119,6 +119,7 @@ fn do_select(
         match block_on(future::timeout(
             timeout,
             poll_io(&fds, IoEvents::empty(), false, || {
+                poll_network_once();
                 let mut res = 0usize;
                 for ((fd, interested), index) in fds.0.iter().zip(fd_indices.iter().copied()) {
                     let events = fd.poll() & *interested;

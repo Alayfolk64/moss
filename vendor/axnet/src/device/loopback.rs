@@ -9,7 +9,7 @@ use smoltcp::{
 };
 
 use crate::{
-    consts::{SOCKET_BUFFER_SIZE, STANDARD_MTU},
+    consts::{LOOPBACK_MTU, ROUTER_PACKET_BUFFER_SIZE},
     device::Device,
 };
 
@@ -20,8 +20,8 @@ pub struct LoopbackDevice {
 impl LoopbackDevice {
     pub fn new() -> Self {
         let buffer = PacketBuffer::new(
-            vec![PacketMetadata::EMPTY; SOCKET_BUFFER_SIZE],
-            vec![0u8; STANDARD_MTU * SOCKET_BUFFER_SIZE],
+            vec![PacketMetadata::EMPTY; ROUTER_PACKET_BUFFER_SIZE],
+            vec![0u8; LOOPBACK_MTU * ROUTER_PACKET_BUFFER_SIZE],
         );
         Self {
             buffer,
@@ -35,13 +35,23 @@ impl Device for LoopbackDevice {
         "lo"
     }
 
+    fn is_loopback(&self) -> bool {
+        true
+    }
+
+    fn notify_rx_ready(&self) {
+        self.poll.wake();
+    }
+
     fn recv(&mut self, buffer: &mut PacketBuffer<()>, _timestamp: Instant) -> bool {
         self.buffer.dequeue().ok().is_some_and(|(_, rx_buf)| {
-            buffer
-                .enqueue(rx_buf.len(), ())
-                .unwrap()
-                .copy_from_slice(rx_buf);
-            true
+            match buffer.enqueue(rx_buf.len(), ()) {
+                Ok(buf) => {
+                    buf.copy_from_slice(rx_buf);
+                    true
+                }
+                Err(_) => false,
+            }
         })
     }
 

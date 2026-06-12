@@ -11,7 +11,7 @@ use axtask::{
 use linux_raw_sys::general::{POLLNVAL, pollfd, timespec};
 use starry_signal::SignalSet;
 
-use super::FdPollSet;
+use super::{FdPollSet, poll_network_once};
 use crate::{
     file::get_file_like,
     mm::{UserConstPtr, UserPtr, nullable},
@@ -60,6 +60,7 @@ fn do_poll(
         match block_on(future::timeout(
             timeout,
             poll_io(&fds, IoEvents::empty(), false, || {
+                poll_network_once();
                 let mut res = 0usize;
                 for ((fd, events), revents) in fds.0.iter().zip(revents.iter_mut()) {
                     let mut result = fd.poll();

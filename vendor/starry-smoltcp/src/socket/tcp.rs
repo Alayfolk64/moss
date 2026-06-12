@@ -549,6 +549,18 @@ pub struct Socket<'a> {
 
 const DEFAULT_MSS: usize = 536;
 
+fn is_loopback_tuple(tuple: Tuple) -> bool {
+    tuple.local.addr.is_loopback() && tuple.remote.addr.is_loopback()
+}
+
+fn next_transmit_seq(remote_last_seq: TcpSeqNumber, local_seq_no: TcpSeqNumber) -> TcpSeqNumber {
+    if remote_last_seq >= local_seq_no {
+        remote_last_seq
+    } else {
+        local_seq_no
+    }
+}
+
 impl<'a> Socket<'a> {
     #[allow(unused_comparisons)] // small usize platforms always pass rx_capacity check
     /// Create a socket using the given buffers.
@@ -2211,7 +2223,8 @@ impl<'a> Socket<'a> {
     }
 
     fn seq_to_transmit(&self, cx: &mut Context) -> bool {
-        let ip_header_len = match self.tuple.unwrap().local.addr {
+        let tuple = self.tuple.unwrap();
+        let ip_header_len = match tuple.local.addr {
             #[cfg(feature = "proto-ipv4")]
             IpAddress::Ipv4(_) => crate::wire::IPV4_HEADER_LEN,
             #[cfg(feature = "proto-ipv6")]
@@ -2219,13 +2232,15 @@ impl<'a> Socket<'a> {
         };
 
         // Max segment size we're able to send due to MTU limitations.
-        let local_mss = cx.ip_mtu() - ip_header_len - TCP_HEADER_LEN;
+        let local_mss = cx.ip_mtu_for_addr(&tuple.remote.addr) - ip_header_len - TCP_HEADER_LEN;
 
         // The effective max segment size, taking into account our and remote's limits.
         let effective_mss = local_mss.min(self.remote_mss);
 
+        let next_seq = next_transmit_seq(self.remote_last_seq, self.local_seq_no);
+
         // Have we sent data that hasn't been ACKed yet?
-        let data_in_flight = self.remote_last_seq != self.local_seq_no;
+        let data_in_flight = next_seq != self.local_seq_no;
 
         // If we want to send a SYN and we haven't done so, do it!
         if matches!(self.state, State::SynSent | State::SynReceived) && !data_in_flight {
@@ -2237,14 +2252,20 @@ impl<'a> Socket<'a> {
             self.local_seq_no + core::cmp::min(self.remote_win_len, self.tx_buffer.len());
 
         // Max amount of octets we can send.
-        let max_send = if max_send_seq >= self.remote_last_seq {
-            max_send_seq - self.remote_last_seq
+        let max_send = if max_send_seq >= next_seq {
+            max_send_seq - next_seq
         } else {
             0
         };
 
-        // Compare max_send with the congestion window.
-        let max_send = max_send.min(self.congestion_controller.inner().window());
+        // Loopback traffic is memory-local and has no physical link to congest.
+        // Keep normal flow control, MSS and MTU limits, but do not throttle it
+        // through the congestion controller window.
+        let max_send = if is_loopback_tuple(tuple) {
+            max_send
+        } else {
+            max_send.min(self.congestion_controller.inner().window())
+        };
 
         // Can we send at least 1 octet?
         let mut can_send = max_send != 0;
@@ -2272,7 +2293,7 @@ impl<'a> Socket<'a> {
         // 1. We have unsent data that fits in the remote window.
         // 2. We have no unsent data.
         // This condition matches only if #2, because #1 is already covered by can_data and we're ORing them.
-        let can_fin = want_fin && self.remote_last_seq == self.local_seq_no + self.tx_buffer.len();
+        let can_fin = want_fin && next_seq == self.local_seq_no + self.tx_buffer.len();
 
         can_send || can_fin
     }
@@ -2486,12 +2507,15 @@ impl<'a> Socket<'a> {
                 // Extract as much data as the remote side can receive in this packet
                 // from the transmit buffer.
 
+                let next_seq = next_transmit_seq(self.remote_last_seq, self.local_seq_no);
+                repr.seq_number = next_seq;
+
                 // Right edge of window, ie the max sequence number we're allowed to send.
                 let win_right_edge = self.local_seq_no + self.remote_win_len;
 
                 // Max amount of octets we're allowed to send according to the remote window.
-                let mut win_limit = if win_right_edge >= self.remote_last_seq {
-                    win_right_edge - self.remote_last_seq
+                let mut win_limit = if win_right_edge >= next_seq {
+                    win_right_edge - next_seq
                 } else {
                     // This can happen if we've sent some data and later the remote side
                     // has shrunk its window so that data is no longer inside the window.
@@ -2511,11 +2535,17 @@ impl<'a> Socket<'a> {
                 // 1. remote window
                 // 2. MSS the remote is willing to accept, probably determined by their MTU
                 // 3. MSS we can send, determined by our MTU.
+                let path_mtu = cx.ip_mtu_for_addr(&tuple.remote.addr);
                 let size = win_limit
                     .min(self.remote_mss)
-                    .min(cx.ip_mtu() - ip_repr.header_len() - TCP_HEADER_LEN);
+                    .min(path_mtu - ip_repr.header_len() - TCP_HEADER_LEN);
+                let size = if is_loopback_tuple(tuple) {
+                    size
+                } else {
+                    size.min(self.congestion_controller.inner().window())
+                };
 
-                let offset = self.remote_last_seq - self.local_seq_no;
+                let offset = next_seq - self.local_seq_no;
                 repr.payload = self.tx_buffer.get_allocated(offset, size);
 
                 // If we've sent everything we had in the buffer, follow it with the PSH or FIN
@@ -2557,7 +2587,7 @@ impl<'a> Socket<'a> {
             tcp_trace!(
                 "tx buffer: sending {} octets at offset {}",
                 repr.payload.len(),
-                self.remote_last_seq - self.local_seq_no
+                repr.seq_number - self.local_seq_no
             );
         }
         if repr.control != TcpControl::None || repr.payload.is_empty() {
@@ -2575,7 +2605,8 @@ impl<'a> Socket<'a> {
 
         if repr.control == TcpControl::Syn {
             // Fill the MSS option. See RFC 6691 for an explanation of this calculation.
-            let max_segment_size = cx.ip_mtu() - ip_repr.header_len() - TCP_HEADER_LEN;
+            let path_mtu = cx.ip_mtu_for_addr(&tuple.remote.addr);
+            let max_segment_size = path_mtu - ip_repr.header_len() - TCP_HEADER_LEN;
             repr.max_seg_size = Some(max_segment_size as u16);
         }
 

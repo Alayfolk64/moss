@@ -15,6 +15,12 @@ pub use vsock::*;
 pub trait Device: Send + Sync {
     fn name(&self) -> &str;
 
+    fn is_loopback(&self) -> bool {
+        false
+    }
+
+    fn notify_rx_ready(&self) {}
+
     fn recv(&mut self, buffer: &mut PacketBuffer<()>, timestamp: Instant) -> bool;
     /// Sends a packet to the next hop.
     ///

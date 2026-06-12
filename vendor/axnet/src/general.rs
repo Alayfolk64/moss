@@ -4,13 +4,15 @@ use core::{
     time::Duration,
 };
 
-use axerrno::AxResult;
+use axerrno::{AxError, AxResult};
 use axpoll::{IoEvents, Pollable};
 use axtask::future::{block_on, poll_io, timeout};
 
 use crate::{
     SERVICE,
+    consts::MAX_SOCKET_BUF_LEN,
     options::{Configurable, GetSocketOption, SetSocketOption},
+    poll_interfaces,
 };
 
 /// General options for all sockets.
@@ -19,9 +21,13 @@ pub(crate) struct GeneralOptions {
     nonblock: AtomicBool,
     /// Whether the socket should reuse the address.
     reuse_address: AtomicBool,
+    /// Whether an IPv6 socket only accepts IPv6 traffic.
+    ipv6_only: AtomicBool,
 
     send_timeout_nanos: AtomicU64,
     recv_timeout_nanos: AtomicU64,
+    send_buffer_len: AtomicU32,
+    recv_buffer_len: AtomicU32,
 
     device_mask: AtomicU32,
 }
@@ -35,9 +41,12 @@ impl GeneralOptions {
         Self {
             nonblock: AtomicBool::new(false),
             reuse_address: AtomicBool::new(false),
+            ipv6_only: AtomicBool::new(false),
 
             send_timeout_nanos: AtomicU64::new(0),
             recv_timeout_nanos: AtomicU64::new(0),
+            send_buffer_len: AtomicU32::new(0),
+            recv_buffer_len: AtomicU32::new(0),
 
             device_mask: AtomicU32::new(0),
         }
@@ -51,6 +60,14 @@ impl GeneralOptions {
         self.reuse_address.load(Ordering::Relaxed)
     }
 
+    pub fn ipv6_only(&self) -> bool {
+        self.ipv6_only.load(Ordering::Relaxed)
+    }
+
+    pub fn set_ipv6_only(&self, ipv6_only: bool) {
+        self.ipv6_only.store(ipv6_only, Ordering::Relaxed);
+    }
+
     pub fn send_timeout(&self) -> Option<Duration> {
         let nanos = self.send_timeout_nanos.load(Ordering::Relaxed);
         (nanos > 0).then(|| Duration::from_nanos(nanos))
@@ -59,6 +76,26 @@ impl GeneralOptions {
     pub fn recv_timeout(&self) -> Option<Duration> {
         let nanos = self.recv_timeout_nanos.load(Ordering::Relaxed);
         (nanos > 0).then(|| Duration::from_nanos(nanos))
+    }
+
+    pub fn send_buffer(&self, default: usize) -> usize {
+        let size = self.send_buffer_len.load(Ordering::Relaxed) as usize;
+        if size == 0 { default } else { size }
+    }
+
+    pub fn recv_buffer(&self, default: usize) -> usize {
+        let size = self.recv_buffer_len.load(Ordering::Relaxed) as usize;
+        if size == 0 { default } else { size }
+    }
+
+    pub fn set_send_buffer(&self, size: usize) {
+        self.send_buffer_len
+            .store(size.clamp(1, MAX_SOCKET_BUF_LEN) as u32, Ordering::Relaxed);
+    }
+
+    pub fn set_recv_buffer(&self, size: usize) {
+        self.recv_buffer_len
+            .store(size.clamp(1, MAX_SOCKET_BUF_LEN) as u32, Ordering::Relaxed);
     }
 
     pub fn set_device_mask(&self, mask: u32) {
@@ -93,6 +130,42 @@ impl GeneralOptions {
             self.recv_timeout(),
             poll_io(pollable, IoEvents::IN, self.nonblocking(), f),
         ))?
+    }
+
+    fn network_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(
+        &self,
+        pollable: &P,
+        events: IoEvents,
+        deadline: Option<Duration>,
+        mut f: F,
+    ) -> AxResult<T> {
+        match f() {
+            Ok(value) => Ok(value),
+            Err(AxError::WouldBlock) => {
+                poll_interfaces();
+                block_on(timeout(
+                    deadline,
+                    poll_io(pollable, events, self.nonblocking(), f),
+                ))?
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn network_send_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(
+        &self,
+        pollable: &P,
+        f: F,
+    ) -> AxResult<T> {
+        self.network_poller(pollable, IoEvents::OUT, self.send_timeout(), f)
+    }
+
+    pub fn network_recv_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(
+        &self,
+        pollable: &P,
+        f: F,
+    ) -> AxResult<T> {
+        self.network_poller(pollable, IoEvents::IN, self.recv_timeout(), f)
     }
 }
 impl Configurable for GeneralOptions {
@@ -138,8 +211,11 @@ impl Configurable for GeneralOptions {
                 self.recv_timeout_nanos
                     .store(timeout.as_nanos() as u64, Ordering::Relaxed);
             }
-            O::SendBuffer(_) | O::ReceiveBuffer(_) => {
-                // TODO(mivik): implement buffer size options
+            O::SendBuffer(size) | O::SendBufferForce(size) => {
+                self.set_send_buffer(*size);
+            }
+            O::ReceiveBuffer(size) => {
+                self.set_recv_buffer(*size);
             }
             _ => return Ok(false),
         }

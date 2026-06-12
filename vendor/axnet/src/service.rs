@@ -4,6 +4,7 @@ use core::{
     task::{Context, Waker},
 };
 
+use axerrno::{AxError, AxResult, LinuxError};
 use axhal::time::{NANOS_PER_MICROS, TimeValue, wall_time_nanos};
 use axtask::future::sleep_until;
 use smoltcp::{
@@ -43,11 +44,11 @@ impl Service {
         self.router.dispatch(timestamp)
     }
 
-    pub fn get_source_address(&self, dst_addr: &IpAddress) -> IpAddress {
+    pub fn get_source_address(&self, dst_addr: &IpAddress) -> AxResult<IpAddress> {
         let Some(rule) = self.router.table.lookup(dst_addr) else {
-            panic!("no route to destination: {dst_addr}");
+            return Err(AxError::from(LinuxError::ENETUNREACH));
         };
-        rule.src
+        Ok(rule.src)
     }
 
     pub fn can_bind_ip(&self, addr: &IpAddress) -> bool {
@@ -65,6 +66,12 @@ impl Service {
                 .lookup(&addr)
                 .map_or(0, |it| 1u32 << it.dev),
             None => u32::MAX,
+        }
+    }
+
+    pub fn notify_route_device(&self, dst_addr: &IpAddress) {
+        if let Some(rule) = self.router.table.lookup(dst_addr) {
+            self.router.devices[rule.dev].notify_rx_ready();
         }
     }
 

@@ -10,12 +10,13 @@ impl InterfaceInner {
         ip_payload: &'frame [u8],
     ) -> Option<Packet<'frame>> {
         let (src_addr, dst_addr) = (ip_repr.src_addr(), ip_repr.dst_addr());
+        let checksum = self.caps.checksum.loopback_transport(&src_addr, &dst_addr);
         let tcp_packet = check!(TcpPacket::new_checked(ip_payload));
         let tcp_repr = check!(TcpRepr::parse(
             &tcp_packet,
             &src_addr,
             &dst_addr,
-            &self.caps.checksum
+            &checksum
         ));
 
         for tcp_socket in sockets

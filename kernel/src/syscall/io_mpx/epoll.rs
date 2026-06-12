@@ -25,6 +25,8 @@ use crate::{
     time::TimeValueLike,
 };
 
+use super::poll_network_once;
+
 bitflags! {
     /// Flags for the `epoll_create` syscall.
     #[derive(Debug, Clone, Copy, Default)]
@@ -115,6 +117,7 @@ fn do_epoll_wait(
 
     with_blocked_signals(nullable!(sigmask.get_as_ref())?.copied(), || {
         if timeout == Some(Duration::ZERO) {
+            poll_network_once();
             return match epoll.poll_events(events) {
                 Ok(n) => Ok(n as _),
                 Err(AxError::WouldBlock) => Ok(0),
@@ -125,6 +128,7 @@ fn do_epoll_wait(
         match block_on(future::timeout(
             timeout,
             poll_io(epoll.as_ref(), IoEvents::IN, false, || {
+                poll_network_once();
                 epoll.poll_events(events)
             }),
         )) {

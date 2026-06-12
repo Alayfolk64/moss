@@ -267,4 +267,8 @@ impl<'a, Tx: phy::TxToken, S: PcapSink> phy::TxToken for TxToken<'a, Tx, S> {
     fn set_meta(&mut self, meta: phy::PacketMeta) {
         self.token.set_meta(meta)
     }
+
+    fn set_dst_addr(&mut self, dst_addr: crate::wire::IpAddress) {
+        self.token.set_dst_addr(dst_addr)
+    }
 }

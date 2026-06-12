@@ -47,7 +47,14 @@ impl<'a> SocketSetWrapper<'a> {
         f(socket)
     }
 
-    pub fn bind_check(&self, addr: IpAddress, port: u16) -> AxResult {
+    fn addr_conflicts(bound_addr: Option<IpAddress>, addr: IpAddress) -> bool {
+        match bound_addr {
+            Some(bound) => bound == addr || addr.is_unspecified(),
+            None => true,
+        }
+    }
+
+    pub fn bind_check_tcp(&self, addr: IpAddress, port: u16) -> AxResult {
         if port == 0 {
             return Ok(());
         }
@@ -55,20 +62,30 @@ impl<'a> SocketSetWrapper<'a> {
         // TODO(mivik): optimize
         let mut sockets = self.inner.lock();
         for (_, socket) in sockets.iter_mut() {
-            match socket {
-                Socket::Tcp(s) => {
-                    let local_addr = s.get_bound_endpoint();
-                    if local_addr.addr == Some(addr) && local_addr.port == port {
-                        return Err(AxError::AddrInUse);
-                    }
+            if let Socket::Tcp(s) = socket {
+                let local_addr = s.get_bound_endpoint();
+                if local_addr.port == port && Self::addr_conflicts(local_addr.addr, addr) {
+                    return Err(AxError::AddrInUse);
                 }
-                Socket::Udp(s) => {
-                    if s.endpoint().addr == Some(addr) && s.endpoint().port == port {
-                        return Err(AxError::AddrInUse);
-                    }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn bind_check_udp(&self, addr: IpAddress, port: u16) -> AxResult {
+        if port == 0 {
+            return Ok(());
+        }
+
+        // TODO(mivik): optimize
+        let mut sockets = self.inner.lock();
+        for (_, socket) in sockets.iter_mut() {
+            if let Socket::Udp(s) = socket {
+                let endpoint = s.endpoint();
+                if endpoint.port == port && Self::addr_conflicts(endpoint.addr, addr) {
+                    return Err(AxError::AddrInUse);
                 }
-                _ => continue,
-            };
+            }
         }
         Ok(())
     }

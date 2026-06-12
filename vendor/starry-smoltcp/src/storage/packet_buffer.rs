@@ -117,6 +117,52 @@ impl<'a, H> PacketBuffer<'a, H> {
         Ok(payload_buf)
     }
 
+    /// Write a single packet into unallocated payload space and enqueue it only
+    /// if `f` succeeds.
+    pub fn try_enqueue_with<R, E, F>(
+        &mut self,
+        size: usize,
+        header: H,
+        f: F,
+    ) -> Result<Result<R, E>, Full>
+    where
+        F: FnOnce(&mut [u8]) -> Result<R, E>,
+    {
+        if self.payload_ring.capacity() < size || self.metadata_ring.is_full() {
+            return Err(Full);
+        }
+
+        if self.payload_ring.is_empty() {
+            self.payload_ring.clear();
+        }
+
+        let window = self.payload_ring.window();
+        let contig_window = self.payload_ring.contiguous_window();
+
+        let needs_padding = contig_window < size;
+        if needs_padding && self.metadata_ring.window() < 2 {
+            return Err(Full);
+        }
+
+        if window < size {
+            return Err(Full);
+        } else if needs_padding {
+            if window - contig_window < size {
+                return Err(Full);
+            } else {
+                *self.metadata_ring.enqueue_one()? = PacketMetadata::padding(contig_window);
+                let _buf_enqueued = self.payload_ring.enqueue_many(contig_window);
+            }
+        }
+
+        let result = f(self.payload_ring.get_unallocated(0, size));
+        if result.is_ok() {
+            self.payload_ring.enqueue_unallocated(size);
+            *self.metadata_ring.enqueue_one()? = PacketMetadata::packet(size, header);
+        }
+        Ok(result)
+    }
+
     /// Call `f` with a packet from the buffer large enough to fit `max_size` bytes. The packet
     /// is shrunk to the size returned from `f` and enqueued into the buffer.
     pub fn enqueue_with_infallible<'b, F>(

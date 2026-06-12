@@ -7,7 +7,7 @@ use crate::phy::PacketMeta;
 use crate::socket::PollAt;
 #[cfg(feature = "async")]
 use crate::socket::WakerRegistration;
-use crate::storage::Empty;
+use crate::storage::{Empty, Full};
 use crate::wire::{IpAddress, IpEndpoint, IpListenEndpoint, IpProtocol, IpRepr, UdpRepr};
 
 /// Metadata for a sent or received UDP packet.
@@ -119,6 +119,7 @@ impl std::error::Error for RecvError {}
 #[derive(Debug)]
 pub struct Socket<'a> {
     endpoint: IpListenEndpoint,
+    connected_endpoint: Option<IpEndpoint>,
     rx_buffer: PacketBuffer<'a>,
     tx_buffer: PacketBuffer<'a>,
     /// The time-to-live (IPv4) or hop limit (IPv6) value used in outgoing packets.
@@ -134,6 +135,7 @@ impl<'a> Socket<'a> {
     pub fn new(rx_buffer: PacketBuffer<'a>, tx_buffer: PacketBuffer<'a>) -> Socket<'a> {
         Socket {
             endpoint: IpListenEndpoint::default(),
+            connected_endpoint: None,
             rx_buffer,
             tx_buffer,
             hop_limit: None,
@@ -183,6 +185,19 @@ impl<'a> Socket<'a> {
     #[inline]
     pub fn endpoint(&self) -> IpListenEndpoint {
         self.endpoint
+    }
+
+    /// Return the connected remote endpoint, if one was configured by the
+    /// socket layer.
+    #[inline]
+    pub fn connected_endpoint(&self) -> Option<IpEndpoint> {
+        self.connected_endpoint
+    }
+
+    /// Set or clear the connected remote endpoint.
+    #[inline]
+    pub fn set_connected_endpoint(&mut self, endpoint: Option<IpEndpoint>) {
+        self.connected_endpoint = endpoint;
     }
 
     /// Return the time-to-live (IPv4) or hop limit (IPv6) value used in outgoing packets.
@@ -242,6 +257,7 @@ impl<'a> Socket<'a> {
     pub fn close(&mut self) {
         // Clear the bound endpoint of the socket.
         self.endpoint = IpListenEndpoint::default();
+        self.connected_endpoint = None;
 
         // Reset the RX and TX buffers of the socket.
         self.tx_buffer.reset();
@@ -477,6 +493,54 @@ impl<'a> Socket<'a> {
         self.rx_buffer.payload_bytes_count()
     }
 
+    /// Enqueue one received datagram.
+    pub fn enqueue_recv_slice(
+        &mut self,
+        payload: &[u8],
+        remote_endpoint: IpEndpoint,
+        local_address: IpAddress,
+        meta: PacketMeta,
+    ) -> Result<(), Full> {
+        let metadata = UdpMetadata {
+            endpoint: remote_endpoint,
+            local_address: Some(local_address),
+            meta,
+        };
+        let buf = self.rx_buffer.enqueue(payload.len(), metadata)?;
+        buf.copy_from_slice(payload);
+
+        #[cfg(feature = "async")]
+        self.rx_waker.wake();
+        Ok(())
+    }
+
+    /// Enqueue one received datagram after filling it through `f`.
+    pub fn enqueue_recv_with<R, E, F>(
+        &mut self,
+        size: usize,
+        remote_endpoint: IpEndpoint,
+        local_address: IpAddress,
+        meta: PacketMeta,
+        f: F,
+    ) -> Result<Result<R, E>, Full>
+    where
+        F: FnOnce(&mut [u8]) -> Result<R, E>,
+    {
+        let metadata = UdpMetadata {
+            endpoint: remote_endpoint,
+            local_address: Some(local_address),
+            meta,
+        };
+        let result = self.rx_buffer.try_enqueue_with(size, metadata, f)?;
+
+        #[cfg(feature = "async")]
+        if result.is_ok() {
+            self.rx_waker.wake();
+        }
+
+        Ok(result)
+    }
+
     pub(crate) fn accepts(&self, cx: &mut Context, ip_repr: &IpRepr, repr: &UdpRepr) -> bool {
         if self.endpoint.port != repr.dst_port {
             return false;
@@ -516,23 +580,14 @@ impl<'a> Socket<'a> {
             size
         );
 
-        let metadata = UdpMetadata {
-            endpoint: remote_endpoint,
-            local_address: Some(ip_repr.dst_addr()),
-            meta,
-        };
-
-        match self.rx_buffer.enqueue(size, metadata) {
-            Ok(buf) => buf.copy_from_slice(payload),
+        match self.enqueue_recv_slice(payload, remote_endpoint, ip_repr.dst_addr(), meta) {
+            Ok(()) => {}
             Err(_) => net_trace!(
                 "udp:{}:{}: buffer full, dropped incoming packet",
                 self.endpoint,
                 remote_endpoint
             ),
         }
-
-        #[cfg(feature = "async")]
-        self.rx_waker.wake();
     }
 
     pub(crate) fn dispatch<F, E>(&mut self, cx: &mut Context, emit: F) -> Result<(), E>

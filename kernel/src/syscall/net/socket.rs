@@ -2,7 +2,7 @@ use axerrno::{AxError, AxResult, LinuxError};
 #[cfg(feature = "vsock")]
 use axnet::vsock::{VsockSocket, VsockStreamTransport};
 use axnet::{
-    Shutdown, Socket as SocketInner, SocketAddrEx, SocketOps,
+    IpFamily, Shutdown, Socket as SocketInner, SocketAddrEx, SocketOps,
     tcp::TcpSocket,
     udp::UdpSocket,
     unix::{DgramTransport, StreamTransport, UnixSocket},
@@ -37,6 +37,11 @@ fn check_privileged_bind(addr: &SocketAddrEx) -> AxResult {
 pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
     debug!("sys_socket <= domain: {domain}, ty: {raw_ty}, proto: {proto}");
     let ty = raw_ty & 0xFF;
+    let ip_family = match domain {
+        AF_INET => Some(IpFamily::Ipv4),
+        AF_INET6 => Some(IpFamily::Ipv6),
+        _ => None,
+    };
 
     let pid = current().as_thread().proc_data.proc.pid();
     let socket = match (domain, ty) {
@@ -44,13 +49,13 @@ pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
             if proto != 0 && proto != IPPROTO_TCP as _ && proto != IPPROTO_SCTP as _ {
                 return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
             }
-            SocketInner::Tcp(TcpSocket::new())
+            SocketInner::Tcp(TcpSocket::new(ip_family.unwrap()))
         }
         (AF_INET | AF_INET6, SOCK_DGRAM) => {
             if proto != 0 && proto != IPPROTO_UDP as _ && proto != IPPROTO_UDPLITE as _ {
                 return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
             }
-            SocketInner::Udp(UdpSocket::new())
+            SocketInner::Udp(UdpSocket::new(ip_family.unwrap()))
         }
         (AF_UNIX, SOCK_STREAM) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
         (AF_UNIX, SOCK_SEQPACKET) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
@@ -138,7 +143,7 @@ pub fn sys_accept4(
         socket.set_nonblocking(true)?;
     }
 
-    let remote_addr = socket.local_addr()?;
+    let remote_addr = socket.peer_addr()?;
     let fd = socket.add_to_fd_table(cloexec).map(|fd| fd as isize)?;
     debug!("sys_accept => fd: {fd}, addr: {remote_addr:?}");
 

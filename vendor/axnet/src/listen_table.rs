@@ -6,26 +6,49 @@ use axsync::Mutex;
 use smoltcp::{
     iface::{SocketHandle, SocketSet},
     socket::tcp::{self, SocketBuffer, State},
-    wire::{IpEndpoint, IpListenEndpoint},
+    wire::{IpAddress, IpEndpoint, IpListenEndpoint},
 };
 
-use crate::{
-    SOCKET_SET,
-    consts::{LISTEN_QUEUE_SIZE, TCP_RX_BUF_LEN, TCP_TX_BUF_LEN},
-};
+use crate::{IpFamily, SOCKET_SET, consts::LISTEN_QUEUE_SIZE};
 
 const PORT_NUM: usize = 65536;
 
 struct ListenTableEntry {
     listen_endpoint: IpListenEndpoint,
+    family: IpFamily,
+    ipv6_only: bool,
+    tcp_rx_buf_len: usize,
+    tcp_tx_buf_len: usize,
     syn_queue: VecDeque<SocketHandle>,
 }
 
 impl ListenTableEntry {
-    pub fn new(listen_endpoint: IpListenEndpoint) -> Self {
+    pub fn new(
+        listen_endpoint: IpListenEndpoint,
+        family: IpFamily,
+        ipv6_only: bool,
+        tcp_rx_buf_len: usize,
+        tcp_tx_buf_len: usize,
+    ) -> Self {
         Self {
             listen_endpoint,
+            family,
+            ipv6_only,
+            tcp_rx_buf_len,
+            tcp_tx_buf_len,
             syn_queue: VecDeque::with_capacity(LISTEN_QUEUE_SIZE),
+        }
+    }
+
+    fn accepts_packet(&self, dst: IpEndpoint) -> bool {
+        if self.listen_endpoint.port != dst.port {
+            return false;
+        }
+
+        match (self.listen_endpoint.addr, dst.addr) {
+            (Some(listen_addr), dst_addr) => listen_addr == dst_addr,
+            (None, IpAddress::Ipv4(_)) => self.family == IpFamily::Ipv4 || !self.ipv6_only,
+            (None, IpAddress::Ipv6(_)) => self.family == IpFamily::Ipv6,
         }
     }
 }
@@ -58,12 +81,25 @@ impl ListenTable {
         self.tcp[port as usize].lock().is_none()
     }
 
-    pub fn listen(&self, listen_endpoint: IpListenEndpoint) -> AxResult {
+    pub fn listen(
+        &self,
+        listen_endpoint: IpListenEndpoint,
+        family: IpFamily,
+        ipv6_only: bool,
+        tcp_rx_buf_len: usize,
+        tcp_tx_buf_len: usize,
+    ) -> AxResult {
         let port = listen_endpoint.port;
         assert_ne!(port, 0);
         let mut entry = self.tcp[port as usize].lock();
         if entry.is_none() {
-            *entry = Some(Box::new(ListenTableEntry::new(listen_endpoint)));
+            *entry = Some(Box::new(ListenTableEntry::new(
+                listen_endpoint,
+                family,
+                ipv6_only,
+                tcp_rx_buf_len,
+                tcp_tx_buf_len,
+            )));
             Ok(())
         } else {
             warn!("socket already listening on port {port}");
@@ -128,6 +164,10 @@ impl ListenTable {
         sockets: &mut SocketSet<'_>,
     ) {
         if let Some(entry) = self.listen_entry(dst.port).lock().deref_mut() {
+            if !entry.accepts_packet(dst) {
+                return;
+            }
+
             // TODO(mivik): accept address check
             if entry.syn_queue.len() >= LISTEN_QUEUE_SIZE {
                 // SYN queue is full, drop the packet
@@ -136,8 +176,8 @@ impl ListenTable {
             }
 
             let mut socket = smoltcp::socket::tcp::Socket::new(
-                SocketBuffer::new(vec![0; TCP_RX_BUF_LEN]),
-                SocketBuffer::new(vec![0; TCP_TX_BUF_LEN]),
+                SocketBuffer::new(vec![0; entry.tcp_rx_buf_len]),
+                SocketBuffer::new(vec![0; entry.tcp_tx_buf_len]),
             );
             if let Err(err) = socket.listen(IpListenEndpoint {
                 addr: None,
