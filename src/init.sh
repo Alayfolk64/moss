@@ -113,8 +113,8 @@ RUN_LA=1
 basic=0
 busybox=0
 cyclictest=0
-iozone=1
-iperf=0
+iozone=0
+iperf=1
 libcbench=0
 libctest=0
 lmbench=0
@@ -188,6 +188,15 @@ glibc_runtime() {
     fi
     ln -v -s /lib/libc.so.6 /lib/libc.so
     ln -v -s /lib/libm.so.6 /lib/libm.so
+}
+
+cleanup_iperf_daemons() {
+    # iperf -s -D keeps a server in background; clear it between libc groups.
+    killall iperf >/dev/null 2>&1 || true
+    killall iperf3 >/dev/null 2>&1 || true
+    sleep 1
+    killall -9 iperf >/dev/null 2>&1 || true
+    killall -9 iperf3 >/dev/null 2>&1 || true
 }
 
 echo @@@@@@@@@@ files @@@@@@@@@@
@@ -374,7 +383,9 @@ fi
 
 if [ "$iperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_iperf_daemons
     ./iperf_testcode.sh
+    cleanup_iperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iperf musl
@@ -457,7 +468,9 @@ fi
 
 if [ "$iperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_iperf_daemons
     ./iperf_testcode.sh
+    cleanup_iperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iperf glibc
