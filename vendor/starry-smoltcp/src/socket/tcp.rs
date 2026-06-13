@@ -553,6 +553,10 @@ fn is_loopback_tuple(tuple: Tuple) -> bool {
     tuple.local.addr.is_loopback() && tuple.remote.addr.is_loopback()
 }
 
+fn is_loopback_tuple_opt(tuple: Option<Tuple>) -> bool {
+    tuple.map(is_loopback_tuple).unwrap_or(false)
+}
+
 fn next_transmit_seq(remote_last_seq: TcpSeqNumber, local_seq_no: TcpSeqNumber) -> TcpSeqNumber {
     if remote_last_seq >= local_seq_no {
         remote_last_seq
@@ -2285,7 +2289,12 @@ impl<'a> Socket<'a> {
         // * There's no data in flight
         // * We can send a full packet
         // * We have all the data we'll ever send (we're closing send)
-        if self.nagle && data_in_flight && !can_send_full && !want_fin {
+        if self.nagle
+            && !is_loopback_tuple(tuple)
+            && data_in_flight
+            && !can_send_full
+            && !want_fin
+        {
             can_send = false;
         }
 
@@ -2299,6 +2308,10 @@ impl<'a> Socket<'a> {
     }
 
     fn delayed_ack_expired(&self, timestamp: Instant) -> bool {
+        if is_loopback_tuple_opt(self.tuple) {
+            return true;
+        }
+
         match self.ack_delay_timer {
             AckDelayTimer::Idle => true,
             AckDelayTimer::Waiting(t) => t <= timestamp,
@@ -2705,6 +2718,7 @@ impl<'a> Socket<'a> {
 
             let delayed_ack_poll_at = match (want_ack, self.ack_delay_timer) {
                 (false, _) => PollAt::Ingress,
+                (true, _) if is_loopback_tuple_opt(self.tuple) => PollAt::Now,
                 (true, AckDelayTimer::Idle) => PollAt::Now,
                 (true, AckDelayTimer::Waiting(t)) => PollAt::Time(t),
                 (true, AckDelayTimer::Immediate) => PollAt::Now,

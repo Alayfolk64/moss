@@ -265,10 +265,10 @@ impl Configurable for UdpSocket {
                     **ttl = socket.hop_limit().unwrap_or(64);
                 });
             }
-            O::SendBuffer(size) => {
+            O::SendBuffer(size) | O::SendBufferForce(size) => {
                 **size = self.with_smol_socket(|socket| socket.payload_send_capacity());
             }
-            O::ReceiveBuffer(size) => {
+            O::ReceiveBuffer(size) | O::ReceiveBufferForce(size) => {
                 **size = self.with_smol_socket(|socket| socket.payload_recv_capacity());
             }
             _ => return Ok(false),
@@ -285,7 +285,7 @@ impl Configurable for UdpSocket {
                 self.apply_configured_buffers_if_idle()?;
                 return Ok(true);
             }
-            O::ReceiveBuffer(size) => {
+            O::ReceiveBuffer(size) | O::ReceiveBufferForce(size) => {
                 self.general.set_recv_buffer(*size);
                 self.apply_configured_buffers_if_idle()?;
                 return Ok(true);
