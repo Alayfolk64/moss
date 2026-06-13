@@ -1,4 +1,5 @@
 use alloc::collections::BTreeMap;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use axerrno::{AxError, AxResult};
 use axsync::spin::SpinNoIrq;
@@ -38,6 +39,7 @@ struct PtraceState {
 }
 
 static PTRACE_TABLE: SpinNoIrq<BTreeMap<Pid, PtraceState>> = SpinNoIrq::new(BTreeMap::new());
+static PTRACE_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy)]
 pub struct PtraceWaitEvent {
@@ -110,6 +112,9 @@ fn allow_attach(curr_euid: u32, target_uid: u32, target_euid: u32) -> bool {
 }
 
 pub fn ptrace_has_wait_target(tracer: Pid, raw_pid: i32) -> bool {
+    if !PTRACE_ACTIVE.load(Ordering::Acquire) {
+        return false;
+    }
     let table = PTRACE_TABLE.lock();
     table
         .iter()
@@ -117,6 +122,9 @@ pub fn ptrace_has_wait_target(tracer: Pid, raw_pid: i32) -> bool {
 }
 
 pub fn ptrace_take_wait_event(tracer: Pid, raw_pid: i32) -> Option<PtraceWaitEvent> {
+    if !PTRACE_ACTIVE.load(Ordering::Acquire) {
+        return None;
+    }
     let mut table = PTRACE_TABLE.lock();
     let found = table.iter().find_map(|(tracee, state)| {
         if state.tracer == tracer
@@ -142,6 +150,10 @@ pub fn ptrace_take_wait_event(tracer: Pid, raw_pid: i32) -> Option<PtraceWaitEve
 
 //被调试进程自己卡住
 pub fn ptrace_wait_if_stopped(thr: &Thread) {
+    if !PTRACE_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
+
     let pid = thr.proc_data.proc.pid();
 
     loop {
@@ -168,6 +180,9 @@ pub fn ptrace_wait_if_stopped(thr: &Thread) {
 }
 
 pub fn ptrace_is_traced(pid: Pid) -> bool {
+    if !PTRACE_ACTIVE.load(Ordering::Acquire) {
+        return false;
+    }
     let table = PTRACE_TABLE.lock();
     table.contains_key(&pid)
 }
@@ -211,6 +226,7 @@ pub fn ptrace_on_process_exit(pid: Pid) {
     for tracee in traced_by_dead {
         table.remove(&tracee);
     }
+    PTRACE_ACTIVE.store(!table.is_empty(), Ordering::Release);
 }
 
 pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult<isize> {
@@ -230,6 +246,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
                 .proc
                 .parent()
                 .ok_or(AxError::OperationNotPermitted)?;
+            PTRACE_ACTIVE.store(true, Ordering::Release);
             table.insert(
                 curr_pid,
                 PtraceState {
@@ -288,6 +305,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
                 return Err(AxError::OperationNotPermitted);
             }
 
+            PTRACE_ACTIVE.store(true, Ordering::Release);
             table.insert(
                 pid,
                 PtraceState {
@@ -327,6 +345,7 @@ pub fn sys_ptrace(request: u32, pid: Pid, _addr: usize, data: usize) -> AxResult
             {
                 let mut table = PTRACE_TABLE.lock();
                 table.remove(&pid);
+                PTRACE_ACTIVE.store(!table.is_empty(), Ordering::Release);
             }
             if let Some(sig) = sig {
                 send_signal_to_process(pid, Some(SignalInfo::new_kernel(sig)))?;

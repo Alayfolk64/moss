@@ -305,87 +305,6 @@ Linux 允许多线程进程中的一个线程调用 exec，并在成功后终止
 
 子进程本身仍继续运行，原有 PID、进程组和会话不变；变化的只是父进程。它们以后成为僵尸进程时，由 init 调用 `wait` 完成回收。
 
-== 子进程状态与等待
-
-=== 从退出码到状态事件
-
-StarryOS 的 `waitpid` 主要观察僵尸子进程。moss 在此基础上增加停止和继续事件，使父进程能够区分三类情况：子进程退出、子进程停止、子进程继续运行。
-
-`WUNTRACED`、`WCONTINUED` 和 `WNOHANG` 是 `waitpid`、`wait4` 的 `options` 参数标志：
-
-#figure(
-  table(
-    columns: (1.5fr, 4.5fr),
-    inset: 5pt,
-    stroke: 0.5pt + gray,
-    table.header([标志], [语义]),
-    [`WUNTRACED`], [子进程因作业控制信号停止时，允许立即报告该状态],
-    [`WCONTINUED`], [子进程收到 `SIGCONT` 恢复运行时，允许报告继续状态],
-    [`WNOHANG`], [当前没有可报告状态时立即返回 0，不阻塞调用进程],
-  ),
-  caption: [waitpid 与 wait4 的主要 options 标志],
-) <tab:waitpid-options>
-
-`waitid` 使用 `WSTOPPED` 表示报告停止状态，并配合 `WEXITED`、`WCONTINUED` 和 `WNOWAIT` 使用。moss 内部将 `WSTOPPED` 与同值的 `WUNTRACED` 统一处理。未被当前选项选中的状态会继续保留，等待后续调用读取。
-
-=== waitpid 的目标选择
-
-`waitpid` 的 pid 参数不仅可以表示一个具体子进程，也可以选择任意子进程或某个进程组。moss 将参数统一转换为 `Any`、`Pid` 和 `Pgid` 三种内部形式，再对直接子进程进行筛选。找不到符合条件的子进程时返回 `ECHILD`，而不是进入无意义的等待。
-
-#figure(
-  [
-    ```rust
-    let target = match pid {
-        -1 => WaitPid::Any, // 任意直接子进程
-        0 => WaitPid::Pgid(proc.group().pgid()),
-        1.. => WaitPid::Pid(pid as _),
-        _ => WaitPid::Pgid(pid.checked_neg()? as _),
-    };
-
-    // waitpid 只能等待调用进程的直接子进程
-    let children = proc.children().into_iter()
-        .filter(|child| target.apply(child))
-        .collect::<Vec<_>>();
-    if children.is_empty() {
-        return Err(LinuxError::ECHILD.into());
-    }
-    ```
-  ],
-  caption: [waitpid 的目标转换与筛选],
-) <lst:waitpid-select>
-
-=== waitid 与 pidfd
-
-moss 增加 `waitid`，支持 `P_ALL`、`P_PID`、`P_PGID` 和 `P_PIDFD`。不同目标最终都转换为一组待观察的子进程：
-
-#figure(
-  [
-    ```rust
-    let (children, pidfd_nonblocking) = match idtype as u32 {
-        // 全部直接子进程
-        P_ALL => (proc.children(), false),
-        // 按 PID 筛选
-        P_PID => (proc.children().into_iter()
-            .filter(|child| child.pid() == id).collect(), false),
-        P_PIDFD => {
-            // 由 pidfd 取得稳定进程引用
-            let pidfd = PidFd::from_fd(id as _)?;
-            let child_pid = pidfd.process_data()?.proc.pid();
-            (proc.children().into_iter()
-                .filter(|child| child.pid() == child_pid).collect(),
-             pidfd.nonblocking())
-        }
-        _ => return Err(AxError::InvalidInput),
-    };
-    ```
-  ],
-  caption: [waitid 的目标选择逻辑],
-) <lst:waitid-select>
-
-实际代码在各分支中完成筛选，并根据退出、信号终止、停止或继续填写 `CLD_EXITED`、`CLD_KILLED`、`CLD_STOPPED` 等 `siginfo_t` 类型。`WNOWAIT` 允许父进程只查看状态而不回收目标。
-
-pidfd 本身来自 StarryOS。moss 的增量是把它接入 `waitid(P_PIDFD)`，并补充 `/proc` fdinfo。相比直接保存 PID，pidfd 是一个稳定的文件描述符引用，不会因为 PID 数值被复用而指向另一个进程。
-
 == 进程组与会话
 
 === PID、PGID 与 SID
@@ -536,4 +455,4 @@ moss 为 PID、UTS 和 User namespace 保存 inode、父 namespace 和 init PID 
 
 moss 选择沿用 StarryOS 的进程线程框架，围绕四条主线完成加固：以 `Thread` 和 `ProcessData` 组成双层对象模型，以线程归属、父子树和进程组会话维护三类组织关系，以 real、effective、saved ID 构成三元凭据，并把 clone、exec、exit、wait 串成完整生命周期。
 
-在此基础上，moss 补严 `clone3` 的 ABI 和失败回滚，增加 `execveat`，完善退出清理与子进程状态报告，将 pidfd 接入等待接口，并加入有状态的权限和 ptrace 控制。当前还未完成完整 vfork、多线程 exec、namespace 隔离和 ptrace 数据访问，但进程从创建到回收的主要管理关系已经比 StarryOS 基线更完整。
+在此基础上，moss 补严 `clone3` 的 ABI 和失败回滚，增加 `execveat`，完善退出清理，并加入有状态的权限和 ptrace 控制。子进程状态与等待放到第三章，与任务阻塞和唤醒机制一起说明。当前还未完成完整 vfork、多线程 exec、namespace 隔离和 ptrace 数据访问，但进程从创建到回收的主要管理关系已经比 StarryOS 基线更完整。

@@ -237,12 +237,18 @@ impl TaskInner {
     /// Polls whether the task has been interrupted.
     #[inline]
     pub fn poll_interrupt(&self, cx: &Context) -> Poll<()> {
-        if self.interrupted.swap(false, Ordering::AcqRel) {
+        if self.take_interrupt() {
             Poll::Ready(())
         } else {
             self.interrupt_waker.register(cx.waker());
             Poll::Pending
         }
+    }
+
+    /// Takes and clears the interrupt state of the task.
+    #[inline]
+    pub fn take_interrupt(&self) -> bool {
+        self.interrupted.swap(false, Ordering::AcqRel)
     }
 
     /// Clears the interrupt state of the task.

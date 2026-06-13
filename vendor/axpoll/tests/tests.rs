@@ -51,6 +51,32 @@ fn empty_return() {
 }
 
 #[test]
+fn register_after_empty_wake() {
+    let ps = PollSet::new();
+    assert_eq!(ps.wake(), 0);
+
+    let counter = Counter::new();
+    let w = Waker::from(counter.clone());
+    ps.register(&w);
+
+    assert_eq!(ps.wake(), 1);
+    assert_eq!(counter.count(), 1);
+}
+
+#[test]
+fn repeated_register_and_wake() {
+    let ps = PollSet::new();
+    let counter = Counter::new();
+    let w = Waker::from(counter.clone());
+
+    for expected in 1..=128 {
+        ps.register(&w);
+        assert_eq!(ps.wake(), 1);
+        assert_eq!(counter.count(), expected);
+    }
+}
+
+#[test]
 fn full_capacity() {
     let ps = PollSet::new();
     let counter = Counter::new();

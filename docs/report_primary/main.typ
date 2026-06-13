@@ -9,4 +9,4 @@
 // 章节顺序只在此文件维护，各章正文由对应作者独立编辑。
 // #include "ch1.typ"
 #include "ch2.typ"
-// #include "ch3.typ"
+#include "ch3.typ"

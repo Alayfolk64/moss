@@ -1,6 +1,6 @@
 //! A blocking mutex implementation.
 
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use axtask::{current, future::block_on, yield_now};
 use event_listener::{Event, listener};
@@ -8,11 +8,12 @@ use event_listener::{Event, listener};
 /// A [`lock_api::RawMutex`] implementation.
 ///
 /// When the mutex is locked, the current task will block and be put into the
-/// wait queue. When the mutex is unlocked, all tasks waiting on the queue
+/// wait queue. When the mutex is unlocked, one task waiting on the queue
 /// will be woken up.
 pub struct RawMutex {
     event: Event,
     owner_id: AtomicU64,
+    waiters: AtomicUsize,
 }
 
 impl RawMutex {
@@ -22,6 +23,7 @@ impl RawMutex {
         Self {
             event: Event::new(),
             owner_id: AtomicU64::new(0),
+            waiters: AtomicUsize::new(0),
         }
     }
 }
@@ -97,12 +99,15 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
             listener!(self.event => listener);
 
-            owner_id = self.owner_id.load(Ordering::Acquire);
+            self.waiters.fetch_add(1, Ordering::SeqCst);
+            owner_id = self.owner_id.load(Ordering::SeqCst);
             if owner_id == 0 {
+                self.waiters.fetch_sub(1, Ordering::SeqCst);
                 continue;
             }
 
             block_on(listener);
+            self.waiters.fetch_sub(1, Ordering::SeqCst);
             owner_id = self.owner_id.load(Ordering::Acquire);
         }
     }
@@ -119,14 +124,16 @@ unsafe impl lock_api::RawMutex for RawMutex {
 
     #[inline(always)]
     unsafe fn unlock(&self) {
-        let owner_id = self.owner_id.swap(0, Ordering::Release);
+        let owner_id = self.owner_id.swap(0, Ordering::SeqCst);
         assert_eq!(
             owner_id,
             current().id().as_u64(),
             "{} tried to release mutex it doesn't own",
             current().id_name()
         );
-        self.event.notify(1);
+        if self.waiters.load(Ordering::SeqCst) != 0 {
+            self.event.notify(1);
+        }
     }
 
     #[inline(always)]

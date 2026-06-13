@@ -7,6 +7,7 @@ extern crate alloc;
 
 use core::{
     mem::MaybeUninit,
+    sync::atomic::{AtomicBool, Ordering},
     task::{Context, Waker},
 };
 
@@ -99,6 +100,16 @@ impl Inner {
         }
         self.entries[slot].write(waker.clone());
     }
+
+    fn take_wakers(&mut self) -> ([MaybeUninit<Waker>; POLL_SET_CAPACITY], usize) {
+        let len = self.len();
+        let mut wakers = [const { MaybeUninit::uninit() }; POLL_SET_CAPACITY];
+        for (dst, src) in wakers.iter_mut().zip(self.entries.iter()).take(len) {
+            dst.write(unsafe { src.assume_init_read() });
+        }
+        self.cursor = 0;
+        (wakers, len)
+    }
 }
 
 impl Drop for Inner {
@@ -110,7 +121,10 @@ impl Drop for Inner {
 }
 
 /// A data structure for waking up tasks that are waiting for I/O events.
-pub struct PollSet(Lazy<Mutex<Inner>>);
+pub struct PollSet {
+    inner: Lazy<Mutex<Inner>>,
+    has_waiters: AtomicBool,
+}
 
 impl Default for PollSet {
     fn default() -> Self {
@@ -121,23 +135,37 @@ impl Default for PollSet {
 impl PollSet {
     /// Creates a new empty [`PollSet`].
     pub const fn new() -> Self {
-        Self(Lazy::new(|| Mutex::new(Inner::new())))
+        Self {
+            inner: Lazy::new(|| Mutex::new(Inner::new())),
+            has_waiters: AtomicBool::new(false),
+        }
     }
 
     /// Registers a waker.
     pub fn register(&self, waker: &Waker) {
-        self.0.lock().register(waker);
+        let mut inner = self.inner.lock();
+        self.has_waiters.store(true, Ordering::Release);
+        inner.register(waker);
     }
 
     /// Wakes up all registered wakers.
     pub fn wake(&self) -> usize {
-        let mut guard = self.0.lock();
-        if guard.is_empty() {
+        if !self.has_waiters.load(Ordering::Acquire) {
             return 0;
         }
-        let inner = core::mem::replace(&mut *guard, Inner::new());
+
+        let mut guard = self.inner.lock();
+        if guard.is_empty() {
+            self.has_waiters.store(false, Ordering::Release);
+            return 0;
+        }
+        let (wakers, len) = guard.take_wakers();
+        self.has_waiters.store(false, Ordering::Release);
         drop(guard);
-        inner.len()
+        for waker in wakers.iter().take(len) {
+            unsafe { waker.assume_init_read() }.wake();
+        }
+        len
     }
 }
 
