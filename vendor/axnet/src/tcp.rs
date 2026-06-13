@@ -1,6 +1,6 @@
 use alloc::vec;
 use core::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::Context,
 };
 
@@ -19,7 +19,8 @@ use super::{LISTEN_TABLE, SOCKET_SET};
 use crate::{
     RecvFlags, RecvOptions, SERVICE, SendOptions, Shutdown, Socket, SocketAddrEx, SocketOps,
     consts::{
-        LOOPBACK_ADVERTISED_MSS, LOOPBACK_MTU, STANDARD_MTU, TCP_RX_BUF_LEN, TCP_TX_BUF_LEN,
+        LOOPBACK_ADVERTISED_MSS, LOOPBACK_MTU, STANDARD_MTU, TCP_RX_BUF_LEN, TCP_SEND_POLL_BYTES,
+        TCP_TX_BUF_LEN,
     },
     family::IpFamily,
     general::GeneralOptions,
@@ -41,6 +42,8 @@ pub struct TcpSocket {
     handle: SocketHandle,
     family: IpFamily,
     ever_connected: AtomicBool,
+    requested_mss: AtomicUsize,
+    bytes_since_poll: AtomicUsize,
 
     general: GeneralOptions,
     has_mcast_group: AtomicBool,
@@ -58,6 +61,8 @@ impl TcpSocket {
             handle: SOCKET_SET.add(new_tcp_socket()),
             family,
             ever_connected: AtomicBool::new(false),
+            requested_mss: AtomicUsize::new(0),
+            bytes_since_poll: AtomicUsize::new(0),
 
             general: GeneralOptions::new(),
             has_mcast_group: AtomicBool::new(false),
@@ -78,6 +83,8 @@ impl TcpSocket {
             handle,
             family,
             ever_connected: AtomicBool::new(true),
+            requested_mss: AtomicUsize::new(0),
+            bytes_since_poll: AtomicUsize::new(0),
 
             general: GeneralOptions::new(),
             has_mcast_group: AtomicBool::new(false),
@@ -186,7 +193,24 @@ impl TcpSocket {
 
     fn advertised_path_mtu_and_mss(&self) -> (usize, usize) {
         let (pmtu, mss) = self.path_mtu_and_mss();
-        (pmtu, mss.min(LOOPBACK_ADVERTISED_MSS))
+        let requested = self.requested_mss.load(Ordering::Relaxed);
+        let advertised = if requested == 0 {
+            mss
+        } else {
+            mss.min(requested)
+        };
+        (pmtu, advertised.min(LOOPBACK_ADVERTISED_MSS))
+    }
+
+    fn maybe_poll_after_send(&self, sent: usize) {
+        if sent == 0 {
+            return;
+        }
+        let total = self.bytes_since_poll.fetch_add(sent, Ordering::Relaxed) + sent;
+        if total >= TCP_SEND_POLL_BYTES {
+            self.bytes_since_poll.store(0, Ordering::Relaxed);
+            poll_interfaces();
+        }
     }
 
     fn endpoint_from_socket_addr(&self, addr: core::net::SocketAddr) -> AxResult<IpEndpoint> {
@@ -266,16 +290,19 @@ impl Configurable for TcpSocket {
             O::NoDelay(no_delay) => {
                 **no_delay = self.with_smol_socket(|socket| !socket.nagle_enabled());
             }
+            O::QuickAck(quick_ack) => {
+                **quick_ack = self.with_smol_socket(|socket| socket.ack_delay().is_none());
+            }
             O::KeepAlive(keep_alive) => {
                 **keep_alive = self.with_smol_socket(|socket| socket.keep_alive().is_some());
             }
             O::MaxSegment(max_segment) => {
                 **max_segment = self.advertised_path_mtu_and_mss().1;
             }
-            O::SendBuffer(size) => {
+            O::SendBuffer(size) | O::SendBufferForce(size) => {
                 **size = self.with_smol_socket(|socket| socket.send_capacity());
             }
-            O::ReceiveBuffer(size) => {
+            O::ReceiveBuffer(size) | O::ReceiveBufferForce(size) => {
                 **size = self.with_smol_socket(|socket| socket.recv_capacity());
             }
             O::TcpInfo(info) => {
@@ -307,7 +334,7 @@ impl Configurable for TcpSocket {
                 self.apply_configured_buffers_if_idle()?;
                 return Ok(true);
             }
-            O::ReceiveBuffer(size) => {
+            O::ReceiveBuffer(size) | O::ReceiveBufferForce(size) => {
                 self.general.set_recv_buffer(*size);
                 self.apply_configured_buffers_if_idle()?;
                 return Ok(true);
@@ -327,6 +354,17 @@ impl Configurable for TcpSocket {
                 self.with_smol_socket(|socket| {
                     socket.set_nagle_enabled(!no_delay);
                 });
+            }
+            O::QuickAck(quick_ack) => {
+                self.with_smol_socket(|socket| {
+                    socket.set_ack_delay((!*quick_ack).then(|| Duration::from_millis(10)));
+                });
+            }
+            O::MaxSegment(max_segment) => {
+                if *max_segment == 0 {
+                    return Err(AxError::InvalidInput);
+                }
+                self.requested_mss.store(*max_segment, Ordering::Relaxed);
             }
             O::KeepAlive(keep_alive) => {
                 self.with_smol_socket(|socket| {
@@ -442,8 +480,7 @@ impl SocketOps for TcpSocket {
                 })
             })?;
 
-        // Hack: let the server listen
-        axtask::yield_now();
+        poll_interfaces();
 
         // Here our state must be `CONNECTING`, and only one thread can run here.
         self.general.send_poller(self, || {
@@ -526,9 +563,7 @@ impl SocketOps for TcpSocket {
                 }
             })
         })?;
-        if sent > 0 {
-            poll_interfaces();
-        }
+        self.maybe_poll_after_send(sent);
         Ok(sent)
     }
 
@@ -603,7 +638,12 @@ impl SocketOps for TcpSocket {
                 if how.has_write() {
                     self.with_smol_socket(|socket| {
                         debug!("TCP socket {}: shutting down", self.handle);
-                        socket.close();
+                        let linger = self.general.linger();
+                        if linger.enabled && linger.timeout_secs == 0 {
+                            socket.abort();
+                        } else {
+                            socket.close();
+                        }
                     });
                 }
                 poll_interfaces();

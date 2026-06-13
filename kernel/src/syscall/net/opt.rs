@@ -16,8 +16,11 @@ const MCAST_LEAVE_GROUP: u32 = linux_raw_sys::net::MCAST_LEAVE_GROUP;
 
 mod conv {
     use axerrno::{AxError, AxResult};
-    use axnet::options::UnixCredentials;
-    use linux_raw_sys::{general::timeval, net::ucred};
+    use axnet::options::{Linger, UnixCredentials};
+    use linux_raw_sys::{
+        general::timeval,
+        net::{linger, ucred},
+    };
 
     use crate::time::TimeValueLike;
 
@@ -76,6 +79,24 @@ mod conv {
             })
         }
     }
+
+    pub struct LingerConv;
+
+    impl LingerConv {
+        pub fn sys_to_rust(val: linger) -> AxResult<Linger> {
+            Ok(Linger {
+                enabled: val.l_onoff != 0,
+                timeout_secs: val.l_linger,
+            })
+        }
+
+        pub fn rust_to_sys(val: Linger) -> AxResult<linger> {
+            Ok(linger {
+                l_onoff: val.enabled as _,
+                l_linger: val.timeout_secs,
+            })
+        }
+    }
 }
 
 macro_rules! call_dispatch {
@@ -90,17 +111,23 @@ macro_rules! call_dispatch {
             (SOL_SOCKET, SO_DONTROUTE) => DontRoute as IntBool,
             (SOL_SOCKET, SO_SNDBUF) => SendBuffer as Int<usize>,
             (SOL_SOCKET, SO_RCVBUF) => ReceiveBuffer as Int<usize>,
+            (SOL_SOCKET, SO_SNDBUFFORCE) => SendBufferForce as Int<usize>,
+            (SOL_SOCKET, SO_RCVBUFFORCE) => ReceiveBufferForce as Int<usize>,
             (SOL_SOCKET, SO_KEEPALIVE) => KeepAlive as IntBool,
+            (SOL_SOCKET, SO_LINGER) => Linger as LingerConv,
             (SOL_SOCKET, SO_RCVTIMEO) => ReceiveTimeout as Duration,
             (SOL_SOCKET, SO_SNDTIMEO) => SendTimeout as Duration,
             (SOL_SOCKET, SO_PASSCRED) => PassCredentials as IntBool,
             (SOL_SOCKET, SO_PEERCRED) => PeerCredentials as Ucred,
 
             (PROTO_TCP, TCP_NODELAY) => NoDelay as IntBool,
+            (PROTO_TCP, TCP_QUICKACK) => QuickAck as IntBool,
             (PROTO_TCP, TCP_MAXSEG) => MaxSegment as Int<usize>,
 
             (PROTO_IP, IP_TTL) => Ttl as Int<u8>,
+            (PROTO_IP, IP_RECVERR) => ReceiveError as IntBool,
             (PROTO_IPV6, IPV6_V6ONLY) => Ipv6Only as IntBool,
+            (PROTO_IPV6, IPV6_RECVERR) => ReceiveError as IntBool,
         }
     }};
     ($dispatch:ident, $in:expr, $($pat:pat => $which:ident $(as $conv:ty)?),* $(,)?) => {

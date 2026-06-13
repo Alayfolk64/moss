@@ -80,6 +80,12 @@ pub struct TcpInfo {
     pub tcpi_total_retrans: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Linger {
+    pub enabled: bool,
+    pub timeout_secs: i32,
+}
+
 define_options! {
     // ---- Socket level options (SO_*) ----
     ReuseAddress(bool),
@@ -90,12 +96,16 @@ define_options! {
     KeepAlive(bool),
     SendTimeout(Duration),
     ReceiveTimeout(Duration),
+    ReceiveError(bool),
     SendBufferForce(usize),
+    ReceiveBufferForce(usize),
+    Linger(Linger),
     PassCredentials(bool),
     PeerCredentials(UnixCredentials),
 
     // --- TCP level options (TCP_*) ----
     NoDelay(bool),
+    QuickAck(bool),
     MaxSegment(usize),
     TcpInfo(TcpInfo),
 
