@@ -1,103 +1,7 @@
-#set text(
-  font: ("Times New Roman", "SimSun"),
-  size: 11pt,
-  lang: "zh",
-)
-#set page(
-  paper: "a4",
-  margin: (x: 2.5cm, y: 2.2cm),
-)
-//段落
-#set par(
-  first-line-indent: (amount: 2em, all: true),
-  justify: true, //两端对齐
-  leading: 0.85em, //行间距
-  spacing: 0.85em, //段间距
-)
-//代码块
-#show raw.where(block: true): it => {
-  block(
-    fill: rgb("#f6f6f6"),
-    inset: 1em,
-    radius: 6pt,
-    width: 100%,
-    breakable: true,
-    above: 0.35em,
-    below: 0.35em,
-    align(
-      left,
-      text(
-        font: ("Consolas", "KaiTi"),
-        size: 10pt,
-        it,
-      ),
-    ),
-  )
-}
+#import "template.typ": chapter-start, report-style
 
-//标题编号格式
-#set heading(numbering: "1.1")
-
-#set figure(numbering: (..nums) => {
-  let chapter = counter(heading).get().first()
-  numbering("1-1", chapter, ..nums)
-})
-
-// 一级标题（章）：新页开始，居中，格式为"第x章 标题"
-#show heading.where(level: 1): it => {
-  pagebreak(weak: true)
-  set align(center)
-  set text(
-    font: ("Times New Roman", "Microsoft YaHei"),
-    size: 16pt,
-    weight: "regular",
-  )
-  v(0em)
-  block[
-    #if it.numbering != none [
-      第#counter(heading).display()章 #it.body
-    ] else [
-      #it.body
-    ]
-  ]
-  v(0.5em)
-}
-
-// 二级标题：固定段前段后距离，并与后文保持在同一页
-#show heading.where(level: 2): it => {
-  block(
-    above: 1.1em,
-    below: 1em,
-    sticky: true,
-    width: 100%,
-  )[
-    #set text(
-      font: ("Times New Roman", "Microsoft YaHei"),
-      size: 14pt,
-      weight: "regular",
-    )
-    #counter(heading).display(it.numbering) #h(0.45em) #it.body
-  ]
-}
-
-// 三级标题：略小于二级标题的段前距离
-#show heading.where(level: 3): it => {
-  block(
-    above: 1em,
-    below: 1em,
-    sticky: true,
-    width: 100%,
-  )[
-    #set text(
-      font: ("Times New Roman", "Microsoft YaHei"),
-      size: 12pt,
-      weight: "regular",
-    )
-    #counter(heading).display(it.numbering) #h(0.45em) #it.body
-  ]
-}
-
-#counter(heading).update(1)
+#show: report-style
+#chapter-start(2)
 
 = 进程与线程管理
 
@@ -148,6 +52,15 @@ StarryOS 已经搭起了进程线程管理的基本框架，moss 的工作是在
 进程和线程并不是两套互不相干的对象。moss 延续 StarryOS 的做法，将状态分为两层：`Thread` 表示单个执行流，`ProcessData` 表示线程共同拥有的进程资源。创建普通线程时复用 `ProcessData`；创建新进程时再根据 clone 标志复制或共享其中的资源。
 
 这种划分回答了一个最基本的问题：某项状态究竟属于线程，还是属于整个进程。线程名称、线程信号状态和退出字段放在 `Thread` 中；地址空间、程序路径、文件表作用域、凭据和子进程集合放在 `ProcessData` 中。只要边界清楚，clone、exec 和 exit 才不会各自维护一份互相冲突的状态。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-2.2.1.svg", width: 85%)
+    ]
+  ],
+  caption: [Thread 与 ProcessData 的双层对象模型],
+) <fig:thread-process-model>
 
 === 三类组织关系
 
@@ -263,6 +176,15 @@ StarryOS 原有退出码可以描述进程终止，却不适合表示暂时停�
 `fork` 在 moss 中并未缺席。在 x86_64 平台上，`sys_fork` 会调用 `sys_clone`，其中不设置资源共享标志，只指定子进程退出时发送 `SIGCHLD`。因此，`fork` 创建的是拥有独立 `ProcessData` 的子进程；`clone` 和 `clone3` 则允许用户通过标志决定创建进程还是线程，以及资源如何继承。
 
 这些入口最终都把参数整理为 `CloneArgs`，交给 `CloneArgs::do_clone` 执行。带有 `CLONE_THREAD` 时，新任务复用当前 `ProcessData`；否则调用 `Process::fork` 建立子进程及父子关系，再创建新的 `ProcessData`。地址空间、文件表、文件系统上下文和信号处理动作分别由 `CLONE_VM`、`CLONE_FILES`、`CLONE_FS` 和 `CLONE_SIGHAND` 决定共享或复制。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-2.4.1.svg", width: 50%)
+    ]
+  ],
+  caption: [fork、clone 与 clone3 的统一创建路径],
+) <fig:clone-path>
 
 #figure(
   table(
