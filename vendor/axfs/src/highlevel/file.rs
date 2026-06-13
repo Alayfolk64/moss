@@ -314,6 +314,7 @@ const PAGE_SIZE: usize = 4096;
 const DEFAULT_LOCAL_FILE_CACHE_PAGES: usize = 256;
 const GLOBAL_FILE_CACHE_PAGES: usize = 16 * 1024;
 const MAX_READAHEAD_BYTES: usize = DEFAULT_LOCAL_FILE_CACHE_PAGES * PAGE_SIZE;
+const DEFERRED_FILE_LEN_THRESHOLD: u64 = 64 * 1024;
 const WRITEBACK_BATCH_PAGES: usize = 16;
 const WRITEBACK_BATCH_BYTES: usize = WRITEBACK_BATCH_PAGES * PAGE_SIZE;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
@@ -520,7 +521,7 @@ impl GlobalPageCache {
         self.file_pages
             .get(&cache_id)
             .into_iter()
-            .flat_map(|pages| pages.range(range))
+            .flat_map(|pages| pages.range(range.clone()))
             .map(|pn| GlobalPageKey { cache_id, pn: *pn })
             .collect()
     }
@@ -765,11 +766,33 @@ impl CachedFile {
             }
         }
 
+        if evicted.is_some() {
+            cache.reserved_slots += 1;
+        }
         for (key, entry) in skipped {
             cache.put(key, entry);
         }
 
         evicted
+    }
+
+    fn evict_one_global_page(allow_mapped: bool) -> VfsResult<bool> {
+        let evicted = {
+            let mut cache = GLOBAL_PAGE_CACHE.lock();
+            Self::pop_global_lru_locked(&mut cache, allow_mapped)
+        };
+        let Some((key, mut entry)) = evicted else {
+            return Ok(false);
+        };
+
+        let result = Self::evict_global_entry(key, &mut entry);
+        let mut cache = GLOBAL_PAGE_CACHE.lock();
+        if result.is_err() {
+            cache.restore_reserved(key, entry);
+        } else {
+            cache.release_reserved(1);
+        }
+        result.map(|_| true)
     }
 
     fn evict_global_entry(key: GlobalPageKey, entry: &mut GlobalPageEntry) -> VfsResult<()> {
@@ -803,16 +826,11 @@ impl CachedFile {
             if cache.has_capacity() {
                 break;
             }
-            let evicted = Self::pop_global_lru_locked(&mut cache, false);
-            let Some((key, mut entry)) = evicted else {
+            drop(cache);
+            if !Self::evict_one_global_page(false)? {
                 warn!("global file page cache is full of mapped pages");
                 return Err(VfsError::NoMemory);
-            };
-            if let Err(err) = Self::evict_global_entry(key, &mut entry) {
-                cache.put(key, entry);
-                return Err(err);
             }
-            drop(cache);
         }
 
         let file = self.inner().entry().as_file()?;
@@ -833,16 +851,11 @@ impl CachedFile {
                 );
                 return f(&mut cache.get_mut(&key).unwrap().page, None);
             }
-            let evicted = Self::pop_global_lru_locked(&mut cache, false);
-            let Some((key, mut entry)) = evicted else {
+            drop(cache);
+            if !Self::evict_one_global_page(false)? {
                 warn!("global file page cache is full of mapped pages");
                 return Err(VfsError::NoMemory);
-            };
-            if let Err(err) = Self::evict_global_entry(key, &mut entry) {
-                cache.put(key, entry);
-                return Err(err);
             }
-            drop(cache);
         }
     }
 
@@ -1054,7 +1067,16 @@ impl CachedFile {
             return self.write_at_in_memory(buf, offset, end);
         }
 
-        let old_len = self.grow_cached_len(end)?;
+        let old_len = self.len()?;
+        if end > old_len {
+            if end <= DEFERRED_FILE_LEN_THRESHOLD {
+                let file = self.inner().entry().as_file()?;
+                file.set_len(end)?;
+                self.set_cached_len(end, false)?;
+            } else {
+                self.grow_cached_len(end)?;
+            }
+        }
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;

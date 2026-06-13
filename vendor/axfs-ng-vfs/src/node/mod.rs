@@ -424,7 +424,7 @@ impl DirEntry {
     }
 
     fn cacheable_metadata(&self) -> bool {
-        !self.flags().contains(NodeFlags::NON_CACHEABLE)
+        self.node_type() != NodeType::Directory && !self.flags().contains(NodeFlags::NON_CACHEABLE)
     }
 
     fn metadata_cache_key(&self) -> InodeMetadataCacheKey {

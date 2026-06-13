@@ -580,6 +580,11 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     } else {
         None
     };
+    // Dirty pages and the cached length must be committed while the inode is
+    // still linked; writing them after unlink can target a recycled inode.
+    if let Some(file) = removed_file_cache.as_ref() {
+        invalidate_file_cache(file)?;
+    }
     with_fs(dirfd, |fs| {
         if flags == AT_REMOVEDIR as _ {
             fs.remove_dir(path.as_str())?;
@@ -608,9 +613,6 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     notify_inotify_dirent(dirfd, &path, IN_DELETE, is_dir, 0);
     if let Some(event) = self_event {
         notify_fanotify_prepared_event(event);
-    }
-    if let Some(file) = removed_file_cache {
-        invalidate_file_cache(&file)?;
     }
     Ok(0)
 }
@@ -1004,10 +1006,11 @@ pub fn sys_renameat2(
         .filter(|loc| !loc.is_dir())
         .and_then(|loc| loc.metadata().ok().is_some_and(|meta| meta.nlink <= 1).then_some(loc));
 
-    old_dir.rename(&old_name, &new_dir, new_name)?;
-    if let Some(file) = replaced_file_cache {
-        invalidate_file_cache(&file)?;
+    // Flush a replaced inode before rename removes its last link.
+    if let Some(file) = replaced_file_cache.as_ref() {
+        invalidate_file_cache(file)?;
     }
+    old_dir.rename(&old_name, &new_dir, new_name)?;
     commit_fanotify_path_alias(path_alias);
     let mut move_self_event = move_self_event;
     if is_dir {

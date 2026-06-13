@@ -281,10 +281,9 @@ impl BackendOps for CowBackend {
         new_pt: &mut PageTableMut,
         _new_aspace: &Arc<Mutex<AddrSpace>>,
     ) -> AxResult<Backend> {
-        let eager_share_file = self.file.is_some() && !flags.contains(MappingFlags::WRITE);
         // Forking untouched lazy COW regions is common (e.g. fork14). In that
         // case, there is nothing in page tables to duplicate.
-        if self.mapped_pages.load(Ordering::Relaxed) == 0 && !eager_share_file {
+        if self.mapped_pages.load(Ordering::Relaxed) == 0 {
             return Ok(Backend::Cow(self.clone()));
         }
 
@@ -299,16 +298,6 @@ impl BackendOps for CowBackend {
                     // - Update its permissions in the old page table using `flags`.
                     // - Map the same physical page into the new page table at the same
                     // virtual address, with the same page size and `flags`.
-                    self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)?;
-                }
-                Err(PagingError::NotMapped) if eager_share_file => {
-                    // Read-only private file mappings are safe to share across
-                    // fork. Populate them in the parent before cloning so a
-                    // fork storm does not allocate the same executable/library
-                    // pages independently in every child.
-                    self.alloc_new_at(vaddr, cow_flags, old_pt)?;
-                    let (paddr, _, page_size) = old_pt.query(vaddr)?;
-                    assert_eq!(page_size, self.size);
                     self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)?;
                 }
                 // If the page is not mapped, skip it.

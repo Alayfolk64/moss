@@ -219,7 +219,6 @@ impl DirNode {
         self.ops.link(name, node).inspect(|entry| {
             self.cache.lock().insert(name.to_owned(), entry.clone());
             invalidate_inode_metadata_cache(node.filesystem(), node.inode());
-            invalidate_inode_metadata_cache(self.filesystem(), self.inode());
         })
     }
 
@@ -237,7 +236,6 @@ impl DirNode {
 
         self.ops.unlink(name).inspect(|_| {
             invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
-            invalidate_inode_metadata_cache(self.filesystem(), self.inode());
             Self::forget_entry(&mut children, name);
         })
     }
@@ -265,7 +263,6 @@ impl DirNode {
     ) -> VfsResult<DirEntry> {
         let entry = self.ops.create(name, node_type, permission)?;
         children.insert(name.to_owned(), entry.clone());
-        invalidate_inode_metadata_cache(self.filesystem(), self.inode());
         Ok(entry)
     }
 
@@ -331,8 +328,6 @@ impl DirNode {
             if let Some(dst) = dst.as_ref() {
                 invalidate_inode_metadata_cache(dst.filesystem(), dst.inode());
             }
-            invalidate_inode_metadata_cache(self.filesystem(), self.inode());
-            invalidate_inode_metadata_cache(dst_dir.filesystem(), dst_dir.inode());
             Self::forget_entry(&mut src_children, src_name);
             Self::forget_entry(
                 dst_children

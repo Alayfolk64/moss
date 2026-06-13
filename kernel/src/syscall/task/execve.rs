@@ -85,7 +85,12 @@ pub fn sys_execve(
 ) -> AxResult<isize> {
     let path = vm_load_string(path)?;
     let exec_loc = FS_CONTEXT.lock().resolve(&path).ok();
-    execve_common(uctx, path, exec_loc, None, argv, envp)
+    let load_loc = if path.ends_with(".sh") {
+        None
+    } else {
+        exec_loc.clone()
+    };
+    execve_common(uctx, path, exec_loc, load_loc, argv, envp)
 }
 
 pub fn sys_execveat(
