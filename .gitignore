@@ -36,3 +36,4 @@ __pycache__/
 /.claude
 /syscall_code
 .vscode/
+*.pyc
