@@ -1,10 +1,36 @@
 # lmbench 计分结果
 
-- 生成时间: `2026-06-13 15:23:26`
+- 生成时间: `2026-06-13 15:36:04`
+- baseline 已按 `608-性能测试.pdf` 第 23-26 页与官方 lmbench judge 脚本交叉核对。
 - 计分项: `36`，单个 libc 理论分数范围为 `0` 到 `< 72`。
-- 单项达到 baseline 得 `1.0` 分；优于 baseline 后按曲线增加，极限趋近 `2.0` 分。
+- 低延迟项: `result <= baseline` 时得 `2 - result / baseline`，否则得 `1.0`。
+- 高吞吐项: `result >= baseline` 时得 `2 - baseline / result`，否则得 `1.0`。
+- 缺失或非正数结果得 `0`；单项达到 baseline 得 `1.0`，极限趋近 `2.0`。
 - 官方 judge 通过名称是否含 `microseconds`/`seconds` 判断方向；因此 8 个 `fs latency` 项实际按“越大越好”计分。
 - `File /var/tmp/XXX write bandwidth` 和 `Protection fault` 不在 baseline 中，不计分。
+
+## 计分规则
+
+lmbench 共 36 个计分项，每项独立计算，最后直接求和。
+
+低延迟项的名称包含 `microseconds` 或 `seconds`，数值越小越好：
+
+```text
+result <= baseline: score = 2 - result / baseline
+result >  baseline: score = 1
+```
+
+其余项目按高吞吐项处理，数值越大越好：
+
+```text
+result >= baseline: score = 2 - baseline / result
+result <  baseline: score = 1
+```
+
+- 缺失、解析失败或结果小于等于 0 时得 0 分。
+- 达到 baseline 时得 1 分；性能优于 baseline 后分数逐渐接近 2 分，但不会达到 2 分。
+- 单个 libc 的 36 项总分范围为 0 到小于 72 分。
+- 官方 judge 仅根据项目名称判断方向，所以 8 个 `fs latency` 项虽然是延迟指标，实际仍按“越大越好”计分。
 
 ## 输入
 

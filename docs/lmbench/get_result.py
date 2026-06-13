@@ -20,7 +20,12 @@ class Item:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parents[1]
 DEFAULT_OUT_DIR = SCRIPT_DIR / "results"
+RUN_ALL_LOGS = (
+    ("output_rv", REPO_ROOT / "output_rv.txt"),
+    ("output_la", REPO_ROOT / "output_la.txt"),
+)
 LIBCS = ("glibc", "musl")
 
 ITEMS = [
@@ -194,13 +199,10 @@ def collect_inputs(args: argparse.Namespace) -> list[tuple[str, Path]]:
     if inputs:
         return inputs
 
-    defaults = [
-        ("RV", (SCRIPT_DIR / "../../output_rv.txt").resolve()),
-        ("LA", (SCRIPT_DIR / "../../output_la.txt").resolve()),
-    ]
-    existing = [(label, path) for label, path in defaults if path.exists()]
+    existing = [(label, path) for label, path in RUN_ALL_LOGS if path.exists()]
     if not existing:
-        raise SystemExit("未提供日志，且仓库根目录不存在 output_rv.txt/output_la.txt")
+        expected = "、".join(str(path) for _, path in RUN_ALL_LOGS)
+        raise SystemExit(f"未提供日志，且未找到 run_all.sh 生成的日志：{expected}")
     return existing
 
 
@@ -214,10 +216,36 @@ def build_report(inputs: list[tuple[str, Path]], datasets: dict[str, dict[str, d
         "# lmbench 计分结果",
         "",
         f"- 生成时间: `{now}`",
+        "- baseline 已按 `608-性能测试.pdf` 第 23-26 页与官方 lmbench judge 脚本交叉核对。",
         f"- 计分项: `{len(ITEMS)}`，单个 libc 理论分数范围为 `0` 到 `< {len(ITEMS) * 2}`。",
-        "- 单项达到 baseline 得 `1.0` 分；优于 baseline 后按曲线增加，极限趋近 `2.0` 分。",
+        "- 低延迟项: `result <= baseline` 时得 `2 - result / baseline`，否则得 `1.0`。",
+        "- 高吞吐项: `result >= baseline` 时得 `2 - baseline / result`，否则得 `1.0`。",
+        "- 缺失或非正数结果得 `0`；单项达到 baseline 得 `1.0`，极限趋近 `2.0`。",
         "- 官方 judge 通过名称是否含 `microseconds`/`seconds` 判断方向；因此 8 个 `fs latency` 项实际按“越大越好”计分。",
         "- `File /var/tmp/XXX write bandwidth` 和 `Protection fault` 不在 baseline 中，不计分。",
+        "",
+        "## 计分规则",
+        "",
+        "lmbench 共 36 个计分项，每项独立计算，最后直接求和。",
+        "",
+        "低延迟项的名称包含 `microseconds` 或 `seconds`，数值越小越好：",
+        "",
+        "```text",
+        "result <= baseline: score = 2 - result / baseline",
+        "result >  baseline: score = 1",
+        "```",
+        "",
+        "其余项目按高吞吐项处理，数值越大越好：",
+        "",
+        "```text",
+        "result >= baseline: score = 2 - baseline / result",
+        "result <  baseline: score = 1",
+        "```",
+        "",
+        "- 缺失、解析失败或结果小于等于 0 时得 0 分。",
+        "- 达到 baseline 时得 1 分；性能优于 baseline 后分数逐渐接近 2 分，但不会达到 2 分。",
+        "- 单个 libc 的 36 项总分范围为 0 到小于 72 分。",
+        "- 官方 judge 仅根据项目名称判断方向，所以 8 个 `fs latency` 项虽然是延迟指标，实际仍按“越大越好”计分。",
         "",
         "## 输入",
         "",
@@ -277,7 +305,13 @@ def build_report(inputs: list[tuple[str, Path]], datasets: dict[str, dict[str, d
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="解析 lmbench 日志并复现官方 judge 计分规则")
+    parser = argparse.ArgumentParser(
+        description="解析 lmbench 日志并复现官方 judge 计分规则",
+        epilog=(
+            "不传日志时，默认读取 run_all.sh 在仓库根目录生成的 "
+            "output_rv.txt 和 output_la.txt。"
+        ),
+    )
     parser.add_argument("logs", nargs="*", type=Path, help="日志路径；标签默认使用文件名")
     parser.add_argument(
         "--input",
@@ -299,6 +333,14 @@ def main() -> int:
         raise SystemExit("日志不存在: " + ", ".join(missing_paths))
 
     datasets = {label: parse_log(path) for label, path in inputs}
+    if not any(parsed for dataset in datasets.values() for parsed in dataset.values()):
+        paths = "、".join(str(path) for _, path in inputs)
+        raise SystemExit(
+            "日志中没有找到有效的 lmbench 结果。"
+            f"已检查：{paths}。请确认 src/init.sh 中 lmbench=1，"
+            "并在 run_all.sh 完成后重新运行本脚本。"
+        )
+
     out = args.out or (DEFAULT_OUT_DIR / f"{datetime.now().strftime('%m%d-%H%M%S')}.md")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(build_report(inputs, datasets), encoding="utf-8")

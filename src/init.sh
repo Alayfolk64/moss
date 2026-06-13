@@ -116,17 +116,17 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
+basic=0
+busybox=0
 cyclictest=0
-iozone=1
-iperf=1
+iozone=0
+iperf=0
 libcbench=0
-libctest=1
-lmbench=0
-ltp=1
-lua=1
-netperf=1
+libctest=0
+lmbench=1
+ltp=0
+lua=
+netperf=0
 
 if [ -n "$some_testcases" ]; then
     basic=0
