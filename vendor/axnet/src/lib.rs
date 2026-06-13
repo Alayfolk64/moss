@@ -24,6 +24,7 @@ mod device;
 mod family;
 mod general;
 mod listen_table;
+mod local;
 pub mod options;
 mod router;
 mod service;
@@ -40,10 +41,10 @@ use alloc::{borrow::ToOwned, boxed::Box};
 
 use axdriver::{AxDeviceContainer, prelude::*};
 use axsync::Mutex;
+pub use family::IpFamily;
 use lazyinit::LazyInit;
 use smoltcp::wire::{EthernetAddress, Ipv4Address, Ipv4Cidr, Ipv6Address, Ipv6Cidr};
 pub use socket::*;
-pub use family::IpFamily;
 
 use crate::{
     consts::{GATEWAY, IP, IP_PREFIX},
@@ -126,6 +127,7 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
 
     SOCKET_SET.init_once(SocketSetWrapper::new());
     LISTEN_TABLE.init_once(ListenTable::new());
+    local::init();
 }
 
 /// Init vsock subsystem by vsock devices.
