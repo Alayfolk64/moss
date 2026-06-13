@@ -37,3 +37,4 @@ __pycache__/
 /syscall_code
 .vscode/
 *.pyc
+.tmp-edge-profile/
