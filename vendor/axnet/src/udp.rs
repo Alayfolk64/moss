@@ -1,4 +1,4 @@
-use alloc::vec;
+use alloc::{sync::Arc, vec};
 use core::{
     sync::atomic::{AtomicUsize, Ordering},
     task::Context,
@@ -11,11 +11,8 @@ use axsync::Mutex;
 use smoltcp::{
     iface::SocketHandle,
     phy::PacketMeta,
-    socket::{
-        Socket as SmolSocket,
-        udp::{self as smol, UdpMetadata},
-    },
-    storage::{Full, PacketMetadata},
+    socket::udp::{self as smol, UdpMetadata},
+    storage::PacketMetadata,
     wire::{IpAddress, IpEndpoint, IpListenEndpoint},
 };
 use spin::RwLock;
@@ -25,6 +22,7 @@ use crate::{
     consts::{UDP_LOOPBACK_YIELD_BYTES, UDP_PACKET_BUFFER_SIZE, UDP_RX_BUF_LEN, UDP_TX_BUF_LEN},
     family::IpFamily,
     general::GeneralOptions,
+    local::LocalUdpSocket,
     options::{Configurable, GetSocketOption, SetSocketOption},
     poll_interfaces,
 };
@@ -57,6 +55,7 @@ pub(crate) fn new_udp_socket() -> smol::Socket<'static> {
 /// A UDP socket that provides POSIX-like APIs.
 pub struct UdpSocket {
     handle: SocketHandle,
+    local: Arc<LocalUdpSocket>,
     family: IpFamily,
     local_addr: RwLock<Option<IpEndpoint>>,
     peer_addr: RwLock<Option<(IpEndpoint, IpAddress)>>,
@@ -73,6 +72,7 @@ impl UdpSocket {
 
         Self {
             handle,
+            local: LocalUdpSocket::new(family),
             family,
             local_addr: RwLock::new(None),
             peer_addr: RwLock::new(None),
@@ -143,29 +143,9 @@ impl UdpSocket {
             .ok_or_else(|| AxError::from(LinuxError::EAFNOSUPPORT))
     }
 
-    fn try_loopback_recv(
-        socket: &mut smol::Socket,
-        size: usize,
-        remote_endpoint: IpEndpoint,
-        local_address: IpAddress,
-        src: &mut impl Read,
-    ) -> Result<Result<usize, AxError>, Full> {
-        socket.enqueue_recv_with(
-            size,
-            remote_endpoint,
-            local_address,
-            PacketMeta::default(),
-            |buf| -> AxResult<usize> {
-                let read = src.read(buf)?;
-                assert_eq!(read, buf.len());
-                Ok(read)
-            },
-        )
-    }
-
     fn try_loopback_send<S>(
         &self,
-        mut src: S,
+        src: S,
         remote_addr: IpEndpoint,
         source_addr: IpAddress,
     ) -> AxResult<Result<usize, S>>
@@ -176,75 +156,12 @@ impl UdpSocket {
             return Ok(Err(src));
         }
 
-        let local_port = self.local_addr.read().as_ref().map_or(0, |addr| addr.port);
-        if local_port == 0 {
-            return Ok(Err(src));
-        }
-
-        let remote_endpoint = IpEndpoint {
-            addr: source_addr,
-            port: local_port,
-        };
-        let size = src.remaining();
-
-        let result = {
-            let mut sockets = SOCKET_SET.inner.lock();
-            let mut listener = None;
-            let mut result = None;
-
-            for (handle, socket) in sockets.iter_mut() {
-                let SmolSocket::Udp(socket) = socket else {
-                    continue;
-                };
-                if !Self::matches_local_endpoint(socket, remote_addr) {
-                    continue;
-                }
-
-                match socket.connected_endpoint() {
-                    Some(peer) if peer == remote_endpoint => {
-                        result = Some(Self::try_loopback_recv(
-                            socket,
-                            size,
-                            remote_endpoint,
-                            remote_addr.addr,
-                            &mut src,
-                        ));
-                        break;
-                    }
-                    Some(_) => continue,
-                    None => listener = Some(handle),
-                }
-            }
-
-            result.or_else(|| listener.map(|handle| {
-                let socket = sockets.get_mut::<smol::Socket>(handle);
-                Self::try_loopback_recv(socket, size, remote_endpoint, remote_addr.addr, &mut src)
-            }))
-        };
-
-        Self::finish_loopback_send(result, remote_addr.addr, src)
-    }
-
-    fn matches_local_endpoint(socket: &smol::Socket, local: IpEndpoint) -> bool {
-        let endpoint = socket.endpoint();
-        endpoint.port == local.port && endpoint.addr.map_or(true, |addr| addr == local.addr)
-    }
-
-    fn finish_loopback_send<S>(
-        result: Option<Result<Result<usize, AxError>, Full>>,
-        local_address: IpAddress,
-        src: S,
-    ) -> AxResult<Result<usize, S>>
-    where
-        S: Read + IoBuf,
-    {
-        match result {
-            Some(Ok(Ok(sent))) => {
-                SERVICE.lock().notify_route_device(&local_address);
+        match self.local.send(src, remote_addr, source_addr)? {
+            Ok(sent) => {
+                SERVICE.lock().notify_route_device(&remote_addr.addr);
                 Ok(Ok(sent))
             }
-            Some(Ok(Err(err))) => Err(err),
-            Some(Err(_)) | None => Ok(Err(src)),
+            Err(src) => Ok(Err(src)),
         }
     }
 }
@@ -265,10 +182,10 @@ impl Configurable for UdpSocket {
                     **ttl = socket.hop_limit().unwrap_or(64);
                 });
             }
-            O::SendBuffer(size) => {
+            O::SendBuffer(size) | O::SendBufferForce(size) => {
                 **size = self.with_smol_socket(|socket| socket.payload_send_capacity());
             }
-            O::ReceiveBuffer(size) => {
+            O::ReceiveBuffer(size) | O::ReceiveBufferForce(size) => {
                 **size = self.with_smol_socket(|socket| socket.payload_recv_capacity());
             }
             _ => return Ok(false),
@@ -285,7 +202,7 @@ impl Configurable for UdpSocket {
                 self.apply_configured_buffers_if_idle()?;
                 return Ok(true);
             }
-            O::ReceiveBuffer(size) => {
+            O::ReceiveBuffer(size) | O::ReceiveBufferForce(size) => {
                 self.general.set_recv_buffer(*size);
                 self.apply_configured_buffers_if_idle()?;
                 return Ok(true);
@@ -299,6 +216,7 @@ impl Configurable for UdpSocket {
         match option {
             O::Ipv6Only(ipv6_only) if self.family == IpFamily::Ipv6 => {
                 self.general.set_ipv6_only(*ipv6_only);
+                self.local.set_ipv6_only(*ipv6_only);
             }
             O::Ttl(ttl) => {
                 self.with_smol_socket(|socket| {
@@ -344,6 +262,7 @@ impl SocketOps for UdpSocket {
                 smol::BindError::Unaddressable => ax_err_type!(ConnectionRefused, "unaddressable"),
             })
         })?;
+        self.local.bind(endpoint)?;
         self.general
             .set_device_mask(SERVICE.lock().device_mask_for(&endpoint));
 
@@ -367,6 +286,7 @@ impl SocketOps for UdpSocket {
         self.with_smol_socket(|socket| {
             socket.set_connected_endpoint(Some(remote_addr));
         });
+        self.local.connect(remote_addr);
         *guard = Some((remote_addr, src));
         debug!("UDP socket {}: connected to {}", self.handle, remote_addr);
         Ok(())
@@ -439,26 +359,40 @@ impl SocketOps for UdpSocket {
         Ok(sent)
     }
 
-    fn recv(&self, mut dst: impl Write, options: RecvOptions) -> AxResult<usize> {
+    fn recv(&self, mut dst: impl Write, mut options: RecvOptions) -> AxResult<usize> {
         if self.local_addr.read().is_none() {
             ax_bail!(NotConnected);
         }
 
-        enum ExpectedRemote<'a> {
-            Any(&'a mut SocketAddrEx),
-            Expecting(IpEndpoint),
-            Unspecified,
-        }
-        let mut expected_remote = match options.from {
-            Some(addr) => ExpectedRemote::Any(addr),
-            None => match self.remote_endpoint() {
-                Ok((endpoint, _)) => ExpectedRemote::Expecting(endpoint),
-                Err(AxError::NotConnected) => ExpectedRemote::Unspecified,
-                Err(e) => return Err(e),
-            },
-        };
+        let flags = options.flags;
+        let mut from = options.from.take();
 
         self.general.network_recv_poller(self, || {
+            let local_options = RecvOptions {
+                from: from.as_mut().map(|addr| &mut **addr),
+                flags,
+                cmsg: None,
+            };
+            match self.local.recv(&mut dst, self.family, local_options) {
+                Ok(read) => return Ok(read),
+                Err(AxError::WouldBlock) | Err(AxError::NotConnected) => {}
+                Err(err) => return Err(err),
+            }
+
+            enum ExpectedRemote<'a> {
+                Any(&'a mut SocketAddrEx),
+                Expecting(IpEndpoint),
+                Unspecified,
+            }
+            let mut expected_remote = match from.as_mut() {
+                Some(addr) => ExpectedRemote::Any(&mut **addr),
+                None => match self.remote_endpoint() {
+                    Ok((endpoint, _)) => ExpectedRemote::Expecting(endpoint),
+                    Err(AxError::NotConnected) => ExpectedRemote::Unspecified,
+                    Err(e) => return Err(e),
+                },
+            };
+
             self.with_smol_socket(|socket| {
                 if !socket.is_open() {
                     // not bound
@@ -466,7 +400,7 @@ impl SocketOps for UdpSocket {
                 } else if !socket.can_recv() {
                     Err(AxError::WouldBlock)
                 } else {
-                    let result = if options.flags.contains(RecvFlags::PEEK) {
+                    let result = if flags.contains(RecvFlags::PEEK) {
                         socket.peek().map(|(data, meta)| (data, *meta))
                     } else {
                         socket.recv()
@@ -475,10 +409,11 @@ impl SocketOps for UdpSocket {
                         Ok((src, meta)) => {
                             match &mut expected_remote {
                                 ExpectedRemote::Any(remote_addr) => {
-                                    **remote_addr = SocketAddrEx::Ip(
-                                        self.family
-                                            .format_socket_addr(meta.endpoint.addr, meta.endpoint.port),
-                                    );
+                                    **remote_addr =
+                                        SocketAddrEx::Ip(self.family.format_socket_addr(
+                                            meta.endpoint.addr,
+                                            meta.endpoint.port,
+                                        ));
                                 }
                                 ExpectedRemote::Expecting(expected) => {
                                     if (!expected.addr.is_unspecified()
@@ -497,7 +432,7 @@ impl SocketOps for UdpSocket {
                                 warn!("UDP message truncated: {} -> {} bytes", src.len(), read);
                             }
 
-                            Ok(if options.flags.contains(RecvFlags::TRUNCATE) {
+                            Ok(if flags.contains(RecvFlags::TRUNCATE) {
                                 src.len()
                             } else {
                                 read
@@ -537,6 +472,7 @@ impl SocketOps for UdpSocket {
             debug!("UDP socket {}: shutting down", self.handle);
             socket.close();
         });
+        self.local.close();
         Ok(())
     }
 }
@@ -548,8 +484,12 @@ impl Pollable for UdpSocket {
         }
 
         let mut events = IoEvents::empty();
+        let local_events = self.local.poll();
         self.with_smol_socket(|socket| {
-            events.set(IoEvents::IN, socket.can_recv());
+            events.set(
+                IoEvents::IN,
+                socket.can_recv() || local_events.contains(IoEvents::IN),
+            );
             events.set(IoEvents::OUT, socket.can_send());
         });
         events
@@ -558,6 +498,7 @@ impl Pollable for UdpSocket {
     fn register(&self, context: &mut Context<'_>, events: IoEvents) {
         if events.intersects(IoEvents::IN | IoEvents::OUT) {
             self.general.register_waker(context.waker());
+            self.local.register(context.waker());
         }
     }
 }

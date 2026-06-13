@@ -18,6 +18,7 @@ pub const ROUTER_PACKET_BUFFER_SIZE: usize = 256;
 
 pub const TCP_RX_BUF_LEN: usize = 512 * 1024;
 pub const TCP_TX_BUF_LEN: usize = 512 * 1024;
+pub const TCP_SEND_POLL_BYTES: usize = 128 * 1024;
 pub const UDP_RX_BUF_LEN: usize = 1024 * 1024;
 pub const UDP_TX_BUF_LEN: usize = 1024 * 1024;
 pub const UDP_PACKET_BUFFER_SIZE: usize = 1024;

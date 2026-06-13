@@ -33,6 +33,12 @@ echo "nobody:x:65534:65534:nobody:/:/bin/sh" >>/etc/passwd
 echo "root:x:0:" >>/etc/group
 echo "nobody:x:65534:" >>/etc/group
 echo "nameserver 8.8.8.8" >/etc/resolv.conf
+cat >/etc/protocols <<'EOF'
+ip 0 IP
+icmp 1 ICMP
+tcp 6 TCP
+udp 17 UDP
+EOF
 
 mkdir -vp /lib/modules/10.0.0/build
 echo "CONFIG_EVENTFD=y" >/lib/modules/10.0.0/build/.config
@@ -110,17 +116,17 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=0
-busybox=0
+basic=1
+busybox=1
 cyclictest=0
-iozone=0
+iozone=1
 iperf=1
 libcbench=0
-libctest=0
+libctest=1
 lmbench=0
-ltp=0
-lua=0
-netperf=0
+ltp=1
+lua=1
+netperf=1
 
 if [ -n "$some_testcases" ]; then
     basic=0
