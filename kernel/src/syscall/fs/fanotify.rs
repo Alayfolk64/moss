@@ -252,6 +252,7 @@ enum FanotifyMarkKind {
 
 static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
 static FANOTIFY_PATH_ALIASES: RwLock<Vec<FanotifyPathAlias>> = RwLock::new(Vec::new());
+static FANOTIFY_INTEREST_MASK: AtomicU64 = AtomicU64::new(0);
 
 pub struct FanotifyFd {
     init_flags: u32,
@@ -399,6 +400,12 @@ impl FanotifyFd {
                 ignore_surv_modify: flags & FAN_MARK_IGNORED_SURV_MODIFY != 0,
                 evictable: flags & FAN_MARK_EVICTABLE != 0,
             });
+        }
+        let interest = marks
+            .iter()
+            .fold(0, |interest, mark| interest | mark.mask | mark.ignored_mask);
+        if interest != 0 {
+            FANOTIFY_INTEREST_MASK.fetch_or(interest, Ordering::Release);
         }
         Ok(())
     }
@@ -1351,6 +1358,9 @@ pub fn sys_fanotify_mark(
 }
 
 fn has_fanotify_interest(mask: u64) -> bool {
+    if FANOTIFY_INTEREST_MASK.load(Ordering::Acquire) & mask == 0 {
+        return false;
+    }
     FANOTIFY_FDS.read().iter().any(|weak| {
         weak.upgrade().is_some_and(|fd| {
             if fd.is_destroyed() {

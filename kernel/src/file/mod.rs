@@ -10,7 +10,11 @@ pub mod signalfd;
 pub mod timerfd;
 
 use alloc::{borrow::Cow, collections::BTreeMap, string::String, sync::Arc};
-use core::{ffi::c_int, time::Duration};
+use core::{
+    ffi::c_int,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use axerrno::{AxError, AxResult};
 use axfs::{FS_CONTEXT, OpenOptions};
@@ -255,6 +259,7 @@ impl Default for AsyncFcntlState {
 }
 
 static ASYNC_FCNTL_STATE: RwLock<BTreeMap<usize, AsyncFcntlState>> = RwLock::new(BTreeMap::new());
+static ASYNC_FCNTL_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 fn file_like_key(file: &Arc<dyn FileLike>) -> usize {
     if let Some(pipe) = file.downcast_ref::<Pipe>() {
@@ -269,6 +274,9 @@ pub fn async_fcntl_set_owner(file: &Arc<dyn FileLike>, owner_type: i32, owner_pi
     let state = map.entry(file_like_key(file)).or_default();
     state.owner_type = owner_type;
     state.owner_pid = owner_pid;
+    if owner_pid > 0 {
+        ASYNC_FCNTL_ACTIVE.store(true, Ordering::Release);
+    }
 }
 
 pub fn async_fcntl_get_owner(file: &Arc<dyn FileLike>) -> AsyncFcntlState {
@@ -295,6 +303,9 @@ pub fn async_fcntl_get_signal(file: &Arc<dyn FileLike>) -> i32 {
 }
 
 pub fn notify_async_io(file_data_ptr: usize) {
+    if !ASYNC_FCNTL_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
     let Some(state) = ASYNC_FCNTL_STATE.read().get(&file_data_ptr).copied() else {
         return;
     };
