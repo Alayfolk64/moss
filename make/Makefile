@@ -48,7 +48,6 @@ DWARF ?=
 LTO ?=
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
-export RUSTFLAGS ?= -Zcrate-attr=feature(unsigned_signed_diff)
 TARGET_DIR ?= $(PWD)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?= $(PWD)/.axconfig.toml

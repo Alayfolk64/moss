@@ -11,7 +11,6 @@ RUST_LLD ?= rust-lld
 RUST_OBJCOPY ?= rust-objcopy
 GDB ?= gdb-multiarch
 LOONGARCH_CC ?=
-export RUSTFLAGS ?= -Zcrate-attr=feature(unsigned_signed_diff)
 
 # QEMU Options
 export BLK := y
