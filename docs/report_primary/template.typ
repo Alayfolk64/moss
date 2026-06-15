@@ -37,6 +37,9 @@
     )
   }
 
+  // 代码图的外层 figure 也允许分页，否则内部代码块仍会被整体移到下一页。
+  show figure.where(kind: raw): set block(breakable: true)
+
   set heading(numbering: "1.1")
 
   set figure(numbering: (..nums) => {
@@ -104,4 +107,3 @@
   counter(figure.where(kind: table)).update(0)
   counter(figure.where(kind: raw)).update(0)
 }
-
