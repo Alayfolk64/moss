@@ -437,7 +437,7 @@ impl LocalTcpSocket {
             tx_buf_len,
         ) {
             Ok(stream) => stream,
-            Err(AxError::ConnectionRefused) => return Ok(false),
+            Err(AxError::ConnectionRefused) => return Err(AxError::ConnectionRefused),
             Err(err) => return Err(err),
         };
 

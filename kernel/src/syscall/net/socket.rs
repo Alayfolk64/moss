@@ -93,10 +93,11 @@ pub fn sys_bind(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> AxResult
 }
 
 pub fn sys_connect(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> AxResult<isize> {
+    let socket = Socket::from_fd(fd)?;
     let addr = SocketAddrEx::read_from_user(addr, addrlen)?;
     debug!("sys_connect <= fd: {fd}, addr: {addr:?}");
 
-    Socket::from_fd(fd)?.connect(addr).map_err(|e| {
+    socket.connect(addr).map_err(|e| {
         if e == AxError::WouldBlock {
             AxError::InProgress
         } else {
