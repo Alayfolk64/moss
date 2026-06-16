@@ -1,6 +1,5 @@
-use core::{marker::PhantomData, mem, time::Duration};
-
 use alloc::boxed::Box;
+use core::{marker::PhantomData, mem, time::Duration};
 
 use crate::{
     DirLookupResult, DirReader, Ext4Error, Ext4Result, FileAttr, InodeRef, InodeType,
@@ -148,7 +147,7 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         let mut parent = self.inode_ref(parent)?;
         parent.add_entry(name, &mut child)?;
         if ty == InodeType::Directory {
-            child.add_entry(".", &mut self.clone_ref(&child))?;
+            child.add_self_entry(".")?;
             child.add_entry("..", &mut parent)?;
             assert_eq!(child.nlink(), 2);
         }

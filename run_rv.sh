@@ -1,12 +1,12 @@
 #!/bin/sh
-# rm -rf sdcard-rv.img disk.img
-# cp ./imgs/sdcard-rv.img ./
+rm -rf sdcard-rv.img disk.img
+cp ./imgs/sdcard-rv.img ./
+rm -rf kernel-rv
 
-# sleep 1
+sleep 1
 
 make kernel-rv
 
-./scripts/inject_libgcc.sh riscv64 sdcard-rv.img
 
 sleep 1
 

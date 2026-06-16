@@ -315,6 +315,29 @@ impl AddrSpace {
         false
     }
 
+    /// Returns an approximate resident set size in bytes for user mappings.
+    ///
+    /// Lazy mmap/brk areas are only counted after their pages have actually
+    /// been populated into the page table, matching the RSS semantics needed by
+    /// `/proc/*/status` and `getrusage(2)`.
+    pub fn resident_set_size(&self) -> usize {
+        let mut bytes = 0;
+        for area in self.areas.iter() {
+            if !area.flags().contains(MappingFlags::USER) {
+                continue;
+            }
+            let Some(pages) = PageIter4K::new(area.start(), area.end()) else {
+                continue;
+            };
+            for vaddr in pages {
+                if self.pt.query(vaddr).is_ok() {
+                    bytes += PAGE_SIZE_4K;
+                }
+            }
+        }
+        bytes
+    }
+
     pub fn is_accessible_fault(&self, vaddr: VirtAddr, access_flags: MappingFlags) -> bool {
         self.areas
             .find(vaddr)

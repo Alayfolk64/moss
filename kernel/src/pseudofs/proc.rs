@@ -40,66 +40,6 @@ use crate::{
     task::{AsThread, NamespaceState, TaskStat, get_task, tasks},
 };
 
-const DUMMY_MEMINFO: &str = indoc! {"
-    MemTotal:       32536204 kB
-    MemFree:         5506524 kB
-    MemAvailable:   18768344 kB
-    Buffers:            3264 kB
-    Cached:         14454588 kB
-    SwapCached:            0 kB
-    Active:         18229700 kB
-    Inactive:        6540624 kB
-    Active(anon):   11380224 kB
-    Inactive(anon):        0 kB
-    Active(file):    6849476 kB
-    Inactive(file):  6540624 kB
-    Unevictable:      930088 kB
-    Mlocked:            1136 kB
-    SwapTotal:       4194300 kB
-    SwapFree:        4194300 kB
-    Zswap:                 0 kB
-    Zswapped:              0 kB
-    Dirty:             47952 kB
-    Writeback:             0 kB
-    AnonPages:      10992512 kB
-    Mapped:          1361184 kB
-    Shmem:           1068056 kB
-    KReclaimable:     341440 kB
-    Slab:             628996 kB
-    SReclaimable:     341440 kB
-    SUnreclaim:       287556 kB
-    KernelStack:       28704 kB
-    PageTables:        85308 kB
-    SecPageTables:      2084 kB
-    NFS_Unstable:          0 kB
-    Bounce:                0 kB
-    WritebackTmp:          0 kB
-    CommitLimit:    20462400 kB
-    Committed_AS:   45105316 kB
-    VmallocTotal:   34359738367 kB
-    VmallocUsed:      205924 kB
-    VmallocChunk:          0 kB
-    Percpu:            23840 kB
-    HardwareCorrupted:     0 kB
-    AnonHugePages:   1417216 kB
-    ShmemHugePages:        0 kB
-    ShmemPmdMapped:        0 kB
-    FileHugePages:    477184 kB
-    FilePmdMapped:    288768 kB
-    CmaTotal:              0 kB
-    CmaFree:               0 kB
-    Unaccepted:            0 kB
-    HugePages_Total:       0
-    HugePages_Free:        0
-    HugePages_Rsvd:        0
-    HugePages_Surp:        0
-    Hugepagesize:       2048 kB
-    Hugetlb:               0 kB
-    DirectMap4k:     1739900 kB
-    DirectMap2M:    31492096 kB
-    DirectMap1G:     1048576 kB
-"};
-
 const DUMMY_SCHED_DEBUG: &str = indoc! {"
     Sched Debug Version: v0.11
     sysctl_sched_latency                    : 12000000
@@ -163,19 +103,55 @@ impl SimpleDirOps for ProcessTaskDir {
 
 #[rustfmt::skip]
 fn task_status(task: &AxTaskRef) -> String {
+    let proc_data = &task.as_thread().proc_data;
+    let rss_kb = proc_data.current_rss_kb();
+    proc_data.proc.record_maxrss_kb(rss_kb);
+    let hwm_kb = proc_data.proc.maxrss_kb();
     format!(
         "Tgid:\t{}\n\
         Pid:\t{}\n\
         Uid:\t0 0 0 0\n\
         Gid:\t0 0 0 0\n\
+        VmHWM:\t{} kB\n\
+        VmRSS:\t{} kB\n\
+        VmSwap:\t0 kB\n\
         VmLck:\t{} kB\n\
         Cpus_allowed:\t1\n\
         Cpus_allowed_list:\t0\n\
         Mems_allowed:\t1\n\
         Mems_allowed_list:\t0",
-        task.as_thread().proc_data.proc.pid(),
+        proc_data.proc.pid(),
         task.id().as_u64(),
+        hwm_kb,
+        rss_kb,
         crate::syscall::mmap_locked_kb(),
+    )
+}
+
+fn proc_meminfo() -> String {
+    const PAGE_SIZE: usize = 4096;
+
+    let allocator = axalloc::global_allocator();
+    let available = allocator.available_pages() * PAGE_SIZE;
+    let total = (allocator.used_pages() + allocator.available_pages()) * PAGE_SIZE;
+    let usages = allocator.usages();
+    let cached = usages.get(axalloc::UsageKind::PageCache);
+
+    format!(
+        "MemTotal:       {} kB\n\
+         MemFree:        {} kB\n\
+         MemAvailable:   {} kB\n\
+         Buffers:        0 kB\n\
+         Cached:         {} kB\n\
+         SwapCached:     0 kB\n\
+         Active:         0 kB\n\
+         Inactive:       0 kB\n\
+         SwapTotal:      0 kB\n\
+         SwapFree:       0 kB\n",
+        total / 1024,
+        available / 1024,
+        available / 1024,
+        cached / 1024,
     )
 }
 
@@ -890,7 +866,7 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     );
     root.add(
         "meminfo",
-        SimpleFile::new_regular(fs.clone(), || Ok(DUMMY_MEMINFO)),
+        SimpleFile::new_regular(fs.clone(), || Ok(proc_meminfo())),
     );
     root.add(
         "cpuinfo",

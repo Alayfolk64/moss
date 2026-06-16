@@ -182,14 +182,20 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
     with_fs(dirfd, |fs| {
         let path = Path::new(path.as_str());
-        if fs.resolve_no_follow(path).is_ok() {
-            return Err(AxError::AlreadyExists);
-        }
-
         let (dir, name) = fs.resolve_nonexistent(path)?;
+        match dir.lookup_no_follow_fresh(name) {
+            Ok(_) => return Err(AxError::AlreadyExists),
+            Err(err) if err.canonicalize() == AxError::NotFound => {}
+            Err(err) => return Err(err),
+        }
         let dir_stat = dir.metadata()?;
-        debug!("sys_mkdirat: creating {} in parent (mode={:#o}, SET_GID={}, gid={})",
-            name, dir_stat.mode.bits(), dir_stat.mode.contains(NodePermission::SET_GID), dir_stat.gid);
+        debug!(
+            "sys_mkdirat: creating {} in parent (mode={:#o}, SET_GID={}, gid={})",
+            name,
+            dir_stat.mode.bits(),
+            dir_stat.mode.contains(NodePermission::SET_GID),
+            dir_stat.gid
+        );
         if dir.mount_flags() & MS_RDONLY != 0 {
             return Err(AxError::ReadOnlyFilesystem);
         }
@@ -207,21 +213,31 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
         let mut permission = NodePermission::from_bits_truncate(mode as u16);
         let gid = if dir_stat.mode.contains(NodePermission::SET_GID) {
-            debug!("Parent dir has SET_GID, inheriting gid={} and setting SET_GID", dir_stat.gid);
+            debug!(
+                "Parent dir has SET_GID, inheriting gid={} and setting SET_GID",
+                dir_stat.gid
+            );
             permission.insert(NodePermission::SET_GID);
             dir_stat.gid
         } else {
-            debug!("Parent dir does NOT have SET_GID (mode={:#o}), using egid={}", dir_stat.mode.bits(), egid);
+            debug!(
+                "Parent dir does NOT have SET_GID (mode={:#o}), using egid={}",
+                dir_stat.mode.bits(),
+                egid
+            );
             egid
         };
 
         let loc = dir.create(name, NodeType::Directory, permission)?;
         // Update both owner and mode to ensure SET_GID is preserved
-        update_cached_metadata(&loc, MetadataUpdate {
-            owner: Some((euid, gid)),
-            mode: Some(permission),
-            ..Default::default()
-        })?;
+        update_cached_metadata(
+            &loc,
+            MetadataUpdate {
+                owner: Some((euid, gid)),
+                mode: Some(permission),
+                ..Default::default()
+            },
+        )?;
         Ok(0)
     })?;
     notify_inotify_dirent(dirfd, &path, IN_CREATE, true, 0);
@@ -296,10 +312,13 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         };
         match dir.create(name, create_type, permission) {
             Ok(loc) => {
-                update_cached_metadata(&loc, MetadataUpdate {
-                    owner: Some((euid, gid)),
-                    ..Default::default()
-                })?;
+                update_cached_metadata(
+                    &loc,
+                    MetadataUpdate {
+                        owner: Some((euid, gid)),
+                        ..Default::default()
+                    },
+                )?;
                 Ok(loc)
             }
             Err(err) => Err(err.into()),
@@ -580,9 +599,9 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     } else {
         None
     };
-    // Dirty pages and the cached length must be committed while the inode is
-    // still linked; writing them after unlink can target a recycled inode.
     if let Some(file) = removed_file_cache.as_ref() {
+        // Dirty pages must not be discarded here: an unlinked but still-open
+        // file is expected to retain its data through existing descriptors.
         invalidate_file_cache(file)?;
     }
     with_fs(dirfd, |fs| {
@@ -667,11 +686,14 @@ pub fn sys_symlinkat(
     let egid = proc_data.egid();
     with_fs(new_dirfd, |fs| {
         let loc = fs.symlink(target, &linkpath)?;
-        update_cached_metadata(&loc, MetadataUpdate {
-            owner: Some((euid, egid)),
-            mode: Some(NodePermission::from_bits_truncate(0o777)),
-            ..Default::default()
-        })?;
+        update_cached_metadata(
+            &loc,
+            MetadataUpdate {
+                owner: Some((euid, egid)),
+                mode: Some(NodePermission::from_bits_truncate(0o777)),
+                ..Default::default()
+            },
+        )?;
         Ok(0)
     })?;
     notify_inotify_dirent(new_dirfd, &linkpath, IN_CREATE, false, 0);
@@ -766,24 +788,35 @@ pub fn sys_fchownat(
     let meta = loc.metadata()?;
 
     let mut mode = meta.mode;
-    debug!("sys_fchownat: path={:?}, before: mode={:#o} (SET_GID={}), node_type={:?}",
-        path, mode.bits(), mode.contains(NodePermission::SET_GID), meta.node_type);
+    debug!(
+        "sys_fchownat: path={:?}, before: mode={:#o} (SET_GID={}), node_type={:?}",
+        path,
+        mode.bits(),
+        mode.contains(NodePermission::SET_GID),
+        meta.node_type
+    );
     // chown always clears the setuid bits
     mode.remove(NodePermission::SET_UID);
     // chown also removes the setgid bits if group-executable, but NOT for directories
     if meta.node_type != NodeType::Directory && mode.contains(NodePermission::GROUP_EXEC) {
         mode.remove(NodePermission::SET_GID);
     }
-    debug!("sys_fchownat: after: mode={:#o} (SET_GID={})",
-        mode.bits(), mode.contains(NodePermission::SET_GID));
+    debug!(
+        "sys_fchownat: after: mode={:#o} (SET_GID={})",
+        mode.bits(),
+        mode.contains(NodePermission::SET_GID)
+    );
 
     let uid = if uid == -1 { meta.uid } else { uid as _ };
     let gid = if gid == -1 { meta.gid } else { gid as _ };
-    update_cached_metadata(&loc, MetadataUpdate {
-        owner: Some((uid, gid)),
-        mode: Some(mode),
-        ..Default::default()
-    })?;
+    update_cached_metadata(
+        &loc,
+        MetadataUpdate {
+            owner: Some((uid, gid)),
+            mode: Some(mode),
+            ..Default::default()
+        },
+    )?;
     Ok(0)
 }
 
@@ -806,12 +839,20 @@ pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> A
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
     let permission = NodePermission::from_bits_truncate(mode as u16);
-    debug!("sys_fchmodat: path={:?}, mode={:#o}, permission bits={:#o}, has SET_GID={}",
-        path, mode, permission.bits(), permission.contains(NodePermission::SET_GID));
-    update_cached_metadata(&loc, MetadataUpdate {
-        mode: Some(permission),
-        ..Default::default()
-    })?;
+    debug!(
+        "sys_fchmodat: path={:?}, mode={:#o}, permission bits={:#o}, has SET_GID={}",
+        path,
+        mode,
+        permission.bits(),
+        permission.contains(NodePermission::SET_GID)
+    );
+    update_cached_metadata(
+        &loc,
+        MetadataUpdate {
+            mode: Some(permission),
+            ..Default::default()
+        },
+    )?;
     if let Some(path) = path.as_deref() {
         notify_inotify_path(dirfd, path, IN_ATTRIB);
     }
@@ -867,11 +908,14 @@ fn update_times(
         }
     }
 
-    update_cached_metadata(&loc, MetadataUpdate {
-        atime: atime.duration(),
-        mtime: mtime.duration(),
-        ..Default::default()
-    })?;
+    update_cached_metadata(
+        &loc,
+        MetadataUpdate {
+            atime: atime.duration(),
+            mtime: mtime.duration(),
+            ..Default::default()
+        },
+    )?;
     if let Some(path) = path.as_deref() {
         notify_inotify_path(dirfd, path, IN_ATTRIB);
     }
@@ -1004,7 +1048,12 @@ pub fn sys_renameat2(
         .lookup_no_follow(new_name)
         .ok()
         .filter(|loc| !loc.is_dir())
-        .and_then(|loc| loc.metadata().ok().is_some_and(|meta| meta.nlink <= 1).then_some(loc));
+        .and_then(|loc| {
+            loc.metadata()
+                .ok()
+                .is_some_and(|meta| meta.nlink <= 1)
+                .then_some(loc)
+        });
 
     // Flush a replaced inode before rename removes its last link.
     if let Some(file) = replaced_file_cache.as_ref() {

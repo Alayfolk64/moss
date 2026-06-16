@@ -158,7 +158,6 @@ impl DeviceOps for LoopDevice {
                 if guard.is_some() {
                     return Err(AxError::ResourceBusy);
                 }
-
                 *guard = Some(file.inner().backend()?.clone());
             }
             LOOP_CLR_FD => {

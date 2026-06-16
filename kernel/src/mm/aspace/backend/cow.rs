@@ -119,6 +119,14 @@ impl CowBackend {
         Ok(frame)
     }
 
+    fn drop_new_frame(&self, frame: PhysAddr) {
+        let frame_ref = FRAME_TABLE
+            .lock()
+            .get_frame_ref(frame)
+            .expect("new frame must be referenced");
+        frame_ref.lock().drop_frame(frame, self.size);
+    }
+
     fn alloc_new_at(
         &self,
         vaddr: VirtAddr,
@@ -142,9 +150,15 @@ impl CowBackend {
                 .map_or(u64::MAX, |end| end.saturating_sub(file_start))
                 .min((buf.len() - start) as u64) as usize;
 
-            file.read_at(&mut &mut buf[start..start + max_read], file_start)?;
+            if let Err(err) = file.read_at(&mut &mut buf[start..start + max_read], file_start) {
+                self.drop_new_frame(frame);
+                return Err(err);
+            }
         }
-        pt.map(vaddr, frame, self.size, flags)?;
+        if let Err(err) = pt.map(vaddr, frame, self.size, flags) {
+            self.drop_new_frame(frame);
+            return Err(err.into());
+        }
         self.mapped_pages.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
@@ -171,6 +185,31 @@ impl CowBackend {
         new_pt.map(vaddr, paddr, self.size, flags)?;
         frame.0 = new_ref_cnt;
         Ok(())
+    }
+
+    fn rollback_shared_range(&self, range: VirtAddrRange, pt: &mut PageTableMut) {
+        let Ok(pages) = pages_in(range, self.size) else {
+            return;
+        };
+
+        for vaddr in pages {
+            match pt.unmap(vaddr) {
+                Ok((frame, _flags, page_size)) => {
+                    if page_size != self.size {
+                        warn!("rollback COW clone got unexpected page size: {page_size:?}");
+                        continue;
+                    }
+
+                    let Some(frame_ref) = FRAME_TABLE.lock().get_frame_ref(frame) else {
+                        warn!("rollback COW clone found unreferenced frame: {frame:?}");
+                        continue;
+                    };
+                    frame_ref.lock().drop_frame(frame, self.size);
+                }
+                Err(PagingError::NotMapped) => {}
+                Err(err) => warn!("rollback COW clone failed to unmap {vaddr:?}: {err:?}"),
+            }
+        }
     }
 
     fn handle_cow_fault(
@@ -203,7 +242,10 @@ impl CowBackend {
                         self.size as _,
                     );
                 }
-                pt.remap(vaddr, new_frame, flags)?;
+                if let Err(err) = pt.remap(vaddr, new_frame, flags) {
+                    self.drop_new_frame(new_frame);
+                    return Err(err.into());
+                }
                 frame.drop_frame(paddr, self.size);
             }
         }
@@ -298,11 +340,19 @@ impl BackendOps for CowBackend {
                     // - Update its permissions in the old page table using `flags`.
                     // - Map the same physical page into the new page table at the same
                     // virtual address, with the same page size and `flags`.
-                    self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)?;
+                    if let Err(err) =
+                        self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)
+                    {
+                        self.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                        return Err(err);
+                    }
                 }
                 // If the page is not mapped, skip it.
                 Err(PagingError::NotMapped) => {}
-                Err(_) => return Err(AxError::BadAddress),
+                Err(_) => {
+                    self.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                    return Err(AxError::BadAddress);
+                }
             };
         }
 

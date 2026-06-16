@@ -304,6 +304,20 @@ impl Location {
         })
     }
 
+    pub fn lookup_no_follow_fresh(&self, name: &str) -> VfsResult<Self> {
+        Ok(match name {
+            DOT => self.clone(),
+            DOTDOT => self.parent().unwrap_or_else(|| self.clone()),
+            _ => {
+                let loc = Self::new(
+                    self.mountpoint.clone(),
+                    self.entry.as_dir()?.lookup_fresh(name)?,
+                );
+                loc.resolve_mountpoint()
+            }
+        })
+    }
+
     pub fn create(
         &self,
         name: &str,

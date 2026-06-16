@@ -274,6 +274,8 @@ pub struct ProcessData {
     futex_table: Arc<FutexTable>,
     /// Accumulated child CPU time in USER_HZ ticks.
     pub child_cpu_time: SpinNoIrq<(u64, u64)>,
+    /// Maximum resident set size among waited-for children, in KiB.
+    child_maxrss_kb: AtomicUsize,
     namespaces: SpinNoIrq<ProcessNamespaces>,
 
     /// The default mask for file permissions.
@@ -320,6 +322,7 @@ impl ProcessData {
 
             futex_table: Arc::new(FutexTable::new()),
             child_cpu_time: SpinNoIrq::new((0, 0)),
+            child_maxrss_kb: AtomicUsize::new(0),
             namespaces: SpinNoIrq::new(ProcessNamespaces::init()),
 
             umask: AtomicU32::new(0o022),
@@ -347,6 +350,19 @@ impl ProcessData {
     /// signal other than SIGCHLD to its parent upon termination.
     pub fn is_clone_child(&self) -> bool {
         self.exit_signal != Some(Signo::SIGCHLD)
+    }
+
+    pub fn current_rss_kb(&self) -> usize {
+        self.aspace.lock().resident_set_size() / 1024
+    }
+
+    pub fn child_maxrss_kb(&self) -> usize {
+        self.child_maxrss_kb.load(Ordering::Acquire)
+    }
+
+    pub fn record_child_maxrss_kb(&self, maxrss_kb: usize) {
+        self.child_maxrss_kb
+            .fetch_max(maxrss_kb, Ordering::AcqRel);
     }
 
     pub fn namespaces(&self) -> ProcessNamespaces {

@@ -177,6 +177,23 @@ impl DirNode {
         }
     }
 
+    fn lookup_fresh_locked(&self, name: &str, children: &mut DirChildren) -> VfsResult<DirEntry> {
+        match self.ops.lookup(name) {
+            Ok(entry) => {
+                if self.ops.is_cacheable() {
+                    children.insert(name.to_owned(), entry.clone());
+                }
+                Ok(entry)
+            }
+            Err(err) => {
+                if err.canonicalize() == VfsError::NotFound {
+                    Self::forget_entry(children, name);
+                }
+                Err(err)
+            }
+        }
+    }
+
     /// Looks up a directory entry by name.
     pub fn lookup(&self, name: &str) -> VfsResult<DirEntry> {
         if name.len() > MAX_NAME_LEN {
@@ -188,6 +205,14 @@ impl DirNode {
         } else {
             self.ops.lookup(name)
         }
+    }
+
+    /// Looks up a directory entry by name without trusting a cached dentry.
+    pub fn lookup_fresh(&self, name: &str) -> VfsResult<DirEntry> {
+        if name.len() > MAX_NAME_LEN {
+            return Err(VfsError::NameTooLong);
+        }
+        self.lookup_fresh_locked(name, &mut self.cache.lock())
     }
 
     /// Looks up a directory entry by name in cache.
@@ -227,17 +252,26 @@ impl DirNode {
         verify_entry_name(name)?;
 
         let mut children = self.cache.lock();
-        let entry = self.lookup_locked(name, &mut children)?;
+        let entry = self.lookup_fresh_locked(name, &mut children)?;
         match (entry.is_dir(), is_dir) {
             (true, false) => return Err(VfsError::IsADirectory),
             (false, true) => return Err(VfsError::NotADirectory),
             _ => {}
         }
 
-        self.ops.unlink(name).inspect(|_| {
-            invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
-            Self::forget_entry(&mut children, name);
-        })
+        match self.ops.unlink(name) {
+            Ok(()) => {
+                invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
+                Self::forget_entry(&mut children, name);
+                Ok(())
+            }
+            Err(err) => {
+                if err.canonicalize() == VfsError::NotFound {
+                    Self::forget_entry(&mut children, name);
+                }
+                Err(err)
+            }
+        }
     }
 
     /// Returns whether the directory contains children.
@@ -262,6 +296,7 @@ impl DirNode {
         children: &mut DirChildren,
     ) -> VfsResult<DirEntry> {
         let entry = self.ops.create(name, node_type, permission)?;
+        Self::forget_entry(children, name);
         children.insert(name.to_owned(), entry.clone());
         Ok(entry)
     }
