@@ -5,7 +5,7 @@ use alloc::{
 };
 use core::{
     fmt,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 use kspin::SpinNoIrq;
@@ -25,6 +25,7 @@ pub(crate) struct ThreadGroup {
 pub struct Process {
     pid: Pid,
     is_zombie: AtomicBool,
+    maxrss_kb: AtomicUsize,
     pub(crate) tg: SpinNoIrq<ThreadGroup>,
 
     // TODO: child subreaper9
@@ -194,6 +195,16 @@ impl Process {
         self.is_zombie.load(Ordering::Acquire)
     }
 
+    /// Returns the maximum resident set size in KiB recorded for the process.
+    pub fn maxrss_kb(&self) -> usize {
+        self.maxrss_kb.load(Ordering::Acquire)
+    }
+
+    /// Records a resident set size sample for the process.
+    pub fn record_maxrss_kb(&self, maxrss_kb: usize) {
+        self.maxrss_kb.fetch_max(maxrss_kb, Ordering::AcqRel);
+    }
+
     /// Terminates the [`Process`], marking it as a zombie process.
     ///
     /// Child processes are inherited by the init process or by the nearest
@@ -256,6 +267,7 @@ impl fmt::Debug for Process {
 /// Builder
 impl Process {
     fn new(pid: Pid, parent: Option<Arc<Process>>) -> Arc<Process> {
+        let maxrss_kb = parent.as_ref().map_or(0, |p| p.maxrss_kb());
         let group = parent.as_ref().map_or_else(
             || {
                 let session = Session::new(pid);
@@ -267,6 +279,7 @@ impl Process {
         let process = Arc::new(Process {
             pid,
             is_zombie: AtomicBool::new(false),
+            maxrss_kb: AtomicUsize::new(maxrss_kb),
             tg: SpinNoIrq::new(ThreadGroup::default()),
             children: SpinNoIrq::new(StrongMap::new()),
             parent: SpinNoIrq::new(parent.as_ref().map(Arc::downgrade).unwrap_or_default()),

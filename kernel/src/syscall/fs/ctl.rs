@@ -6,9 +6,10 @@ use core::{
     time::Duration,
 };
 
-use axerrno::{AxError, AxResult, LinuxError};
+use axerrno::{AxError, AxErrorKind, AxResult, LinuxError};
 use axfs::{
-    FS_CONTEXT, FsContext, invalidate_file_cache, sync_global_file_caches, update_cached_metadata,
+    FS_CONTEXT, FsContext, discard_file_cache, invalidate_file_cache, sync_global_file_caches,
+    update_cached_metadata,
 };
 use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
@@ -182,11 +183,10 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
 
     with_fs(dirfd, |fs| {
         let path = Path::new(path.as_str());
-        if fs.resolve_no_follow(path).is_ok() {
+        let (dir, name) = fs.resolve_nonexistent(path)?;
+        if dir.lookup_no_follow_fresh(name).is_ok() {
             return Err(AxError::AlreadyExists);
         }
-
-        let (dir, name) = fs.resolve_nonexistent(path)?;
         let dir_stat = dir.metadata()?;
         debug!("sys_mkdirat: creating {} in parent (mode={:#o}, SET_GID={}, gid={})",
             name, dir_stat.mode.bits(), dir_stat.mode.contains(NodePermission::SET_GID), dir_stat.gid);
@@ -580,10 +580,17 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     } else {
         None
     };
-    // Dirty pages and the cached length must be committed while the inode is
-    // still linked; writing them after unlink can target a recycled inode.
     if let Some(file) = removed_file_cache.as_ref() {
-        invalidate_file_cache(file)?;
+        // Dirty pages are normally committed while the inode is still linked;
+        // if the filesystem is full, let unlink discard this last link's cache
+        // so the deletion can free the file's blocks.
+        if let Err(err) = invalidate_file_cache(file) {
+            if err.canonicalize() == AxError::from(AxErrorKind::StorageFull) {
+                discard_file_cache(file);
+            } else {
+                return Err(err);
+            }
+        }
     }
     with_fs(dirfd, |fs| {
         if flags == AT_REMOVEDIR as _ {

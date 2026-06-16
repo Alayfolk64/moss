@@ -18,7 +18,7 @@ use crate::{
     task::AsThread,
 };
 
-///bitflags! 是一个宏，专门用来定义“可以组合的标志位”
+// bitflags! 是一个宏，专门用来定义“可以组合的标志位”
 bitflags::bitflags! {
     /// `PROT_*` flags for use with [`sys_mmap`].
     ///
@@ -339,11 +339,17 @@ pub fn sys_mmap(
     };
 
     let start = addr.align_down(page_size);
-    let end = (addr + length).align_up(page_size);
+    let end = addr
+        .checked_add(length)
+        .ok_or(AxError::NoMemory)?
+        .align_up(page_size);
     let mut length = end - start;
 
     let start = if map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE) {
         let dst_addr = VirtAddr::from(start);
+        if !aspace.contains_range(dst_addr, length) {
+            return Err(AxError::NoMemory);
+        }
         if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
             aspace.unmap(dst_addr, length)?;
             forget_mmap(pid, dst_addr.as_usize(), length);
@@ -438,7 +444,7 @@ pub fn sys_mmap(
                     }
                 }
             } else {
-                Backend::new_shared(start, Arc::new(SharedPages::new(length, PageSize::Size4K)?))
+                Backend::new_shared(start, Arc::new(SharedPages::new(length, PageSize::Size4K)))
             }
         }
         MmapFlags::PRIVATE => {

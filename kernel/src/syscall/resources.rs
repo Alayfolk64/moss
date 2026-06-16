@@ -55,21 +55,40 @@ pub fn sys_prlimit64(
 struct Rusage {
     utime: TimeValue,
     stime: TimeValue,
+    maxrss_kb: usize,
 }
 
 impl Rusage {
     fn from_thread(thread: &Thread) -> Self {
         if let Ok(time) = thread.time.try_borrow() {
             let (utime, stime) = time.output();
-            Self { utime, stime }
+            thread
+                .proc_data
+                .proc
+                .record_maxrss_kb(thread.proc_data.current_rss_kb());
+            Self {
+                utime,
+                stime,
+                maxrss_kb: thread.proc_data.proc.maxrss_kb(),
+            }
         } else {
             Self::default()
+        }
+    }
+
+    fn from_child_stats(utime_ticks: u64, stime_ticks: u64, maxrss_kb: usize) -> Self {
+        const MICROS_PER_TICK: u64 = 10_000;
+        Self {
+            utime: TimeValue::from_micros(utime_ticks.saturating_mul(MICROS_PER_TICK)),
+            stime: TimeValue::from_micros(stime_ticks.saturating_mul(MICROS_PER_TICK)),
+            maxrss_kb,
         }
     }
 
     fn collate(mut self, other: Rusage) -> Self {
         self.utime += other.utime;
         self.stime += other.stime;
+        self.maxrss_kb = self.maxrss_kb.max(other.maxrss_kb);
         self
     }
 }
@@ -80,6 +99,7 @@ impl From<Rusage> for rusage {
         let mut usage: rusage = unsafe { core::mem::zeroed() };
         usage.ru_utime = __kernel_old_timeval::from_time_value(value.utime);
         usage.ru_stime = __kernel_old_timeval::from_time_value(value.stime);
+        usage.ru_maxrss = value.maxrss_kb as _;
         usage
     }
 }
@@ -107,19 +127,8 @@ pub fn sys_getrusage(who: i32, usage: *mut rusage) -> AxResult<isize> {
                 })
         }
         RUSAGE_CHILDREN => {
-            thr.proc_data
-                .proc
-                .threads()
-                .into_iter()
-                .fold(Rusage::default(), |acc, child| {
-                    if let Ok(task) = get_task(child)
-                        && !curr.ptr_eq(&task)
-                    {
-                        acc.collate(Rusage::from_thread(task.as_thread()))
-                    } else {
-                        acc
-                    }
-                })
+            let child_time = thr.proc_data.child_cpu_time.lock();
+            Rusage::from_child_stats(child_time.0, child_time.1, thr.proc_data.child_maxrss_kb())
         }
         RUSAGE_THREAD => Rusage::from_thread(thr),
         _ => return Err(AxError::InvalidInput),

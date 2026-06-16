@@ -1486,6 +1486,41 @@ pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     Ok(())
 }
 
+pub fn discard_file_cache(location: &Location) {
+    let key = CachedFile::file_cache_key(location);
+    let Some(record) = FILE_CACHES.read().get(&key).cloned() else {
+        location.invalidate_metadata_cache();
+        return;
+    };
+    debug_assert_eq!(record.key, key);
+    if record.in_memory {
+        FILE_CACHES.write().remove(&key);
+        location.invalidate_metadata_cache();
+        return;
+    }
+
+    let cached = CachedFile::from_record(&record);
+    let removed = {
+        let _file_guard = cached.shared().global_cache_op.lock();
+        let mut cache = GLOBAL_PAGE_CACHE.lock();
+        let keys = cache.keys_for_file(record.cache_id);
+        let mut removed = Vec::new();
+        for key in keys {
+            if let Some(entry) = cache.pop(&key) {
+                removed.push((key, entry));
+            }
+        }
+        removed
+    };
+
+    for (key, mut entry) in removed {
+        entry.page.dirty = false;
+        cached.notify_evict_listeners(key.pn, &entry.page);
+    }
+    FILE_CACHES.write().remove(&key);
+    location.invalidate_metadata_cache();
+}
+
 pub fn cached_file_len(location: &Location) -> Option<u64> {
     location.cached_metadata().map(|metadata| metadata.size)
 }

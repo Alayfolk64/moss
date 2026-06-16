@@ -78,6 +78,7 @@ axfs = { path = "vendor/axfs" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
 lwext4_rust = { path = "third_party/lwext4_rust" }
 starry-smoltcp = { path = "vendor/starry-smoltcp" }
+starry-process = { path = "vendor/starry-process" }
 
 [package.metadata.vendor-filter]
 platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none-softfloat"]

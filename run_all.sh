@@ -1,17 +1,14 @@
 #!/bin/sh
 set -e
 
-# rm -rf sdcard-la.img
-# rm -rf sdcard-rv.img
-# cp ./imgs/sdcard-rv.img ./
-# cp ./imgs/sdcard-la.img ./
+rm -rf sdcard-la.img sdcard-rv.img disk-la.img disk.img
+rm -rf kernel-la kernel-rv
+cp ./imgs/sdcard-rv.img ./
+cp ./imgs/sdcard-la.img ./
 
-# sleep 1
+sleep 1
 
 make all
-
-./scripts/inject_libgcc.sh riscv64 sdcard-rv.img
-./scripts/inject_libgcc.sh loongarch64 sdcard-la.img
 
 sleep 1
 

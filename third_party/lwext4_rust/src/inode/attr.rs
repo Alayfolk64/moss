@@ -1,8 +1,7 @@
 use core::time::Duration;
 
-use crate::{SystemHal, ffi::*, util::get_block_size};
-
 use super::{InodeRef, InodeType};
+use crate::{SystemHal, ffi::*, util::get_block_size};
 
 /// Filesystem node metadata.
 #[derive(Clone, Debug, Default)]
@@ -53,6 +52,10 @@ fn decode_time(time: u32, extra: u32) -> Duration {
 }
 
 impl<Hal: SystemHal> InodeRef<Hal> {
+    fn has_extra_time_fields(&self) -> bool {
+        u16::from_le(self.superblock().inode_size) > EXT4_GOOD_OLD_INODE_SIZE as u16
+    }
+
     pub fn inode_type(&self) -> InodeType {
         ((self.mode() >> 12) as u8).into()
     }
@@ -95,23 +98,32 @@ impl<Hal: SystemHal> InodeRef<Hal> {
 
     pub fn set_atime(&mut self, dur: &Duration) {
         let (time, extra) = encode_time(dur);
+        let has_extra_time_fields = self.has_extra_time_fields();
         let inode = self.raw_inode_mut();
         inode.access_time = time;
-        inode.atime_extra = extra;
+        if has_extra_time_fields {
+            inode.atime_extra = extra;
+        }
         self.mark_dirty();
     }
     pub fn set_mtime(&mut self, dur: &Duration) {
         let (time, extra) = encode_time(dur);
+        let has_extra_time_fields = self.has_extra_time_fields();
         let inode = self.raw_inode_mut();
         inode.modification_time = time;
-        inode.mtime_extra = extra;
+        if has_extra_time_fields {
+            inode.mtime_extra = extra;
+        }
         self.mark_dirty();
     }
     pub fn set_ctime(&mut self, dur: &Duration) {
         let (time, extra) = encode_time(dur);
+        let has_extra_time_fields = self.has_extra_time_fields();
         let inode = self.raw_inode_mut();
         inode.change_inode_time = time;
-        inode.ctime_extra = extra;
+        if has_extra_time_fields {
+            inode.ctime_extra = extra;
+        }
         self.mark_dirty();
     }
 
@@ -146,8 +158,14 @@ impl<Hal: SystemHal> InodeRef<Hal> {
         };
 
         let inode = self.raw_inode();
-        attr.atime = decode_time(inode.access_time, inode.atime_extra);
-        attr.mtime = decode_time(inode.modification_time, inode.mtime_extra);
-        attr.ctime = decode_time(inode.change_inode_time, inode.ctime_extra);
+        if self.has_extra_time_fields() {
+            attr.atime = decode_time(inode.access_time, inode.atime_extra);
+            attr.mtime = decode_time(inode.modification_time, inode.mtime_extra);
+            attr.ctime = decode_time(inode.change_inode_time, inode.ctime_extra);
+        } else {
+            attr.atime = decode_time(inode.access_time, 0);
+            attr.mtime = decode_time(inode.modification_time, 0);
+            attr.ctime = decode_time(inode.change_inode_time, 0);
+        }
     }
 }

@@ -21,7 +21,7 @@ use super::{ptrace_has_wait_target, ptrace_take_wait_event};
 use crate::{
     file::{FileLike, PidFd},
     syscall::SYSCALL_RESTART,
-    task::{AsThread, ProcessWaitStatus, get_process_data},
+    task::{AsThread, ProcessData, ProcessWaitStatus, get_process_data},
 };
 
 fn restart_syscall(uctx: &mut UserContext) {
@@ -190,12 +190,22 @@ fn wait_status_waitpid(child: &Process, options: WaitOptions) -> AxResult<Option
     }
 }
 
+fn reap_exited_child(parent: &ProcessData, child: &Process) {
+    if !parent.signal.signal_ignored(Signo::SIGCHLD) {
+        parent.record_child_maxrss_kb(child.maxrss_kb());
+    }
+    child.free();
+}
+
 fn waitid_children(
     children: Vec<Arc<Process>>,
     infop: *mut siginfo_t,
     options: WaitOptions,
     pidfd_nonblocking: bool,
 ) -> AxResult<isize> {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+
     let check_children = || -> AxResult<Option<isize>> {
         for child in &children {
             if let Some(info) = wait_status_siginfo(child, options)? {
@@ -213,7 +223,7 @@ fn waitid_children(
                 infop.vm_write(make_exit_siginfo(child))?;
             }
             if !options.contains(WaitOptions::WNOWAIT) {
-                child.free();
+                reap_exited_child(proc_data, child);
             }
             return Ok(Some(0));
         }
@@ -226,9 +236,6 @@ fn waitid_children(
             Ok(None)
         }
     };
-
-    let curr = current();
-    let proc_data = &curr.as_thread().proc_data;
 
     loop {
         match block_on(interruptible(poll_fn(|cx| {
@@ -374,7 +381,7 @@ pub fn sys_waitpid(
 
         if let Some(child) = children.iter().find(|child| child.is_zombie()) {
             if !options.contains(WaitOptions::WNOWAIT) {
-                child.free();
+                reap_exited_child(proc_data, child);
             }
             if let Some(exit_code) = exit_code.nullable() {
                 exit_code.vm_write(child.exit_code())?;

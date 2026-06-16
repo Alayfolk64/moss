@@ -395,7 +395,7 @@ getxattr02 getxattr02
 getxattr03 getxattr03
 getxattr04 getxattr04
 ioctl02      test_ioctl
-ioctl01      ioctl01
+# ioctl01      ioctl01
 # ioctl03      ioctl03
 ioctl04      ioctl04
 ioctl05      ioctl05

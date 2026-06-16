@@ -1,0 +1,4 @@
+interface:
+  display_name: "LTP 测例改写"
+  short_description: "将 LTP syscall 测例改写成中文注释版简化代码"
+  default_prompt: "Use $ltp-rewrite to rewrite LTP syscall tests from syscall_code into simplified annotated files under rewritten."

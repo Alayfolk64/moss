@@ -168,6 +168,7 @@ impl InterfaceInner {
     }
 
     /// Get the first link-local IPv6 address of the interface, if present.
+    #[allow(dead_code)]
     fn link_local_ipv6_address(&self) -> Option<Ipv6Address> {
         self.ip_addrs.iter().find_map(|addr| match *addr {
             #[cfg(feature = "proto-ipv4")]
@@ -533,6 +534,7 @@ impl InterfaceInner {
         ))
     }
 
+    #[allow(dead_code)]
     pub(super) fn mldv2_report_packet<'any>(
         &self,
         records: &'any [MldAddressRecordRepr<'any>],

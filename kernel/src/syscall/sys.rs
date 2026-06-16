@@ -137,8 +137,18 @@ pub fn sys_uname(name: *mut new_utsname) -> AxResult<isize> {
 }
 
 pub fn sys_sysinfo(info: *mut sysinfo) -> AxResult<isize> {
+    const PAGE_SIZE: usize = 4096;
+
     // FIXME: Zeroable
     let mut kinfo: sysinfo = unsafe { core::mem::zeroed() };
+    let allocator = axalloc::global_allocator();
+    let available = allocator.available_pages() * PAGE_SIZE;
+    let total = (allocator.used_pages() + allocator.available_pages()) * PAGE_SIZE;
+    let usages = allocator.usages();
+
+    kinfo.totalram = total as _;
+    kinfo.freeram = available as _;
+    kinfo.bufferram = usages.get(axalloc::UsageKind::PageCache) as _;
     kinfo.procs = processes().len() as _;
     kinfo.mem_unit = 1;
     info.vm_write(kinfo)?;

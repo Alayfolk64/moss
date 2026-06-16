@@ -4,9 +4,10 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::FileBackend;
+use axfs::{FileBackend, invalidate_file_cache};
 use axfs_ng_vfs::{DeviceId, NodeFlags, VfsResult};
 use axsync::Mutex;
+use bytemuck::AnyBitPattern;
 use linux_raw_sys::{
     ioctl::{
         BLKALIGNOFF, BLKBSZGET, BLKBSZSET, BLKDISCARD, BLKDISCARDZEROES, BLKFLSBUF, BLKGETSIZE,
@@ -26,6 +27,14 @@ use crate::{
 };
 
 const HDIO_GETGEO: u32 = 0x0301;
+const LOOP_ZERO_CHUNK: usize = 4096;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default, AnyBitPattern)]
+struct BlockRange {
+    start: u64,
+    len: u64,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -112,6 +121,38 @@ impl LoopDevice {
         file.ok_or(AxError::from(LinuxError::ENXIO))
     }
 
+    /// Clone the backing file for block-device I/O.
+    pub fn clone_block_file(&self) -> VfsResult<FileBackend> {
+        let file = self.clone_file()?;
+        Self::flush_backing_cache(&file)?;
+        Ok(file)
+    }
+
+    fn is_memory_backing(file: &FileBackend) -> bool {
+        file.location().filesystem().name() == "tmpfs"
+    }
+
+    fn flush_backing_cache(file: &FileBackend) -> VfsResult<()> {
+        file.sync(false)?;
+        if !Self::is_memory_backing(file) {
+            invalidate_file_cache(file.location())?;
+        }
+        Ok(())
+    }
+
+    fn loop_backend_from_file(file: &crate::file::File) -> VfsResult<FileBackend> {
+        let backend = file.inner().backend()?;
+        backend.sync(false)?;
+
+        let location = backend.location().clone();
+        if Self::is_memory_backing(backend) {
+            return Ok(backend.clone());
+        }
+
+        invalidate_file_cache(&location)?;
+        Ok(FileBackend::Direct(location))
+    }
+
     fn geometry(&self) -> VfsResult<(u64, u32, u32, u32)> {
         let sectors = self.len()? / 512;
         let heads = 64;
@@ -120,6 +161,44 @@ impl LoopDevice {
             .div_ceil((heads * sectors_per_track) as u64)
             .clamp(1, u16::MAX as u64) as u32;
         Ok((sectors, heads, sectors_per_track, cylinders))
+    }
+
+    fn flush_backing_file(&self) -> VfsResult<()> {
+        self.clone_file()?.sync(false)
+    }
+
+    fn zero_backing_range(&self, range: BlockRange) -> VfsResult<()> {
+        if self.ro.load(Ordering::Relaxed) {
+            return Err(AxError::ReadOnlyFilesystem);
+        }
+        if range.start % 512 != 0 || range.len % 512 != 0 {
+            return Err(AxError::InvalidInput);
+        }
+
+        let file = self.clone_file()?;
+        let end = range
+            .start
+            .checked_add(range.len)
+            .ok_or(AxError::InvalidInput)?;
+        if end > file.len()? {
+            return Err(AxError::InvalidInput);
+        }
+
+        let zeros = [0u8; LOOP_ZERO_CHUNK];
+        let mut offset = range.start;
+        while offset < end {
+            let chunk = (end - offset).min(LOOP_ZERO_CHUNK as u64) as usize;
+            let mut written = 0;
+            while written < chunk {
+                let n = file.write_at(&zeros[written..chunk], offset + written as u64)?;
+                if n == 0 {
+                    return Err(AxError::Io);
+                }
+                written += n;
+            }
+            offset += chunk as u64;
+        }
+        file.sync(true)
     }
 }
 
@@ -154,17 +233,24 @@ impl DeviceOps for LoopDevice {
                 let Some(file) = f.downcast_ref::<crate::file::File>() else {
                     return Err(AxError::InvalidInput);
                 };
+                if self.file.lock().is_some() {
+                    return Err(AxError::ResourceBusy);
+                }
+
+                let backend = Self::loop_backend_from_file(file)?;
                 let mut guard = self.file.lock();
                 if guard.is_some() {
                     return Err(AxError::ResourceBusy);
                 }
-
-                *guard = Some(file.inner().backend()?.clone());
+                *guard = Some(backend);
             }
             LOOP_CLR_FD => {
                 let mut guard = self.file.lock();
                 if guard.is_none() {
                     return Err(AxError::from(LinuxError::ENXIO));
+                }
+                if let Some(file) = guard.as_ref() {
+                    Self::flush_backing_cache(file)?;
                 }
                 *guard = None;
             }
@@ -210,8 +296,11 @@ impl DeviceOps for LoopDevice {
             BLKIOMIN | BLKIOOPT => {
                 (arg as *mut u32).vm_write(512)?;
             }
-            BLKALIGNOFF | BLKDISCARDZEROES | BLKROTATIONAL => {
+            BLKALIGNOFF | BLKROTATIONAL => {
                 (arg as *mut u32).vm_write(0)?;
+            }
+            BLKDISCARDZEROES => {
+                (arg as *mut u32).vm_write(1)?;
             }
             BLKBSZSET => {
                 let size = (arg as *const u32).vm_read()?;
@@ -219,7 +308,13 @@ impl DeviceOps for LoopDevice {
                     return Err(AxError::InvalidInput);
                 }
             }
-            BLKFLSBUF | BLKDISCARD | BLKSECDISCARD | BLKZEROOUT => {}
+            BLKFLSBUF => {
+                self.flush_backing_file()?;
+            }
+            BLKDISCARD | BLKSECDISCARD | BLKZEROOUT => {
+                let range = (arg as *const BlockRange).vm_read()?;
+                self.zero_backing_range(range)?;
+            }
             HDIO_GETGEO => {
                 let (_, heads, sectors_per_track, cylinders) = self.geometry()?;
                 (arg as *mut HdGeometry).vm_write(HdGeometry {

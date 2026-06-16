@@ -1,8 +1,7 @@
 use core::{mem, slice};
 
-use crate::{Ext4Result, SystemHal, error::Context, ffi::*, util::revision_tuple};
-
 use super::{InodeRef, InodeType};
+use crate::{Ext4Result, SystemHal, error::Context, ffi::*, util::revision_tuple};
 
 impl<Hal: SystemHal> InodeRef<Hal> {
     pub fn read_dir(mut self, offset: u64) -> Ext4Result<DirReader<Hal>> {
@@ -43,7 +42,7 @@ impl<Hal: SystemHal> InodeRef<Hal> {
         let mut reader = self.read_dir(0)?;
         while let Some(curr) = reader.current() {
             let name = curr.name();
-            if name != b"." && name != b".." {
+            if curr.ino() != 0 && name != b"." && name != b".." {
                 return Ok(true);
             }
             reader.step()?;
@@ -64,6 +63,17 @@ impl<Hal: SystemHal> InodeRef<Hal> {
         entry.inc_nlink();
         Ok(())
     }
+
+    pub(crate) fn add_self_entry(&mut self, name: &str) -> Ext4Result {
+        unsafe {
+            let inode = self.inner.as_mut();
+            ext4_dir_add_entry(inode, name.as_ptr() as *const _, name.len() as _, inode)
+                .context("ext4_dir_add_entry")?;
+        }
+        self.inc_nlink();
+        Ok(())
+    }
+
     pub(crate) fn remove_entry(&mut self, name: &str, entry: &mut InodeRef<Hal>) -> Ext4Result {
         unsafe {
             ext4_dir_remove_entry(
