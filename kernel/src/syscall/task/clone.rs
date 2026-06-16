@@ -237,6 +237,7 @@ impl CloneArgs {
                 flags.contains(CloneFlags::NEWUSER),
                 flags.contains(CloneFlags::NEWUTS),
             );
+            proc_data.set_personality(old_proc_data.personality());
             proc_data.set_umask(old_proc_data.umask());
             proc_data.set_heap_top(old_proc_data.get_heap_top());
             proc_data.set_uid(old_proc_data.uid());
@@ -387,16 +388,19 @@ pub fn sys_unshare(flags: u64) -> AxResult<isize> {
         return Err(AxError::InvalidInput);
     }
 
-    if flags.intersects(
-        CloneFlags::NEWNS
-            | CloneFlags::NEWIPC
-            | CloneFlags::NEWNET
-            | CloneFlags::NEWPID
-            | CloneFlags::NEWUSER
-            | CloneFlags::NEWUTS
-            | CloneFlags::NEWCGROUP
-            | CloneFlags::NEWTIME,
-    ) {
+    let namespace_flags = CloneFlags::NEWNS
+        | CloneFlags::NEWIPC
+        | CloneFlags::NEWNET
+        | CloneFlags::NEWPID
+        | CloneFlags::NEWUSER
+        | CloneFlags::NEWUTS
+        | CloneFlags::NEWCGROUP
+        | CloneFlags::NEWTIME;
+
+    if flags.intersects(namespace_flags) {
+        if current().as_thread().proc_data.euid() != 0 {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
         warn!("sys_unshare: namespace flags detected, stub support only");
     }
 

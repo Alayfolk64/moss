@@ -431,6 +431,12 @@ fn check_remove_target_access(
     remove_dir: bool,
 ) -> AxResult<()> {
     check_link_dir_access(parent)?;
+    if let Ok(path) = target.absolute_path() {
+        let flags = inode_flags(path.as_str());
+        if flags & (FS_IMMUTABLE_FL | FS_APPEND_FL) != 0 {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
+    }
     if remove_dir
         && (target.is_mountpoint() || (target.is_root_of_mount() && !target.mountpoint().is_root()))
     {
@@ -660,7 +666,7 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         .unwrap_or(remove_dir);
     let dirent_event = prepare_fanotify_delete_event(dirfd, &path, is_dir);
     let inotify_target = prepare_inotify_target(dirfd, &path);
-    let (parent_dir, target, target_name) = with_fs(dirfd, |fs| {
+    let target_result = with_fs(dirfd, |fs| {
         let target = fs.resolve_no_follow(path.as_str())?;
         let parent = target.parent().ok_or(if remove_dir {
             AxError::ResourceBusy
@@ -668,7 +674,21 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
             AxError::IsADirectory
         })?;
         Ok((parent, target.clone(), target.name().to_string()))
-    })?;
+    });
+    let (parent_dir, target, target_name) = match target_result {
+        Ok(result) => result,
+        Err(err) if err.canonicalize() == AxError::NotFound => {
+            let readonly_parent = with_fs(dirfd, |fs| {
+                let (parent, _) = fs.resolve_parent(Path::new(path.as_str()))?;
+                Ok(parent.mount_flags() & MS_RDONLY != 0)
+            })?;
+            if readonly_parent {
+                return Err(AxError::ReadOnlyFilesystem);
+            }
+            return Err(err);
+        }
+        Err(err) => return Err(err),
+    };
     check_remove_target_access(&parent_dir, &target, remove_dir)?;
     let removed_file_cache = if !is_dir {
         (target.metadata()?.nlink <= 1).then_some(target.clone())
@@ -960,15 +980,45 @@ fn update_times(
     mtime: UtimeSpec,
     flags: u32,
 ) -> AxResult<()> {
+    if path.is_null() && flags & AT_EMPTY_PATH == 0 {
+        return Err(AxError::BadAddress);
+    }
     let path = path.nullable().map(vm_load_string).transpose()?;
     let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
+    let metadata = loc.metadata()?;
+    let omit_both = atime.is_omit() && mtime.is_omit();
+    let now_both = atime.is_now() && mtime.is_now();
+
+    if loc.mount_flags() & MS_RDONLY != 0 && !omit_both {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    if euid != 0 {
+        let is_owner = euid == metadata.uid;
+        if now_both {
+            if !is_owner
+                && !can_write_file(
+                    metadata.mode.bits() as u32,
+                    metadata.uid,
+                    metadata.gid,
+                    euid,
+                    proc_data.egid(),
+                )
+            {
+                return Err(AxError::PermissionDenied);
+            }
+        } else if !omit_both && !is_owner {
+            return Err(AxError::OperationNotPermitted);
+        }
+    }
 
     if let Ok(path) = loc.absolute_path() {
         let inode_flags = inode_flags(path.as_str());
-        let omit_both = atime.is_omit() && mtime.is_omit();
-        let now_both = atime.is_now() && mtime.is_now();
         if inode_flags & FS_IMMUTABLE_FL != 0 && !omit_both {
             return Err(AxError::OperationNotPermitted);
         }
@@ -1001,6 +1051,9 @@ pub struct utimbuf {
 
 #[cfg(target_arch = "x86_64")]
 pub fn sys_utime(path: *const c_char, times: *const utimbuf) -> AxResult<isize> {
+    if path.is_null() {
+        return Err(AxError::BadAddress);
+    }
     let (atime, mtime) = if let Some(times) = times.nullable() {
         // FIXME: AnyBitPattern
         let times = unsafe { times.vm_read_uninit()?.assume_init() };
@@ -1020,6 +1073,9 @@ pub fn sys_utimes(
     path: *const c_char,
     times: *const [linux_raw_sys::general::timeval; 2],
 ) -> AxResult<isize> {
+    if path.is_null() {
+        return Err(AxError::BadAddress);
+    }
     let (atime, mtime) = if let Some(times) = times.nullable() {
         // FIXME: AnyBitPattern
         let [atime, mtime] = unsafe { times.vm_read_uninit()?.assume_init() };
@@ -1038,17 +1094,19 @@ pub fn sys_utimensat(
     dirfd: i32,
     path: *const c_char,
     times: *const [timespec; 2],
-    mut flags: u32,
+    flags: u32,
 ) -> AxResult<isize> {
     const VALID_FLAGS: u32 = AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH;
     if flags & !VALID_FLAGS != 0 {
         return Err(AxError::InvalidInput);
     }
     if path.is_null() {
+        if flags & AT_EMPTY_PATH == 0 {
+            return Err(AxError::BadAddress);
+        }
         if flags & AT_SYMLINK_NOFOLLOW != 0 {
             return Err(AxError::InvalidInput);
         }
-        flags |= AT_EMPTY_PATH;
     }
     fn utime_to_spec(time: &timespec) -> AxResult<UtimeSpec> {
         match time.tv_nsec {

@@ -1,5 +1,6 @@
 CC ?= cc
 CFLAGS ?= -Wall -Wextra -O2 -std=c11 -D_GNU_SOURCE -pthread
+LDLIBS ?= -pthread
 
 PROGRAMS = \
 	bind01_simple \
@@ -14,7 +15,7 @@ PROGRAMS = \
 all: $(PROGRAMS)
 
 %_simple: %_simple.c bind_simple_common.h
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $< $(LDLIBS)
 
 clean:
 	rm -f $(PROGRAMS)

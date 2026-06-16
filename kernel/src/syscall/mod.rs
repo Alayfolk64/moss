@@ -302,6 +302,12 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg4() as _,
             uctx.arg5() as _,
         ),
+        Sysno::vmsplice => sys_vmsplice(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
 
         // io mpx
         #[cfg(target_arch = "x86_64")]
@@ -624,6 +630,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::getegid => sys_getegid(),
         Sysno::setuid => sys_setuid(uctx.arg0() as _),
         Sysno::setgid => sys_setgid(uctx.arg0() as _),
+        Sysno::personality => sys_personality(uctx.arg0()),
         Sysno::getgroups => sys_getgroups(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::setgroups => sys_setgroups(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::uname => sys_uname(uctx.arg0() as _),
@@ -794,12 +801,11 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         ),
         Sysno::open_tree => sys_open_tree(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 
+        Sysno::userfaultfd => Err(AxError::from(LinuxError::EPERM)),
+        Sysno::io_uring_setup => Err(AxError::Unsupported),
+
         // dummy fds
-        Sysno::userfaultfd
-        | Sysno::perf_event_open
-        | Sysno::io_uring_setup
-        | Sysno::fspick
-        | Sysno::memfd_secret => sys_dummy_fd(sysno),
+        Sysno::perf_event_open | Sysno::fspick | Sysno::memfd_secret => sys_dummy_fd(sysno),
 
         Sysno::bpf => sys_bpf(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 

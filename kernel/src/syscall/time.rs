@@ -261,7 +261,11 @@ pub fn sys_gettimeofday(tv: *mut timeval, tz: *mut timezone) -> AxResult<isize> 
 }
 
 pub fn sys_clock_getres(clock_id: __kernel_clockid_t, res: *mut timespec) -> AxResult<isize> {
-    if clock_id as u32 != CLOCK_MONOTONIC && clock_id as u32 != CLOCK_REALTIME {
+    if !matches!(
+        clock_id as u32,
+        CLOCK_MONOTONIC | CLOCK_MONOTONIC_COARSE | CLOCK_MONOTONIC_RAW | CLOCK_REALTIME
+            | CLOCK_REALTIME_COARSE | CLOCK_BOOTTIME | CLOCK_TAI
+    ) {
         warn!("Called sys_clock_getres for unsupported clock {clock_id}");
     }
     if let Some(res) = res.nullable() {

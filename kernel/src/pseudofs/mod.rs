@@ -8,7 +8,7 @@ mod fs;
 mod proc;
 mod tmp;
 
-use alloc::sync::Arc;
+use alloc::{format, string::String, sync::Arc};
 
 use axerrno::LinuxResult;
 use axfs::{FS_CONTEXT, File, FsContext};
@@ -67,6 +67,24 @@ fn create_static_file(fs: &FsContext, path: &str, data: &[u8]) -> LinuxResult<()
     Ok(())
 }
 
+fn create_dir_all(fs: &FsContext, path: &str) -> LinuxResult<()> {
+    let mut current = PathBuf::new();
+    for comp in Path::new(path).components() {
+        current.push(comp.as_str());
+        if fs.resolve(&current).is_err() {
+            fs.create_dir(&current, DIR_PERMISSION)?;
+        }
+    }
+    Ok(())
+}
+
+fn cpu_range_string() -> String {
+    match axconfig::plat::CPU_NUM {
+        0 | 1 => "0\n".into(),
+        num => format!("0-{}\n", num - 1),
+    }
+}
+
 /// Mount all filesystems
 pub fn mount_all() -> LinuxResult<()> {
     info!("Initialize pseudofs...");
@@ -78,25 +96,28 @@ pub fn mount_all() -> LinuxResult<()> {
     mount_at(&fs, "/proc", proc::new_procfs())?;
 
     mount_at(&fs, "/sys", tmp::MemoryFs::new())?;
-    let mut path = PathBuf::new();
-    for comp in Path::new("/sys/class/graphics/fb0/device").components() {
-        path.push(comp.as_str());
-        if fs.resolve(&path).is_err() {
-            fs.create_dir(&path, DIR_PERMISSION)?;
-        }
-    }
+    create_dir_all(&fs, "/sys/class/graphics/fb0/device")?;
+    let mut path = PathBuf::from("/sys/class/graphics/fb0/device");
     path.push("subsystem");
     fs.symlink("whatever", &path)?;
 
-    let mut path = PathBuf::new();
-    for comp in Path::new("/sys/block/loop0/queue").components() {
-        path.push(comp.as_str());
-        if fs.resolve(&path).is_err() {
-            fs.create_dir(&path, DIR_PERMISSION)?;
-        }
-    }
+    create_dir_all(&fs, "/sys/block/loop0/queue")?;
     create_static_file(&fs, "/sys/block/loop0/queue/logical_block_size", b"512\n")?;
     create_static_file(&fs, "/sys/block/loop0/queue/dma_alignment", b"0\n")?;
+
+    create_dir_all(&fs, "/sys/devices/system/cpu")?;
+    for cpu_id in 0..axconfig::plat::CPU_NUM {
+        create_dir_all(&fs, &format!("/sys/devices/system/cpu/cpu{cpu_id}"))?;
+    }
+    let cpu_range = cpu_range_string();
+    create_static_file(&fs, "/sys/devices/system/cpu/online", cpu_range.as_bytes())?;
+    create_static_file(
+        &fs,
+        "/sys/devices/system/cpu/possible",
+        cpu_range.as_bytes(),
+    )?;
+    create_static_file(&fs, "/sys/devices/system/cpu/present", cpu_range.as_bytes())?;
+    create_static_file(&fs, "/sys/devices/system/cpu/offline", b"\n")?;
     drop(fs);
 
     #[cfg(feature = "dev-log")]

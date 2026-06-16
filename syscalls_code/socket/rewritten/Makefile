@@ -1,7 +1,9 @@
 CC ?= cc
-CFLAGS ?= -Wall -Wextra -O2 -std=c11 -D_GNU_SOURCE
+CFLAGS ?= -Wall -Wextra -O2 -std=c11
 
-PROGRAMS = socket01_simple socket02_simple
+PROGRAMS = \
+	socket01_simple \
+	socket02_simple
 
 .PHONY: all clean
 

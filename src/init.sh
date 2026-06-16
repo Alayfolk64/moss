@@ -75,6 +75,12 @@ EOF
 
 cat >/bin/mkfs.ext4 <<'EOF'
 #!/bin/sh
+case "$1" in
+    -V|--version)
+        echo "mke2fs 1.47.0"
+        exit 0
+        ;;
+esac
 exec mkfs.ext2 "$@"
 EOF
 
@@ -319,6 +325,7 @@ run_ltp() {
         if ! printf '%s\n' "$case_output" | grep -q '^Summary:[[:space:]]*$'; then
             emit_summary_if_missing "$case_output"
         fi
+        rm -f "$tmp_output"
 
         echo "FAIL LTP CASE $case_name : 0"
 

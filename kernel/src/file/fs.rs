@@ -261,7 +261,7 @@ impl File {
         if inner.flags().contains(FileFlags::APPEND) {
             status_flags |= O_APPEND;
         }
-        status_flags |= open_flags & (O_NOATIME | O_PATH);
+        status_flags |= open_flags & (O_NOATIME | O_NONBLOCK | O_PATH);
         let write_mount_id = (inner.flags().contains(FileFlags::WRITE)
             && !inner.flags().contains(FileFlags::PATH))
         .then(|| mount_id(inner.location()));
@@ -271,7 +271,7 @@ impl File {
 
         Self {
             inner,
-            nonblock: AtomicBool::new(false),
+            nonblock: AtomicBool::new(open_flags & O_NONBLOCK != 0),
             status_flags: AtomicU32::new(status_flags),
             write_mount_id,
         }
@@ -293,6 +293,7 @@ impl File {
 impl Drop for File {
     fn drop(&mut self) {
         if let Some(id) = self.write_mount_id {
+            let _ = self.inner.sync(false);
             note_mount_write_close(id);
         }
     }
@@ -322,13 +323,27 @@ impl FileLike for File {
 
     fn write(&self, src: &mut IoSrc) -> AxResult<usize> {
         let inner = self.inner();
-        if likely(self.is_blocking()) {
+        let written = if likely(self.is_blocking()) {
             inner.write(src)
         } else {
             block_on(poll_io(self, IoEvents::OUT, self.nonblocking(), || {
                 inner.write(&mut *src)
             }))
+        }?;
+        if written > 0 {
+            let now = realtime_time();
+            if !inner.record_modification(now) {
+                let _ = update_cached_metadata(
+                    inner.location(),
+                    MetadataUpdate {
+                        mtime: Some(now),
+                        ctime: Some(now),
+                        ..Default::default()
+                    },
+                );
+            }
         }
+        Ok(written)
     }
 
     fn stat(&self) -> AxResult<Kstat> {

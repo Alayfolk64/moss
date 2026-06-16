@@ -644,6 +644,9 @@ pub fn sys_umount2(target: *const c_char, flags: i32) -> AxResult<isize> {
 
     let target = vm_load_string(target)?;
     debug!("sys_umount2 <= target: {target:?}, flags: {flags:#x}");
+    if current().as_thread().proc_data.euid() != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
     let target = if flags & UMOUNT_NOFOLLOW != 0 {
         FS_CONTEXT.lock().resolve_no_follow(target)?
     } else {
@@ -654,7 +657,7 @@ pub fn sys_umount2(target: *const c_char, flags: i32) -> AxResult<isize> {
     }
     let path = target.absolute_path().ok().map(|path| path.to_string());
     let dev = target.mountpoint().device();
-    if mount_write_open_count(&target) > 0 {
+    if flags & MNT_DETACH == 0 && mount_write_open_count(&target) > 0 {
         return Err(AxError::ResourceBusy);
     }
     if flags & MNT_EXPIRE != 0 && !expire_marked(dev) {

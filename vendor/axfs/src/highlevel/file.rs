@@ -421,14 +421,12 @@ impl Clone for CachedFile {
 
 enum FileUserData {
     Weak(Weak<CachedFileRecord>),
-    Strong(Arc<CachedFileRecord>),
 }
 
 impl FileUserData {
     pub fn get(&self) -> Option<Arc<CachedFileRecord>> {
         match self {
             FileUserData::Weak(weak) => weak.upgrade(),
-            FileUserData::Strong(strong) => Some(strong.clone()),
         }
     }
 }
@@ -468,12 +466,7 @@ impl CachedFile {
             record
         } else {
             let record = Self::record_from_global_cache(&location, in_memory);
-            let user_data = if in_memory {
-                FileUserData::Strong(record.clone())
-            } else {
-                FileUserData::Weak(Arc::downgrade(&record))
-            };
-            guard.insert(user_data);
+            guard.insert(FileUserData::Weak(Arc::downgrade(&record)));
             record
         };
         drop(guard);
@@ -1185,6 +1178,7 @@ pub fn drop_file_caches_by_device(device: u64) -> VfsResult<()> {
             .is_some_and(|current| Arc::ptr_eq(current, &record))
         {
             caches.remove(&key);
+            record.location.user_data().remove::<FileUserData>();
             record.location.invalidate_metadata_cache();
         }
     }
@@ -1200,11 +1194,13 @@ pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     debug_assert_eq!(record.key, key);
     if record.in_memory {
         FILE_CACHES.write().remove(&key);
+        location.user_data().remove::<FileUserData>();
         location.invalidate_metadata_cache();
         return Ok(());
     }
     CachedFile::from_record(&record).drop_cached_pages()?;
     FILE_CACHES.write().remove(&key);
+    location.user_data().remove::<FileUserData>();
     location.invalidate_metadata_cache();
     Ok(())
 }
