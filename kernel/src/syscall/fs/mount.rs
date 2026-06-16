@@ -243,7 +243,7 @@ fn loop_file_block_device(source: &str, mount_flags: u32) -> AxResult<Option<Loo
     if loop_device.ro.load(Ordering::Relaxed) && mount_flags & MS_RDONLY == 0 {
         return Err(AxError::PermissionDenied);
     }
-    let file = loop_device.clone_block_file()?;
+    let file = loop_device.clone_file()?;
     Ok(Some(LoopFileBlockDevice::new(file)?))
 }
 

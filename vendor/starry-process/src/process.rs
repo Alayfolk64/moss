@@ -267,7 +267,6 @@ impl fmt::Debug for Process {
 /// Builder
 impl Process {
     fn new(pid: Pid, parent: Option<Arc<Process>>) -> Arc<Process> {
-        let maxrss_kb = parent.as_ref().map_or(0, |p| p.maxrss_kb());
         let group = parent.as_ref().map_or_else(
             || {
                 let session = Session::new(pid);
@@ -279,7 +278,7 @@ impl Process {
         let process = Arc::new(Process {
             pid,
             is_zombie: AtomicBool::new(false),
-            maxrss_kb: AtomicUsize::new(maxrss_kb),
+            maxrss_kb: AtomicUsize::new(0),
             tg: SpinNoIrq::new(ThreadGroup::default()),
             children: SpinNoIrq::new(StrongMap::new()),
             parent: SpinNoIrq::new(parent.as_ref().map(Arc::downgrade).unwrap_or_default()),
