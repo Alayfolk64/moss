@@ -11,7 +11,8 @@ use axio::{Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
 use linux_raw_sys::general::{
-    __kernel_off_t, AT_FDCWD, IN_ACCESS, IN_MODIFY, O_ACCMODE, O_WRONLY, POSIX_FADV_WILLNEED,
+    __kernel_off_t, AT_FDCWD, IN_ACCESS, IN_MODIFY, MS_RDONLY, O_ACCMODE, O_WRONLY,
+    POSIX_FADV_WILLNEED, RLIMIT_FSIZE,
 };
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
@@ -28,6 +29,7 @@ use crate::file::Socket;
 use crate::{
     file::{File, FileLike, Pipe, get_file_like},
     mm::{IoVec, IoVectorBuf, UserConstPtr, VmBytes, VmBytesMut},
+    task::AsThread,
 };
 
 struct DummyFd;
@@ -129,8 +131,37 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> AxResult<i
 pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxResult<isize> {
     let path = path.get_as_str()?;
     debug!("sys_truncate <= {path:?} {length}");
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
     if length < 0 {
         return Err(AxError::InvalidInput);
+    }
+    let loc = FS_CONTEXT.lock().resolve(path)?;
+    let metadata = loc.metadata()?;
+    if metadata.node_type == NodeType::Directory {
+        return Err(AxError::IsADirectory);
+    }
+    if loc.mount_flags() & MS_RDONLY != 0 {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    if euid != 0
+        && !can_write_file(
+            metadata.mode.bits() as u32,
+            metadata.uid,
+            metadata.gid,
+            euid,
+            proc_data.egid(),
+        )
+    {
+        return Err(AxError::PermissionDenied);
+    }
+    let fsize_limit = proc_data.rlim.read()[RLIMIT_FSIZE].current;
+    if length as u64 > fsize_limit {
+        return Err(AxError::from(LinuxError::EFBIG));
     }
     let file = OpenOptions::new()
         .write(true)
@@ -140,6 +171,17 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxRes
     notify_inotify_path(AT_FDCWD, path, IN_MODIFY);
     notify_fanotify_modify_path(AT_FDCWD, path);
     Ok(0)
+}
+
+fn can_write_file(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
+    let shift = if euid == uid {
+        6
+    } else if egid == gid {
+        3
+    } else {
+        0
+    };
+    mode & (0o2 << shift) != 0
 }
 
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> AxResult<isize> {

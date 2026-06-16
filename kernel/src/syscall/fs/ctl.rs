@@ -1,4 +1,10 @@
-use alloc::{ffi::CString, string::ToString, vec, vec::Vec};
+use alloc::{
+    ffi::CString,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::{
     ffi::{c_char, c_int},
     mem::offset_of,
@@ -419,6 +425,61 @@ fn check_link_dir_access(dir: &Location) -> AxResult<()> {
     }
 }
 
+fn check_remove_target_access(
+    parent: &Location,
+    target: &Location,
+    remove_dir: bool,
+) -> AxResult<()> {
+    check_link_dir_access(parent)?;
+    if remove_dir
+        && (target.is_mountpoint() || (target.is_root_of_mount() && !target.mountpoint().is_root()))
+    {
+        return Err(AxError::ResourceBusy);
+    }
+    Ok(())
+}
+
+fn lookup_optional(dir: &Location, name: &str) -> AxResult<Option<Location>> {
+    match dir.lookup_no_follow(name) {
+        Ok(loc) => Ok(Some(loc)),
+        Err(err) if err.canonicalize() == AxError::NotFound => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+fn choose_rename_exchange_tmp_name(dir: &Location) -> AxResult<String> {
+    for i in 0..64 {
+        let name = format!(".starry-rename-exchange-{i}");
+        if lookup_optional(dir, &name)?.is_none() {
+            return Ok(name);
+        }
+    }
+    Err(AxError::AlreadyExists)
+}
+
+fn rename_exchange(
+    old_dir: &Location,
+    old_name: &str,
+    new_dir: &Location,
+    new_name: &str,
+) -> AxResult<()> {
+    old_dir.lookup_no_follow(old_name)?;
+    new_dir.lookup_no_follow(new_name)?;
+
+    let tmp_name = choose_rename_exchange_tmp_name(old_dir)?;
+    old_dir.rename(old_name, old_dir, &tmp_name)?;
+    if let Err(err) = new_dir.rename(new_name, old_dir, old_name) {
+        let _ = old_dir.rename(&tmp_name, old_dir, old_name);
+        return Err(err);
+    }
+    if let Err(err) = old_dir.rename(&tmp_name, new_dir, new_name) {
+        let _ = old_dir.rename(old_name, new_dir, new_name);
+        let _ = old_dir.rename(&tmp_name, old_dir, old_name);
+        return Err(err);
+    }
+    Ok(())
+}
+
 fn check_link_count_limit(target: &Location) -> AxResult<()> {
     // Keep the limit intentionally modest for this kernel. POSIX only requires
     // LINK_MAX >= 8, and LTP's EMLINK setup depends on the filesystem reaching
@@ -581,21 +642,36 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     let path = vm_load_string(path)?;
 
     debug!("sys_unlinkat <= dirfd: {dirfd}, path: {path:?}, flags: {flags}");
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
+    let remove_dir = flags == AT_REMOVEDIR as _;
+    if flags & !(AT_REMOVEDIR as usize) != 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if remove_dir && path == "." {
+        return Err(AxError::InvalidInput);
+    }
 
     let self_event = prepare_fanotify_delete_self_event(dirfd, &path);
     let is_dir = self_event
         .as_ref()
         .map(fanotify_prepared_event_is_dir)
-        .unwrap_or(flags == AT_REMOVEDIR as _);
+        .unwrap_or(remove_dir);
     let dirent_event = prepare_fanotify_delete_event(dirfd, &path, is_dir);
     let inotify_target = prepare_inotify_target(dirfd, &path);
+    let (parent_dir, target, target_name) = with_fs(dirfd, |fs| {
+        let target = fs.resolve_no_follow(path.as_str())?;
+        let parent = target.parent().ok_or(if remove_dir {
+            AxError::ResourceBusy
+        } else {
+            AxError::IsADirectory
+        })?;
+        Ok((parent, target.clone(), target.name().to_string()))
+    })?;
+    check_remove_target_access(&parent_dir, &target, remove_dir)?;
     let removed_file_cache = if !is_dir {
-        with_fs(dirfd, |fs| {
-            let file = fs.resolve_no_follow(path.as_str())?;
-            Ok((file.metadata()?.nlink <= 1).then_some(file))
-        })
-        .ok()
-        .flatten()
+        (target.metadata()?.nlink <= 1).then_some(target.clone())
     } else {
         None
     };
@@ -604,14 +680,7 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         // file is expected to retain its data through existing descriptors.
         invalidate_file_cache(file)?;
     }
-    with_fs(dirfd, |fs| {
-        if flags == AT_REMOVEDIR as _ {
-            fs.remove_dir(path.as_str())?;
-        } else {
-            fs.remove_file(path.as_str())?;
-        }
-        Ok(0)
-    })?;
+    parent_dir.unlink(&target_name, remove_dir)?;
     let mut self_event = self_event;
     if is_dir {
         if let Some(event) = self_event.take() {
@@ -1032,12 +1101,48 @@ pub fn sys_renameat2(
         "sys_renameat2 <= old_dirfd: {old_dirfd}, old_path: {old_path:?}, new_dirfd: {new_dirfd}, \
          new_path: {new_path}, flags: {flags}"
     );
+    const VALID_RENAME_FLAGS: u32 = RENAME_NOREPLACE | RENAME_EXCHANGE | RENAME_WHITEOUT;
+    if old_path.is_empty()
+        || new_path.is_empty()
+        || flags & !VALID_RENAME_FLAGS != 0
+        || flags & RENAME_WHITEOUT != 0
+        || flags & RENAME_NOREPLACE != 0 && flags & RENAME_EXCHANGE != 0
+    {
+        return Err(if old_path.is_empty() || new_path.is_empty() {
+            AxError::NotFound
+        } else {
+            AxError::InvalidInput
+        });
+    }
 
     let (old_dir, old_name) = with_fs(old_dirfd, |fs| fs.resolve_parent(Path::new(&old_path)))?;
     let (new_dir, new_name) =
         with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
-    if old_dir.mount_flags() & MS_RDONLY != 0 || new_dir.mount_flags() & MS_RDONLY != 0 {
-        return Err(AxError::ReadOnlyFilesystem);
+    check_link_dir_access(&old_dir)?;
+    if !old_dir.ptr_eq(&new_dir) {
+        check_link_dir_access(&new_dir)?;
+    }
+
+    let old_target = old_dir.lookup_no_follow(&old_name)?;
+    let new_target = lookup_optional(&new_dir, new_name)?;
+    let same_target = new_target
+        .as_ref()
+        .is_some_and(|target| old_target.ptr_eq(target));
+    if flags == 0 && same_target {
+        return Ok(0);
+    }
+    if flags & RENAME_NOREPLACE != 0 && new_target.is_some() {
+        return Err(AxError::AlreadyExists);
+    }
+    if flags & RENAME_EXCHANGE != 0 {
+        if new_target.is_none() {
+            return Err(AxError::NotFound);
+        }
+        if same_target {
+            return Ok(0);
+        }
+        rename_exchange(&old_dir, &old_name, &new_dir, new_name)?;
+        return Ok(0);
     }
     let is_dir = fanotify_path_is_dir(old_dirfd, &old_path).unwrap_or(false);
     let move_from_event = prepare_fanotify_move_from_event(old_dirfd, &old_path, is_dir);
@@ -1047,16 +1152,12 @@ pub fn sys_renameat2(
     let path_alias = prepare_fanotify_path_alias(old_dirfd, &old_path, new_dirfd, &new_path);
     let inotify_target = prepare_inotify_target(old_dirfd, &old_path);
     let cookie = next_inotify_cookie();
-    let replaced_file_cache = new_dir
-        .lookup_no_follow(new_name)
-        .ok()
-        .filter(|loc| !loc.is_dir())
-        .and_then(|loc| {
-            loc.metadata()
-                .ok()
-                .is_some_and(|meta| meta.nlink <= 1)
-                .then_some(loc)
-        });
+    let replaced_file_cache = new_target.filter(|loc| !loc.is_dir()).and_then(|loc| {
+        loc.metadata()
+            .ok()
+            .is_some_and(|meta| meta.nlink <= 1)
+            .then_some(loc)
+    });
 
     // Flush a replaced inode before rename removes its last link.
     if let Some(file) = replaced_file_cache.as_ref() {
