@@ -16,8 +16,8 @@ use linux_raw_sys::general::{
     __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
     AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_FOLLOW, AT_SYMLINK_NOFOLLOW, MS_NOATIME,
     MS_NODEV, MS_NODIRATIME, MS_NOEXEC, MS_NOSUID, MS_NOSYMFOLLOW, MS_RDONLY, MS_RELATIME,
-    O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK,
-    S_IFMT, STATX__RESERVED, W_OK, X_OK, stat, statfs, statx,
+    O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK, S_IFMT,
+    STATX__RESERVED, W_OK, X_OK, stat, statfs, statx,
 };
 use spin::RwLock;
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
@@ -25,7 +25,7 @@ use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 use crate::{
     file::{Directory, File, FileLike, Pipe, add_file_like, get_file_like, resolve_at},
     mm::vm_load_string,
-    syscall::task::current_has_cap,
+    syscall::{fs::mount::note_mount_access, task::current_has_cap},
     task::AsThread,
 };
 
@@ -335,10 +335,12 @@ pub fn sys_faccessat2(dirfd: c_int, path: *const c_char, mode: u32, flags: u32) 
 
     let file = resolve_at(dirfd, path.as_deref(), flags)?;
     let stat = file.stat()?;
-    let read_only_fs = mode & W_OK != 0
-        && file
-            .into_file()
-            .is_some_and(|loc| loc.mount_flags() & MS_RDONLY != 0);
+    let loc = file.into_file();
+    if let Some(loc) = loc.as_ref() {
+        note_mount_access(loc);
+    }
+    let read_only_fs =
+        mode & W_OK != 0 && loc.is_some_and(|loc| loc.mount_flags() & MS_RDONLY != 0);
 
     let (uid, gid) = access_ids(flags);
     check_parent_search_access(dirfd, path.as_deref(), flags, uid, gid)?;

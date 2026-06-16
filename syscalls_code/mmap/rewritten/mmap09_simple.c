@@ -1,47 +1,61 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-/*
- * mmap09 的简化转写版。
- *
- * 测试目标：
- *   文件处于 mmap 状态时，ftruncate() 缩小、扩大、清零文件均能返回成功。
- */
+// 本测例验证已经 mmap 的文件在被 ftruncate 缩小、扩大或截断为 0 时，ftruncate 调用本身都能成功完成。
 
 #include "mmap_simple_common.h"
 
+// 原测例的文件大小为 64KB。
 #define MAPSIZE (64 * 1024)
 
+// 用于生成临时工作目录的模板。
+static char temp_dir[] = "/tmp/mmap09_XXXXXX";
+
+// 单个 ftruncate 场景，保存新大小和原始描述文本。
+struct test_case {
+    off_t newsize;
+    const char *desc;
+};
+
+// 原测例中的三个 ftruncate 场景。
+static struct test_case tcases[] = {
+    {MAPSIZE - 8192, "ftruncate mmaped file to a smaller size"},
+    {MAPSIZE + 1024, "ftruncate mmaped file to a larger size"},
+    {0, "ftruncate mmaped file to 0 size"},
+};
+
+// 入口函数准备映射文件并逐项执行 ftruncate。
 int main(void)
 {
-	off_t sizes[] = {MAPSIZE - 8192, MAPSIZE + 1024, 0};
-	const char *names[] = {"shrink mapped file", "grow mapped file", "truncate mapped file to zero"};
-	char *addr;
-	int fd;
-	int failed = 0;
-	size_t i;
+    // 创建临时目录和测试文件。
+    simple_enter_temp_dir(temp_dir);
+    int fd = open("mmaptest", O_RDWR | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0)
+        simple_die_errno("open /tmp/mmaptest");
 
-	unlink("mmap09_file");
-	fd = open("mmap09_file", O_RDWR | O_CREAT | O_TRUNC, 0666);
-	if (fd == -1)
-		fail_now("open mmap09_file");
-	if (ftruncate(fd, MAPSIZE) == -1)
-		fail_now("initial ftruncate");
+    // 将文件扩展到初始大小。
+    if (ftruncate(fd, MAPSIZE) != 0)
+        simple_die_errno("ftruncate");
 
-	addr = mmap(NULL, MAPSIZE, PROT_READ | PROT_WRITE, MAP_FILE | MAP_SHARED, fd, 0);
-	if (addr == MAP_FAILED)
-		fail_now("mmap");
-	memset(addr, 'A', MAPSIZE);
+    // 映射文件并用 A 填充，保持原测例的 mmaped file 状态。
+    char *maddr = mmap(0, MAPSIZE, PROT_READ | PROT_WRITE,
+                       MAP_FILE | MAP_SHARED, fd, 0);
+    if (maddr == MAP_FAILED)
+        simple_die_errno("mmap");
+    memset(maddr, 'A', MAPSIZE);
 
-	for (i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
-		if (ftruncate(fd, sizes[i]) == 0)
-			printf("PASS: %s succeeded\n", names[i]);
-		else {
-			printf("FAIL: %s failed with %s\n", names[i], strerror(errno));
-			failed = 1;
-		}
-	}
+    // 逐个执行 ftruncate 场景。
+    int failed = 0;
+    for (size_t i = 0; i < SIMPLE_ARRAY_SIZE(tcases); i++) {
+        if (ftruncate(fd, tcases[i].newsize) == 0) {
+            printf("%s\n", tcases[i].desc);
+        } else {
+            fprintf(stderr, "%s: %s\n", tcases[i].desc, strerror(errno));
+            failed = 1;
+        }
+    }
 
-	munmap(addr, MAPSIZE);
-	close(fd);
-	unlink("mmap09_file");
-	return failed ? EXIT_FAILURE : EXIT_SUCCESS;
+    // 清理映射、文件和临时目录。
+    munmap(maddr, MAPSIZE);
+    close(fd);
+    unlink("mmaptest");
+    simple_leave_temp_dir(temp_dir);
+    return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }

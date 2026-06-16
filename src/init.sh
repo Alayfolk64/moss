@@ -111,11 +111,54 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
 fi
 
 some_testcases="
-    mkdir02 mkdir02
-    mkdir03 mkdir03
-    mkdir04 mkdir04
-    mkdir05 mkdir05
-    mkdir09 mkdir09
+    fstatfs01 fstatfs01
+    fstatfs01_64 fstatfs01_64
+    fstatfs02 fstatfs02
+    fstatfs02_64 fstatfs02_64
+    fsync01 fsync01
+    ftruncate01 ftruncate01
+    ftruncate01_64 ftruncate01_64
+    link01 symlink01 -T link01
+    link02 link02
+    link04 link04
+    link05 link05
+    link08 link08
+    linkat01 linkat01
+    linkat02 linkat02
+    mount01 mount01
+    mount02 mount02
+    mount03 mount03
+    mount04 mount04
+    mount05 mount05
+    mount06 mount06
+    mount07 mount07
+    move_mount01 move_mount01
+    move_mount02 move_mount02
+    rename01 rename01
+    rename03 rename03
+    rename04 rename04
+    rename05 rename05
+    rename06 rename06
+    rename08 rename08
+    rename10 rename10
+    rename11 rename11
+    rename13 rename13
+    rename14 rename14
+    renameat01 renameat01
+    renameat201 renameat201
+    rmdir01 rmdir01
+    rmdir02 rmdir02
+    truncate02 truncate02
+    truncate02_64 truncate02_64
+    truncate03 truncate03
+    truncate03_64 truncate03_64
+    unlink05 unlink05
+    unlink07 unlink07
+    unlink08 unlink08
+    unlinkat01 unlinkat01
+    umount01 umount01
+    umount02 umount02
+    umount2_02 umount2_02
 "
 
 RUN_RV=1

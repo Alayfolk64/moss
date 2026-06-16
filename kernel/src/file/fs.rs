@@ -62,13 +62,10 @@ fn should_update_atime_for_access(loc: &Location, is_dir: bool, now: Duration) -
         let Ok(metadata) = cached_metadata(loc) else {
             return false;
         };
-        let stale_by_time = now
-            .checked_sub(metadata.atime)
-            .map_or(false, |elapsed| elapsed >= Duration::from_secs(24 * 60 * 60));
-        if metadata.atime > metadata.mtime
-            && metadata.atime > metadata.ctime
-            && !stale_by_time
-        {
+        let stale_by_time = now.checked_sub(metadata.atime).map_or(false, |elapsed| {
+            elapsed >= Duration::from_secs(24 * 60 * 60)
+        });
+        if metadata.atime > metadata.mtime && metadata.atime > metadata.ctime && !stale_by_time {
             return false;
         }
     }
@@ -80,22 +77,18 @@ pub fn update_atime_for_access(loc: &Location, is_dir: bool) {
     if !should_update_atime_for_access(loc, is_dir, now) {
         return;
     }
-    let _ = update_cached_metadata(loc, MetadataUpdate {
-        atime: Some(now),
-        ..Default::default()
-    });
+    let _ = update_cached_metadata(
+        loc,
+        MetadataUpdate {
+            atime: Some(now),
+            ..Default::default()
+        },
+    );
 }
 
 fn record_file_access(file: &axfs::File) {
     let loc = file.location();
-    if loc.mount_flags() & MS_NOATIME != 0 {
-        return;
-    }
     let now = realtime_time();
-    let strict = loc.mount_flags() & MS_STRICTATIME != 0;
-    if file.record_access(now, strict) {
-        return;
-    }
     if should_update_atime_for_access(loc, false, now) {
         let _ = update_cached_metadata(
             loc,
@@ -215,6 +208,36 @@ pub struct File {
     inner: axfs::File,
     nonblock: AtomicBool,
     status_flags: AtomicU32,
+    write_mount_id: Option<usize>,
+}
+
+static MOUNT_WRITE_OPEN_COUNTS: RwLock<BTreeMap<usize, usize>> = RwLock::new(BTreeMap::new());
+
+fn mount_id(loc: &Location) -> usize {
+    Arc::as_ptr(loc.mountpoint()) as usize
+}
+
+fn note_mount_write_open(id: usize) {
+    let mut counts = MOUNT_WRITE_OPEN_COUNTS.write();
+    *counts.entry(id).or_insert(0) += 1;
+}
+
+fn note_mount_write_close(id: usize) {
+    let mut counts = MOUNT_WRITE_OPEN_COUNTS.write();
+    if let Some(count) = counts.get_mut(&id) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            counts.remove(&id);
+        }
+    }
+}
+
+pub fn mount_write_open_count(loc: &Location) -> usize {
+    MOUNT_WRITE_OPEN_COUNTS
+        .read()
+        .get(&mount_id(loc))
+        .copied()
+        .unwrap_or(0)
 }
 
 impl File {
@@ -239,11 +262,18 @@ impl File {
             status_flags |= O_APPEND;
         }
         status_flags |= open_flags & (O_NOATIME | O_PATH);
+        let write_mount_id = (inner.flags().contains(FileFlags::WRITE)
+            && !inner.flags().contains(FileFlags::PATH))
+        .then(|| mount_id(inner.location()));
+        if let Some(id) = write_mount_id {
+            note_mount_write_open(id);
+        }
 
         Self {
             inner,
             nonblock: AtomicBool::new(false),
             status_flags: AtomicU32::new(status_flags),
+            write_mount_id,
         }
     }
 
@@ -260,6 +290,14 @@ impl File {
     }
 }
 
+impl Drop for File {
+    fn drop(&mut self) {
+        if let Some(id) = self.write_mount_id {
+            note_mount_write_close(id);
+        }
+    }
+}
+
 fn path_for(loc: &Location) -> Cow<'static, str> {
     loc.absolute_path()
         .map_or_else(|_| "<error>".into(), |f| Cow::Owned(f.to_string()))
@@ -268,6 +306,7 @@ fn path_for(loc: &Location) -> Cow<'static, str> {
 impl FileLike for File {
     fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
         let inner = self.inner();
+        let requested = dst.remaining_mut();
         let read = if likely(self.is_blocking()) {
             inner.read(dst)
         } else {
@@ -275,7 +314,7 @@ impl FileLike for File {
                 inner.read(&mut *dst)
             }))
         };
-        if read.as_ref().map_or(false, |n| *n > 0) && self.status_flags() & O_NOATIME == 0 {
+        if read.is_ok() && requested > 0 && self.status_flags() & O_NOATIME == 0 {
             record_file_access(inner);
         }
         read

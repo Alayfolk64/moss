@@ -1036,6 +1036,9 @@ pub fn sys_renameat2(
     let (old_dir, old_name) = with_fs(old_dirfd, |fs| fs.resolve_parent(Path::new(&old_path)))?;
     let (new_dir, new_name) =
         with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
+    if old_dir.mount_flags() & MS_RDONLY != 0 || new_dir.mount_flags() & MS_RDONLY != 0 {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
     let is_dir = fanotify_path_is_dir(old_dirfd, &old_path).unwrap_or(false);
     let move_from_event = prepare_fanotify_move_from_event(old_dirfd, &old_path, is_dir);
     let move_self_event = prepare_fanotify_move_self_event(old_dirfd, &old_path);
