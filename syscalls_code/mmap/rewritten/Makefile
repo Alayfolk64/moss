@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -Wall -Wextra -O2 -D_FILE_OFFSET_BITS=64 -pthread
+CFLAGS ?= -Wall -Wextra -O2 -std=c11 -D_FILE_OFFSET_BITS=64 -pthread
 
 PROGRAMS = \
 	mmap001_simple \

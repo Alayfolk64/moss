@@ -110,13 +110,7 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     ARCH=LOONGARCH
 fi
 
-some_testcases="
-    mkdir02 mkdir02
-    mkdir03 mkdir03
-    mkdir04 mkdir04
-    mkdir05 mkdir05
-    mkdir09 mkdir09
-"
+some_testcases=""
 
 RUN_RV=1
 RUN_LA=1

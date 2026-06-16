@@ -2,18 +2,23 @@
 
 use core::ops::{Index, IndexMut};
 
-use linux_raw_sys::general::{RLIM_NLIMITS, RLIMIT_NOFILE, RLIMIT_STACK};
+use linux_raw_sys::general::{RLIM_INFINITY, RLIM_NLIMITS, RLIMIT_NOFILE, RLIMIT_STACK};
 
 /// The maximum number of open files
 pub const AX_FILE_LIMIT: usize = 1024;
 
 /// The limit for a specific resource
-#[derive(Default)]
 pub struct Rlimit {
     /// The current limit for the resource (soft)
     pub current: u64,
     /// The maximum limit for the resource (hard)
     pub max: u64,
+}
+
+impl Default for Rlimit {
+    fn default() -> Self {
+        Self::new(RLIM_INFINITY as u64, RLIM_INFINITY as u64)
+    }
 }
 
 impl Rlimit {
