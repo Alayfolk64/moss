@@ -16,6 +16,13 @@ impl IpFamily {
         }
     }
 
+    pub fn loopback_addr(self) -> IpAddress {
+        match self {
+            Self::Ipv4 => IpAddress::Ipv4(Ipv4Addr::LOCALHOST.into()),
+            Self::Ipv6 => IpAddress::Ipv6(Ipv6Addr::LOCALHOST.into()),
+        }
+    }
+
     pub fn format_socket_addr(self, addr: IpAddress, port: u16) -> SocketAddr {
         match (self, addr) {
             (Self::Ipv6, IpAddress::Ipv4(v4)) => {

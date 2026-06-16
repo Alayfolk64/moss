@@ -549,7 +549,10 @@ impl SocketOps for TcpSocket {
 
     fn connect(&self, remote_addr: SocketAddrEx) -> AxResult {
         let remote_addr = remote_addr.into_ip()?;
-        let remote_endpoint = self.endpoint_from_socket_addr(remote_addr)?;
+        let mut remote_endpoint = self.endpoint_from_socket_addr(remote_addr)?;
+        if remote_endpoint.addr.is_unspecified() {
+            remote_endpoint.addr = self.family.loopback_addr();
+        }
         if self.ever_connected.load(Ordering::Acquire) {
             return Err(ax_err_type!(AlreadyConnected));
         }
