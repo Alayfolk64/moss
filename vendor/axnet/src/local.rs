@@ -169,13 +169,7 @@ impl LocalUdpSocket {
     }
 
     fn check_incoming(&self, dst: IpEndpoint, remote_endpoint: IpEndpoint) -> AxResult {
-        let endpoint = self.endpoint.lock().ok_or(AxError::NotConnected)?;
-        if !endpoint_accepts(
-            endpoint,
-            self.family,
-            self.ipv6_only.load(Ordering::Relaxed),
-            dst,
-        ) {
+        if !self.accepts_endpoint(dst) {
             return Err(AxError::ConnectionRefused);
         }
         if let Some(peer) = *self.connected.lock() {
@@ -184,6 +178,22 @@ impl LocalUdpSocket {
             }
         }
         Ok(())
+    }
+
+    fn accepts_endpoint(&self, dst: IpEndpoint) -> bool {
+        let Some(endpoint) = *self.endpoint.lock() else {
+            return false;
+        };
+        endpoint_accepts(
+            endpoint,
+            self.family,
+            self.ipv6_only.load(Ordering::Relaxed),
+            dst,
+        )
+    }
+
+    fn connected_peer(&self) -> Option<IpEndpoint> {
+        *self.connected.lock()
     }
 
     fn enqueue_from_reader<S>(
@@ -295,7 +305,7 @@ impl LocalUdpSocket {
 
     pub(crate) fn close(&self) {
         if let Some(endpoint) = self.endpoint.lock().take() {
-            local_transport().unbind_udp(endpoint, self.family);
+            local_transport().unbind_udp(endpoint, self.family, self);
         }
         self.rx.lock().clear();
         self.poll_state.wake();
@@ -756,7 +766,9 @@ impl Drop for LocalTcpStream {
 }
 
 struct LocalTransport {
-    udp: Mutex<HashMap<EndpointKey, Weak<LocalUdpSocket>>>,
+    // UDP reuse needs multiple sockets on one endpoint: iperf3 keeps a listener
+    // and creates per-peer connected stream sockets on the same server port.
+    udp: Mutex<HashMap<EndpointKey, Vec<Weak<LocalUdpSocket>>>>,
     tcp: Mutex<HashMap<EndpointKey, Arc<LocalTcpListener>>>,
 }
 
@@ -776,17 +788,23 @@ impl LocalTransport {
     ) -> AxResult {
         let key = EndpointKey::new(endpoint.addr, endpoint.port, family);
         let mut udp = self.udp.lock();
-        if udp.get(&key).and_then(Weak::upgrade).is_some() {
-            return Err(AxError::AddrInUse);
-        }
-        udp.insert(key, Arc::downgrade(socket));
+        udp.entry(key).or_default().push(Arc::downgrade(socket));
         Ok(())
     }
 
-    fn unbind_udp(&self, endpoint: IpListenEndpoint, family: IpFamily) {
-        self.udp
-            .lock()
-            .remove(&EndpointKey::new(endpoint.addr, endpoint.port, family));
+    fn unbind_udp(&self, endpoint: IpListenEndpoint, family: IpFamily, socket: &LocalUdpSocket) {
+        let key = EndpointKey::new(endpoint.addr, endpoint.port, family);
+        let socket_ptr = socket as *const LocalUdpSocket;
+        let mut udp = self.udp.lock();
+        if let Some(sockets) = udp.get_mut(&key) {
+            sockets.retain(|weak| {
+                weak.upgrade()
+                    .map_or(false, |registered| Arc::as_ptr(&registered) != socket_ptr)
+            });
+            if sockets.is_empty() {
+                udp.remove(&key);
+            }
+        }
     }
 
     fn lookup_udp(
@@ -801,10 +819,18 @@ impl LocalTransport {
             let mut stale = Vec::new();
 
             for key in keys_for_lookup(endpoint.addr, endpoint.port, family) {
-                match udp.get(&key).and_then(Weak::upgrade) {
-                    Some(socket) => candidates.push(socket),
-                    None if udp.get(&key).is_some() => stale.push(key),
-                    None => {}
+                if let Some(sockets) = udp.get_mut(&key) {
+                    sockets.retain(|weak| {
+                        if let Some(socket) = weak.upgrade() {
+                            candidates.push(socket);
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                    if sockets.is_empty() {
+                        stale.push(key);
+                    }
                 }
             }
             for key in stale {
@@ -813,12 +839,19 @@ impl LocalTransport {
             candidates
         };
 
+        let mut listener = None;
         for socket in candidates {
-            if socket.check_incoming(endpoint, remote_endpoint).is_ok() {
-                return Some(socket);
+            if !socket.accepts_endpoint(endpoint) {
+                continue;
+            }
+            match socket.connected_peer() {
+                Some(peer) if peer == remote_endpoint => return Some(socket),
+                Some(_) => {}
+                None if listener.is_none() => listener = Some(socket),
+                None => {}
             }
         }
-        None
+        listener
     }
 
     fn send_udp<S>(
