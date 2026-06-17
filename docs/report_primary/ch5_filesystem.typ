@@ -11,7 +11,14 @@
 
 moss 的文件系统沿用 StarryOS 的做法分四层来处理这个问题。最底层 axfs-ng-vfs 只定义接口：文件系统是什么、目录节点能做什么、文件节点能做什么，不涉及任何存储细节。axfs 在此之上实现路径解析、页缓存和具体的 ext4/FAT32 后端。再往上，kernel/src/file/ 提供 Linux 兼容的 `FileLike` 接口，把 VFS 的文件对象、管道、socket、设备文件统一进一张文件描述符表。最顶层 syscall/fs/ 负责把系统调用的参数翻译成对上层接口的调用。
 
-// 图 5-1：文件系统分层架构图
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-5-1.svg", width: 80%)
+    ]
+  ],
+  caption: [moss 文件系统分层架构],
+) <fig:fs-arch>
 
 这种分层的好处是职责清晰：路径解析、挂载语义、权限检查在各自的层处理，不会混入具体文件系统的实现里。StarryOS 提供了这套框架的雏形，moss 的工作主要集中在挂载命名空间的完整化、页缓存的统一管理、I/O 多路复用和文件事件通知上。
 
@@ -46,13 +53,24 @@ moss 用 `Location` 把这两者绑在一起：
 
 `Mountpoint` 树的子节点用 `Weak` 引用而非 `Arc`，这个选择是为了让卸载操作自然生效——子挂载点没有外部引用时会自动释放，不需要显式通知父节点，也可以避免父子引用形成环，影响挂载点的释放。卸载前的 EBUSY 检查会反过来用 `Weak::strong_count` 判断子挂载点是否还活着，如果这个挂载点还在被使用的话则拒绝卸载返回错误码 EBUSY 。
 
+@fig:mount-tree 展示了一个典型的挂载点树。rootfs 挂载在根，/proc、/tmp、/mnt 作为三个并列的子挂载点分别挂载 procfs、tmpfs 和 ext4 镜像，父到子的引用均为 Arc。/mnt 下还有一个 bind mount 到 /mnt/ro，以只读标志重新暴露同一份 ext4 数据，这个子挂载点用 Weak 引用持有，卸载 /mnt 时它会随之自动释放。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-5-2.svg", width: 70%)
+    ]
+  ],
+  caption: [Mountpoint 树],
+) <fig:mount-tree>
+
 === 节点能力标志
 
-把 pipe、procfs 节点、普通文件、设备节点统一抽象为"文件节点"，上层就需要知道怎么对待它们的差异。一种做法是在 VFS 里做类型判断，但这样每增加一种节点类型都要修改上层。moss 的做法是让节点自己声明 I/O 契约，用 `NodeFlags` 表达。
+把 pipe、procfs 节点、普通文件、设备节点统一抽象为"文件节点"，上层就需要知道怎么对待它们的差异。一种做法是在 VFS 里做类型判断，但这样每增加一种节点类型都要修改上层，很不利于代码的实现。moss 的做法是让节点自己声明 I/O 契约，用 `NodeFlags` 表达。
 
 #figure(
   table(
-    columns: (1.2fr, 2.2fr, 1.6fr),
+    columns: (1fr, 2.2fr, 1.6fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([标志], [含义], [使用方]),
@@ -66,7 +84,7 @@ moss 用 `Location` 把这两者绑在一起：
 
 有了这些标志，VFS 就能做出正确的决策：`STREAM` 节点不维护文件偏移；`NON_CACHEABLE` 节点每次 stat 都走后端；`ALWAYS_CACHE` 节点的写入不需要回写到任何设备。上层不再需要 if-else 判断节点类型，节点的差异被限制在声明这一步。
 
-元数据缓存以 `(fs_ptr, inode)` 为键，存入全局 `BTreeMap`。目录节点被刻意排除在外——目录的 nlink 会随子节点增删而变化，缓存它很容易导致读到过期数据。
+元数据缓存以 `(fs_ptr, inode)` 为键，存入了全局的 `BTreeMap`，这样多个进程、多个 fd、多个路径访问同一个文件时，可以共享同一份缓存，提高访问效率。由于目录的 nlink 会随子节点增删而变化，缓存它很容易导致读到过期数据，所以将目录节点被刻意排除在元数据缓存外。
 
 === 路径解析与 FsContext
 
@@ -74,7 +92,7 @@ moss 用 `Location` 把这两者绑在一起：
 
 moss 用 `scope_local!` 给每个任务绑定一个独立的 `FsContext`，里面存着 `root_dir` 和 `current_dir`。`scope_local!` 是 ArceOS 提供的机制，类似线程局部存储，但生命周期和任务绑定，fork/clone 时从父任务继承。`root_dir` 既是 chroot 的锚点，也是路径向上遍历的上界——遇到 `..` 到达根之后继续向上，会被静默截断，这正是 chroot 应有的行为。
 
-符号链接的循环检测靠一个共享计数器 `follow_count`，它以可变引用的形式贯穿整个解析调用栈。A→B→C 这样的间接链，三次跳转都计入同一个计数器，不会因为"每次只跟一跳"而绕过上限。上限设为 40，与 Linux 一致。
+符号链接的循环检测靠一个共享计数器 `follow_count`，它以可变引用的形式贯穿整个解析调用栈。A→B→C 这样的间接链，三次跳转都计入同一个计数器，不会因为"每次只跟一跳"而绕过上限。上限设为 40，与 Linux 一致，超过就返回错误，避免死循环。
 
 解析本身有四个变体，对应不同的 syscall 语义：
 
@@ -92,7 +110,7 @@ moss 用 `scope_local!` 给每个任务绑定一个独立的 `FsContext`，里�
   caption: [路径解析的四个变体覆盖所有 syscall 场景],
 ) <tab:resolve-variants>
 
-每次目录查找完成后，VFS 自动调用 `resolve_mountpoint()` 检查是否到达挂载点，如果是则切换到对应文件系统的根。这个操作对调用方透明，穿越挂载点和普通的目录查找在接口上没有区别。
+每次目录查找完成后，VFS 自动调用 `resolve_mountpoint()` 检查是否到达挂载点，如果是则切换到对应文件系统的根。这个操作对调用方透明，穿越挂载点和普通的目录查找在接口上没有区别，可以让所有系统调用都共享同一套正确路径语义。
 
 == 文件系统实现
 
@@ -106,24 +124,33 @@ moss 为此实现了 `LoopFileBlockDevice`：
   [
     ```rust
     pub struct LoopFileBlockDevice {
+        // 被当作块设备使用的普通镜像文件。
         file: Arc<Mutex<File>>,
+        // ext4 后端看到的逻辑块大小。
         block_size: u32,
     }
 
     impl BlockDriverOps for LoopFileBlockDevice {
         fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> ... {
-            self.file.lock().read_at(block_id * self.block_size as u64, buf)
+            let offset = block_id * self.block_size as u64;
+            self.file.lock().read_at(offset, buf)
         }
-        // write_block 对称实现
+
+        fn write_block(&mut self, block_id: u64, buf: &[u8]) -> ... {
+            let offset = block_id * self.block_size as u64;
+            self.file.lock().write_at(offset, buf)
+        }
     }
     ```
   ],
   caption: [LoopFileBlockDevice 将普通文件适配为块设备接口],
 ) <lst:loop-device>
 
+这层适配的核心就是块号到文件偏移的换算：块设备第 N 块，对应普通文件中从 `N * block_size` 开始的一段内容。ext4 后端仍然按块读写，`LoopFileBlockDevice` 则把这些块访问翻译成对镜像文件固定偏移处的 `read_at`/`write_at`，这样普通文件就具备了块设备接口。
+
 `sys_mount` 识别 `/dev/loop*` 路径时，把对应文件包装成 `LoopFileBlockDevice`，再传给 ext4 后端。这样镜像文件挂载就走普通的 ext4 挂载路径，不需要单独处理。
 
-FAT32 基于 `starry-fatfs`（StarryOS 基础层的纯 Rust 实现），通过同一套 VFS 接口接入。FAT 没有 Unix 权限模型，uid/gid、mode 等字段需要在适配层给出合理的默认值，对上层保持透明。
+FAT32 基于 `starry-fatfs`（StarryOS 基础层的纯 Rust 实现）接入，底层负责解析 FAT 表和目录项，上层仍然通过同一套 VFS 接口执行 open/read/write/stat 等操作。FAT 本身只保存文件名、大小、目录关系和只读、隐藏等简单属性，没有 Linux 的 uid/gid、rwx 权限位和完整 inode 模型，因此适配层在返回元数据时为这些字段补出默认值：普通文件和目录给出固定的 mode，uid/gid 使用挂载时约定的默认身份，inode/nlink 等字段也按 VFS 需要合成。这样上层程序即使访问 FAT32，也能像访问 ext4 一样拿到一份 Linux 风格的 stat 结果。
 
 === 内存文件系统
 
@@ -131,21 +158,66 @@ tmpfs 的核心需求是：快速创建销毁文件，不访问磁盘，支持 /
 
 inode 用 `slab::Slab<Arc<Inode>>` 分配。slab 分配的好处是 inode 号直接等于 slab 下标加一，分配和按号查找都是 O(1)，不需要维护额外的 id 映射表。
 
+核心代码如下：
+
+#figure(
+  [
+    ```rust
+    pub struct MemoryFs {
+        // Slab 像一张可复用空槽的 inode 表。
+        inodes: Mutex<Slab<Arc<Inode>>>,
+        // ...
+    }
+
+    impl MemoryFs {
+        fn get(&self, ino: u64) -> Arc<Inode> {
+            // inode 号从 1 开始，Slab 下标从 0 开始。
+            self.inodes.lock()[ino as usize - 1].clone()
+        }
+    }
+    ```
+  ],
+  caption: [MemoryFs 用 Slab 分配 inode 并合成 inode 号],
+) <lst:memoryfs-slab>
+
+因此，创建文件时只需要从 slab 取一个空槽，空槽下标加一就是对外暴露的 inode 号；之后按 inode 号查找时再减一，就能直接定位回 slab 中的对象。
+
 文件内容则反向思考：`MemoryFs` 的 inode 里不存数据，`FileContent` 只记录一个 `length: Mutex<u64>`，实际内容全部委托给上层页缓存（靠 `ALWAYS_CACHE` 标志触发）。这样做有两个好处：inode 本身非常轻量，不需要在内存中维护两份缓冲区；全零写入由页缓存检测，不分配缓存页，天然支持稀疏文件。
 
 释放 inode 时要同时满足 `nlink == 0` 和 `Arc::strong_count == 2`（一份在 slab，一份在当前调用者）才真正释放。只满足前者不够——进程可能还持有打开的文件描述符，此时 inode 虽然没有目录项指向它，但数据不能提前销毁。
-
-MemoryFs 还实现了完整的 xattr（get/set/list/remove）。这在竞赛内核里不常见，但 LTP 的 xattr 测试集会在 tmpfs 上执行，不实现就会有一批用例失败。
 
 === 伪文件系统
 
 procfs 和 devfs 解决的是一个本质问题：/proc 里的文件内容由内核按当前状态动态生成，/dev 下的设备文件背后是驱动而不是存储，但两者都需要出现在文件系统的路径空间里，能被普通的 open/read/stat 访问。
 
-moss 用 `SimpleFs` 框架处理这类伪文件系统，它提供 slab inode 分配和基本的目录结构，具体的目录内容和文件读取逻辑通过 `SimpleDirOps` trait 注入。procfs 和 devfs 只需要实现"这个目录下有哪些条目"和"读这个文件返回什么"，其他事情框架处理。
+moss 用 `SimpleFs` 框架处理这类伪文件系统，它提供 slab inode 分配和基本的目录结构，具体的目录内容和文件读取逻辑通过 `SimpleDirOps` trait 注入。procfs 和 devfs 只需要实现"这个目录下有哪些条目"和"读这个文件返回什么"，其他的框架处理。两者的目录结构如下：
 
-procfs 覆盖了 `/proc/[pid]/` 的完整进程视图：stat、status、maps、pagemap、fd、fdinfo、ns（pid/uts/user namespace）、cmdline、comm、exe，以及 `/proc/sys/` 下的内核参数接口。其中有个容易出错的地方：进程可能在 procfs 条目被访问的同时退出。`ProcessTaskDir` 用 `Weak<Process>` 持有进程引用，升级 `Weak` 失败时直接返回空目录，不会悬空也不会 panic。
+#figure(
+  [
+    ```
+    /proc                              /dev
+    ├── [pid]/                         ├── null    ← SPECIAL_NODES 注入 rdev
+    │   ├── stat                       ├── zero    ← SPECIAL_NODES 注入 rdev
+    │   ├── status                     ├── urandom
+    │   ├── maps                       ├── tty
+    │   ├── pagemap                    ├── ptmx    ← PTY 主设备
+    │   ├── cmdline                    ├── pts/    ← PTY 从设备目录
+    │   ├── exe  ──► 可执行文件路径     │   ├── 0
+    │   ├── fd/                        │   └── 1
+    │   └── ns/  (pid/uts/user)        ├── loop0   ← loop 块设备
+    ├── self/ ──► 当前进程 [pid]/       ├── fb0     ← 帧缓冲
+    └── sys/                           └── rtc0    ← 实时时钟
+        ├── kernel/
+        ├── fs/   (pipe-max-size 等)
+        └── vm/   (drop_caches 等)
+    ```
+  ],
+  caption: [procfs 与 devfs 的目录结构],
+) <lst:pseudofs-tree>
 
-devfs 里有一类特殊情况：`/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并不存在，需要凭空出现在 /dev 下并且 stat 时返回正确的 major/minor 号。moss 用全局 `SPECIAL_NODES` 表处理这个问题——stat 调用时检查路径是否在表里，如果是则用表项中的 mode 和 rdev 覆盖底层节点的返回值。这个覆盖发生在 VFS 层，不需要修改任何文件系统后端。
+procfs 中 `[pid]/` 目录是动态的，每个运行中的进程对应一个。其中有个容易出错的地方：进程可能在 procfs 条目被访问的同时退出。`ProcessTaskDir` 用 `Weak<Process>` 持有进程引用，升级 `Weak` 失败时直接返回空目录，不会悬空也不会 panic。
+
+devfs 里 `/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并不存在，但 stat 时要返回正确的 major/minor 号。moss 用全局 `SPECIAL_NODES` 表处理这个问题——stat 调用时检查路径是否在表里，如果是则用表项中的 mode 和 rdev 覆盖底层节点的返回值。这个覆盖发生在 VFS 层，不需要修改任何文件系统后端。
 
 == I/O 子系统
 
