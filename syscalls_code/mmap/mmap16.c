@@ -22,7 +22,6 @@
  *  Author: Jan Kara <jack@suse.cz>
  *  Date:   Wed Oct 1 21:49:46 2014 -0400
  *
- *      ext4: fix mmap data corruption when blocksize < pagesize
  */
 
 #define _GNU_SOURCE

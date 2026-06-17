@@ -1,17 +1,20 @@
-use alloc::{borrow::Cow, sync::Arc, vec};
+use alloc::{borrow::Cow, sync::Arc, vec, vec::Vec};
 use core::{
     ffi::{c_char, c_int},
     task::Context,
 };
 
+use axhal::time::realtime_time;
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::{FS_CONTEXT, FileFlags, OpenOptions};
-use axfs_ng_vfs::NodeType;
-use axio::{Seek, SeekFrom};
+use axfs::{FS_CONTEXT, FileFlags, OpenOptions, update_cached_metadata};
+use axfs_ng_vfs::{MetadataUpdate, NodeType};
+use axio::{IoBuf, Read, Seek, SeekFrom};
 use axpoll::{IoEvents, Pollable};
 use axtask::current;
 use linux_raw_sys::general::{
-    __kernel_off_t, AT_FDCWD, IN_ACCESS, IN_MODIFY, O_ACCMODE, O_WRONLY, POSIX_FADV_WILLNEED,
+    __kernel_off_t, AT_FDCWD, FS_IMMUTABLE_FL, IN_ACCESS, IN_MODIFY, MS_RDONLY, O_ACCMODE,
+    O_WRONLY, POSIX_FADV_WILLNEED, RLIMIT_FSIZE, SPLICE_F_GIFT, SPLICE_F_MORE, SPLICE_F_MOVE,
+    SPLICE_F_NONBLOCK,
 };
 use starry_vm::{VmMutPtr, VmPtr};
 use syscalls::Sysno;
@@ -22,12 +25,14 @@ use super::{
         notify_fanotify_modify_path,
     },
     inotify::{notify_inotify_file, notify_inotify_path},
+    memfd::{check_memfd_resize, check_memfd_write, check_memfd_write_at},
 };
 #[cfg(feature = "net")]
 use crate::file::Socket;
 use crate::{
-    file::{File, FileLike, Pipe, get_file_like},
+    file::{Directory, File, FileLike, Pipe, get_file_like, inode_flags},
     mm::{IoVec, IoVectorBuf, UserConstPtr, VmBytes, VmBytesMut},
+    task::AsThread,
 };
 
 struct DummyFd;
@@ -95,6 +100,9 @@ pub fn sys_write(fd: i32, buf: *const u8, len: usize) -> AxResult<isize> {
         return Ok(0);
     }
     let f = get_file_like(fd)?;
+    if let Some(file) = f.downcast_ref::<File>() {
+        check_memfd_write(file)?;
+    }
     let written = f.write(&mut VmBytes::new(buf, len))?;
     if written > 0 {
         notify_inotify_file(f.as_ref(), IN_MODIFY);
@@ -106,12 +114,24 @@ pub fn sys_write(fd: i32, buf: *const u8, len: usize) -> AxResult<isize> {
 pub fn sys_writev(fd: i32, iov: *const IoVec, iovcnt: usize) -> AxResult<isize> {
     debug!("sys_writev <= fd: {fd}, iovcnt: {iovcnt}");
     let f = get_file_like(fd)?;
-    let written = f.write(&mut IoVectorBuf::new(iov, iovcnt)?.into_io())?;
+    if let Some(file) = f.downcast_ref::<File>() {
+        check_memfd_write(file)?;
+    }
+    let data = read_iov_to_vec(iov, iovcnt)?;
+    let mut data = data.as_slice();
+    let written = f.write(&mut data)?;
     if written > 0 {
         notify_inotify_file(f.as_ref(), IN_MODIFY);
         notify_fanotify_modify(&f);
     }
     Ok(written as _)
+}
+
+fn read_iov_to_vec(iov: *const IoVec, iovcnt: usize) -> AxResult<Vec<u8>> {
+    let mut iov = IoVectorBuf::new(iov, iovcnt)?.into_io();
+    let mut data = vec![0; iov.remaining()];
+    iov.read(&mut data)?;
+    Ok(data)
 }
 
 pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> AxResult<isize> {
@@ -129,8 +149,37 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> AxResult<i
 pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxResult<isize> {
     let path = path.get_as_str()?;
     debug!("sys_truncate <= {path:?} {length}");
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
     if length < 0 {
         return Err(AxError::InvalidInput);
+    }
+    let loc = FS_CONTEXT.lock().resolve(path)?;
+    let metadata = loc.metadata()?;
+    if metadata.node_type == NodeType::Directory {
+        return Err(AxError::IsADirectory);
+    }
+    if loc.mount_flags() & MS_RDONLY != 0 {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    if euid != 0
+        && !can_write_file(
+            metadata.mode.bits() as u32,
+            metadata.uid,
+            metadata.gid,
+            euid,
+            proc_data.egid(),
+        )
+    {
+        return Err(AxError::PermissionDenied);
+    }
+    let fsize_limit = proc_data.rlim.read()[RLIMIT_FSIZE].current;
+    if length as u64 > fsize_limit {
+        return Err(AxError::from(LinuxError::EFBIG));
     }
     let file = OpenOptions::new()
         .write(true)
@@ -142,9 +191,24 @@ pub fn sys_truncate(path: UserConstPtr<c_char>, length: __kernel_off_t) -> AxRes
     Ok(0)
 }
 
+fn can_write_file(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
+    let shift = if euid == uid {
+        6
+    } else if egid == gid {
+        3
+    } else {
+        0
+    };
+    mode & (0o2 << shift) != 0
+}
+
 pub fn sys_ftruncate(fd: c_int, length: __kernel_off_t) -> AxResult<isize> {
     debug!("sys_ftruncate <= {fd} {length}");
+    if length < 0 {
+        return Err(AxError::InvalidInput);
+    }
     let f = File::from_fd(fd)?;
+    check_memfd_resize(&f, length as u64)?;
     f.inner().access(FileFlags::WRITE)?.set_len(length as _)?;
     notify_inotify_file(f.as_ref(), IN_MODIFY);
     let f: Arc<dyn FileLike> = f;
@@ -165,7 +229,9 @@ pub fn sys_fallocate(
     let f = File::from_fd(fd)?;
     let inner = f.inner();
     let file = inner.access(FileFlags::WRITE)?;
-    file.set_len(file.len()?.max(offset as u64 + len as u64))?;
+    let new_len = file.len()?.max(offset as u64 + len as u64);
+    check_memfd_resize(&f, new_len)?;
+    file.set_len(new_len)?;
     Ok(0)
 }
 
@@ -288,6 +354,7 @@ pub fn sys_pwrite64(
         return Err(AxError::InvalidInput);
     }
     let f = positioned_file_from_fd(fd)?;
+    check_memfd_write_at(&f, offset as u64, len)?;
     if len == 0 {
         return Ok(0);
     }
@@ -297,7 +364,25 @@ pub fn sys_pwrite64(
     } else {
         inner.write_at(VmBytes::new(buf, len), offset as _)?
     };
+    if write > 0 {
+        record_positioned_write(&f)?;
+    }
     Ok(write as _)
+}
+
+fn record_positioned_write(file: &File) -> AxResult {
+    let now = realtime_time();
+    if !file.inner().record_modification(now) {
+        update_cached_metadata(
+            file.inner().location(),
+            MetadataUpdate {
+                mtime: Some(now),
+                ctime: Some(now),
+                ..Default::default()
+            },
+        )?;
+    }
+    Ok(())
 }
 
 fn positioned_file_from_fd(fd: c_int) -> AxResult<Arc<File>> {
@@ -368,17 +453,33 @@ pub fn sys_pwritev2(
         return Err(AxError::from(LinuxError::EOPNOTSUPP));
     }
     let f = positioned_file_from_fd(fd)?;
-    let iov = IoVectorBuf::new(iov, iovcnt)?.into_io();
+    let data = read_iov_to_vec(iov, iovcnt)?;
     if offset == -1 {
-        f.inner().write(iov).map(|n| n as _)
+        check_memfd_write(&f)?;
+        let mut data = data.as_slice();
+        let written = f.inner().write(&mut data)?;
+        if written > 0 {
+            record_positioned_write(&f)?;
+        }
+        Ok(written as _)
     } else if offset < -1 {
         Err(AxError::InvalidInput)
     } else {
+        check_memfd_write_at(&f, offset as u64, data.len())?;
         let inner = f.inner();
+        let mut data = data.as_slice();
         if let Ok(file) = inner.access(FileFlags::APPEND) {
-            file.append(iov).map(|(n, _)| n as _)
+            let (written, _) = file.append(&mut data)?;
+            if written > 0 {
+                record_positioned_write(&f)?;
+            }
+            Ok(written as _)
         } else {
-            inner.write_at(iov, offset as _).map(|n| n as _)
+            let written = inner.write_at(&mut data, offset as _)?;
+            if written > 0 {
+                record_positioned_write(&f)?;
+            }
+            Ok(written as _)
         }
     }
 }
@@ -608,31 +709,89 @@ pub fn sys_copy_file_range(
         _flags
     );
 
-    // TODO: check flags
-    // TODO: check both regular files
-    // TODO: check same file and overlap
-    if let (Ok(src), Ok(dst)) = (File::from_fd(fd_in), File::from_fd(fd_out)) {
-        src.inner().access(FileFlags::READ)?;
-        dst.inner().access(FileFlags::WRITE)?;
+    if _flags != 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if len > i64::MAX as usize {
+        return Err(AxError::from(LinuxError::EOVERFLOW));
+    }
+    if Pipe::from_fd(fd_in).is_ok() || Pipe::from_fd(fd_out).is_ok() {
+        return Err(AxError::InvalidInput);
+    }
 
-        if src.inner().location().metadata()?.device != dst.inner().location().metadata()?.device {
-            return Err(AxError::from(LinuxError::EXDEV));
+    let src_file = File::from_fd(fd_in)?;
+    if Directory::from_fd(fd_out).is_ok() {
+        return Err(AxError::IsADirectory);
+    }
+    let dst_file = File::from_fd(fd_out).map_err(|err| match err {
+        AxError::InvalidInput => AxError::InvalidInput,
+        err => err,
+    })?;
+
+    src_file.inner().access(FileFlags::READ)?;
+    if dst_file.inner().access(FileFlags::APPEND).is_ok() {
+        return Err(AxError::BadFileDescriptor);
+    }
+    dst_file.inner().access(FileFlags::WRITE)?;
+
+    let src_meta = src_file.inner().location().metadata()?;
+    let dst_meta = dst_file.inner().location().metadata()?;
+    if src_meta.node_type != NodeType::RegularFile || dst_meta.node_type != NodeType::RegularFile {
+        return Err(AxError::InvalidInput);
+    }
+
+    if let Ok(path) = dst_file.inner().location().absolute_path()
+        && inode_flags(path.as_str()) & FS_IMMUTABLE_FL != 0
+    {
+        return Err(AxError::from(LinuxError::EPERM));
+    }
+
+    let src_off = if off_in.is_null() { 0 } else { off_in.vm_read()? };
+    let dst_off = if off_out.is_null() {
+        0
+    } else {
+        off_out.vm_read()?
+    };
+    if dst_off > i64::MAX as u64
+        || dst_off
+            .checked_add(len as u64)
+            .is_none_or(|end| end > i64::MAX as u64)
+    {
+        return Err(AxError::from(LinuxError::EFBIG));
+    }
+
+    if src_meta.device == dst_meta.device && src_meta.inode == dst_meta.inode {
+        let src_end = src_off.saturating_add(len as u64);
+        let dst_end = dst_off.saturating_add(len as u64);
+        if src_off < dst_end && dst_off < src_end {
+            return Err(AxError::InvalidInput);
         }
     }
 
+    if src_meta.device != dst_meta.device {
+        return Err(AxError::from(LinuxError::EXDEV));
+    }
+
     let src = if !off_in.is_null() {
-        SendFile::Offset(File::from_fd(fd_in)?, off_in)
+        SendFile::Offset(src_file, off_in)
     } else {
-        SendFile::Direct(get_file_like(fd_in)?)
+        SendFile::Direct(src_file)
     };
 
     let dst = if !off_out.is_null() {
-        SendFile::Offset(File::from_fd(fd_out)?, off_out)
+        SendFile::Offset(dst_file.clone(), off_out)
     } else {
-        SendFile::Direct(get_file_like(fd_out)?)
+        SendFile::Direct(dst_file.clone())
     };
 
-    do_send(src, dst, len).map(|n| n as _)
+    let written = do_send(src, dst, len)?;
+    if written > 0 {
+        record_positioned_write(&dst_file)?;
+        notify_inotify_file(dst_file.as_ref(), IN_MODIFY);
+        let dst_file_like: Arc<dyn FileLike> = dst_file;
+        notify_fanotify_modify(&dst_file_like);
+    }
+    Ok(written as _)
 }
 
 pub fn sys_splice(
@@ -670,4 +829,46 @@ pub fn sys_splice(
     let dst = splice_dst(dst_endpoint, off_out)?;
 
     do_send(src, dst, len).map_err(splice_error).map(|n| n as _)
+}
+
+pub fn sys_vmsplice(
+    fd: c_int,
+    iov: *const IoVec,
+    nr_segs: usize,
+    flags: u32,
+) -> AxResult<isize> {
+    debug!("sys_vmsplice <= fd: {fd}, nr_segs: {nr_segs}, flags: {flags}");
+
+    const ALLOWED_FLAGS: u32 = SPLICE_F_MOVE | SPLICE_F_NONBLOCK | SPLICE_F_MORE | SPLICE_F_GIFT;
+    if flags & !ALLOWED_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let pipe = Pipe::from_fd(fd).map_err(|err| match err {
+        AxError::InvalidInput => AxError::BadFileDescriptor,
+        err => err,
+    })?;
+    let mut iov = IoVectorBuf::new(iov, nr_segs)?.into_io();
+
+    let old_nonblocking = pipe.nonblocking();
+    if flags & SPLICE_F_NONBLOCK != 0 && !old_nonblocking {
+        pipe.set_nonblocking(true)?;
+    }
+
+    let result = if pipe.is_read() {
+        pipe.read(&mut iov)
+    } else if flags & SPLICE_F_NONBLOCK == 0 {
+        match pipe.write_once(&mut iov) {
+            Err(AxError::WouldBlock) => pipe.write(&mut iov),
+            result => result,
+        }
+    } else {
+        pipe.write(&mut iov)
+    };
+
+    if flags & SPLICE_F_NONBLOCK != 0 && !old_nonblocking {
+        pipe.set_nonblocking(false)?;
+    }
+
+    result.map(|n| n as _)
 }

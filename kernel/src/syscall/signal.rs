@@ -233,15 +233,21 @@ pub fn sys_kill(pid: i32, signo: u32) -> AxResult<isize> {
     Ok(0)
 }
 
-pub fn sys_tkill(tid: Pid, signo: u32) -> AxResult<isize> {
+pub fn sys_tkill(tid: i32, signo: u32) -> AxResult<isize> {
+    if tid <= 0 {
+        return Err(AxError::InvalidInput);
+    }
     let sig = make_siginfo(signo, SI_TKILL)?;
-    send_signal_to_thread(None, tid, sig)?;
+    send_signal_to_thread(None, tid as Pid, sig)?;
     Ok(0)
 }
 
-pub fn sys_tgkill(tgid: Pid, tid: Pid, signo: u32) -> AxResult<isize> {
+pub fn sys_tgkill(tgid: i32, tid: i32, signo: u32) -> AxResult<isize> {
+    if tgid <= 0 || tid <= 0 {
+        return Err(AxError::InvalidInput);
+    }
     let sig = make_siginfo(signo, SI_TKILL)?;
-    send_signal_to_thread(Some(tgid), tid, sig)?;
+    send_signal_to_thread(Some(tgid as Pid), tid as Pid, sig)?;
     Ok(0)
 }
 

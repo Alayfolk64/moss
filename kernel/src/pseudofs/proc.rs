@@ -57,6 +57,15 @@ const DUMMY_CPUINFO: &str = indoc! {"
     bogomips	: 1000.00
 "};
 
+fn proc_stat() -> String {
+    let mut stat = String::from("cpu  0 0 0 0 0 0 0 0 0 0\n");
+    for cpu_id in 0..axconfig::plat::CPU_NUM {
+        stat.push_str(&format!("cpu{cpu_id} 0 0 0 0 0 0 0 0 0 0\n"));
+    }
+    stat.push_str("intr 0\nctxt 0\nbtime 0\nprocesses 0\nprocs_running 1\nprocs_blocked 0\n");
+    stat
+}
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -871,6 +880,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     root.add(
         "cpuinfo",
         SimpleFile::new_regular(fs.clone(), || Ok(DUMMY_CPUINFO)),
+    );
+    root.add(
+        "stat",
+        SimpleFile::new_regular(fs.clone(), || Ok(proc_stat())),
     );
     root.add(
         "meminfo2",

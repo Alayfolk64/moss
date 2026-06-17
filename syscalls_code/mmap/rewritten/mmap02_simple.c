@@ -1,51 +1,77 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-/*
- * mmap02 的简化转写版。
- *
- * 测试目标：
- *   只读打开的文件可以用 PROT_READ | MAP_SHARED 成功映射，
- *   映射内容应与文件内容一致。
- */
+// 本测例验证只读打开的文件描述符可以用 PROT_READ + MAP_SHARED 成功 mmap，且映射内容与文件内容一致。
 
 #include "mmap_simple_common.h"
 
+// 原测例使用的临时文件名。
+#define TEMPFILE "mmapfile"
+
+// 用于生成临时工作目录的模板。
+static char temp_dir[] = "/tmp/mmap02_XXXXXX";
+
+// 入口函数准备只读文件映射并比较内容。
 int main(void)
 {
-	long page_size = page_size_or_die();
-	char *buf = malloc(page_size);
-	char *addr;
-	int fd;
-	int failed = 0;
+    // 创建隔离临时目录并分配一页测试数据。
+    simple_enter_temp_dir(temp_dir);
+    size_t page_sz = (size_t)simple_page_size();
+    char *buf = malloc(page_sz);
+    if (!buf) {
+        fprintf(stderr, "malloc failed\n");
+        simple_leave_temp_dir(temp_dir);
+        return EXIT_FAILURE;
+    }
+    memset(buf, 'A', page_sz);
 
-	if (!buf)
-		fail_now("malloc");
-	memset(buf, 'A', page_size);
+    // 创建文件并写入一整页 A。
+    int fd = open(TEMPFILE, O_RDWR | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0 || simple_write_full(fd, buf, page_sz) != 0) {
+        fprintf(stderr, "writing to %s failed: %s\n", TEMPFILE, strerror(errno));
+        free(buf);
+        if (fd >= 0)
+            close(fd);
+        simple_leave_temp_dir(temp_dir);
+        return EXIT_FAILURE;
+    }
 
-	unlink("mmap02_file");
-	fd = create_filled_file("mmap02_file", page_size, 'A');
-	if (fd == -1)
-		fail_now("create mmap02_file");
-	close(fd);
+    // 改成只读权限并以只读方式重新打开。
+    if (fchmod(fd, 0444) != 0 || close(fd) != 0) {
+        fprintf(stderr, "closing %s failed: %s\n", TEMPFILE, strerror(errno));
+        free(buf);
+        simple_leave_temp_dir(temp_dir);
+        return EXIT_FAILURE;
+    }
+    fd = open(TEMPFILE, O_RDONLY);
+    if (fd < 0) {
+        fprintf(stderr, "opening %s read-only failed: %s\n", TEMPFILE, strerror(errno));
+        free(buf);
+        simple_leave_temp_dir(temp_dir);
+        return EXIT_FAILURE;
+    }
 
-	if (chmod("mmap02_file", 0444) == -1)
-		fail_now("chmod mmap02_file");
-	fd = open("mmap02_file", O_RDONLY);
-	if (fd == -1)
-		fail_now("open read-only file");
+    // 执行只读共享映射。
+    char *addr = mmap(NULL, page_sz, PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);
+    if (addr == MAP_FAILED) {
+        fprintf(stderr, "mmap() failed on %s: %s\n", TEMPFILE, strerror(errno));
+        free(buf);
+        close(fd);
+        simple_leave_temp_dir(temp_dir);
+        return EXIT_FAILURE;
+    }
 
-	addr = mmap(NULL, page_size, PROT_READ, MAP_FILE | MAP_SHARED, fd, 0);
-	if (addr == MAP_FAILED)
-		fail_now("mmap");
+    // 比较映射内容与原缓冲区，并保留原输出文本。
+    int failed = 0;
+    if (memcmp(buf, addr, page_sz) == 0)
+        printf("mmap() functionality successful\n");
+    else {
+        fprintf(stderr, "mapped memory area contains invalid data\n");
+        failed = 1;
+    }
 
-	if (memcmp(buf, addr, page_size) == 0)
-		pass_msg("read-only file mapping contains expected data");
-	else
-		failed = fail_msg("read-only file mapping contains wrong data");
-
-	munmap(addr, page_size);
-	close(fd);
-	chmod("mmap02_file", 0666);
-	unlink("mmap02_file");
-	free(buf);
-	return failed ? EXIT_FAILURE : EXIT_SUCCESS;
+    // 解除映射并清理文件。
+    munmap(addr, page_sz);
+    close(fd);
+    unlink(TEMPFILE);
+    free(buf);
+    simple_leave_temp_dir(temp_dir);
+    return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }

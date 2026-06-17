@@ -8,9 +8,10 @@ use alloc::{
 use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult};
+use axfs::{FS_CONTEXT, FileBackend, OpenOptions, OpenResult, update_cached_metadata};
 use axfs_ng_vfs::{
-    DirEntry, FileNode, Location, NodePermission, NodeType, Reference, VfsError, path::Path,
+    DirEntry, FileNode, Location, MetadataUpdate, NodePermission, NodeType, Reference, VfsError,
+    path::Path,
 };
 use axio::{Seek, SeekFrom};
 use axtask::{current, yield_now};
@@ -27,6 +28,7 @@ use super::{
         notify_fanotify_fd_close, notify_fanotify_open,
     },
     inotify::{notify_inotify_dirent, notify_inotify_file},
+    memfd_state,
     protected_symlinks_enabled,
 };
 use crate::{
@@ -304,6 +306,7 @@ fn check_open_target_constraints(
     if metadata.node_type == NodeType::Fifo
         && flags & O_NONBLOCK != 0
         && flags & O_ACCMODE == O_WRONLY
+        && !fifo_has_reader(&loc)?
     {
         return Err(AxError::from(LinuxError::ENXIO));
     }
@@ -312,6 +315,52 @@ fn check_open_target_constraints(
         return Err(AxError::from(LinuxError::EPERM));
     }
 
+    Ok(())
+}
+
+fn fifo_has_reader(loc: &Location) -> AxResult<bool> {
+    let metadata = loc.metadata()?;
+    let fd_table = FD_TABLE.read();
+
+    for fd in fd_table.ids() {
+        let Some(file_desc) = fd_table.get(fd) else {
+            continue;
+        };
+        let Some(file) = file_desc.inner.downcast_ref::<File>() else {
+            if let Some(pipe) = file_desc.inner.downcast_ref::<Pipe>()
+                && pipe.fifo_key() == Some((metadata.device, metadata.inode))
+                && pipe.is_read()
+            {
+                return Ok(true);
+            }
+            continue;
+        };
+        let other_metadata = file.inner().location().metadata()?;
+        if metadata.device == other_metadata.device
+            && metadata.inode == other_metadata.inode
+            && file_desc.inner.status_flags() & O_ACCMODE != O_WRONLY
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+fn record_created_file(dirfd: c_int, path: &str) -> AxResult {
+    let loc = resolve_at(dirfd, Some(path), 0)?
+        .into_file()
+        .ok_or(AxError::BadFileDescriptor)?;
+    let now = axhal::time::realtime_time();
+    update_cached_metadata(
+        &loc,
+        MetadataUpdate {
+            atime: Some(now),
+            mtime: Some(now),
+            ctime: Some(now),
+            ..Default::default()
+        },
+    )?;
     Ok(())
 }
 
@@ -379,6 +428,11 @@ fn open_with_create_follow(
 fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
     let f: Arc<dyn FileLike> = match result {
         OpenResult::File(mut file) => {
+            let metadata = file.location().metadata()?;
+            if metadata.node_type == NodeType::Fifo {
+                let read_side = flags & O_ACCMODE != O_WRONLY;
+                Arc::new(Pipe::new_fifo(metadata.device, metadata.inode, read_side))
+            } else {
             // /dev/xx handling
             if let Ok(device) = file.location().entry().downcast::<Device>() {
                 let inner = device.inner().as_any();
@@ -415,6 +469,7 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
                 }
             }
             Arc::new(File::new_with_status_flags(file, flags))
+            }
         }
         OpenResult::Dir(dir) => Arc::new(Directory::new(dir)),
     };
@@ -472,6 +527,7 @@ pub fn sys_openat(
             match open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32) {
                 Ok(result) => {
                     if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                        record_created_file(dirfd, path.as_str())?;
                         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
                     }
                     let fd = add_to_fd(result, flags_u32)?;
@@ -490,6 +546,7 @@ pub fn sys_openat(
         open_with_create_follow(dirfd, path.as_str(), &create_options, flags_u32)?;
 
         if !existed_before_create {
+            record_created_file(dirfd, path.as_str())?;
             notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         }
         let fd = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)
@@ -505,6 +562,7 @@ pub fn sys_openat(
     check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
     if flags_u32 & O_CREAT != 0 && !existed_before_create {
         let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
+        record_created_file(dirfd, path.as_str())?;
         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         let fd = add_to_fd(result, flags as _)?;
         notify_fanotify_create(dirfd, &path, false);
@@ -1364,6 +1422,23 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
                 .get_mut(fd as _)
                 .ok_or(AxError::BadFileDescriptor)?
                 .cloexec = cloexec;
+            Ok(0)
+        }
+        F_GET_SEALS => {
+            let file = File::from_fd(fd)?;
+            let state = memfd_state(&file).ok_or(AxError::InvalidInput)?;
+            Ok(state.seals() as _)
+        }
+        F_ADD_SEALS => {
+            let file_like = get_file_like(fd)?;
+            if file_like.status_flags() & O_ACCMODE == O_RDONLY {
+                return Err(AxError::from(LinuxError::EPERM));
+            }
+            let file = file_like
+                .downcast_arc::<File>()
+                .map_err(|_| AxError::InvalidInput)?;
+            let state = memfd_state(&file).ok_or(AxError::InvalidInput)?;
+            state.add_seals(arg as u32)?;
             Ok(0)
         }
         F_GETPIPE_SZ => {

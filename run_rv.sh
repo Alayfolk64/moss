@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 rm -rf sdcard-rv.img disk.img
 cp ./imgs/sdcard-rv.img ./
 rm -rf kernel-rv

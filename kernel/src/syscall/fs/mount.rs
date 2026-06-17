@@ -12,7 +12,7 @@ use core::{
 
 use axdriver::prelude::{BaseDriverOps, BlockDriverOps, DevError, DevResult, DeviceType};
 use axerrno::{AxError, AxResult, LinuxError};
-use axfs::{FS_CONTEXT, FileBackend};
+use axfs::{FS_CONTEXT, FileBackend, drop_file_caches_by_device};
 use axfs_ng_vfs::{Filesystem, Location};
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
@@ -26,7 +26,7 @@ use spin::RwLock;
 use starry_vm::VmPtr;
 
 use crate::{
-    file::{FileLike, add_file_like, get_file_like, resolve_at, with_fs},
+    file::{FileLike, add_file_like, get_file_like, mount_write_open_count, resolve_at, with_fs},
     mm::vm_load_string,
     pseudofs::{Device, MemoryFs, dev::r#loop::LoopDevice},
     syscall::fs::inotify::notify_inotify_unmount_dev,
@@ -57,6 +57,7 @@ const FSCONFIG_CMD_RECONFIGURE: u32 = 7;
 const MOVE_MOUNT_F_EMPTY_PATH: u32 = 4;
 const VALID_FSMOUNT_ATTRS: u32 = 0x1 | 0x2 | 0x4 | 0x8 | 0x10 | 0x20 | 0x80;
 static MOUNTED_PATHS: RwLock<Vec<String>> = RwLock::new(Vec::new());
+static EXPIRE_MARKED_MOUNTS: RwLock<Vec<u64>> = RwLock::new(Vec::new());
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum MountKind {
@@ -320,7 +321,9 @@ fn mount_filesystem_at(
     let path = target
         .absolute_path()
         .map_or_else(|_| target_path.to_string(), |path| path.to_string());
-    // Let VFS layer handle mount errors; don't pre-check MOUNTED_PATHS
+    if is_mounted_root(&target) || is_active_mount_path(&path) {
+        return Err(AxError::ResourceBusy);
+    }
     if let Err(err) = target.mount_with_flags(&fs, mount_flags) {
         warn!("mount target={target_path} failed: {err:?}");
         return Err(err.into());
@@ -337,8 +340,7 @@ fn bind_mount_at(source: &Location, dirfd: c_int, target_path: &str) -> AxResult
     let path = target
         .absolute_path()
         .map_or_else(|_| target_path.to_string(), |path| path.to_string());
-    // Check if already mounted, but only if target is already a mountpoint
-    if target.is_root_of_mount() && MOUNTED_PATHS.read().iter().any(|it| it == &path) {
+    if is_mounted_root(&target) || is_active_mount_path(&path) {
         return Err(AxError::ResourceBusy);
     }
     if let Err(err) = target.bind_mount(source) {
@@ -354,14 +356,50 @@ fn bind_mount_at(source: &Location, dirfd: c_int, target_path: &str) -> AxResult
 
 pub fn proc_mounts() -> String {
     let mut out = String::from("proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n");
-    for path in MOUNTED_PATHS.read().iter() {
-        out.push_str(&format!("none {path} auto rw 0 0\n"));
+    let paths = MOUNTED_PATHS.read().clone();
+    let mut active_paths = Vec::new();
+    for path in paths {
+        if is_active_mount_path(&path) {
+            out.push_str(&format!("none {path} auto rw 0 0\n"));
+            active_paths.push(path);
+        }
     }
+    *MOUNTED_PATHS.write() = active_paths;
     out
 }
 
 fn unregister_mount_path(path: &str) {
     MOUNTED_PATHS.write().retain(|it| it != path);
+}
+
+fn is_mounted_root(target: &Location) -> bool {
+    target.is_root_of_mount() && !target.mountpoint().is_root()
+}
+
+fn is_active_mount_path(path: &str) -> bool {
+    FS_CONTEXT
+        .lock()
+        .resolve(path)
+        .is_ok_and(|loc| is_mounted_root(&loc))
+}
+
+fn expire_marked(device: u64) -> bool {
+    EXPIRE_MARKED_MOUNTS.read().iter().any(|it| *it == device)
+}
+
+fn mark_expire(device: u64) {
+    let mut mounts = EXPIRE_MARKED_MOUNTS.write();
+    if !mounts.iter().any(|it| *it == device) {
+        mounts.push(device);
+    }
+}
+
+fn clear_expire_mark(device: u64) {
+    EXPIRE_MARKED_MOUNTS.write().retain(|it| *it != device);
+}
+
+pub(super) fn note_mount_access(loc: &Location) {
+    clear_expire_mark(loc.mountpoint().device());
 }
 
 fn mount_flags_from_attrs(attrs: u32) -> u32 {
@@ -488,7 +526,7 @@ pub fn sys_move_mount(
     if flags & MOVE_MOUNT_F_EMPTY_PATH != 0 {
         // from_path must be empty when MOVE_MOUNT_F_EMPTY_PATH is set
         if !from_path.is_empty() {
-            return Err(AxError::InvalidInput);
+            return Err(AxError::NotFound);
         }
         // from_dirfd must be a valid fsmount fd
         let mount = get_file_like(from_dirfd)?
@@ -573,12 +611,13 @@ pub fn sys_mount(
 
     if flags as u32 & MS_REMOUNT != 0 {
         let target = FS_CONTEXT.lock().resolve(target.as_str())?;
-        if !target.is_root_of_mount() {
+        if !is_mounted_root(&target) {
             return Err(AxError::InvalidInput);
         }
-        target
-            .mountpoint()
-            .set_mount_flags(mount_flags & !MS_REMOUNT);
+        if mount_flags & MS_RDONLY != 0 && mount_write_open_count(&target) > 0 {
+            return Err(AxError::ResourceBusy);
+        }
+        target.mountpoint().set_mount_flags(mount_flags);
         return Ok(0);
     }
 
@@ -597,17 +636,38 @@ pub fn sys_umount2(target: *const c_char, flags: i32) -> AxResult<isize> {
     const UMOUNT_NOFOLLOW: i32 = 0x8;
     const ALLOWED_FLAGS: i32 = MNT_FORCE | MNT_DETACH | MNT_EXPIRE | UMOUNT_NOFOLLOW;
 
-    if flags & !ALLOWED_FLAGS != 0 {
+    if flags & !ALLOWED_FLAGS != 0
+        || flags & MNT_EXPIRE != 0 && flags & (MNT_FORCE | MNT_DETACH) != 0
+    {
         return Err(AxError::InvalidInput);
     }
 
     let target = vm_load_string(target)?;
     debug!("sys_umount2 <= target: {target:?}, flags: {flags:#x}");
-    let target = FS_CONTEXT.lock().resolve(target)?;
+    if current().as_thread().proc_data.euid() != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+    let target = if flags & UMOUNT_NOFOLLOW != 0 {
+        FS_CONTEXT.lock().resolve_no_follow(target)?
+    } else {
+        FS_CONTEXT.lock().resolve(target)?
+    };
+    if !is_mounted_root(&target) {
+        return Err(AxError::InvalidInput);
+    }
     let path = target.absolute_path().ok().map(|path| path.to_string());
-    let dev = target.metadata()?.device;
+    let dev = target.mountpoint().device();
+    if flags & MNT_DETACH == 0 && mount_write_open_count(&target) > 0 {
+        return Err(AxError::ResourceBusy);
+    }
+    if flags & MNT_EXPIRE != 0 && !expire_marked(dev) {
+        mark_expire(dev);
+        return Err(AxError::from(LinuxError::EAGAIN));
+    }
+    drop_file_caches_by_device(dev)?;
     target.filesystem().flush()?;
     target.unmount()?;
+    clear_expire_mark(dev);
     if let Some(path) = path {
         unregister_mount_path(&path);
     }

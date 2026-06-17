@@ -180,7 +180,13 @@ impl TypeMap {
     }
 
     pub fn insert<T: Any + Send + Sync>(&mut self, value: T) {
+        self.remove::<T>();
         self.0.push((TypeId::of::<T>(), Arc::new(value)));
+    }
+
+    pub fn remove<T: Any + Send + Sync>(&mut self) {
+        let id = TypeId::of::<T>();
+        self.0.retain(|(ty, _)| ty != &id);
     }
 
     pub fn get<T: Any + Send + Sync>(&self) -> Option<Arc<T>> {

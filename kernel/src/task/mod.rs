@@ -278,6 +278,9 @@ pub struct ProcessData {
     child_maxrss_kb: AtomicUsize,
     namespaces: SpinNoIrq<ProcessNamespaces>,
 
+    personality: AtomicUsize,
+    membarrier_state: AtomicU32,
+
     /// The default mask for file permissions.
     umask: AtomicU32,
     ioprio: AtomicU32,
@@ -324,6 +327,8 @@ impl ProcessData {
             child_cpu_time: SpinNoIrq::new((0, 0)),
             child_maxrss_kb: AtomicUsize::new(0),
             namespaces: SpinNoIrq::new(ProcessNamespaces::init()),
+            personality: AtomicUsize::new(0),
+            membarrier_state: AtomicU32::new(0),
 
             umask: AtomicU32::new(0o022),
             ioprio: AtomicU32::new((2 << 13) | 4),
@@ -419,6 +424,22 @@ impl ProcessData {
 
     pub fn set_ioprio(&self, ioprio: u32) {
         self.ioprio.store(ioprio, Ordering::SeqCst);
+    }
+
+    pub fn personality(&self) -> usize {
+        self.personality.load(Ordering::SeqCst)
+    }
+
+    pub fn set_personality(&self, personality: usize) {
+        self.personality.store(personality, Ordering::SeqCst);
+    }
+
+    pub fn membarrier_state(&self) -> u32 {
+        self.membarrier_state.load(Ordering::SeqCst)
+    }
+
+    pub fn add_membarrier_state(&self, state: u32) {
+        self.membarrier_state.fetch_or(state, Ordering::SeqCst);
     }
 
     pub fn uid(&self) -> u32 {

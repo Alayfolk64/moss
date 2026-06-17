@@ -99,6 +99,18 @@ pub fn sys_setgid(gid: u32) -> AxResult<isize> {
     Ok(0)
 }
 
+pub fn sys_personality(personality: usize) -> AxResult<isize> {
+    const PERSONALITY_GET: usize = 0xffff_ffff;
+
+    let curr = axtask::current();
+    let proc_data = &curr.as_thread().proc_data;
+    let old = proc_data.personality();
+    if personality != PERSONALITY_GET {
+        proc_data.set_personality(personality);
+    }
+    Ok(old as _)
+}
+
 pub fn sys_getgroups(size: usize, list: *mut u32) -> AxResult<isize> {
     debug!("sys_getgroups <= size: {size}");
     if size < 1 {

@@ -1,4 +1,9 @@
-use alloc::{borrow::Cow, format, sync::Arc};
+use alloc::{
+    borrow::Cow,
+    collections::BTreeMap,
+    format,
+    sync::{Arc, Weak},
+};
 use core::{
     mem,
     sync::atomic::{AtomicBool, Ordering},
@@ -21,6 +26,7 @@ use ringbuf::{
     HeapRb,
     traits::{Consumer, Observer, Producer},
 };
+use spin::RwLock;
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::VmMutPtr;
 
@@ -32,6 +38,9 @@ use crate::{
 
 const RING_BUFFER_INIT_SIZE: usize = 65536; // 64 KiB
 pub const PIPE_MAX_SIZE: usize = 1048576; // 1 MiB
+type FifoKey = (u64, u64);
+
+static FIFO_PIPES: RwLock<BTreeMap<FifoKey, Weak<Shared>>> = RwLock::new(BTreeMap::new());
 
 struct Shared {
     buffer: Mutex<HeapRb<u8>>,
@@ -44,6 +53,7 @@ pub struct Pipe {
     read_side: bool,
     shared: Arc<Shared>,
     non_blocking: AtomicBool,
+    fifo_key: Option<FifoKey>,
 }
 impl Drop for Pipe {
     fn drop(&mut self) {
@@ -63,13 +73,45 @@ impl Pipe {
             read_side: true,
             shared: shared.clone(),
             non_blocking: AtomicBool::new(false),
+            fifo_key: None,
         };
         let write_end = Pipe {
             read_side: false,
             shared,
             non_blocking: AtomicBool::new(false),
+            fifo_key: None,
         };
         (read_end, write_end)
+    }
+
+    pub fn new_fifo(device: u64, inode: u64, read_side: bool) -> Self {
+        let key = (device, inode);
+        let shared = {
+            let mut pipes = FIFO_PIPES.write();
+            if let Some(shared) = pipes.get(&key).and_then(Weak::upgrade) {
+                shared
+            } else {
+                let shared = Arc::new(Shared {
+                    buffer: Mutex::new(HeapRb::new(RING_BUFFER_INIT_SIZE)),
+                    poll_rx: PollSet::new(),
+                    poll_tx: PollSet::new(),
+                    poll_close: PollSet::new(),
+                });
+                pipes.insert(key, Arc::downgrade(&shared));
+                shared
+            }
+        };
+
+        Self {
+            read_side,
+            shared,
+            non_blocking: AtomicBool::new(false),
+            fifo_key: Some(key),
+        }
+    }
+
+    pub const fn fifo_key(&self) -> Option<FifoKey> {
+        self.fifo_key
     }
 
     pub const fn is_read(&self) -> bool {
@@ -107,6 +149,10 @@ impl Pipe {
 
     pub(super) fn async_key(&self) -> usize {
         Arc::as_ptr(&self.shared) as usize
+    }
+
+    pub fn write_once(&self, src: &mut IoSrc) -> AxResult<usize> {
+        self.try_write(src)
     }
 
     fn try_read(&self, dst: &mut IoDst) -> AxResult<usize> {
