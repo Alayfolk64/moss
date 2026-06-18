@@ -22,6 +22,55 @@ moss 的文件系统沿用 StarryOS 的做法分四层来处理这个问题。�
 
 这种分层的好处是职责清晰：路径解析、挂载语义、权限检查在各自的层处理，不会混入具体文件系统的实现里。StarryOS 提供了这套框架的雏形，moss 的工作主要集中在挂载命名空间的完整化、页缓存的统一管理、I/O 多路复用和文件事件通知上。
 
+== 挂载子系统
+
+没有挂载，"一切皆文件"就只是句口号。磁盘分区、插入的 U 盘、内核生成的 /proc、内存里的临时目录——它们生来是独立的存储对象，各自有自己的根，根本不认识彼此。挂载解决的就是这个问题：把独立的文件系统动态拼到同一棵目录树下，让 `/home/user` 和 `/proc/meminfo` 可以用同一套接口访问，调用方完全不需要知道底下的存储是什么。
+
+在内核里，每次 `mount` 调用都在一棵 `Mountpoint` 树上添加一个节点，记录"这个文件系统的根接在了哪个目录项上"。路径解析穿越目录时，一旦碰到挂载点就自动切换到对应文件系统的根——这个切换对调用方透明，`open("/mnt/foo")` 和 `open("/bin/bash")` 走同一套代码路径，差别只在于前者在路途中换了一次"文件系统"。
+
+=== 传统挂载接口
+
+`sys_mount` 除了普通挂载外，还支持几种改变已有挂载关系的操作模式：
+
+#figure(
+  table(
+    columns: (1fr, 2.6fr),
+    inset: 6pt,
+    stroke: 0.5pt + gray,
+    table.header([标志], [含义]),
+    [`MS_BIND`], [bind mount：让已有目录树在另一条路径下可见，不复制任何文件],
+    [`MS_MOVE`], [迁移挂载点：将挂载从一个路径移到另一个路径，不卸载重挂],
+    [`MS_REMOUNT`], [修改现有挂载的标志，如将读写挂载改为只读],
+    [`MS_PRIVATE`], [命名空间隔离：本挂载点的变动不向父/子命名空间传播],
+  ),
+  caption: [sys_mount 支持的操作模式],
+) <tab:mount-flags>
+
+bind mount 值得单独说一下。它不创建新的文件系统实例，只是让同一棵目录树从另一条路径也可以访问到。容器场景里常用这个：把宿主机的某个目录以只读方式 bind mount 进容器，容器内用户能读到内容，但任何写操作都会被挂载标志拦下来，底层数据不受影响。moss 的实现直接复用源挂载点对象，新的 `Location` 指向同一个 `Mountpoint`，device_id 天然相同，`stat()` 结果与 Linux 一致。
+
+`sys_umount2` 卸载时会向所有关注该挂载点的 inotify watch 发送 IN_UNMOUNT 事件，监视 /mnt 的应用能在文件系统被卸载时收到通知。
+
+=== 新式挂载 API
+
+传统 `sys_mount` 有个历史包袱：调用者必须同时拥有源设备的访问权限和目标路径的挂载权限，两者缺一不可。在容器场景里这很别扭——容器进程应该能在自己的命名空间里自由挂载，却因为没有宿主机路径的权限而卡住。
+
+Linux 5.2 针对这个问题引入了基于 fd 的新式挂载 API。StarryOS 没有实现这套接口，moss 参考 Linux 内核的语义补上了这部分，把挂载拆成几个独立步骤：
+
+#figure(
+  [
+    ```
+    fd  = fsopen("ext4")                        // 创建文件系统上下文
+          fsconfig(fd, "source", "/dev/loop0")  // 配置设备路径
+          fsconfig(fd, "cmd", "create")          // 完成配置，准备挂载
+    mfd = fsmount(fd, 0, 0)                     // 实例化为挂载对象 fd
+          move_mount(mfd, "/mnt")               // 将挂载接入目录树
+    ```
+  ],
+  caption: [新式挂载 API 的调用流程],
+) <lst:new-mount-api>
+
+关键在于 `fsopen` 到 `fsmount` 这几步可以在无特权的用户命名空间里完成，只有最后的 `move_mount` 才需要对目标路径的权限。`open_tree` 反向工作，把现有的挂载子树克隆成一个 fd，可以跨命名空间传递再接入。这五个调用共同构成了容器运行时和命名空间工具所依赖的挂载语义基础。
+
 == VFS 抽象层
 
 === 目录树与挂载上下文
@@ -110,7 +159,16 @@ moss 用 `scope_local!` 给每个任务绑定一个独立的 `FsContext`，里�
   caption: [路径解析的四个变体覆盖所有 syscall 场景],
 ) <tab:resolve-variants>
 
-每次目录查找完成后，VFS 自动调用 `resolve_mountpoint()` 检查是否到达挂载点，如果是则切换到对应文件系统的根。这个操作对调用方透明，穿越挂载点和普通的目录查找在接口上没有区别，可以让所有系统调用都共享同一套正确路径语义。
+每次目录查找完成后，VFS 自动调用 `resolve_mountpoint()` 检查是否到达挂载点，如果是则切换到对应文件系统的根。这个操作对调用方透明，穿越挂载点和普通的目录查找在接口上没有区别，可以让所有系统调用都共享同一套正确路径语义。@fig:resolve-flow 展示了一次完整路径解析的处理流程。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-5-2-3.svg", width: 75%)
+    ]
+  ],
+  caption: [路径解析的完整处理流程],
+) <fig:resolve-flow>
 
 == 文件系统实现
 
@@ -156,7 +214,7 @@ FAT32 基于 `starry-fatfs`（StarryOS 基础层的纯 Rust 实现）接入，�
 
 tmpfs 的核心需求是：快速创建销毁文件，不访问磁盘，支持 /dev/shm 和 /tmp 这类高频场景。moss 实现的 `MemoryFs` 在 inode 管理和文件内容存储上都做了针对性的设计。
 
-inode 用 `slab::Slab<Arc<Inode>>` 分配。slab 分配的好处是 inode 号直接等于 slab 下标加一，分配和按号查找都是 O(1)，不需要维护额外的 id 映射表。
+inode 用 `slab::Slab<Arc<Inode>>` 分配。slab 分配的好处是 inode 号直接等于 slab 下标加一，这样分配和按号查找都是 O(1)，不需要维护额外的 id 映射表。
 
 核心代码如下：
 
@@ -223,7 +281,7 @@ devfs 里 `/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并�
 
 === 页缓存
 
-文件 I/O 如果每次都直接读写块设备，性能无法接受。但如果每个文件各自维护缓存，多个进程打开同一个文件时就会有多份副本，内存浪费，写入之间还会互相不可见。全局页缓存是解决这两个问题的标准方法：把文件数据统一缓存，以文件系统对象和页号为键，跨进程共享同一份物理页。
+文件 I/O 如果每次都直接读写块设备，可想而知性能效果会很不理想。但如果每个文件各自维护缓存，多个进程打开同一个文件时就会有多份副本，内存又会浪费，写入之间还会互相不可见。全局页缓存是解决这两个问题的标准方法：把文件数据统一缓存，以文件系统对象和页号为键，跨进程共享同一份物理页。
 
 全局页缓存的 LRU 组织结构和它与 mmap 的联动在内存管理章节已经说明，本节关注文件系统侧的读写策略。
 
@@ -274,85 +332,156 @@ epoll 还支持三种触发模式：
 
 `ppoll` 和 `pselect6` 需要原子地切换信号掩码然后进入等待——如果先换掩码再等待，中间有个窗口期可能丢失信号。moss 在进入 `block_on` 前完成掩码切换，返回时恢复，保证原子语义。
 
-== 挂载子系统
-
-=== 传统挂载接口
-
-`sys_mount` 不只是"把文件系统接到路径上"，它需要处理几种不同的操作模式：
-
-#figure(
-  table(
-    columns: (1.4fr, 2.6fr),
-    inset: 6pt,
-    stroke: 0.5pt + gray,
-    table.header([标志], [含义]),
-    [`MS_BIND`], [bind mount：让已有目录树在另一个路径下可见，不复制任何文件],
-    [`MS_MOVE`], [迁移挂载点：将挂载从一个路径移动到另一个路径，不卸载重挂],
-    [`MS_REMOUNT`], [修改现有挂载的标志，如将读写挂载改为只读],
-    [`MS_PRIVATE`], [命名空间隔离：本挂载点的变动不向父/子命名空间传播],
-  ),
-  caption: [sys_mount 支持的操作模式],
-) <tab:mount-flags>
-
-bind mount 是容器化场景里常用的操作，让宿主机的某个目录在容器内以另一个路径暴露。moss 的实现直接复用源挂载点对象，新的 `Location` 指向同一个 `Mountpoint`，device_id 天然相同，`stat()` 的结果与 Linux 一致，不需要特殊处理。
-
-`sys_umount2` 卸载时会向所有关注该挂载点的 inotify watch 发送 IN_UNMOUNT 事件，这样监视 /mnt 的应用在文件系统被卸载时能收到通知。
-
-=== 新式挂载 API
-
-Linux 5.2 引入了基于文件描述符的挂载 API，解决的问题是：传统 `sys_mount` 需要调用者同时持有挂载能力和目标路径的权限，这在容器场景里很难满足——容器进程可能没有宿主机路径的权限，但应该能在自己的命名空间里做挂载。
-
-新 API 把挂载分解为几个步骤，每个步骤返回一个 fd：
-
-#figure(
-  [
-    ```
-    fd  = fsopen("ext4")           // 创建文件系统上下文
-          fsconfig(fd, "source", "/dev/loop0")  // 设置设备
-          fsconfig(fd, "cmd", "create")          // 完成配置
-    mfd = fsmount(fd, 0, 0)        // 实例化为挂载对象
-          move_mount(mfd, "/mnt")  // 接入目录树
-    ```
-  ],
-  caption: [新式挂载 API 的调用流程],
-) <lst:new-mount-api>
-
-分步骤的好处是：`fsopen` 和 `fsconfig` 可以在无特权的命名空间里执行，`move_mount` 才需要对目标路径的权限。`open_tree` 则反向工作，把一棵挂载子树克隆为 fd，可以传给另一个命名空间使用。moss 完整实现了这五个调用，通过 LTP 对应测试集。
-
 == 文件元数据与权限
 
 === 元数据查询
 
-stat 系列（stat/fstat/lstat）返回固定字段集合。statx 是 Linux 4.11 扩展的版本，增加了两类信息：文件系统无法提供的字段（如 `stx_btime` 创建时间）可以用 `STATX_ATTR_*` 标志标记为"不可用"而不是返回错误；`stx_mnt_id` 返回挂载 ID，让调用者知道这个文件在哪个挂载点上。moss 实现了完整的 statx，`SPECIAL_NODES` 表中的设备文件在 stat 时用表项值覆盖 mode 和 rdev。
+stat 系列（stat/fstat/lstat）返回固定字段集合。moss 参考 Linux 语义实现了扩展版本 statx，在兼容 stat 全部字段的基础上增加了两类能力：文件系统无法提供的字段（如 `stx_btime` 创建时间）可以用 `STATX_ATTR_*` 标志标记为"不可用"而不是返回错误；`stx_mnt_id` 返回挂载 ID，让调用者知道这个文件属于哪个挂载点。`SPECIAL_NODES` 表中的设备文件在 stat 时用表项值覆盖 mode 和 rdev。
+
+#figure(
+  table(
+    columns: (1.3fr, 1.2fr, 2.8fr),
+    inset: 6pt,
+    stroke: 0.5pt + gray,
+    table.header([接口], [字段集合], [moss 实现要点]),
+    [`stat/fstat/lstat`], [固定字段集], [设备文件的 mode/rdev 由 `SPECIAL_NODES` 表覆盖],
+    [`statx`], [可选扩展字段], [`STATX_ATTR_*` 标记不可用字段；`stx_mnt_id` 报告挂载点 ID],
+  ),
+  caption: [stat 与 statx 的能力对比],
+) <tab:statx>
 
 === 权限检查
 
-`access` 和 `faccessat2` 的检查比想象中复杂。表面上是"看文件的 mode 位"，但实际上要处理几个叠加的规则：
+`access` 和 `faccessat2` 看起来只是查 mode 位，实际要处理几条叠加规则，还要区分使用哪套 uid。moss 把这些都做全了：
 
-路径中每一级父目录都需要通过搜索权限（execute bit）检查，缺少任意一级就返回 EACCES。目标文件在只读挂载上时，写权限请求返回 EROFS 而不是 EACCES，原因不同，错误码也不同。root 用户执行文件时，目标文件须带有至少一个执行位（三组权限中任意一个 x 位为 1），与普通用户的检查逻辑不同。
+#figure(
+  table(
+    columns: (1.5fr, 1fr, 2.5fr),
+    inset: 6pt,
+    stroke: 0.5pt + gray,
+    table.header([规则 / 接口], [返回值 / uid], [说明]),
+    [父目录搜索权限], [EACCES], [路径每一级父目录都须通过 execute bit，缺一即拒],
+    [只读挂载写请求], [EROFS], [写权限被挂载标志拦下时返回 EROFS，不是 EACCES],
+    [root 执行位要求], [EACCES], [root 执行文件须至少一个 x 位，与普通用户不同],
+    [`access`], [real uid/gid], [反映调用者真实身份，setuid 程序中是原始调用者],
+    [`faccessat2` + `AT_EACCESS`], [effective uid/gid], [反映当前运行身份，setuid 程序中是文件所有者],
+  ),
+  caption: [权限检查的叠加规则与 uid 语义],
+) <tab:access-rules>
 
-`access` 用 real uid/gid 判断，`faccessat2` 加了 `AT_EACCESS` 标志后改用 effective uid/gid。两者差别在 setuid 程序里才显现：setuid 程序运行时 effective uid 是文件所有者，real uid 是调用者。StarryOS 的基础实现不区分这两者，moss 在此处做了补强，让 `access` 行为与 Linux 手册的描述吻合。
+StarryOS 不区分 real 与 effective uid，moss 补上了这一差异。
 
-inode flags（`FS_IMMUTABLE_FL`、`FS_APPEND_FL` 等）不依赖文件系统后端的支持，moss 用全局 `INODE_FLAGS` 表按路径存储这些标志，`FS_IOC_GETFLAGS`/`FS_IOC_SETFLAGS` ioctl 读写此表，stat 和写操作时从表里查出标志叠加到检查逻辑里。
-
-xattr 在 MemoryFs 上有完整实现，ext4 通过 lwext4 接口透传。
+inode flags（`FS_IMMUTABLE_FL`、`FS_APPEND_FL` 等）不依赖文件系统后端，moss 用全局 `INODE_FLAGS` 表按路径存储，`FS_IOC_GETFLAGS`/`FS_IOC_SETFLAGS` ioctl 读写，stat 和写操作时查表叠加到检查逻辑里。xattr 在 MemoryFs 上有完整实现，ext4 通过 lwext4 接口透传。
 
 == 文件事件通知
 
-用户程序有时需要知道文件系统上发生了什么——备份工具要感知哪些文件被修改，安全软件要在文件被访问时介入。Linux 提供了两套机制，覆盖不同的使用场景。
+用户程序有时需要知道文件系统上发生了什么——备份工具要感知哪些文件被修改，安全软件要在文件被访问时介入。Linux 提供了两套机制，能够覆盖不同的使用场景，moss 对此也进行了实现。
 
 === inotify
 
 inotify 面向具体文件或目录的变化监视。用户态对目标路径添加 watch，之后 create、delete、modify、attrib、move 等操作产生的事件进入事件队列，通过 read 取出。移动操作会产生成对的 IN_MOVED_FROM 和 IN_MOVED_TO 事件，两者通过 cookie 字段关联，让接收方能识别是同一次 rename。
 
-moss 在 VFS 的创建、删除、重命名和属性更新路径上插入通知点，卸载时向相关 watch 发送 IN_UNMOUNT。
+实现上，一个 inotify fd 维护两张表：`watches` 记录用户关注哪些 inode，`events` 保存已经发生但尚未被 read 取走的事件。
+
+#figure(
+  [
+    ```rust
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Target {
+        dev: u64,     // 文件系统设备号
+        ino: u64,     // inode 号，和 dev 一起唯一定位目标
+        is_dir: bool, // 事件目标是否是目录
+    }
+
+    #[derive(Clone)]
+    struct Watch {
+        wd: c_int,       // 用户态看到的 watch descriptor
+        target: Target,  // 被监视的文件或目录
+        mask: u32,       // 关注的事件集合，如 IN_CREATE/IN_DELETE
+    }
+
+    struct Event {
+        wd: c_int,              // 事件对应哪个 watch
+        mask: u32,              // 实际发生的事件
+        cookie: u32,            // rename 时关联 MOVED_FROM/MOVED_TO
+        name: Option<String>,   // 目录事件中的子项名称
+    }
+
+    pub struct InotifyFd {
+        watches: Mutex<Vec<Watch>>,       // 当前 fd 上注册的所有 watch
+        events: Mutex<VecDeque<Event>>,   // 等待用户态 read 的事件队列
+        poll: PollSet,                    // 新事件到达时唤醒 read/poll
+    }
+    ```
+  ],
+  caption: [inotify：watch 表和事件队列],
+) <lst:inotify-structs>
+
+@fig:inotify-flow 展示了 inotify 从注册 watch 到用户态取出事件的完整数据流，其中 rename 产生的 IN_MOVED_FROM 与 IN_MOVED_TO 通过相同的 cookie 值关联为一对。moss 在 VFS 的创建、删除、重命名和属性更新路径上插入通知点，卸载时向相关 watch 发送 IN_UNMOUNT。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图5-7-1.svg", width: 90%)
+    ]
+  ],
+  caption: [inotify 事件投递流程],
+) <fig:inotify-flow>
 
 === fanotify
 
-fanotify 解决的是 inotify 解决不了的两个问题：监视范围更大（可以作用在整个挂载点上），以及能在访问发生时主动介入。
+fanotify 解决的是 inotify 解决不了的两个问题：监视范围更大（可以作用在单个 inode 、整个挂载点乃至整个filesystem ），以及能在访问发生时主动介入，而 inotify 更像是一种事后通知。
 
 mark 可以挂在单个文件、目录或整个挂载点上，mask 指定关注的事件类型。FID 模式下，事件报告中携带文件系统标识符和文件句柄，监听者无需持有路径就能定位文件——这对跨挂载点的全局监视很重要，因为文件可能在监听期间被移动过。
 
-权限事件（`FAN_OPEN_PERM`、`FAN_ACCESS_PERM`）是 fanotify 最特殊的部分：内核在文件被打开或访问时，先等待监听进程的响应，再决定是否让操作继续。触发进程在等待期间阻塞，监听进程通过写入 allow 或 deny 响应。安全软件（防病毒、DLP）依赖这个机制在文件访问路径上做拦截。
+fanotify 的核心也是“关注集合 + 事件队列”，但 mark 的作用范围更丰富，事件中还可能携带文件句柄、子项名称和权限请求编号。
 
-moss 的 fanotify 实现覆盖了打开、读写、创建、删除、重命名、关闭等路径上的通知点，约 2200 行。没有活跃监听时，通知路径上只有一次轻量的标志检查，普通文件操作不承担额外开销。
+#figure(
+  [
+    ```rust
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum FanotifyMarkKind {
+        Inode,      // 监视单个文件或目录
+        Mount,      // 监视整个挂载点
+        Filesystem, // 监视同一文件系统
+    }
+
+    struct FanotifyMark {
+        target: FanotifyTarget, // 被监视的 inode/挂载点/文件系统
+        path: Option<String>,   // 需要按路径报告时保留别名
+        kind: FanotifyMarkKind, // mark 的作用范围
+        mask: u64,              // FAN_OPEN/FAN_ACCESS/FAN_CREATE 等
+        ignored_mask: u64,      // 临时忽略的事件集合
+    }
+
+    struct FanotifyEvent {
+        mask: u64,                      // 实际触发的 fanotify 事件
+        file: Option<Arc<dyn FileLike>>, // 需要返回 fd 时保留文件对象
+        fid: Option<FanotifyTarget>,    // FID 模式下报告的文件身份
+        name: Option<String>,           // 目录项事件的子项名称
+        permission_id: Option<u64>,     // 权限事件等待用户态响应
+    }
+
+    pub struct FanotifyFd {
+        marks: Mutex<Vec<FanotifyMark>>,        // 当前监听实例上的所有 mark
+        events: Mutex<VecDeque<FanotifyEvent>>, // 等待读取的事件队列
+        permissions: Mutex<Vec<FanotifyPermission>>, // 尚未 allow/deny 的权限事件
+        poll: PollSet,                          // 唤醒 read/poll 等待者
+    }
+    ```
+  ],
+  caption: [fanotify：mark、事件队列与权限等待表],
+) <lst:fanotify-structs>
+
+权限事件（`FAN_OPEN_PERM`、`FAN_ACCESS_PERM`）是 fanotify 最特殊的部分：内核在文件被打开或访问时，先等待监听进程的响应，再决定是否让操作继续。触发进程在等待期间阻塞，监听进程通过写入 allow 或 deny 响应。安全软件（防病毒、DLP）依赖这个机制在文件访问路径上做拦截。@fig:fanotify-perm 展示了这一阻塞-响应流程中三方的交互时序。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图5-7-2.svg", width: 90%)
+    ]
+  ],
+  caption: [fanotify 权限事件时序],
+) <fig:fanotify-perm>
+
+moss 的 fanotify 实现覆盖了打开、读写、创建、删除、重命名、关闭等路径上的通知点，没有活跃监听时，通知路径上只有一次轻量的标志检查，普通文件操作就不用承担额外开销。
