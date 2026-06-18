@@ -32,8 +32,8 @@ class Result:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_RV = (SCRIPT_DIR / "../../output_rv.txt").resolve()
-DEFAULT_LA = (SCRIPT_DIR / "../../output_la.txt").resolve()
+DEFAULT_RV = (SCRIPT_DIR / "../../docs/output_rv.txt").resolve()
+DEFAULT_LA = (SCRIPT_DIR / "../../docs/output_la.txt").resolve()
 DEFAULT_OUT_DIR = SCRIPT_DIR / "results"
 LIBCS = ("glibc", "musl")
 

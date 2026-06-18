@@ -23,8 +23,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 DEFAULT_OUT_DIR = SCRIPT_DIR / "results"
 RUN_ALL_LOGS = (
-    ("output_rv", REPO_ROOT / "output_rv.txt"),
-    ("output_la", REPO_ROOT / "output_la.txt"),
+    ("output_rv", REPO_ROOT / "docs/output_rv.txt"),
+    ("output_la", REPO_ROOT / "docs/output_la.txt"),
 )
 LIBCS = ("glibc", "musl")
 
@@ -202,7 +202,7 @@ def collect_inputs(args: argparse.Namespace) -> list[tuple[str, Path]]:
     existing = [(label, path) for label, path in RUN_ALL_LOGS if path.exists()]
     if not existing:
         expected = "、".join(str(path) for _, path in RUN_ALL_LOGS)
-        raise SystemExit(f"未提供日志，且未找到 run_all.sh 生成的日志：{expected}")
+        raise SystemExit(f"未提供日志，且未找到 make run_rv/make run_la 生成的日志：{expected}")
     return existing
 
 
@@ -308,8 +308,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="解析 lmbench 日志并复现官方 judge 计分规则",
         epilog=(
-            "不传日志时，默认读取 run_all.sh 在仓库根目录生成的 "
-            "output_rv.txt 和 output_la.txt。"
+            "不传日志时，默认读取 make run_rv/make run_la 生成的 "
+            "docs/output_rv.txt 和 docs/output_la.txt。"
         ),
     )
     parser.add_argument("logs", nargs="*", type=Path, help="日志路径；标签默认使用文件名")
@@ -338,7 +338,7 @@ def main() -> int:
         raise SystemExit(
             "日志中没有找到有效的 lmbench 结果。"
             f"已检查：{paths}。请确认 src/init.sh 中 lmbench=1，"
-            "并在 run_all.sh 完成后重新运行本脚本。"
+            "并在 make run_rv 或 make run_la 完成后重新运行本脚本。"
         )
 
     out = args.out or (DEFAULT_OUT_DIR / f"{datetime.now().strftime('%m%d-%H%M%S')}.md")

@@ -58,8 +58,8 @@ class Item:
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_RV = (SCRIPT_DIR / "../../output_rv.txt").resolve()
-DEFAULT_LA = (SCRIPT_DIR / "../../output_la.txt").resolve()
+DEFAULT_RV = (SCRIPT_DIR / "../../docs/output_rv.txt").resolve()
+DEFAULT_LA = (SCRIPT_DIR / "../../docs/output_la.txt").resolve()
 DEFAULT_OUT_DIR = SCRIPT_DIR / "results"
 UBUNTU_LOGS = (
     (
@@ -277,7 +277,7 @@ def build_report(inputs: list[tuple[str, Path]], datasets: dict[str, dict[str, d
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="解析 cyclictest 日志并复现官方 judge 计分规则",
-        epilog="不传日志时，默认读取仓库根目录 output_rv.txt/output_la.txt 和本机 Ubuntu 对照日志。",
+        epilog="不传日志时，默认读取 docs/output_rv.txt、docs/output_la.txt 和本机 Ubuntu 对照日志。",
     )
     parser.add_argument("logs", nargs="*", type=Path, help="日志路径；标签默认使用文件名")
     parser.add_argument(

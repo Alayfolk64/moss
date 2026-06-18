@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-input="${1:-summary_rv.txt}"
-output="${2:-total.txt}"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
+input="${1:-$ROOT_DIR/docs/summary_rv.txt}"
+output="${2:-$ROOT_DIR/docs/total.txt}"
 
 LC_ALL=C awk '
 function reset_case() {

@@ -1,402 +1,377 @@
-# I/O Benchmark Pass 优化总结
+# I/O 优化过程记录
 
-本文总结本轮围绕 iozone、lmbench、UnixBench fstime 等测例做的 I/O 优化。整体目标是减少小块读写中的无意义开销，让 1KiB record、512KiB 到 1MiB 工作集这类测试更容易命中缓存，并补齐显式预读接口的实际效果。
+本文记录 iozone、lmbench 文件项、UnixBench fstime 等 I/O 类测试相关优化。每一项按收益优先级整理，固定说明四件事：原来的问题、修改了什么、为什么能提速、对应代码。
 
-## 1. 页缓存从 64 页提升到 256 页
+## 总体思路
 
-代码位置：
+这轮 I/O 优化没有改变文件系统语义，也没有按 benchmark 名称做特殊分支。主要做的是减少普通文件读写中的明显浪费：
 
-- `vendor/axfs/src/highlevel/file.rs`
-- `DEFAULT_FILE_CACHE_PAGES`
-- `CachedFileShared::new`
+| 优先级 | 优化点 | 主要受益测试 |
+| --- | --- | --- |
+| P0 | 页缓存容量从 256KiB 提到 1MiB | iozone reread、lmbench `bw_file_rd`、`bw_mmap_rd` |
+| P1 | 新文件写入避免 read-before-write | iozone writer、UnixBench fstime |
+| P2 | dirty page 连续批量写回 | lmbench `lmdd fsync=1`、小文件 fsync |
+| P3 | 无 inotify/fanotify 监听时快速跳过通知 | lmbench read/write/open/close、iozone 小块 I/O、libcbench stdio |
+| P4 | `read()` atime 改为 relatime | iozone 小 record read、普通文件热读 |
+| P5 | `readahead()` / `fadvise(WILLNEED)` 真正预读 | 显式预读测试、mmap 后续 fault |
+| P6 | mmap 顺序 fault 轻量预热 | lmbench `bw_mmap_rd` |
 
-原来普通 cached file 的页缓存是：
+## P0: 页缓存容量从 64 页提升到 256 页
 
-```text
-64 页 * 4KiB = 256KiB
+**原来的问题**
+
+普通 cached file 以前只保留 64 个 4KiB 页，也就是 256KiB。iozone 4 进程测试里每个 child file 是 1MiB，lmbench 文件读和 mmap 读常见工作集是 512KiB。缓存容量小于工作集时，顺序读完一遍后，文件开头的页已经被 LRU 淘汰，下一轮 reread 又要重新从底层文件系统读。
+
+**修改了什么**
+
+把普通本地文件的 per-file page cache 提到 256 页，也就是 1MiB。
+
+代码引用：
+
+```rust
+// vendor/axfs/src/highlevel/file.rs
+const PAGE_SIZE: usize = 4096;
+const DEFAULT_LOCAL_FILE_CACHE_PAGES: usize = 256;
+const MAX_READAHEAD_BYTES: usize = DEFAULT_LOCAL_FILE_CACHE_PAGES * PAGE_SIZE;
 ```
 
-现在改为：
+缓存创建时使用这个容量：
 
-```text
-256 页 * 4KiB = 1MiB
+```rust
+// vendor/axfs/src/highlevel/file.rs
+LruCache::new(NonZeroUsize::new(DEFAULT_LOCAL_FILE_CACHE_PAGES).unwrap())
 ```
 
-这样做的原因是测试里的文件工作集比 256KiB 大：
+**为什么能提速**
 
-- iozone 4 进程测试每个 child file 是 1MiB。
-- lmbench `bw_file_rd` 和 `bw_mmap_rd` 使用 512KiB 文件。
-- UnixBench fstime 默认会用 1KiB 小块反复读写较小文件。
+1MiB cache 可以完整覆盖 iozone 单个 child file，也能覆盖 lmbench 512KiB 文件。第二轮读、反向读、stride read、mmap fault 后续访问更容易直接命中页缓存，减少底层 ext4/lwext4 读和路径锁开销。
 
-页缓存太小时，顺序读完整个文件后，LRU 里只剩文件尾部；下一轮从文件头 reread 时，前面读入的新页又会把尾部页挤出去，命中率很差。把 per-file cache 提到 1MiB 后，至少能完整覆盖 iozone 4 进程场景下的单个 child file，也能覆盖 lmbench 的 512KiB 读文件。
+**边界**
 
-tmpfs/in-memory 文件仍然保持 unbounded cache，没有改变。
+tmpfs/in-memory 文件本来就不按这个 LRU 容量限制，不受影响。这里也没有实现全局 page cache 回收，所以容量不能继续无脑放大。
 
-## 2. cached 写路径避免 read-before-write
+## P1: cached 写路径避免 read-before-write
 
-代码位置：
+**原来的问题**
 
-- `vendor/axfs/src/highlevel/file.rs`
-- `CachedFile::write_at_locked`
-- `CachedFile::page_or_insert_zeroed`
-- `CachedFile::can_zero_fill_write_page`
+页缓存以 4KiB 为单位。旧逻辑在缓存里没有目标页时，会先从底层文件系统读出完整 4KiB，再把用户写入的数据覆盖进去。这个逻辑对“修改旧文件中间一小段”是必要的，因为未覆盖部分要保留旧内容。
 
-axfs 页缓存按 4KiB 一页保存文件内容。原来的写路径比较保守：如果目标页不在缓存里，就先从底层文件系统读出完整 4KiB 页，再把用户写入的数据覆盖进去。
+但 benchmark 常见场景是新建文件后连续写，或者 append 到 EOF 之后的新页。这些页没有旧内容需要保留，先读旧页就是纯浪费。1KiB record 写文件时，这个浪费会被放大。
 
-这个逻辑在修改旧文件中间一小段时是必要的，因为没被覆盖的旧数据还要保留。
+**修改了什么**
 
-但在这些场景里，读旧页是浪费的：
+写入前先记录旧文件长度 `old_len`，再判断当前页是否可以直接用全 0 页填充。如果页完全在旧 EOF 之后，或者本次写入覆盖了该页旧有效内容，就不再读底层旧页。
 
-- 新建文件后写入第一页。
-- 文件末尾 append 到新页。
-- 扩展文件后写入 EOF 之后的页。
-- 本次写入完整覆盖了旧页中所有有效内容。
+代码引用：
 
-现在写路径会先记录写入前的文件长度 `old_len`，再判断每个页是否需要保留旧内容：
-
-```text
-如果页完全位于旧 EOF 之后：
-    分配全 0 页，直接写入用户数据
-
-如果写入范围覆盖了该页所有旧有效内容：
-    分配全 0 页，直接写入用户数据
-
-否则：
-    仍然读取旧页，保留未覆盖的旧数据
+```rust
+// vendor/axfs/src/highlevel/file.rs
+fn can_zero_fill_write_page(old_len: u64, page_start: u64, range: &Range<usize>) -> bool {
+    if page_start >= old_len {
+        return true;
+    }
+    let old_valid_end = (old_len - page_start).min(PAGE_SIZE as u64) as usize;
+    range.start == 0 && range.end >= old_valid_end
+}
 ```
 
-这样可以在不改变文件语义的前提下，减少新文件小块写时的无意义底层读。对 iozone、fstime 这种 1KiB 小块连续写文件的测试比较有帮助。
+写路径使用这个判断：
 
-## 3. 普通 read 的 atime 更新改成 relatime
-
-代码位置：
-
-- `kernel/src/file/fs.rs`
-- `update_atime_for_access`
-
-原来普通 `read()` 每次成功后都会更新 atime。对于 1KiB 小读来说，这会让每次读都额外触发一次元数据更新，开销很明显。
-
-现在默认使用 Linux 常见的 relatime 语义：
-
-```text
-只有当 atime 早于 mtime，
-或 atime 早于 ctime，
-或距离上次 atime 更新超过 24 小时，
-才真正更新 atime。
+```rust
+// vendor/axfs/src/highlevel/file.rs
+let old_len = self.len()?;
+...
+let zeroed = Self::can_zero_fill_write_page(old_len, page_start, &range);
+self.with_page_or_insert_impl(pn, zeroed, |page, _| {
+    buf.read(&mut page.data()[range.start..range.end])?;
+    page.dirty = true;
+    Ok(())
+})?;
 ```
 
-保留的行为：
+**为什么能提速**
 
-- `MS_NOATIME`：不更新 atime。
-- `MS_NODIRATIME`：目录访问不更新 atime。
-- `MS_STRICTATIME`：仍然每次访问都更新 atime。
+对新建文件连续写来说，原来每个新页可能经历“读 4KiB 旧页 + 写用户数据”，现在变成“分配零页 + 写用户数据”。这减少了底层 `read_at()` 次数，也减少了进入 ext4/lwext4 的次数。iozone writer、rewriter 和 UnixBench fstime 这种小块连续写最容易受益。
 
-这样普通文件读的热路径会少很多元数据写，尤其适合 iozone 这种小 record read 测试。
+**正确性**
 
-## 4. ext4 atime-only 更新不再刷新 ctime
+如果写入没有覆盖旧页全部有效内容，仍然走原来的 `page_or_insert()`，会先读旧页再修改，保证未覆盖字节不丢。
 
-代码位置：
+## P2: dirty page 连续批量写回
 
-- `vendor/axfs/src/fs/ext4/inode.rs`
-- `Inode::update_metadata`
+**原来的问题**
 
-原来 ext4 的 `update_metadata` 只要更新 metadata，就会顺手刷新 ctime。这样 atime-only 更新也会导致 ctime 变化。
-
-现在改成：
-
-```text
-mode / owner / mtime 变化：
-    更新 ctime
-
-只有 atime 变化：
-    不更新 ctime
-```
-
-这更符合常见文件系统语义，也避免 atime 更新连带制造更多元数据变化。
-
-## 5. mount flag 接受 MS_RELATIME
-
-代码位置：
-
-- `kernel/src/syscall/fs/mount.rs`
-- `SUPPORTED_MOUNT_FLAGS`
-
-`/proc/mounts` 中已经呈现 relatime 风格，但 mount flag 白名单之前没有接受 `MS_RELATIME`。
-
-现在把 `MS_RELATIME` 加入支持列表，避免用户态显式传入该 flag 时被错误拒绝。
-
-## 6. readahead 和 fadvise(WILLNEED) 从 no-op 变成真实预读
-
-代码位置：
-
-- `kernel/src/syscall/fs/io.rs`
-- `sys_readahead`
-- `sys_fadvise64`
-- `vendor/axfs/src/highlevel/file.rs`
-- `FileBackend::readahead`
-- `CachedFile::readahead`
-
-原来 `readahead()` 和 `posix_fadvise(..., POSIX_FADV_WILLNEED)` 基本只是做参数检查，然后返回成功，并不会真的提前读文件。
-
-现在的流程是：
-
-```text
-用户调用 readahead 或 fadvise(WILLNEED)
-  -> syscall 层检查 fd、offset、文件类型
-  -> 找到文件 backend
-  -> 如果是 cached backend，把对应文件页读进页缓存
-  -> 如果是 direct backend，保持 no-op
-```
-
-当前预读策略比较保守：
-
-```text
-按 4KiB 页同步预读
-单次最多预读 1MiB
-不改变文件 offset
-不做后台异步预读
-不做自动顺序预读
-```
-
-这样至少让显式预读接口变得真实有效。用户程序如果提前告诉内核“我马上要用这段文件”，后续 `read`、`pread` 或共享 mmap fault 更可能命中页缓存。
-
-direct I/O 不做预缓存，因为 direct I/O 的语义就是绕过页缓存，通常由用户程序或数据库自己管理缓存。
-
-## 7. 对测试的预期收益
-
-这轮优化主要服务以下测试特点：
-
-- iozone 使用 1KiB record，4 进程场景每个文件 1MiB。
-- lmbench 文件读和 mmap 读使用 512KiB 文件。
-- UnixBench fstime 使用 1KiB buffer 做 write/read/copy。
-
-预期改善点：
-
-- 1MiB per-file cache 降低小文件 reread 抖动。
-- 新文件小块写减少 read-before-write。
-- 普通 `read()` 少做 atime 元数据写。
-- 显式 `readahead` / `fadvise(WILLNEED)` 后续读更可能命中缓存。
-
-## 8. 当前边界
-
-这轮优化刻意没有做大手术，仍有一些边界：
-
-- 没有实现全局 page cache 回收。
-- 没有实现自动顺序预读。
-- 没有实现异步后台预读。
-- 没有拆 ext4 全局锁。
-- 没有改变 direct I/O 的缓存语义。
-- 单次显式预读最多 1MiB，不追求一次缓存 LTP `readahead02` 那种 64MiB 文件。
-
-因此这是一轮偏稳妥的 benchmark pass：优先减少明显浪费，提升小工作集 I/O 的缓存命中和写路径效率，同时避免引入大范围调度、块层或内存回收改造。
-
-## 9. inotify / fanotify 无监听快路径
-
-代码位置：
-- `kernel/src/syscall/fs/inotify.rs`
-- `kernel/src/syscall/fs/fanotify.rs`
-- `kernel/src/syscall/fs/io.rs`
-- `kernel/src/syscall/fs/fd_ops.rs`
-- `kernel/src/syscall/mm/mmap.rs`
-
-这次补充优化的是普通文件 I/O 热路径里的文件事件通知开销。iozone、lmbench、libcbench、Lua 启动和脚本执行这类测试通常不会主动创建 inotify/fanotify 监听者，但原来的 read/write/open/close 路径仍然会进入通知准备逻辑。
-
-原来的典型路径是：
-
-```text
-read / write / open / close 成功
-  -> 准备 inotify / fanotify 通知
-  -> 可能触发 file.stat()
-  -> 可能解析 file.path()
-  -> 可能查找父目录 target
-  -> fanotify 还可能准备 permission/event target
-  -> 最后发现其实没有任何监听者
-```
-
-这些操作对功能是必要的，但在没有监听者时属于纯额外开销。尤其是 iozone 的小块 read/write 会高频进入 syscall，单次多一点 stat、路径解析或 `Arc::clone()`，累计起来就会影响分数。
-
-现在的处理方式：
-
-```text
-inotify：
-  维护全局 INOTIFY_WATCHES 计数
-  没有 watch 时，notify/prepare 函数直接返回
-
-fanotify：
-  在 notify_fanotify_event / request_fanotify_permission 开头检查 has_fanotify_interest(mask)
-  没有感兴趣的 mark 时，直接返回
-
-热路径调用：
-  read/write/readv/writev/close/mmap 改成传引用
-  无监听场景下不再为了通知额外 clone Arc
-```
-
-inotify 的 watch 数会在 add_watch、remove_watch 和 InotifyFd drop 时维护，避免每次普通 I/O 都扫描全局 fd 列表。fanotify 继续复用现有的 mark interest 判断，但把判断提前到 stat/path 准备之前。
-
-对测试的预期收益：
-
-- iozone：主要改善小 record read/write/open/close 场景，减少文件通知的固定 syscall 开销。
-- lmbench/libcbench：对 read/write/open/close 相关微基准有帮助。
-- Lua：对脚本启动、模块加载、普通文件读取有轻微帮助。
-- iperf：主要是网络测试，收益不明显，只会间接受益于少量 fd open/close 开销降低。
-
-这项优化不改变 inotify/fanotify 的正常语义：一旦存在 watch/mark，仍然会走原来的事件匹配、权限请求和队列投递逻辑。它只是让“无人监听”的常见 benchmark 场景更快跳过通知子系统。
-
-## 10. dirty page 批量写回
-
-代码位置：
-
-- `vendor/axfs/src/highlevel/file.rs`
-- `CachedFile::writeback_cached_pages`
-- `CachedFile::writeback_dirty_pages`
-- `CachedFile::writeback_dirty_run`
-
-这次优化主要服务 lmbench 里的：
+lmbench 里有类似下面的测试：
 
 ```text
 lmdd ... of=/var/tmp/XXX move=1m fsync=1
 ```
 
-它的行为可以简单理解为：
+它会写 1MiB 文件再 `fsync`。旧的全量写回路径会按 LRU 一页页写，每页 4KiB，连续 1MiB dirty data 会变成很多次小 `file.write_at()`。
 
-```text
-写一个 1MiB 文件
-然后 fsync，要求把脏数据真正写回底层文件系统
+**修改了什么**
+
+全量写回时先收集 dirty 页，按页号排序，把连续页合并成一批写回。当前批量上限是 16 页，也就是 64KiB。
+
+代码引用：
+
+```rust
+// vendor/axfs/src/highlevel/file.rs
+const WRITEBACK_BATCH_PAGES: usize = 16;
+const WRITEBACK_BATCH_BYTES: usize = WRITEBACK_BATCH_PAGES * PAGE_SIZE;
 ```
 
-原来的 cached file 全量写回路径会不断从 LRU 里弹出页，然后一页一页通过 `evict_cache` 写回。页大小是 4KiB，所以连续写 1MiB 文件时，可能变成很多次 4KiB 写回。
+连续 dirty 页合并：
 
-这就像搬东西时一件一件搬：
-
-```text
-写回第 0 页 4KiB
-写回第 1 页 4KiB
-写回第 2 页 4KiB
+```rust
+// vendor/axfs/src/highlevel/file.rs
+dirty_pages.sort_by_key(|(pn, _)| *pn);
 ...
+if pn != prev_pn + 1 {
+    break;
+}
+if bytes > 0 && bytes + len > WRITEBACK_BATCH_BYTES {
+    break;
+}
+Self::writeback_dirty_run(file, file_len, &mut dirty_pages[start..end])?;
 ```
 
-现在在 `sync/drop` 这类全量写回路径里，会先把 dirty 页收集起来，再按页号排序，把连续 dirty 页合并成一批写回。
+批量写回：
 
-当前批量大小是：
-
-```text
-WRITEBACK_BATCH_PAGES = 16
-16 页 * 4KiB = 64KiB
+```rust
+// vendor/axfs/src/highlevel/file.rs
+let start = run[0].0 as u64 * PAGE_SIZE as u64;
+let mut buf = Vec::new();
+for (pn, page) in run.iter_mut() {
+    let len = Self::page_write_len(file_len, *pn);
+    if len > 0 {
+        buf.extend_from_slice(&page.data()[..len]);
+    }
+}
+if !buf.is_empty() {
+    file.write_at(&buf, start)?;
+}
 ```
 
-新的流程大致是：
+**为什么能提速**
 
-```text
-从页缓存弹出所有页
-  -> clean 页只通知 mmap eviction listener，不写底层
-  -> dirty 页收集起来
+把多个 4KiB 写合并成最多 64KiB 写，可以减少 `write_at()` 调用次数、ext4 锁进入次数和底层块写路径调度次数。对 `fsync=1`、小文件同步写回这类测试比较直接。
 
-dirty 页按页号排序
-  -> 连续页合并
-  -> 最多 64KiB 一批
-  -> 用一个 bounce buffer 调用一次 file.write_at()
+**正确性**
+
+只在写成功后清 dirty。文件尾页通过 `page_write_len()` 按 `file_len` 裁剪，不写超过 EOF。普通 LRU 单页 eviction 语义不变。
+
+## P3: inotify / fanotify 无监听快路径
+
+**原来的问题**
+
+普通 `read/write/open/close` 成功后会准备 inotify/fanotify 通知。benchmark 通常没有创建 watcher 或 fanotify mark，但旧路径仍可能做 `stat()`、路径解析、父目录查找、事件对象准备，最后才发现没人监听。
+
+对 1KiB 小块读写来说，这些固定开销会被调用次数放大。
+
+**修改了什么**
+
+inotify 维护全局 watcher 计数，没有 watcher 时直接返回。fanotify 维护 interest mask，没有感兴趣事件时不解析路径、不构造事件。
+
+代码引用：
+
+```rust
+// kernel/src/syscall/fs/inotify.rs
+pub(super) fn has_inotify_watchers() -> bool {
+    INOTIFY_WATCHES.load(Ordering::Acquire) != 0
+}
+
+pub fn notify_inotify_file(file: &dyn FileLike, mask: u32) {
+    if !has_inotify_watchers() {
+        return;
+    }
+    let Ok(stat) = file.stat() else {
+        return;
+    };
+    ...
+}
 ```
 
-这样做的好处是：
+fanotify 快速判断：
 
-- 减少 `file.write_at()` 调用次数。
-- 减少进入 ext4/lwext4 的次数。
-- 减少全量 `fsync` 时的小块写回开销。
-- 对 lmbench `lmdd fsync=1` 更有针对性。
+```rust
+// kernel/src/syscall/fs/fanotify.rs
+fn has_fanotify_interest(mask: u64) -> bool {
+    if FANOTIFY_INTEREST_MASK.load(Ordering::Acquire) & mask == 0 {
+        return false;
+    }
+    ...
+}
 
-正确性上仍然保守：
-
-- 单页 LRU eviction 路径没有改，仍然按原来的 4KiB 页写回。
-- 文件尾页会按 `file.len()` 裁剪，避免写超过 EOF。
-- dirty 页写成功后才清 dirty。
-- clean 页不会写底层，只做 eviction 通知。
-
-## 11. mmap 顺序 fault 轻量预热
-
-代码位置：
-
-- `kernel/src/mm/aspace/backend/file.rs`
-- `FileBackendInner::last_fault_page`
-- `FileBackendInner::next_readahead_page`
-- `FileBackend::maybe_readahead_after_fault`
-- `FileBackend::populate`
-
-这次优化主要服务 lmbench 里的：
-
-```text
-bw_mmap_rd 512k mmap_only
-bw_mmap_rd 512k open2close
+fn notify_fanotify_event(file: &Arc<dyn FileLike>, mask: u64) {
+    if !has_fanotify_interest(mask) {
+        return;
+    }
+    ...
+}
 ```
 
-这类测试会把文件 mmap 到内存，然后连续扫描这段内存。程序表面上是在读内存，实际上每访问到一个还没准备好的文件页时，内核会触发 page fault，再把对应文件页读进页缓存并建立映射。
+热路径调用仍保留通知语义：
 
-原来的行为更接近：
+```rust
+// kernel/src/syscall/fs/io.rs
+let read = f.read(&mut VmBytesMut::new(buf, len))?;
+if read > 0 {
+    notify_inotify_file(f.as_ref(), IN_ACCESS);
+    notify_fanotify_access(&f);
+}
+```
 
-```text
-访问第 0 页 -> fault -> 读第 0 页
-访问第 1 页 -> fault -> 读第 1 页
-访问第 2 页 -> fault -> 读第 2 页
+**为什么能提速**
+
+没有监听者时，普通文件 I/O 不再为通知系统做路径解析、stat、mark 匹配和事件准备。lmbench `Simple read/write/open/close`、iozone 小 record、libcbench stdio 都会减少固定 syscall 开销。
+
+**正确性**
+
+一旦存在 watcher/mark，仍然走原来的事件匹配和权限请求逻辑。这个优化只跳过“无人监听”的空路径。
+
+## P4: `read()` atime 改为 relatime
+
+**原来的问题**
+
+如果每次 `read()` 都更新 atime，1KiB 小读会额外制造大量元数据写。iozone 的 readers/rereaders 会反复读同一批文件，这个开销很明显。
+
+**修改了什么**
+
+默认采用 Linux 常见 relatime 规则：只有 atime 早于 mtime/ctime，或者距离上次 atime 更新超过 24 小时，才更新 atime。`MS_STRICTATIME` 仍保留每次访问更新，`MS_NOATIME`、`MS_NODIRATIME` 仍按语义跳过。
+
+代码引用：
+
+```rust
+// kernel/src/file/fs.rs
+if flags & MS_STRICTATIME == 0 {
+    let Ok(metadata) = cached_metadata(loc) else {
+        return false;
+    };
+    let stale_by_time = now.checked_sub(metadata.atime).map_or(false, |elapsed| {
+        elapsed >= Duration::from_secs(24 * 60 * 60)
+    });
+    if metadata.atime > metadata.mtime && metadata.atime > metadata.ctime && !stale_by_time {
+        return false;
+    }
+}
+```
+
+mount flag 支持：
+
+```rust
+// kernel/src/syscall/fs/mount.rs
+const SUPPORTED_MOUNT_FLAGS: u32 = MS_RDONLY
+    | MS_NODEV
+    | MS_NOEXEC
+    | MS_NOSUID
+    | MS_NOATIME
+    | MS_NODIRATIME
+    | MS_RELATIME
+    | MS_REMOUNT
+    | MS_NOSYMFOLLOW
+    | MS_STRICTATIME;
+```
+
+**为什么能提速**
+
+热读路径少做元数据更新，减少 inode metadata 写、ctime 相关连带变化和文件系统锁争用。
+
+## P5: `readahead()` 和 `fadvise(WILLNEED)` 真正预读
+
+**原来的问题**
+
+`readahead()` 和 `posix_fadvise(..., POSIX_FADV_WILLNEED)` 原来基本是参数检查后返回成功，没有把数据读入页缓存。用户态显式告诉内核“我要用这段文件”时，后续读仍然要等实际 I/O。
+
+**修改了什么**
+
+syscall 层找到 regular file 的 cached backend 后，调用 `CachedFile::readahead()`，按页把文件内容放进页缓存。direct backend 保持 no-op。
+
+代码引用：
+
+```rust
+// kernel/src/syscall/fs/io.rs
+if advice == POSIX_FADV_WILLNEED && len > 0 {
+    let file_like = get_file_like(fd)?;
+    if let Some(file) = file_for_readahead(&file_like)? {
+        file.inner().backend()?.readahead(offset as u64, len as usize)?;
+    }
+}
+```
+
+```rust
+// kernel/src/syscall/fs/io.rs
+pub fn sys_readahead(fd: c_int, offset: __kernel_off_t, count: usize) -> AxResult<isize> {
+    ...
+    if let Some(file) = file_for_readahead(&file_like)? {
+        file.inner().backend()?.readahead(offset as u64, count)?;
+    }
+    Ok(0)
+}
+```
+
+backend 分发：
+
+```rust
+// vendor/axfs/src/highlevel/file.rs
+pub fn readahead(&self, offset: u64, count: usize) -> VfsResult<()> {
+    match self {
+        Self::Cached(cached) => cached.readahead(offset, count),
+        Self::Direct(_) => Ok(()),
+    }
+}
+```
+
+**为什么能提速**
+
+后续 `read/pread/mmap fault` 更容易命中页缓存，显式预读测试也不再只是空实现。
+
+## P6: mmap 顺序 fault 轻量预热
+
+**原来的问题**
+
+`bw_mmap_rd` 会 mmap 文件后顺序扫描。旧逻辑是每访问一个未映射页，就 fault 一次、读一页、映射一页。顺序扫描被拆成很多碎片化读页。
+
+**修改了什么**
+
+文件映射后端记录上一次 fault 的页号。如果发现当前 fault 是上一页的下一页，就认为可能在顺序扫描，提前把后续 4 页读进页缓存。
+
+代码引用：
+
+```rust
+// kernel/src/mm/aspace/backend/file.rs
+const MMAP_FAULT_READAHEAD_PAGES: u32 = 4;
+
+fn maybe_readahead_after_fault(&self, pn: u32) {
+    let last = self.0.last_fault_page.swap(pn, Ordering::Relaxed);
+    if last.checked_add(1) != Some(pn) {
+        return;
+    }
+    ...
+    let _ = self.0.cache.readahead(offset, count);
+}
+```
+
+只在单页读 fault 后触发：
+
+```rust
+// kernel/src/mm/aspace/backend/file.rs
+let fault_readahead =
+    range.end - range.start == PAGE_SIZE_4K && access_flags.contains(MappingFlags::READ);
 ...
+if pages > 0 && fault_readahead {
+    self.maybe_readahead_after_fault(start_page);
+}
 ```
 
-这对顺序扫文件来说比较碎。
+**为什么能提速**
 
-现在增加了一个很保守的顺序检测：
+后续页仍然会 fault 建立映射，但 fault 时数据更可能已经在页缓存里，减少底层文件读等待。只对连续 fault 触发，可以避免伤害 `lat_pagefault` 这种随机 fault 测试。
 
-```text
-第一次 fault：
-    只处理当前页，不额外预读
+## 未做的事
 
-如果刚 fault 过 page N，
-下一次紧接着 fault page N+1：
-    认为可能是顺序扫描
-    best-effort 预热后面 4 页到页缓存
-```
-
-预热窗口是：
-
-```text
-MMAP_FAULT_READAHEAD_PAGES = 4
-4 页 * 4KiB = 16KiB
-```
-
-这里的“预热”只做一件事：
-
-```text
-调用 CachedFile::readahead()
-把后续文件页提前放进页缓存
-```
-
-它不会提前建立页表映射。也就是说，后续访问这些页时仍然可能发生 page fault，但 fault 时更可能不用再等底层文件系统读页，只需要把已经在页缓存里的页映射进去。
-
-这样设计是为了兼顾两个 lmbench 项：
-
-- `bw_mmap_rd`：连续扫文件，能吃到页缓存预热收益。
-- `lat_pagefault`：它测单次 fault 延迟，而且访问页顺序是随机 permutation，不容易触发连续 fault 检测。
-
-所以这次没有做激进的“每次 fault 都预读很多页”，避免把 `lat_pagefault` 的单次 fault 成本拉高。
-
-当前边界：
-
-- 只优化 file-backed shared mmap 的页缓存预热。
-- 不提前映射未来页。
-- 不做异步后台预读。
-- 预读失败会被忽略，不影响当前 page fault 是否成功。
-- fork/clone 出来的新 mapping 不继承旧 mapping 的预读窗口状态，避免误判。
-
-## 12. 第三刀和第四刀的预期影响
-
-这两刀更偏向 lmbench，而不是 lua/cyclictest 这类测试。
-
-预期收益：
-
-- `lmdd ... fsync=1`：dirty 页批量写回减少小块写回次数。
-- `bw_mmap_rd 512k`：顺序 mmap 读时，后续页更容易命中页缓存。
-- `lat_mmap`：本轮没有在 `mmap()` 建立时强制 populate，理论上不应明显变慢。
-- `lat_pagefault`：只有连续 fault 才预热，随机 fault 基本不触发，尽量不伤单次 fault 延迟。
-
-不明显受益：
-
-- Lua：主要是解释器、字符串、数学和简单 open/close，重 I/O 很少。
-- libcbench：只有 `stdio tmpfile putc/getc` 部分可能受益，malloc/string/pthread/regex 基本不受影响。
-- cyclictest：测 timer/scheduler/wakeup latency，和页缓存、mmap 文件读写不是一个方向。
+- 没有实现全局 page cache 回收。
+- 没有实现异步后台预读。
+- 没有拆 ext4 全局锁。
+- 没有改变 direct I/O 绕过页缓存的语义。
+- 没有按 benchmark 名称跳过真实 I/O。

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-INPUT_RV="$ROOT_DIR/output_rv.txt"
-INPUT_LA="$ROOT_DIR/output_la.txt"
-OUTPUT_RV="$ROOT_DIR/summary_rv.txt"
-OUTPUT_LA="$ROOT_DIR/summary_la.txt"
+INPUT_RV="$ROOT_DIR/docs/output_rv.txt"
+INPUT_LA="$ROOT_DIR/docs/output_la.txt"
+OUTPUT_RV="$ROOT_DIR/docs/summary_rv.txt"
+OUTPUT_LA="$ROOT_DIR/docs/summary_la.txt"
 
 for f in "$INPUT_RV" "$INPUT_LA"; do
   if [ ! -f "$f" ]; then

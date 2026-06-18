@@ -122,17 +122,17 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=0
-busybox=0
-cyclictest=0
-iozone=0
-iperf=0
-libcbench=0
-libctest=0
-lmbench=0
-ltp=0
-lua=0
-netperf=0
+basic=1
+busybox=1
+cyclictest=1
+iozone=1
+iperf=1
+libcbench=1
+libctest=1
+lmbench=1
+ltp=1
+lua=1
+netperf=1
 
 if [ -n "$some_testcases" ]; then
     basic=0
@@ -228,79 +228,6 @@ run_ltp() {
         all_testcases="$(awk 'NF && $1 !~ /^#/ { print }' ./ltp_testcases.sh)"
     fi
 
-    emit_summary_if_missing() {
-        output="$1"
-        if printf '%s\n' "$output" | grep -q '^Summary:[[:space:]]*$'; then
-            printf '%s\n' "$output" | awk '/^Summary:[[:space:]]*$/ { show = 1 } show { print } show && /^warnings[[:space:]]/ { exit }'
-        else
-            # Align with LTP result accounting:
-            # TPASS -> passed, TFAIL -> failed, TBROK -> broken,
-            # TCONF -> skipped, TWARN -> warnings, TINFO/TDEBUG ignored.
-            # For numbered legacy output ("tcid <num> TTYPE : ..."), deduplicate
-            # by "<tcid>:<num>:<TTYPE>" to avoid double counting when buffered
-            # output is replayed after fork.
-            counts=$(printf '%s\n' "$output" | awk '
-                function is_result(t) {
-                    return (t == "TPASS" || t == "TFAIL" || t == "TBROK" || t == "TCONF" || t == "TWARN");
-                }
-                function inc(t) {
-                    if (t == "TPASS")
-                        passed++;
-                    else if (t == "TFAIL")
-                        failed++;
-                    else if (t == "TBROK")
-                        broken++;
-                    else if (t == "TCONF")
-                        skipped++;
-                    else if (t == "TWARN")
-                        warnings++;
-                }
-                {
-                    line = $0;
-                    gsub(/\033\[[0-9;]*[A-Za-z]/, "", line);
-                    n = split(line, f, /[[:space:]]+/);
-                    idx = 1;
-                    if (f[1] == "")
-                        idx = 2;
-
-                    if (n >= idx + 3 && f[idx+1] ~ /^[0-9]+$/ && is_result(f[idx+2]) && f[idx+3] == ":") {
-                        key = f[idx] ":" f[idx+1] ":" f[idx+2];
-                        if (!(key in seen)) {
-                            seen[key] = 1;
-                            inc(f[idx+2]);
-                        }
-                        next;
-                    }
-
-                    for (i = 1; i <= n; i++) {
-                        t = f[i];
-                        has_colon = sub(/:$/, "", t);
-                        if (is_result(t) && has_colon) {
-                            inc(t);
-                            break;
-                        }
-                    }
-                }
-                END {
-                    printf "%d %d %d %d %d\n", passed, failed, broken, skipped, warnings;
-                }
-            ')
-            set -- $counts
-            passed=$1
-            failed=$2
-            broken=$3
-            skipped=$4
-            warnings=$5
-            echo
-            echo "Summary:"
-            echo "passed   $passed"
-            echo "failed   $failed"
-            echo "broken   $broken"
-            echo "skipped  $skipped"
-            echo "warnings $warnings"
-        fi
-    }
-
     cd ltp/testcases/bin
     export PATH="$(pwd):$PATH"
 
@@ -317,15 +244,7 @@ run_ltp() {
         fi
 
         echo "RUN LTP CASE $case_name"
-        tmp_output="/tmp/${ARCH}_ltp_case_${case_name}_output.txt"
-        rm -f "$tmp_output"
-
-        ./$run_cmd 2>&1 | tee "$tmp_output"
-        case_output=$(cat "$tmp_output")
-        if ! printf '%s\n' "$case_output" | grep -q '^Summary:[[:space:]]*$'; then
-            emit_summary_if_missing "$case_output"
-        fi
-        rm -f "$tmp_output"
+        ./$run_cmd 2>&1
 
         echo "FAIL LTP CASE $case_name : 0"
 

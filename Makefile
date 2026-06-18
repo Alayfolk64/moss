@@ -49,6 +49,8 @@ SDCARD_RV_IMG := $(A)/sdcard-rv.img
 SDCARD_RV_SRC := $(A)/.sdcard-rv.src.img
 SDCARD_LA_IMG := $(A)/sdcard-la.img
 SDCARD_LA_SRC := $(A)/.sdcard-la.src.img
+OUTPUT_RV := $(A)/docs/output_rv.txt
+OUTPUT_LA := $(A)/docs/output_la.txt
 
 ROOTFS_URL = https://github.com/Starry-OS/rootfs/releases/download/20260214
 ROOTFS_IMG = rootfs-$(ARCH).img
@@ -72,7 +74,9 @@ makeclean:
 	@$(MAKE) -C make makeclean
 	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin \
 		$(A)/kernel-rv.dbg.elf $(A)/kernel-la.dbg.elf \
-		$(A)/kernel-rv.bin.o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
+		$(A)/kernel-rv.bin.o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S \
+		$(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin \
+		$(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin
 
 prepare-sdcard-rv:
 	@src="$(SDCARD_RV_SRC)"; \
@@ -120,16 +124,21 @@ all: kernel-rv kernel-la
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 build
+ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
-	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin
-	$(RUST_OBJCOPY) -I binary -O elf64-littleriscv -B riscv --rename-section .data=.text,alloc,load,readonly,code $(A)/kernel-rv.bin $(A)/kernel-rv.bin.o
+endif
+	$(RUST_OBJCOPY) -I binary -O elf64-littleriscv -B riscv --rename-section .data=.text,alloc,load,readonly,code $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin.o
 	$(RUST_LLD) -flavor gnu -m elf64lriscv -T $(A)/make/kernel-rv-wrap.ld -o $(A)/kernel-rv $(A)/kernel-rv.bin.o
-	rm -f $(A)/kernel-rv.bin.o
+	rm -f $(A)/kernel-rv.bin.o $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin
+ifneq ($(DWARF), y)
+	rm -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf
+endif
 
 kernel-la: toolchain
 	$(MAKE) ARCH=loongarch64 BUS=pci build
+ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
-	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin $(A)/kernel-la.bin
+endif
 	@LOONGARCH_CC_BIN="$(LOONGARCH_CC)"; \
 	if [ -z "$$LOONGARCH_CC_BIN" ]; then \
 		if command -v loongarch64-linux-musl-gcc >/dev/null 2>&1; then \
@@ -147,11 +156,14 @@ kernel-la: toolchain
 		'.global _binary_kernel_la_bin_end' \
 		'.balign 16' \
 		'_binary_kernel_la_bin_start:' \
-		'.incbin "kernel-la.bin"' \
+		'.incbin "$(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin"' \
 		'_binary_kernel_la_bin_end:' > $(A)/kernel-la.bin.S; \
 	"$$LOONGARCH_CC_BIN" -c -o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
 	$(RUST_LLD) -flavor gnu -m elf64loongarch -T $(A)/make/kernel-la-wrap.ld -o $(A)/kernel-la $(A)/kernel-la.bin.o
-	rm -f $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
+	rm -f $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin
+ifneq ($(DWARF), y)
+	rm -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf
+endif
 
 debug-rv:
 	$(MAKE) ARCH=riscv64 SHELL_INIT=y DWARF=y kernel-rv
@@ -168,7 +180,7 @@ debug-rv:
 		-drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-no-reboot -device virtio-net-device,netdev=net \
-		-netdev user,id=net -rtc base=utc -S -s 2>&1 | tee output_rv.txt
+		-netdev user,id=net -rtc base=utc -S -s 2>&1 | tee $(OUTPUT_RV)
 
 debug-la:
 	$(MAKE) ARCH=loongarch64 BUS=pci SHELL_INIT=y DWARF=y kernel-la
@@ -185,7 +197,7 @@ debug-la:
 		-drive file=tmp-la-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-pci,drive=x0 -no-reboot \
 		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
-		-rtc base=utc -S -s 2>&1 | tee output_la.txt
+		-rtc base=utc -S -s 2>&1 | tee $(OUTPUT_LA)
 
 debug-rv-timerfd:
 	$(MAKE) ARCH=riscv64 DWARF=y APP_FEATURES="qemu timerfd-debug-init" kernel-rv
@@ -202,7 +214,7 @@ debug-rv-timerfd:
 		-drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-no-reboot -device virtio-net-device,netdev=net \
-		-netdev user,id=net -rtc base=utc -S -s 2>&1 | tee output_rv.txt
+		-netdev user,id=net -rtc base=utc -S -s 2>&1 | tee $(OUTPUT_RV)
 
 debug-la-timerfd:
 	$(MAKE) ARCH=loongarch64 BUS=pci DWARF=y APP_FEATURES="qemu timerfd-debug-init" kernel-la
@@ -219,7 +231,7 @@ debug-la-timerfd:
 		-drive file=tmp-la-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-pci,drive=x0 -no-reboot \
 		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
-		-rtc base=utc -S -s 2>&1 | tee output_la.txt
+		-rtc base=utc -S -s 2>&1 | tee $(OUTPUT_LA)
 
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
@@ -236,11 +248,27 @@ repair-sdcard-rv:
 ci-test:
 	./scripts/ci-test.py $(ARCH)
 
-# Aliases
+run_rv: kernel-rv prepare-sdcard-rv
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default \
+		-drive file=sdcard-rv.img,if=none,format=raw,id=x0 \
+		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
+		-no-reboot -device virtio-net-device,netdev=net \
+		-netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
+
+run_la: kernel-la prepare-sdcard-la
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 \
+		-drive file=sdcard-la.img,if=none,format=raw,id=x0 \
+		-device virtio-blk-pci,drive=x0 -no-reboot \
+		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
+		-rtc base=utc 2>&1 | tee $(OUTPUT_LA)
+
+run-rv: run_rv
+run-la: run_la
+
 rv:
 	$(MAKE) ARCH=riscv64 run
 
-rv-shell:
+shell_rv:
 	$(MAKE) ARCH=riscv64 SHELL_INIT=y kernel-rv
 	@img="$(A)/sdcard-rv.img"; \
 	tmp_img="$(A)/tmp-rv-shell.img"; \
@@ -249,13 +277,15 @@ rv-shell:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m 1G -nographic -smp 1 -bios default -drive file=sdcard-rv.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee output_rv.txt
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default -drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
+
+rv-shell: shell_rv
 
 
 la:
 	$(MAKE) ARCH=loongarch64 BUS=pci run
 
-la-shell:
+shell_la:
 	$(MAKE) ARCH=loongarch64 BUS=pci SHELL_INIT=y kernel-la
 	@img="$(A)/sdcard-la.img"; \
 	tmp_img="$(A)/tmp-la-shell.img"; \
@@ -264,7 +294,9 @@ la-shell:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-loongarch64 -kernel kernel-la -m 1G -nographic -smp 1 -drive file=sdcard-la.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee output_la.txt
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 -drive file=tmp-la-shell.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee $(OUTPUT_LA)
+
+la-shell: shell_la
 
 
 vf2:
@@ -278,4 +310,4 @@ docker:
 	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la debug-rv debug-la debug-rv-timerfd debug-la-timerfd contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la rv-shell la-shell docker
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la debug-rv debug-la debug-rv-timerfd debug-la-timerfd contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
