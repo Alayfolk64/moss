@@ -28,8 +28,8 @@ __pycache__/
 *.img
 *.gz
 *.xz
-/output_rv.txt
-/output_la.txt
+/docs/output_rv.txt
+/docs/output_la.txt
 /summary_la.txt
 /summary_rv.txt
 /total.txt
