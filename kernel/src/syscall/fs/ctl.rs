@@ -1094,11 +1094,19 @@ pub fn sys_utimensat(
     dirfd: i32,
     path: *const c_char,
     times: *const [timespec; 2],
-    mut flags: u32,
+    flags: u32,
 ) -> AxResult<isize> {
     const VALID_FLAGS: u32 = AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH;
     if flags & !VALID_FLAGS != 0 {
         return Err(AxError::InvalidInput);
+    }
+    if path.is_null() {
+        if flags & AT_EMPTY_PATH == 0 {
+            return Err(AxError::BadAddress);
+        }
+        if flags & AT_SYMLINK_NOFOLLOW != 0 {
+            return Err(AxError::InvalidInput);
+        }
     }
     fn utime_to_spec(time: &timespec) -> AxResult<UtimeSpec> {
         match time.tv_nsec {
@@ -1117,12 +1125,6 @@ pub fn sys_utimensat(
     };
     if atime.is_omit() && mtime.is_omit() {
         return Ok(0);
-    }
-    if path.is_null() {
-        if flags & AT_SYMLINK_NOFOLLOW != 0 {
-            return Err(AxError::InvalidInput);
-        }
-        flags |= AT_EMPTY_PATH;
     }
 
     update_times(dirfd, path, atime, mtime, flags)?;
