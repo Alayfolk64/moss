@@ -9,25 +9,11 @@
 
 == 概述
 
-=== StarryOS 的已有基础
+StarryOS 已经建立了可运行的进程线程框架。每个用户执行流对应一个 `Thread`，同一进程中的线程共同持有 `ProcessData`。前者保存线程私有状态，后者保存地址空间、文件资源、进程级信号和父子关系等共享状态。在功能上，StarryOS 已经提供了 `fork`、`clone`、`clone3`、`execve`、`exit` 和 `waitpid`，能够完成进程创建、程序映像替换、线程退出和僵尸进程回收，进程组、会话和 pidfd 也已有基本实现。
 
-StarryOS 已经建立了可运行的进程线程框架。每个用户执行流对应一个 `Thread`，同一进程中的线程共同持有 `ProcessData`。前者保存线程私有状态，后者保存地址空间、文件资源、进程级信号和父子关系等共享状态。
+然而，基线只处理了"创建子进程、运行、退出、父进程回收"这条主路径，接口组合复杂后问题便逐渐暴露：clone 的标志约束和失败回滚不够严密，exec 缺少 `execveat` 及执行权限检查，wait 无法完整表达停止和继续状态，UID/GID 部分接口直接返回成功而没有保存身份变化，ptrace 和 pidfd 的观测链路也尚未打通。换句话说，基线能建立进程，却没有把进程的身份、状态和生命周期完全串联起来。
 
-在功能上，StarryOS 已经提供了 `fork`、`clone`、`clone3`、`execve`、`exit` 和 `waitpid`，可以完成进程创建、程序映像替换、线程退出和僵尸进程回收。进程组、会话和 pidfd 也已有基本实现。因此，moss 面对的不是一片空白，而是一套主体结构已经成形，但是部分 Linux 语义仍较简化的实现。
-
-=== base os 实现的主要不足
-
-当用户程序只走“创建子进程、运行、退出、父进程回收”这条主路径时，StarryOS 已能正常工作。问题主要在接口组合变得复杂后暴露出来。
-
-创建方面，`clone3` 已经存在，但参数结构长度、非法标志组合、栈参数和 pidfd 写回失败后的回滚不够严密。执行方面，基线只有 `execve`，缺少 `execveat`，对执行权限、`MS_NOEXEC` 和正在写入的可执行文件也缺少完整检查。
-
-状态管理方面，原有 `waitpid` 主要处理已经退出的子进程，无法完整表达“停止”和“继续”，也没有 `waitid` 所需的目标选择和 `siginfo_t` 编码。权限方面，部分 UID/GID 与 capability 接口采用固定返回值或直接成功，进程身份没有真正参与 `kill`、程序执行和调试附加等判断。ptrace 尚未实现，pidfd 也没有接入 `waitid` 和 `/proc` 的观测接口。
-
-这些问题说明，基线已经能够建立进程，却还没有把进程的身份、状态和生命周期完全串联起来。
-
-=== moss 的完善范围
-
-moss 保留 StarryOS 的主体结构，重点补齐创建、执行、退出、等待和控制接口之间的联系。主要增量如表所示。
+moss 保留 StarryOS 的主体结构，重点补齐这些接口之间的联系。主要增量如表所示。
 
 #figure(
   table(
@@ -70,13 +56,11 @@ moss 同时维护三类关系。
 - 亲缘关系：进程通过 parent 和 children 形成父子树，供退出托管和 wait 使用。
 - 分组关系：进程依次归入进程组和会话，形成 PID、PGID、SID 三层标识。
 
-这三类关系用途不同。线程组解决“哪些执行流共享资源”，父子树解决“谁负责回收谁”，进程组和会话解决“哪些进程作为一个作业被统一管理”。moss 没有把它们压进同一张表，而是分别维护，再通过全局索引提供查询。
+这三类关系用途不同。线程组解决"哪些执行流共享资源"，父子树解决"谁负责回收谁"，进程组和会话解决"哪些进程作为一个作业被统一管理"。moss 没有把它们压进同一张表，而是分别维护，再通过全局索引提供查询。
 
 === 三元凭据
 
-Linux 不使用单一 UID 表示进程身份，而是维护 real、effective、saved 三个值。real ID 表示身份来源，effective ID 用于当前权限判断，saved ID 允许进程在受限范围内恢复先前身份。GID 采用相同结构。
-
-moss 将 UID/GID 三元组放入 `ProcessData`，并让 `setreuid`、`setresuid` 等接口真正修改这些状态。非特权进程只能在已有三元组中切换，特权进程可以设置新的值。这样，凭据不再只是系统调用的返回结果，而成为程序执行、信号发送和 ptrace 权限检查共同使用的进程属性。
+Linux 不使用单一 UID 表示进程身份，而是维护 real、effective、saved 三个值，GID 采用相同结构。real ID 表示身份来源，effective ID 用于当前权限判断，saved ID 允许进程在受限范围内恢复先前身份。moss 将 UID/GID 三元组放入 `ProcessData`，让凭据真正参与程序执行、信号发送和 ptrace 权限检查。具体实现见 @sec:uid-gid。
 
 === 生命周期闭环
 
@@ -118,9 +102,9 @@ moss 将 UID/GID 三元组放入 `ProcessData`，并让 `setreuid`、`setresuid`
         pub aspace: Arc<Mutex<AddrSpace>>,
         pub scope: RwLock<Scope>,
         pub wait_status: SpinNoIrq<Option<ProcessWaitStatus>>,
-        uid: AtomicU32,
-        euid: AtomicU32,
-        suid: AtomicU32,
+        // UID/GID 三元组（GID 结构相同）
+        uid: AtomicU32, euid: AtomicU32, suid: AtomicU32,
+        gid: AtomicU32, egid: AtomicU32, sgid: AtomicU32,
     }
     ```
   ],
@@ -147,7 +131,7 @@ StarryOS 原有退出码可以描述进程终止，却不适合表示暂时停�
   caption: [进程停止与继续状态],
 ) <lst:process-wait-status>
 
-退出状态仍由 `Process` 保存；停止和继续状态则独立记录在 `ProcessData` 中。这样，父进程可以区分“子进程已经结束”和“子进程仍然存在，但状态发生变化”，也便于 `waitpid` 与 `waitid` 按不同选项消费事件。
+退出状态仍由 `Process` 保存；停止和继续状态则独立记录在 `ProcessData` 中。这样，父进程可以区分"子进程已经结束"和"子进程仍然存在，但状态发生变化"，也便于 `waitpid` 与 `waitid` 按不同选项消费事件。
 
 === 子进程等待语义
 
@@ -253,29 +237,23 @@ moss 补充了 clone 标志之间的依赖关系。例如，线程必须共享�
 
 === 创建失败回滚
 
-创建子进程需要建立进程对象、线程记录、父子关系和 pidfd，最后才把新任务加入系统。若 pidfd 分配或写回用户地址失败，前面建立的状态不能继续保留。
+创建子进程需要建立进程对象、线程记录、父子关系和 pidfd，最后才把新任务加入系统。若 pidfd 分配或写回用户地址失败，已建立的状态不能继续保留——否则系统中会出现"有 PID、无可运行线程"的半初始化对象，既占用 PID 空间，又无法被 wait 回收。
 
-moss 在任务真正启动前设置回滚路径。发生错误时，内核移除刚加入的线程记录，并在其成为最后一个线程时释放新进程。这样，系统调用返回失败后不会留下“有 PID、无可运行线程”的半初始化对象。
+moss 在任务真正启动前设置回滚路径。发生错误时，内核移除刚加入的线程记录，并在其成为最后一个线程时释放新进程。这样，系统调用返回失败后不会留下残留对象。
 
-但是当前 `CLONE_VFORK` 尚未完整暂停父进程；namespace 标志也只完成识别和元数据继承。二者在接口上可被处理，但不能视为完整实现。
+当前 `CLONE_VFORK` 将 `CLONE_VM` 标志去掉后退化为普通创建，不暂停父进程等待子进程 exec/exit，与 POSIX 语义有差异，对依赖 vfork 优化写时复制的程序可能有影响。namespace 标志也只完成识别和元数据继承，不建立真正的隔离视图。
 
 == 程序执行
 
 === execve 基线
 
-StarryOS 的 `execve` 已经能够装载 ELF 文件，替换地址空间和用户上下文，更新程序路径与命令行，重置信号处理动作，并关闭带有 `CLOEXEC` 标志的文件描述符。exec 不创建新进程，因此 PID、父子关系、进程组和会话保持不变。
-
-基线的不足主要在入口形式和执行约束。它只能按路径执行文件，对文件是否允许执行、是否位于 `MS_NOEXEC` 挂载点以及是否正在被写入缺少完整判断。
+StarryOS 的 `execve` 已经能够装载 ELF 文件，替换地址空间和用户上下文，更新程序路径与命令行，重置信号处理动作，并关闭带有 `CLOEXEC` 标志的文件描述符。exec 不创建新进程，因此 PID、父子关系、进程组和会话保持不变。基线的不足在于只能按路径执行文件，对执行权限、`MS_NOEXEC` 挂载点和正在写入的可执行文件缺少检查，也没有 `execveat`。
 
 === execveat 与执行检查
 
-`execveat` 用于在指定目录文件描述符下执行程序。路径为相对路径时，内核以 `dirfd` 指向的目录为起点；指定 `AT_EMPTY_PATH` 时，还可以直接执行文件描述符所指向的文件。`AT_SYMLINK_NOFOLLOW` 则要求目标为符号链接时拒绝执行。
+传统 `execve` 只能接收路径，绝对路径依赖进程看到的文件系统，相对路径又依赖当前工作目录。程序若已经打开了可信目录或目标文件，仍需重新拼接并解析路径，期间目录项可能被改名或替换。`execveat` 可以从稳定的目录文件描述符开始解析，或使用 `AT_EMPTY_PATH` 执行已经打开的文件，减少重复路径解析带来的竞态，也便于容器运行时、动态加载器等程序在受控目录中启动目标。
 
-传统 `execve` 只能接收路径，绝对路径依赖进程看到的文件系统，相对路径又依赖当前工作目录。程序若已经打开了可信目录或目标文件，仍需重新拼接并解析路径，期间目录项可能被改名或替换。`execveat` 可以从稳定的目录文件描述符开始解析，或使用 `AT_EMPTY_PATH` 执行已经打开的文件，减少重复路径解析带来的竞态，也便于容器运行时、动态加载器等程序在受控目录中启动目标。因此，完整的 Linux 执行接口不能只停留在 `execve`。
-
-moss 增加该入口后，将 `execve` 与 `execveat` 汇入同一条 `execve_common` 路径，后续装载和状态更新仍由一套逻辑完成。
-
-在替换旧地址空间之前，moss 先完成执行条件检查：
+moss 增加该入口后，将 `execve` 与 `execveat` 汇入同一条 `execve_common` 路径，后续装载和状态更新仍由一套逻辑完成。在替换旧地址空间之前，moss 先完成执行条件检查：
 
 #figure(
   [
@@ -299,27 +277,23 @@ moss 增加该入口后，将 `execve` 与 `execveat` 汇入同一条 `execve_co
 
 这些检查全部通过后，内核才装载新程序并提交地址空间。若解析、权限或装载失败，原程序仍可继续运行。成功后，内核还会清除旧程序遗留的线程退出指针，避免新地址空间继续引用失效地址。
 
-=== 多线程 exec 的边界
-
-Linux 允许多线程进程中的一个线程调用 exec，并在成功后终止其他线程，只保留调用者。moss 当前尚未实现这一收敛过程，多线程进程调用 exec 时会返回失败。这是程序执行路径中仍然明确存在的限制。
+当前多线程进程调用 exec 时会返回失败，Linux 允许的"exec 后只保留调用线程"的收敛过程尚未实现。
 
 == 退出与资源回收
 
 === 单个线程退出与进程结束
 
-一个进程可以包含多个线程，因此某个线程退出并不等于整个进程结束。内核先执行线程级退出清理，再把它从进程的线程集合中移除。清理内容包括 robust Futex 和 `clear_child_tid`，其唤醒语义放在第三章的 Futex 退出路径中说明。如果还有其他线程存活，共享的地址空间、文件表和 `ProcessData` 都继续保留。
+一个进程可以包含多个线程，因此某个线程退出并不等于整个进程结束。内核先执行线程级退出清理，再把它从进程的线程集合中移除。清理内容包括 robust futex 和 `clear_child_tid`，其唤醒语义放在第三章的 futex 退出路径中说明。如果还有其他线程存活，共享的地址空间、文件表和 `ProcessData` 都继续保留。
 
 只有最后一个线程退出时，内核才结束整个进程。此时进程进入僵尸状态，保存退出码，向父进程发送退出信号并唤醒正在等待的父进程。moss 还在这一阶段释放文件锁、租约、共享内存记录和 ptrace 关系。进程对象不会立即删除，要等父进程调用 `wait` 读取退出状态后才完成回收。
 
 === exit_group：结束全部线程
 
-2.6.1说明了最后一个线程退出的时候如何结束进程，但 `exit_group` 需要主动让进程中的全部线程退出。moss 先标记线程组正在整体退出，再向其他存活线程发送终止信号。各线程仍按 2.6.1 的路径完成清理，最后离开的线程负责执行进程级退出工作。
-
-普通 `exit` 只结束调用线程，`exit_group` 则结束整个进程。这一区别对多线程程序尤其重要。
+普通 `exit` 只结束调用线程，`exit_group` 则需要主动让进程中的全部线程退出。moss 先标记线程组正在整体退出，再向其他存活线程发送终止信号。各线程仍按上一节的路径完成清理，最后离开的线程负责执行进程级退出工作。这一区别对多线程程序尤其重要。
 
 === 退出后的孤儿进程托管
 
-进程结束后，还要处理它尚未退出的子进程。子进程不能随父进程一起删除，否则它们之后退出时将无人负责回收。StarryOS 会把这些子进程从原父进程的 `children` 表中移出，改由 init 进程托管：
+进程结束后，还要处理它尚未退出的子进程。子进程不能随父进程一起删除——它们之后退出时需要有进程负责读取退出状态，否则将永远停留在僵尸状态占用内核资源。moss 沿用 StarryOS 的做法，把这些子进程从原父进程的 `children` 表中移出，改由 init 进程托管：
 
 #align(center)[
   原父进程 → 子进程 #h(1em) 变为 #h(1em) init → 子进程
@@ -331,9 +305,7 @@ Linux 允许多线程进程中的一个线程调用 exec，并在成功后终止
 
 === PID、PGID 与 SID
 
-进程组和会话用于组织多个相关进程。每个进程有 PID，所属进程组有 PGID，进程组所属会话有 SID。通常，组长的 PID 等于 PGID，会话首进程的 PID 等于 SID。
-
-这种层级常见于 Shell：一条管道中的多个进程属于同一进程组，一个终端登录环境中的多个进程组属于同一会话。它们仍是独立进程，但可以按组查询、等待或发送信号。
+进程组和会话用于组织多个相关进程。每个进程有 PID，所属进程组有 PGID，进程组所属会话有 SID。通常，组长的 PID 等于 PGID，会话首进程的 PID 等于 SID。这种层级常见于 Shell：一条管道中的多个进程属于同一进程组，一个终端登录环境中的多个进程组属于同一会话。它们仍是独立进程，但可以按组查询、等待或发送信号。
 
 在实现上，moss 沿用 StarryOS 的对象关系：`Process` 保存自身 PID 和所属的 `ProcessGroup`，`ProcessGroup` 保存 PGID、所属 `Session` 及组内进程，`Session` 再保存 SID 和会话内的进程组。
 
@@ -364,33 +336,13 @@ Linux 允许多线程进程中的一个线程调用 exec，并在成功后终止
   caption: [进程、进程组与会话的对象关系],
 ) <lst:process-group-session>
 
-因此，查询一个进程的三个标识时，内核沿对象引用逐层取得结果：
-
-#figure(
-  [
-    ```rust
-    // 先按 PID 找到进程对象
-    let proc = get_process_data(pid)?.proc;
-    let pid  = proc.pid();
-    // 沿所属关系取得进程组和会话标识
-    let pgid = proc.group().pgid();
-    let sid  = proc.group().session().sid();
-    ```
-  ],
-  caption: [PID、PGID 与 SID 的逐层查询],
-) <lst:process-identifiers>
-
-反向操作则依靠成员表完成。例如，向进程组发送信号时，内核遍历 `ProcessGroup::processes`，逐个找到组内进程。moss 还通过 `PROCESS_TABLE`、`PROCESS_GROUP_TABLE` 和 `SESSION_TABLE` 提供按 PID、PGID、SID 的全局查询，并补齐新建进程组和会话后的登记。
+查询一个进程的三个标识时，内核沿对象引用逐层取得结果：先按 PID 找到进程对象，再沿所属关系取得进程组和会话标识。反向操作则依靠成员表完成——向进程组发送信号时，内核遍历 `ProcessGroup::processes`，逐个找到组内进程。
 
 === 进程组创建与迁移
 
-StarryOS 已提供 `setpgid`、`getpgid` 等基础接口，但新建的进程组没有同步写入全局 PGID 索引。这样，进程虽然已经加入新组，其他系统调用却可能无法通过 PGID 找到该进程组。
+StarryOS 已提供 `setpgid`、`getpgid` 等基础接口，但新建的进程组没有同步写入全局 PGID 索引，导致其他系统调用可能无法通过 PGID 找到该进程组。
 
-moss 根据目标 PGID 分两种情况处理。目标 PGID 等于进程自身 PID 时，内核创建一个新进程组，并立即将它登记到全局索引中。此后，`getpgid`、组信号和按进程组等待等操作都能查到该对象。
-
-目标 PGID 指向已有进程组时，内核先从全局索引中找到目标组，并检查它与当前进程是否属于同一会话。检查通过后，内核将进程从旧组的成员表中删除，加入新组的成员表，同时更新进程自身保存的所属组。若目标组不存在或属于其他会话，则拒绝迁移。
-
-这样修改后，进程保存的所属组、旧组和新组的成员表、全局 PGID 索引始终保持一致。
+moss 根据目标 PGID 分两种情况处理。目标 PGID 等于进程自身 PID 时，内核创建新进程组并立即登记到全局索引，此后组信号和按进程组等待等操作都能查到该对象。目标 PGID 指向已有进程组时，内核先从全局索引中找到目标组，检查它与当前进程是否属于同一会话，通过后将进程从旧组迁移到新组，同时更新全局索引。若目标组不存在或属于其他会话，则拒绝迁移。这样修改后，进程所属组、成员表和全局索引始终保持一致。
 
 === 会话创建
 
@@ -415,23 +367,15 @@ moss 根据目标 PGID 分两种情况处理。目标 PGID 等于进程自身 PI
 
 == 权限与进程控制
 
-=== UID/GID 三元组
+=== UID/GID 三元组 <sec:uid-gid>
 
-Linux 不用一个 UID 同时表示进程的来源和当前权限，而是维护 real、effective、saved 三个值。real UID 表示进程原本属于哪个用户；effective UID 是执行文件访问、程序执行和信号发送等权限检查时使用的身份；saved UID 保存进程曾经拥有的有效身份。GID 也采用相同的三元组。
+Linux 不用一个 UID 同时表示进程的来源和当前权限，而是维护 real、effective、saved 三个值。real UID 表示进程原本属于哪个用户；effective UID 是执行文件访问、程序执行和信号发送等权限检查时使用的身份；saved UID 保存进程曾经拥有的有效身份。这样设计是为了支持受控的权限切换：带有 set-user-ID 属性的程序可以先以较高权限完成必要操作，再降低 effective UID，之后若还需执行受保护操作，可以从 saved UID 恢复。GID 也采用相同的三元组。
 
-这样设计是为了支持受控的权限切换。例如，带有 set-user-ID 属性的程序可以先以较高权限完成必要操作，再降低 effective UID；之后若还需执行受保护操作，可以从 saved UID 恢复原来的权限。若只保存一个 UID，降低权限后便无法安全恢复；若允许进程任意设置 UID，又会形成提权漏洞。
-
-StarryOS 基线中的部分身份设置接口只返回成功，没有保存身份变化。moss 在 `ProcessData` 中加入 UID/GID 三元组，并在 `setresuid`、`setresgid` 等接口中检查转换范围。下面代码展示了 UID 路径的最小实现：
+StarryOS 基线中的部分身份设置接口只返回成功，没有保存身份变化。moss 在 `ProcessData` 中加入完整的六个原子字段，并在 `setresuid`、`setresgid` 等接口中检查转换范围：
 
 #figure(
   [
     ```rust
-    pub struct ProcessData {
-        uid: AtomicU32,  // real UID：进程的实际身份
-        euid: AtomicU32, // effective UID：当前权限判断使用
-        suid: AtomicU32, // saved UID：保留可恢复的身份
-    }
-
     let allowed = [old_ruid, old_euid, old_suid];
     if old_euid != 0 {
         // 非特权进程不能把三元组改成从未拥有过的身份
@@ -442,24 +386,16 @@ StarryOS 基线中的部分身份设置接口只返回成功，没有保存身�
             return Err(eperm());
         }
     }
-
-    if ruid != UID_GID_NO_CHANGE {
-        proc_data.set_real_uid(ruid);
-    }
-    if euid != UID_GID_NO_CHANGE {
-        proc_data.set_euid(euid);
-    }
-    if suid != UID_GID_NO_CHANGE {
-        proc_data.set_suid(suid);
-    }
+    // 分别更新三个字段，UID_GID_NO_CHANGE 表示不修改
+    if ruid != UID_GID_NO_CHANGE { proc_data.set_real_uid(ruid); }
+    if euid != UID_GID_NO_CHANGE { proc_data.set_euid(euid); }
+    if suid != UID_GID_NO_CHANGE { proc_data.set_suid(suid); }
     ```
   ],
   caption: [UID 三元组的保存与受限转换],
 ) <lst:uid-triplet>
 
-非特权进程只能在原有三元组中切换，effective UID 为 0 的特权进程才可以设置新的身份。修改后的 effective UID/GID 会参与程序执行权限、`kill` 和 ptrace attach 等检查。凭据因此成为实际权限判断依据，而不再只是查询接口返回的固定数值。
-
-capability 也由固定结果改为保存 effective、permitted、inheritable 和 bounding 集合，并限制进程任意扩大自身能力。
+非特权进程只能在原有三元组中切换，effective UID 为 0 的特权进程才可以设置新的身份。修改后的 effective UID/GID 会参与程序执行权限（见 @lst:exec-check）、`kill` 和 ptrace attach 等检查，凭据因此成为实际权限判断依据，而不再只是查询接口返回的固定数值。capability 也由固定结果改为保存 effective、permitted、inheritable 和 bounding 集合，并限制进程任意扩大自身能力。
 
 === ptrace 最小控制链路
 
@@ -469,9 +405,7 @@ moss 新增 ptrace 的基础状态管理，建立 `TRACEME`、`ATTACH`、`DETACH
 
 === namespace 的当前状态
 
-moss 为 PID、UTS 和 User namespace 保存 inode、父 namespace 和 init PID 等元数据，也能识别 clone 与 unshare 中的相关标志。但当前实现不会建立独立 PID 视图、主机名隔离或 UID 映射，代码也明确将相关路径标记为兼容桩。
-
-因此，这部分只能描述为 namespace 接口和状态预留，不能计作完整的容器隔离能力。
+moss 为 PID、UTS 和 User namespace 保存 inode、父 namespace 和 init PID 等元数据，也能识别 clone 与 unshare 中的相关标志，使 `/proc/self/ns/*` 能够报告不同的 inode 编号。但当前不会建立独立 PID 视图、主机名隔离或 UID 映射，代码也明确将相关路径标记为兼容桩。因此，这部分只能描述为 namespace 接口和状态预留，不能计作完整的容器隔离能力。
 
 == 本章小结
 
