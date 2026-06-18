@@ -1,0 +1,282 @@
+
+OpenSBI v1.7
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name               : riscv-virtio,qemu
+Platform Features           : medeleg
+Platform HART Count         : 1
+Platform IPI Device         : aclint-mswi
+Platform Timer Device       : aclint-mtimer @ 10000000Hz
+Platform Console Device     : uart8250
+Platform HSM Device         : ---
+Platform PMU Device         : ---
+Platform Reboot Device      : syscon-reboot
+Platform Shutdown Device    : syscon-poweroff
+Platform Suspend Device     : ---
+Platform CPPC Device        : ---
+Firmware Base               : 0x80000000
+Firmware Size               : 317 KB
+Firmware RW Offset          : 0x40000
+Firmware RW Size            : 61 KB
+Firmware Heap Offset        : 0x46000
+Firmware Heap Size          : 37 KB (total), 2 KB (reserved), 11 KB (used), 23 KB (free)
+Firmware Scratch Size       : 4096 B (total), 1400 B (used), 2696 B (free)
+Runtime SBI Version         : 3.0
+Standard SBI Extensions     : time,rfnc,ipi,base,hsm,srst,pmu,dbcn,fwft,legacy,dbtr,sse
+Experimental SBI Extensions : none
+
+Domain0 Name                : root
+Domain0 Boot HART           : 0
+Domain0 HARTs               : 0*
+Domain0 Region00            : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01            : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02            : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03            : 0x0000000080040000-0x000000008004ffff M: (R,W) S/U: ()
+Domain0 Region04            : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05            : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06            : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07            : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address        : 0x0000000080200000
+Domain0 Next Arg1           : 0x00000000bfe00000
+Domain0 Next Mode           : S-mode
+Domain0 SysReset            : yes
+Domain0 SysSuspend          : yes
+
+Boot HART ID                : 0
+Boot HART Domain            : root
+Boot HART Priv Version      : v1.12
+Boot HART Base ISA          : rv64imafdch
+Boot HART ISA Extensions    : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count         : 16
+Boot HART PMP Granularity   : 2 bits
+Boot HART PMP Address Bits  : 54
+Boot HART MHPM Info         : 16 (0x0007fff8)
+Boot HART Debug Triggers    : 2 triggers
+Boot HART MIDELEG           : 0x0000000000001666
+Boot HART MEDELEG           : 0x0000000000f4b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-17 16:00:01.002710 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrwxrwxrwx    1 root     root          38 Jan  1  1970 [1;36mld-linux-riscv64-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-riscv64-lp64d.so.1[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64-sf.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64.so.1[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 0      
+-rw-r--r--    1 root     root         106 Jun 17 16:00 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START ltp-musl ####
+#### OS COMP TEST GROUP END ltp-musl ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+2026-06-17-16-00-03
+#### OS COMP TEST GROUP START lmbench-musl ####
+latency measurements
+Simple syscall: 2.0732 microseconds
+Simple read: 7.0607 microseconds
+Simple write: 7.3707 microseconds
+Simple stat: 16.9041 microseconds
+Simple fstat: 3.5262 microseconds
+Simple open/close: 73.1378 microseconds
+Select on 100 fd's: 66.0362 microseconds
+Signal handler installation: 4.7171 microseconds
+Signal handler overhead: 13.7016 microseconds
+Protection fault: 1.8506 microseconds
+Pipe latency: 166.2901 microseconds
+Process fork+exit: 2015.7689 microseconds
+Process fork+execve: 2071.0577 microseconds
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+Process fork+/bin/sh -c: 125291.0000 microseconds
+File /var/tmp/XXX write bandwidth:11937 KB/sec
+Pagefaults on /var/tmp/XXX: 19.0512 microseconds
+0.524288 242
+file system latency
+0k	2541	2243	3931
+1k	2038	1801	2958
+4k	2001	1810	3073
+10k	1688	1500	2461
+Bandwidth measurements
+Pipe bandwidth: 325.83 MB/sec
+0.524288 1725.77
+0.524288 1306.07
+0.524288 15108.14
+0.524288 183.66
+context switch overhead
+
+"size=32k ovr=9.54
+2 80.72
+4 80.86
+8 81.24
+16 80.79
+24 80.72
+32 80.74
+64 80.66
+96 80.84
+#### OS COMP TEST GROUP END lmbench-musl ####
+2026-06-17-16-15-59
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+prepare glibc runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+#### OS COMP TEST GROUP END ltp-glibc ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+2026-06-17-16-16-00
+#### OS COMP TEST GROUP START lmbench-glibc ####
+latency measurements
+Simple syscall: 2.0429 microseconds
+Simple read: 6.8702 microseconds
+Simple write: 7.1959 microseconds
+Simple stat: 15.2228 microseconds
+Simple fstat: 6.0000 microseconds
+Simple open/close: 75.4757 microseconds
+Select on 100 fd's: 61.9569 microseconds
+Signal handler installation: 4.7489 microseconds
+Signal handler overhead: 13.4775 microseconds
+Protection fault: 2.0170 microseconds
+Pipe latency: 170.9471 microseconds
+Process fork+exit: 2934.7500 microseconds
+Process fork+execve: 3086.1714 microseconds
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+/tmp/hello: line 1: /code/lmbench_src/bin/build/lmbench_all: not found
+Process fork+/bin/sh -c: 123865.0000 microseconds
+File /var/tmp/XXX write bandwidth:34899 KB/sec
+Pagefaults on /var/tmp/XXX: 19.9648 microseconds
+0.524288 242
+file system latency
+0k	13	2499	4001
+1k	11	1965	3049
+4k	11	1978	3086
+10k	9	1636	2248
+Bandwidth measurements
+Pipe bandwidth: 337.35 MB/sec
+0.524288 1718.09
+0.524288 1350.90
+0.524288 11227.72
+0.524288 179.14
+context switch overhead
+
+"size=32k ovr=10.16
+2 81.55
+4 80.56
+8 81.52
+16 80.30
+24 80.20
+32 80.67
+64 79.91
+96 79.77
+#### OS COMP TEST GROUP END lmbench-glibc ####
+2026-06-17-16-25-22
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####
