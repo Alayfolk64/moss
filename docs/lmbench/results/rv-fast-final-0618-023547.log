@@ -1,0 +1,199 @@
+
+OpenSBI v1.7
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name               : riscv-virtio,qemu
+Platform Features           : medeleg
+Platform HART Count         : 1
+Platform IPI Device         : aclint-mswi
+Platform Timer Device       : aclint-mtimer @ 10000000Hz
+Platform Console Device     : uart8250
+Platform HSM Device         : ---
+Platform PMU Device         : ---
+Platform Reboot Device      : syscon-reboot
+Platform Shutdown Device    : syscon-poweroff
+Platform Suspend Device     : ---
+Platform CPPC Device        : ---
+Firmware Base               : 0x80000000
+Firmware Size               : 317 KB
+Firmware RW Offset          : 0x40000
+Firmware RW Size            : 61 KB
+Firmware Heap Offset        : 0x46000
+Firmware Heap Size          : 37 KB (total), 2 KB (reserved), 11 KB (used), 23 KB (free)
+Firmware Scratch Size       : 4096 B (total), 1400 B (used), 2696 B (free)
+Runtime SBI Version         : 3.0
+Standard SBI Extensions     : time,rfnc,ipi,base,hsm,srst,pmu,dbcn,fwft,legacy,dbtr,sse
+Experimental SBI Extensions : none
+
+Domain0 Name                : root
+Domain0 Boot HART           : 0
+Domain0 HARTs               : 0*
+Domain0 Region00            : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01            : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02            : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03            : 0x0000000080040000-0x000000008004ffff M: (R,W) S/U: ()
+Domain0 Region04            : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05            : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06            : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07            : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address        : 0x0000000080200000
+Domain0 Next Arg1           : 0x00000000bfe00000
+Domain0 Next Mode           : S-mode
+Domain0 SysReset            : yes
+Domain0 SysSuspend          : yes
+
+Boot HART ID                : 0
+Boot HART Domain            : root
+Boot HART Priv Version      : v1.12
+Boot HART Base ISA          : rv64imafdch
+Boot HART ISA Extensions    : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count         : 16
+Boot HART PMP Granularity   : 2 bits
+Boot HART PMP Address Bits  : 54
+Boot HART MHPM Info         : 16 (0x0007fff8)
+Boot HART Debug Triggers    : 2 triggers
+Boot HART MIDELEG           : 0x0000000000001666
+Boot HART MEDELEG           : 0x0000000000f4b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-17 18:28:50.002354 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrwxrwxrwx    1 root     root          38 Jan  1  1970 [1;36mld-linux-riscv64-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-riscv64-lp64d.so.1[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64-sf.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64.so.1[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 0      
+-rw-r--r--    1 root     root         106 Jun 17 18:28 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START ltp-musl ####
+#### OS COMP TEST GROUP END ltp-musl ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+2026-06-17-18-28-52
+#### OS COMP TEST GROUP START lmbench-musl ####
+latency measurements
+RUN LMBENCH CASE syscall
+Simple syscall: 2.1981 microseconds
+Simple read: 3.8037 microseconds
+Simple write: 5.9353 microseconds
+Simple stat: 14.5969 microseconds
+Simple fstat: 3.9969 microseconds
+Simple open/close: 55.8983 microseconds
+2026-06-17-18-32-36
+RUN LMBENCH CASE select
+Select on 100 fd's: 20.0155 microseconds
+2026-06-17-18-32-47
+RUN LMBENCH CASE mmap
+File /var/tmp/XXX write bandwidth:9760 KB/sec
+Pagefaults on /var/tmp/XXX: 4.3977 microseconds
+0.524288 264
+2026-06-17-18-33-11
+RUN LMBENCH CASE bandwidth
+Bandwidth measurements
+Pipe bandwidth: 347.00 MB/sec
+0.524288 1850.91
+0.524288 1524.06
+0.524288 15409.82
+0.524288 688.34
+2026-06-17-18-35-20
+#### OS COMP TEST GROUP END lmbench-musl ####
+2026-06-17-18-35-20
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+prepare glibc runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+#### OS COMP TEST GROUP END ltp-glibc ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####

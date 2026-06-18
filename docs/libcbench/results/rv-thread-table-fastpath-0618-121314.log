@@ -1,0 +1,253 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-18 04:12:50.005465300 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrwxrwxrwx    1 root     root          38 Jan  1  1970 [1;36mld-linux-riscv64-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-riscv64-lp64d.so.1[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64-sf.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64.so.1[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 0      
+-rw-r--r--    1 root     root         106 Jun 18 04:12 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+#### OS COMP TEST GROUP START ltp-musl ####
+#### OS COMP TEST GROUP END ltp-musl ####
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+2026-06-18-04-12-55
+#### OS COMP TEST GROUP START libcbench-musl ####
+b_malloc_sparse (0)
+  time: 0.672733400, virt: 0, res: 0, dirty: 0
+
+b_malloc_bubble (0)
+  time: 0.557434400, virt: 0, res: 0, dirty: 0
+
+b_malloc_tiny1 (0)
+  time: 0.027798700, virt: 0, res: 0, dirty: 0
+
+b_malloc_tiny2 (0)
+  time: 0.021506500, virt: 0, res: 0, dirty: 0
+
+b_malloc_big1 (0)
+  time: 0.208460300, virt: 0, res: 0, dirty: 0
+
+b_malloc_big2 (0)
+  time: 0.241107000, virt: 0, res: 0, dirty: 0
+
+b_malloc_thread_stress (0)
+  time: 0.158608000, virt: 0, res: 0, dirty: 0
+
+b_malloc_thread_local (0)
+  time: 0.118316600, virt: 0, res: 0, dirty: 0
+
+b_string_strstr ("abcdefghijklmnopqrstuvwxyz")
+  time: 0.033680900, virt: 0, res: 0, dirty: 0
+
+b_string_strstr ("azbycxdwevfugthsirjqkplomn")
+  time: 0.031691200, virt: 0, res: 0, dirty: 0
+
+b_string_strstr ("aaaaaaaaaaaaaacccccccccccc")
+  time: 0.024583900, virt: 0, res: 0, dirty: 0
+
+b_string_strstr ("aaaaaaaaaaaaaaaaaaaaaaaaac")
+  time: 0.024228500, virt: 0, res: 0, dirty: 0
+
+b_string_strstr ("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac")
+  time: 0.036027600, virt: 0, res: 0, dirty: 0
+
+b_string_memset (0)
+  time: 0.017507100, virt: 0, res: 0, dirty: 0
+
+b_string_strchr (0)
+  time: 0.023088200, virt: 0, res: 0, dirty: 0
+
+b_string_strlen (0)
+  time: 0.026152600, virt: 0, res: 0, dirty: 0
+
+b_pthread_createjoin_serial1 (0)
+  time: 1.137481700, virt: 0, res: 0, dirty: 0
+
+b_pthread_createjoin_serial2 (0)
+  time: 0.869592200, virt: 0, res: 0, dirty: 0
+
+b_pthread_create_serial1 (0)
+  time: 1.773601200, virt: 0, res: 0, dirty: 0
+
+b_pthread_uselesslock (0)
+  time: 0.102584400, virt: 0, res: 0, dirty: 0
+
+b_utf8_bigbuf (0)
+  time: 0.066933400, virt: 0, res: 0, dirty: 0
+
+b_utf8_onebyone (0)
+  time: 0.184797000, virt: 0, res: 0, dirty: 0
+
+b_stdio_putcgetc (0)
+  time: 0.591517300, virt: 0, res: 0, dirty: 0
+
+b_stdio_putcgetc_unlocked (0)
+  time: 0.540662400, virt: 0, res: 0, dirty: 0
+
+b_regex_compile ("(a|b|c)*d*b")
+  time: 0.144956200, virt: 0, res: 0, dirty: 0
+
+b_regex_search ("(a|b|c)*d*b")
+  time: 0.166332100, virt: 0, res: 0, dirty: 0
+
+b_regex_search ("a{25}b")
+  time: 0.644060400, virt: 0, res: 0, dirty: 0
+
+#### OS COMP TEST GROUP END libcbench-musl ####
+2026-06-18-04-13-05
+#### OS COMP TEST GROUP START lmbench-musl ####
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+prepare glibc runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+#### OS COMP TEST GROUP START ltp-glibc ####
+#### OS COMP TEST GROUP END ltp-glibc ####
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####
