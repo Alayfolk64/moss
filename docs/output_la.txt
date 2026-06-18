@@ -11690,3 +11690,5 @@ b_regex_search ("a{25}b")
 #### OS COMP TEST GROUP END libcbench-musl ####
 2026-06-18-11-28-27
 2026-06-18-11-28-27
+#### OS COMP TEST GROUP START lmbench-musl ####
+latency measurements
