@@ -289,6 +289,14 @@ else
     skip_group libctest musl
 fi
 
+if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group lmbench musl
+fi
+
 if [ "$ltp" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     run_ltp musl
@@ -331,14 +339,6 @@ else
     skip_group libcbench musl
 fi
 
-if [ "$lmbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lmbench musl
-fi
-
 if [ "$lua" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./lua_testcode.sh
@@ -372,6 +372,14 @@ if [ "$busybox" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox glibc
+fi
+
+if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group lmbench glibc
 fi
 
 if [ "$ltp" = 1 ]; then
@@ -414,14 +422,6 @@ if [ "$libcbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libcbench glibc
-fi
-
-if [ "$lmbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lmbench glibc
 fi
 
 if [ "$lua" = 1 ]; then
