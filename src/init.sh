@@ -158,13 +158,13 @@ RUN_LA=1
 # Test switches: 1 means run, 0 means only print group start/end.
 basic=0
 busybox=0
-cyclictest=1
+cyclictest=0
 iozone=0
 iperf=0
 libcbench=0
 libctest=0
 lmbench=0
-ltp=0
+ltp=1
 lua=0
 netperf=0
 
@@ -323,6 +323,14 @@ else
     skip_group libctest musl
 fi
 
+if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group lmbench musl
+fi
+
 if [ "$ltp" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     run_ltp musl
@@ -365,14 +373,6 @@ else
     skip_group libcbench musl
 fi
 
-if [ "$lmbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lmbench musl
-fi
-
 if [ "$lua" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./lua_testcode.sh
@@ -406,6 +406,14 @@ if [ "$busybox" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox glibc
+fi
+
+if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group lmbench glibc
 fi
 
 if [ "$ltp" = 1 ]; then
@@ -448,14 +456,6 @@ if [ "$libcbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libcbench glibc
-fi
-
-if [ "$lmbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lmbench glibc
 fi
 
 if [ "$lua" = 1 ]; then
