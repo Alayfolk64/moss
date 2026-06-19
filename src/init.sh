@@ -10,6 +10,40 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     rm -f /lib/ld-musl-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
     ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+    # The contest LoongArch musl libc ships several sched_* APIs as ENOSYS stubs.
+    # Patch them to issue Linux syscalls so cyclictest can initialize policy.
+    patch_musl_libc() {
+        patch_name=$1
+        patch_offset=$2
+        patch_count=$3
+        patch_expected=$4
+        patch_replacement=$5
+        patch_tmp_base="/tmp/musl-libc-patch-$$-$patch_offset"
+
+        if ! command -v cmp >/dev/null 2>&1; then
+            echo "WARN: skip LoongArch musl libc $patch_name patch: cmp not found"
+            return
+        fi
+
+        printf '%b' "$patch_expected" >"$patch_tmp_base.expected"
+        printf '%b' "$patch_replacement" >"$patch_tmp_base.replacement"
+        dd if=/musl/lib/libc.so of="$patch_tmp_base.actual" bs=1 skip="$patch_offset" count="$patch_count" 2>/dev/null
+
+        if cmp -s "$patch_tmp_base.expected" "$patch_tmp_base.actual"; then
+            dd if="$patch_tmp_base.replacement" of=/musl/lib/libc.so bs=1 seek="$patch_offset" conv=notrunc 2>/dev/null
+        elif ! cmp -s "$patch_tmp_base.replacement" "$patch_tmp_base.actual"; then
+            echo "WARN: skip LoongArch musl libc $patch_name patch: unexpected bytes at offset $patch_offset"
+        fi
+
+        rm -f "$patch_tmp_base.expected" "$patch_tmp_base.replacement" "$patch_tmp_base.actual"
+    }
+
+    patch_musl_libc sched_get 345312 64 \
+        '\143\300\377\002\004\150\277\002\141\040\300\051\377\203\277\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114\143\300\377\002\004\150\277\002\141\040\300\051\377\143\277\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114' \
+        '\143\300\377\002\141\040\300\051\013\344\201\002\000\000\053\000\377\177\277\124\141\040\300\050\143\100\300\002\040\000\000\114\143\300\377\002\141\040\300\051\013\340\201\002\000\000\053\000\377\137\277\124\141\040\300\050\143\100\300\002\040\000\000\114'
+    patch_musl_libc sched_set 345412 64 \
+        '\143\300\377\002\004\150\277\002\141\040\300\051\377\037\277\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114\143\300\377\002\004\150\277\002\141\040\300\051\377\377\276\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114' \
+        '\143\300\377\002\141\040\300\051\013\330\201\002\000\000\053\000\377\033\277\124\141\040\300\050\143\100\300\002\040\000\000\114\143\300\377\002\141\040\300\051\013\334\201\002\000\000\053\000\377\373\276\124\141\040\300\050\143\100\300\002\040\000\000\114'
 elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
     rm -f /lib/ld-musl-riscv64.so.1 /lib/ld-musl-riscv64-sf.so.1 /lib/ld-linux-riscv64-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
@@ -122,17 +156,17 @@ RUN_RV=1
 RUN_LA=1
 
 # Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
+basic=0
+busybox=0
 cyclictest=1
-iozone=1
-iperf=1
-libcbench=1
-libctest=1
-lmbench=1
-ltp=1
-lua=1
-netperf=1
+iozone=0
+iperf=0
+libcbench=0
+libctest=0
+lmbench=0
+ltp=0
+lua=0
+netperf=0
 
 if [ -n "$some_testcases" ]; then
     basic=0

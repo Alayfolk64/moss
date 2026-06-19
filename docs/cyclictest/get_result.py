@@ -79,7 +79,7 @@ START_RE = re.compile(r"#### OS COMP TEST GROUP START cyclictest-(musl|glibc) ##
 END_RE = re.compile(r"#### OS COMP TEST GROUP END cyclictest-(musl|glibc) ####")
 BEGIN_RE = re.compile(r"====== cyclictest (NO_STRESS_P1|NO_STRESS_P8|STRESS_P1|STRESS_P8) begin ======")
 SUCCESS_RE = re.compile(r"====== cyclictest (NO_STRESS_P1|NO_STRESS_P8|STRESS_P1|STRESS_P8) end: success ======")
-T_RE = re.compile(r"T: .+ Min:\s+(\d+).+Max:\s+(\d+)")
+T_RE = re.compile(r"T: .+ Min:\s*(\d+).+Max:\s*(\d+)")
 KILL_SUCCESS = "kill hackbench: success"
 
 

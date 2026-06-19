@@ -3,7 +3,7 @@ use axhal::time::TimeValue;
 use axtask::{AxCpuMask, current};
 use linux_raw_sys::general::{
     __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_REALTIME, PRIO_PGRP, PRIO_PROCESS, PRIO_USER,
-    SCHED_RR, TIMER_ABSTIME, timespec,
+    SCHED_NORMAL, TIMER_ABSTIME, timespec,
 };
 use starry_vm::{VmMutPtr, VmPtr, vm_load, vm_write_slice};
 
@@ -138,15 +138,21 @@ pub fn sys_sched_setaffinity(
     Ok(0)
 }
 
+#[repr(C)]
+struct SchedParam {
+    sched_priority: i32,
+}
+
 pub fn sys_sched_getscheduler(_pid: i32) -> AxResult<isize> {
-    Ok(SCHED_RR as _)
+    Ok(SCHED_NORMAL as _)
 }
 
 pub fn sys_sched_setscheduler(_pid: i32, _policy: i32, _param: *const ()) -> AxResult<isize> {
     Ok(0)
 }
 
-pub fn sys_sched_getparam(_pid: i32, _param: *mut ()) -> AxResult<isize> {
+pub fn sys_sched_getparam(_pid: i32, param: *mut ()) -> AxResult<isize> {
+    (param as *mut SchedParam).vm_write(SchedParam { sched_priority: 0 })?;
     Ok(0)
 }
 
