@@ -279,23 +279,90 @@ devfs 里 `/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并�
 
 == I/O 子系统
 
-文件读写请求经过 `CachedFile` 后端统一处理。每个文件在全局缓存表中有一份 `CachedFileRecord`，以 `(fs_ptr, inode)` 为键索引，同一文件被多个进程或多个 fd 打开时共享同一份缓存记录，不会出现多份副本。读写请求根据文件类型走三条路径：普通磁盘文件走 cached 路径，经页缓存层访问；`O_DIRECT` 打开的文件走 direct 路径，绕过缓存直接访问块设备；tmpfs 等内存文件系统走 in-memory 路径，不涉及块设备。
+文件读写请求经过 `CachedFile` 后端统一处理。每个文件在全局缓存表中有一份 `CachedFileRecord`，以 `(fs_ptr, inode)` 为键索引，同一文件被多个进程或多个 fd 打开时共享同一份缓存记录，不会出现多份副本。读写请求根据文件类型走三条路径：普通磁盘文件走 cached 路径，经页缓存层访问；`O_DIRECT` 打开的文件走 direct 路径，绕过缓存直接访问块设备；tmpfs 等内存文件系统走 in-memory 路径，不涉及块设备。三条路径的分流结构如@fig:io-paths 所示。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-5-5-1.svg", width: 78%)
+    ]
+  ],
+  caption: [I/O 读写三条路径],
+) <fig:io-paths>
 
 === 页缓存
 
-moss 采用"全局索引 + per-file LRU"的结构管理页缓存：全局表以 `(fs_ptr, inode)` 为键记录各文件的缓存入口，真正的数据页缓存在每个文件自己的 LRU 里，默认容量 256 个 4KiB 页（1MiB）。这样设置有两个好处：单个文件的大规模顺序扫描不会把其他文件的缓存挤出；缓存大小能覆盖 iozone 和 lmbench 常见工作集（单个 child file 约 1MiB，典型读写测试工作集约 512KiB），第二轮读、反向读、stride read 命中缓存的概率更高。
+moss 采用"全局索引 + per-file LRU"的结构管理页缓存：全局表以 `(fs_ptr, inode)` 为键记录各文件的缓存入口，真正的数据页缓存在每个文件自己的 LRU 里，默认容量 256 个 4KiB 页（1MiB）。这样设置有两个好处：单个文件的大规模顺序扫描不会把其他文件的缓存挤出；对于能完整装入缓存的小文件，一旦内容被读入，后续的重复读、非顺序访问都可以直接命中缓存，无需再访问底层存储。
 
-tmpfs 走 in-memory 路径，不进入全局表：读未分配页时直接返回全局 `ZERO_PAGE` 中对应的内容，写入全零数据时不分配真实缓存页，天然支持稀疏文件。
+这个结构的关键代码如@lst:file-cache-record 所示。全局表只负责"同一个文件找到同一份缓存记录"，页数据本身仍然放在每个文件自己的 `CachedFileShared` 里。
 
-写路径做了一项针对性的优化，避免 read-before-write。页缓存以 4KiB 为单位操作，朴素实现在目标页缺失时会先读出完整旧页再部分覆盖——这对修改已有文件的中间段是必要的，但对新文件顺序写或 EOF 之后 append 而言，旧内容根本不存在或即将全部被覆盖，先读旧页是纯浪费。moss 用 `can_zero_fill_write_page` 判断：当前页完全在旧 EOF 之后，或本次写入已覆盖页内所有旧有效内容时，直接分配清零页而不调用底层 `read_at()`，消除了新页写入前的无效读取。
+#figure(
+  [
+    ```rust
+    // vendor/axfs/src/highlevel/file.rs
+    // ...
+    type FileCacheKey = (usize, u64); // (fs_ptr, inode)，唯一定位某个文件
 
-脏页写回时，所有脏页按页号排序，连续页合并成一批写入，每批最多 16 页（64KiB）。相比逐页提交，顺序写场景下的块设备请求数量明显减少，对 fsync、close/drop 等需要落盘的路径尤为有效。
+    struct CachedFileRecord {
+        key: FileCacheKey,             // 当前缓存记录对应哪个文件
+        location: Location,            // 文件在 VFS 中的位置，用来回到底层读写
+        shared: Arc<CachedFileShared>, // 真正共享的页缓存和同步状态
+        in_memory: bool,               // 是否是 tmpfs 这类内存文件
+    }
 
-O_DIRECT 读写绕过页缓存，但同一文件可能同时有 cached fd 在访问。为维护一致性，moss 在 direct 读前先将目标范围内的 dirty cached 页写回，direct 写后使对应干净页失效，两条路径不会读到不一致的内容。
+    static FILE_CACHES:
+        // 全局索引表：同一文件的多个 fd 会找到同一个 CachedFileRecord
+        Lazy<RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>> = ...;
+    // ...
+    ```
+  ],
+  caption: [文件页缓存的全局索引记录],
+) <lst:file-cache-record>
+
+tmpfs 走 in-memory 路径：它也通过全局索引找到自己的缓存记录，但记录中的 `in_memory` 为 true，内部使用无界缓存，且不需要写回块设备。读未分配页时直接返回全局 `ZERO_PAGE` 中对应的内容，写入全零数据时不分配真实缓存页，能够支持稀疏文件或者全零写入。
+
+写路径做了一项针对性的优化，避免 read-before-write。页缓存以 4KiB 为单位操作，朴素的实现在目标页缺失时会先读出完整旧页再部分覆盖——这对修改已有文件的中间段是必要的，但对新文件顺序写或 EOF 之后 append 而言，旧内容根本不存在或即将全部被覆盖，先读旧页纯属浪费。moss 用 `can_zero_fill_write_page` 判断：如果当前页完全在旧 EOF 之后，或者本次写入从页内偏移 0 开始且覆盖了页内所有旧有效内容时，直接分配清零页而不调用底层 `read_at()`，消除了新页写入前的无效读取。
+
+脏页写回时，所有脏页按页号排序，连续页合并成一批写入，每批最多 16 页（64KiB）。如@fig:dirty-writeback 所示，相比逐页提交，顺序写场景下的块设备请求数量可以明显减少，对 fsync、close/drop 等需要落盘的路径尤为有效。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-5-5-2.svg", width: 82%)
+    ]
+  ],
+  caption: [脏页按页号排序后合并为批次写回],
+) <fig:dirty-writeback>
+
+O_DIRECT 读写绕过页缓存，但同一文件可能同时有 cached fd 在访问，如果进程 A 用 cached I/O 写了数据，还在缓存里没落盘，此时进程 B 又要用 direct I/O 读同一段，如果不处理，B 可能读到旧数据。为维护一致性，moss 在 direct 读前先将目标范围内的 dirty cached 页写回，direct 写后使对应干净页失效，这样两条路径就不会读到不一致的内容。
 
 === 元数据缓存
 
-频繁的 stat 调用和读写带来的时间戳更新如果每次都穿透底层文件系统，会在 I/O 密集场景产生大量元数据写。moss 在 VFS 层引入 inode 元数据缓存，以 `(fs_ptr, inode)` 为键将 size、atime、mtime、ctime 缓存在内存中。目录的 nlink 随子节点增删变化，缓存容易读到过期值，被排除在外；`NON_CACHEABLE` 节点（procfs、sysfs 等）内容动态生成，同样不进入缓存。
+频繁的 stat 调用和读写带来的时间戳更新如果每次都穿透底层文件系统，会在 I/O 密集场景产生大量元数据写。如果一个任务只是想读文件，却要附加一次写的任务，就会产生很多无用的开销。为解决这一问题，moss 在 VFS 层引入 inode 元数据缓存，以 `(fs_ptr, inode)` 为键将 size、atime、mtime、ctime 缓存在内存中。目录的 nlink 随子节点增删变化，缓存容易读到过期值，被排除在外；`NON_CACHEABLE` 节点（procfs、sysfs 等）内容动态生成，同样不进入缓存。
+
+元数据缓存的核心字段如@lst:metadata-cache 所示。它只保留当前报告需要理解的字段：一份缓存后的 `metadata`，以及两个表示"还有东西没提交到底层"的 dirty 标记。
+
+#figure(
+  [
+    ```rust
+    // vendor/axfs-ng-vfs/src/node/mod.rs
+    // ...
+    type InodeMetadataCacheKey = (usize, u64); // (fs_ptr, inode)
+
+    struct InodeMetadataCache {
+        metadata: Metadata,            // 当前内存里缓存的 size/atime/mtime/ctime 等
+        dirty_size: bool,              // 文件大小是否已经改了但还没提交
+        dirty_update: MetadataUpdate,  // 时间戳、权限、所有者等待提交更新
+    }
+
+    static INODE_METADATA_CACHES:
+        // 全局元数据缓存表：同一 inode 的 stat/fstat 共享这一份结果
+        Lazy<Mutex<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>>> = ...;
+    // ...
+    ```
+  ],
+  caption: [inode 元数据缓存记录],
+) <lst:metadata-cache>
 
 元数据更新采用延迟提交策略：各字段的修改先合并到 `dirty_update`，不立刻落盘；sync 或文件关闭时统一提交，把多次独立的元数据写合并为一次。atime 更新遵循 relatime 策略：只有 atime 早于 mtime 或 ctime、或距上次更新超过 24 小时，读操作才会触发 atime 更新，大多数只读访问因此不再产生元数据写。`MS_NOATIME` 和 `MS_STRICTATIME` 挂载标志可以覆盖这个策略。
 
@@ -311,11 +378,32 @@ mmap 访问时每次 page fault 只处理当前缺失页。moss 在 fault 后检
 
 === I/O 多路复用
 
-服务器程序需要同时等待多个 fd 上的事件，轮询是一种做法但 CPU 开销不可接受。正确的实现是：没有事件时挂起任务，有事件时精准唤醒。
+服务器程序需要同时等待多个 fd 上的事件，轮询是一种做法但 CPU 的开销极大。正确的实现应该是：没有事件时挂起任务，有事件时精准唤醒。
 
 moss 实现了 select、poll 和 epoll 三种接口。select 和 poll 的实现相对直接：通过 `block_on(timeout(poll_io(...)))` 把当前任务交给调度器，等到有 fd 就绪或超时时再返回，全程不占用 CPU。
 
 epoll 需要更精细的控制，因为它要在 fd 就绪时立刻通知，而不是等调用者再次轮询。moss 的实现里，每个被监视的 fd 对应一个 `EpollInterest`，持有一个实现了 `std::task::Wake` 的 `InterestWaker`。当底层文件对象（pipe、socket、设备等）的状态变化时，它调用 `InterestWaker::wake()`，后者把这个 interest 推入 epoll 的 ready queue，并唤醒阻塞在 `epoll_wait` 上的任务。整条路径是事件驱动的，没有任何轮询。
+
+epoll 的核心状态可以见@lst:epoll-inner 这一段：一张"关注表"记录用户关心哪些 fd，一个 ready queue 记录已经就绪的 fd，再加一个 `PollSet` 用来唤醒睡在 `epoll_wait` 上的任务。
+
+#figure(
+  [
+    ```rust
+    // kernel/src/file/epoll.rs
+    // ...
+    struct EpollInner {
+        // 关注表：key 是被监听的 fd，value 是该 fd 关心的事件和触发模式
+        interests: SpinNoPreempt<HashMap<EntryKey, Arc<EpollInterest>>>,
+        // 就绪队列：底层 fd 有事件时，把对应 interest 放进这里
+        ready_queue: SpinNoPreempt<VecDeque<Weak<EpollInterest>>>,
+        // 等待队列：ready_queue 从空变为非空时唤醒 epoll_wait
+        poll_ready: PollSet,
+    }
+    // ...
+    ```
+  ],
+  caption: [epoll 的关注表与就绪队列],
+) <lst:epoll-inner>
 
 epoll 还支持三种触发模式：
 
