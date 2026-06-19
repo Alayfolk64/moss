@@ -448,7 +448,7 @@ stat 系列（stat/fstat/lstat）返回固定字段集合。moss 参考 Linux �
 
 #figure(
   table(
-    columns: (1.5fr, 1fr, 2.5fr),
+    columns: (1.2fr, 1fr, 2.5fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([规则 / 接口], [返回值 / uid], [说明]),
@@ -456,7 +456,7 @@ stat 系列（stat/fstat/lstat）返回固定字段集合。moss 参考 Linux �
     [只读挂载写请求], [EROFS], [写权限被挂载标志拦下时返回 EROFS，不是 EACCES],
     [root 执行位要求], [EACCES], [root 执行文件须至少一个 x 位，与普通用户不同],
     [`access`], [real uid/gid], [反映调用者真实身份，setuid 程序中是原始调用者],
-    [`faccessat2` + `AT_EACCESS`], [effective uid/gid], [反映当前运行身份，setuid 程序中是文件所有者],
+    [`faccessat2`+`AT_EACCESS`], [effective uid/gid], [反映当前运行身份，setuid 程序中是文件所有者],
   ),
   caption: [权限检查的叠加规则与 uid 语义],
 ) <tab:access-rules>
@@ -583,3 +583,7 @@ moss 的 fanotify 实现覆盖了打开、读写、创建、删除、重命名�
 inotify 和 fanotify 的实现需要在 read、write、open、close 等系统调用路径上插入事件投递逻辑。没有注册监听者时，这些逻辑不应带来任何额外开销。
 
 moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维护全局 watch 计数，计数为零时通知函数立即返回；fanotify 维护全局兴趣掩码，掩码对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听时不进入任何路径解析、mark 匹配或事件队列操作。一旦用户注册了 watch 或 mark，仍会走完整的匹配和投递流程，功能语义不受影响。
+
+== 本章小结
+
+本章介绍了 moss 文件系统从底层存储到用户接口的整体设计。挂载子系统支持 bind mount、命名空间隔离与新式挂载 API，VFS 层通过 `Location` 和 `NodeFlags` 将路径解析与挂载切换解耦，使上层调用方无需感知挂载点跳转。I/O 子系统在 StarryOS 基础上引入 per-file 页缓存与元数据缓存，并在写路径、脏页写回、显式预读和 mmap fault 预热四个维度做了针对性优化，减少小块 I/O 中的无效读写和元数据开销。文件事件通知提供了 inotify 和 fanotify 的完整实现，在无监听者时通过全局计数与兴趣掩码早期过滤，使事件投递逻辑不干扰正常 I/O 路径的性能。

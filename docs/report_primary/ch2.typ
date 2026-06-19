@@ -13,11 +13,11 @@ StarryOS 已经建立了可运行的进程线程框架。每个用户执行流�
 
 然而，基线只处理了"创建子进程、运行、退出、父进程回收"这条主路径，接口组合复杂后问题便逐渐暴露：clone 的标志约束和失败回滚不够严密，exec 缺少 `execveat` 及执行权限检查，wait 无法完整表达停止和继续状态，UID/GID 部分接口直接返回成功而没有保存身份变化，ptrace 和 pidfd 的观测链路也尚未打通。换句话说，基线能建立进程，却没有把进程的身份、状态和生命周期完全串联起来。
 
-moss 保留 StarryOS 的主体结构，重点补齐这些接口之间的联系。主要增量如表所示。
+moss 保留了 StarryOS 的主体结构，重点补齐这些接口之间的联系。主要增量如表所示：
 
 #figure(
   table(
-    columns: (1.35fr, 2.3fr, 2.65fr),
+    columns: (1fr, 2.3fr, 2.65fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([内容], [StarryOS 基线], [moss 的增量]),
@@ -60,7 +60,7 @@ moss 同时维护三类关系。
 
 === 三元凭据
 
-Linux 不使用单一 UID 表示进程身份，而是维护 real、effective、saved 三个值，GID 采用相同结构。real ID 表示身份来源，effective ID 用于当前权限判断，saved ID 允许进程在受限范围内恢复先前身份。moss 将 UID/GID 三元组放入 `ProcessData`，让凭据真正参与程序执行、信号发送和 ptrace 权限检查。具体实现见 @sec:uid-gid。
+moss 的进程身份设计参考了 Linux 的凭据模型：UID 不只保存一个值，而是拆成 real、effective、saved 三个字段，GID 采用相同结构。real ID 表示身份来源，effective ID 用于当前权限判断，saved ID 允许进程在受限范围内恢复先前身份。moss 将 UID/GID 三元组放入 `ProcessData`，让凭据真正参与程序执行、信号发送和 ptrace 权限检查。具体实现见 @sec:uid-gid。
 
 === 生命周期闭环
 
@@ -115,7 +115,7 @@ Linux 不使用单一 UID 表示进程身份，而是维护 real、effective、s
 
 === 进程状态
 
-StarryOS 原有退出码可以描述进程终止，却不适合表示暂时停止或继续运行。moss 增加 `ProcessWaitStatus`：
+StarryOS 原有退出码可以描述进程终止，但并不适合表示暂时停止或继续运行。moss 增加 `ProcessWaitStatus`：
 
 #figure(
   [
@@ -131,7 +131,16 @@ StarryOS 原有退出码可以描述进程终止，却不适合表示暂时停�
   caption: [进程停止与继续状态],
 ) <lst:process-wait-status>
 
-退出状态仍由 `Process` 保存；停止和继续状态则独立记录在 `ProcessData` 中。这样，父进程可以区分"子进程已经结束"和"子进程仍然存在，但状态发生变化"，也便于 `waitpid` 与 `waitid` 按不同选项消费事件。
+退出状态仍由 `Process` 保存；停止和继续状态则独立记录在 `ProcessData` 中。@fig:process-state 展示了进程在四个状态之间的完整流转关系：运行中与已停止之间通过 SIGSTOP/SIGCONT 互相切换，exit 触发进入僵尸状态，父进程调用 wait 后完成最终回收。父进程通过 wait 所能感知的三类事件——Stopped、Continued、退出——都对应图中的状态转换。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-2-进程状态机.svg", width: 60%)
+    ]
+  ],
+  caption: [进程生命周期状态机],
+) <fig:process-state>
 
 === 子进程等待语义
 
@@ -293,13 +302,16 @@ moss 增加该入口后，将 `execve` 与 `execveat` 汇入同一条 `execve_co
 
 === 退出后的孤儿进程托管
 
-进程结束后，还要处理它尚未退出的子进程。子进程不能随父进程一起删除——它们之后退出时需要有进程负责读取退出状态，否则将永远停留在僵尸状态占用内核资源。moss 沿用 StarryOS 的做法，把这些子进程从原父进程的 `children` 表中移出，改由 init 进程托管：
+进程结束后，还要处理它尚未退出的子进程。子进程不能随父进程一起删除——它们之后退出时需要有进程负责读取退出状态，否则将永远停留在僵尸状态占用内核资源。moss 沿用 StarryOS 的做法，把这些子进程从原父进程的 `children` 表中移出，改由 init 进程托管。如 @fig:orphan-reparent 所示，整个过程只修改父进程指针，子进程本身的 PID、PGID 和 SID 均保持不变，仍可继续运行。它们以后成为僵尸进程时，由 init 调用 `wait` 完成回收。
 
-#align(center)[
-  原父进程 → 子进程 #h(1em) 变为 #h(1em) init → 子进程
-]
-
-子进程本身仍继续运行，原有 PID、进程组和会话不变；变化的只是父进程。它们以后成为僵尸进程时，由 init 调用 `wait` 完成回收。
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-2-孤儿托管.svg", width: 95%)
+    ]
+  ],
+  caption: [父进程退出后子进程被 init 接管，PID、PGID、SID 不变],
+) <fig:orphan-reparent>
 
 == 进程组与会话
 
@@ -369,7 +381,7 @@ moss 根据目标 PGID 分两种情况处理。目标 PGID 等于进程自身 PI
 
 === UID/GID 三元组 <sec:uid-gid>
 
-Linux 不用一个 UID 同时表示进程的来源和当前权限，而是维护 real、effective、saved 三个值。real UID 表示进程原本属于哪个用户；effective UID 是执行文件访问、程序执行和信号发送等权限检查时使用的身份；saved UID 保存进程曾经拥有的有效身份。这样设计是为了支持受控的权限切换：带有 set-user-ID 属性的程序可以先以较高权限完成必要操作，再降低 effective UID，之后若还需执行受保护操作，可以从 saved UID 恢复。GID 也采用相同的三元组。
+moss 沿用了 Linux 的身份拆分方式，不用一个 UID 同时表示进程的来源和当前权限，而是维护 real、effective、saved 三个值。real UID 表示进程原本属于哪个用户；effective UID 是执行文件访问、程序执行和信号发送等权限检查时使用的身份；saved UID 保存进程曾经拥有的有效身份。这样设计是为了支持受控的权限切换：带有 set-user-ID 属性的程序可以先以较高权限完成必要操作，再降低 effective UID，之后若还需执行受保护操作，可以从 saved UID 恢复。GID 也采用相同的三元组。
 
 StarryOS 基线中的部分身份设置接口只返回成功，没有保存身份变化。moss 在 `ProcessData` 中加入完整的六个原子字段，并在 `setresuid`、`setresgid` 等接口中检查转换范围：
 
@@ -402,10 +414,6 @@ StarryOS 基线中的部分身份设置接口只返回成功，没有保存身�
 moss 新增 ptrace 的基础状态管理，建立 `TRACEME`、`ATTACH`、`DETACH`、停止、继续和 wait 报告之间的关系。attach 时先检查目标是否存在、是否已被跟踪以及调用者是否具有相应权限；目标停止后，跟踪者通过 wait 获取事件。
 
 当前实现只能完成最小控制流程。`PTRACE_SYSCALL` 和 `PTRACE_SINGLESTEP` 暂按普通继续处理，寄存器、目标内存和 siginfo 读写请求返回 `EIO`，因此还不能视为完整的 GDB 后端。
-
-=== namespace 的当前状态
-
-moss 为 PID、UTS 和 User namespace 保存 inode、父 namespace 和 init PID 等元数据，也能识别 clone 与 unshare 中的相关标志，使 `/proc/self/ns/*` 能够报告不同的 inode 编号。但当前不会建立独立 PID 视图、主机名隔离或 UID 映射，代码也明确将相关路径标记为兼容桩。因此，这部分只能描述为 namespace 接口和状态预留，不能计作完整的容器隔离能力。
 
 == 本章小结
 
