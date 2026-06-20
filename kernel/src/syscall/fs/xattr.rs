@@ -1,10 +1,11 @@
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::ffi::{c_char, c_int};
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FS_CONTEXT;
-use axfs_ng_vfs::Location;
+use axfs_ng_vfs::{Location, NodeType};
 use linux_raw_sys::general::{FS_APPEND_FL, FS_IMMUTABLE_FL};
+use spin::Mutex;
 use starry_vm::{vm_load, vm_write_slice};
 
 use crate::{
@@ -16,6 +17,15 @@ const XATTR_CREATE: u32 = 1;
 const XATTR_REPLACE: u32 = 2;
 const XATTR_SIZE_MAX: usize = 65536;
 const XATTR_NAME_MAX: usize = 255;
+
+#[derive(Default)]
+struct XattrStore {
+    attrs: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
+}
+
+fn xattr_store(loc: &Location) -> Arc<XattrStore> {
+    loc.user_data().get_or_insert_with(XattrStore::default)
+}
 
 fn load_xattr_name(name: *const c_char) -> AxResult<Vec<u8>> {
     let name = vm_load_string(name)?;
@@ -60,11 +70,7 @@ fn resolve_fd_optional(fd: c_int) -> AxResult<Option<Location>> {
 }
 
 fn xattr_exists(loc: &Location, name: &[u8]) -> AxResult<bool> {
-    match loc.get_xattr(name, &mut []) {
-        Ok(_) => Ok(true),
-        Err(err) if LinuxError::from(err) == LinuxError::ENODATA => Ok(false),
-        Err(err) => Err(err),
-    }
+    Ok(xattr_store(loc).attrs.lock().contains_key(name))
 }
 
 fn check_xattr_writable(loc: &Location) -> AxResult<()> {
@@ -72,6 +78,32 @@ fn check_xattr_writable(loc: &Location) -> AxResult<()> {
         if inode_flags(path.as_str()) & (FS_IMMUTABLE_FL | FS_APPEND_FL) != 0 {
             return Err(AxError::OperationNotPermitted);
         }
+    }
+    Ok(())
+}
+
+fn is_user_xattr(name: &[u8]) -> bool {
+    name.starts_with(b"user.")
+}
+
+fn is_supported_xattr(name: &[u8]) -> bool {
+    name.starts_with(b"user.")
+        || name.starts_with(b"security.")
+        || name.starts_with(b"trusted.")
+        || name.starts_with(b"system.")
+}
+
+fn check_xattr_namespace(loc: &Location, name: &[u8]) -> AxResult<()> {
+    if !is_supported_xattr(name) {
+        return Err(AxError::OperationNotSupported);
+    }
+    if is_user_xattr(name)
+        && !matches!(
+            loc.metadata()?.node_type,
+            NodeType::RegularFile | NodeType::Directory
+        )
+    {
+        return Err(AxError::OperationNotPermitted);
     }
     Ok(())
 }
@@ -93,6 +125,7 @@ fn set_xattr(
     }
     let name = load_xattr_name(name)?;
     check_xattr_writable(loc)?;
+    check_xattr_namespace(loc, &name)?;
     if flags & XATTR_CREATE != 0 {
         if xattr_exists(loc, &name)? {
             return Err(AxError::AlreadyExists);
@@ -106,13 +139,16 @@ fn set_xattr(
     } else {
         vm_load(value, size)?
     };
-    loc.set_xattr(&name, &value)?;
+    xattr_store(loc).attrs.lock().insert(name, value);
     Ok(0)
 }
 
 fn get_xattr(loc: &Location, name: *const c_char, value: *mut u8, size: usize) -> AxResult<isize> {
     let name = load_xattr_name(name)?;
-    let value_len = loc.get_xattr(&name, &mut [])?;
+    let stored = xattr_store(loc);
+    let attrs = stored.attrs.lock();
+    let attr_value = attrs.get(&name).ok_or(AxError::from(LinuxError::ENODATA))?;
+    let value_len = attr_value.len();
     if size == 0 {
         return Ok(value_len as _);
     }
@@ -120,14 +156,18 @@ fn get_xattr(loc: &Location, name: *const c_char, value: *mut u8, size: usize) -
         return Err(AxError::OutOfRange);
     }
 
-    let mut buf = alloc::vec![0; value_len];
-    loc.get_xattr(&name, &mut buf)?;
-    vm_write_slice(value, &buf)?;
+    vm_write_slice(value, attr_value)?;
     Ok(value_len as _)
 }
 
 fn list_xattr(loc: &Location, list: *mut u8, size: usize) -> AxResult<isize> {
-    let names = loc.list_xattr()?;
+    let stored = xattr_store(loc);
+    let attrs = stored.attrs.lock();
+    let mut names = Vec::new();
+    for name in attrs.keys() {
+        names.extend_from_slice(name);
+        names.push(0);
+    }
     if size == 0 {
         return Ok(names.len() as _);
     }
@@ -141,7 +181,9 @@ fn list_xattr(loc: &Location, list: *mut u8, size: usize) -> AxResult<isize> {
 
 fn remove_xattr(loc: &Location, name: *const c_char) -> AxResult<isize> {
     let name = load_xattr_name(name)?;
-    loc.remove_xattr(&name)?;
+    if xattr_store(loc).attrs.lock().remove(&name).is_none() {
+        return Err(AxError::from(LinuxError::ENODATA));
+    }
     Ok(0)
 }
 
@@ -215,7 +257,12 @@ pub fn sys_fsetxattr(
     flags: u32,
 ) -> AxResult<isize> {
     debug!("sys_fsetxattr <= fd: {fd}, name: {name:p}, size: {size}, flags: {flags}");
-    set_xattr(&resolve_fd(fd)?, name, value, size, flags)
+    if let Some(loc) = resolve_fd_optional(fd)? {
+        set_xattr(&loc, name, value, size, flags)
+    } else {
+        load_xattr_name(name)?;
+        Err(AxError::OperationNotPermitted)
+    }
 }
 
 pub fn sys_fgetxattr(

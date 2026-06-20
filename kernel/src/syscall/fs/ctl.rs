@@ -14,7 +14,8 @@ use core::{
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{
-    FS_CONTEXT, FsContext, invalidate_file_cache, sync_global_file_caches, update_cached_metadata,
+    FS_CONTEXT, FsContext, invalidate_removed_file_cache, sync_global_file_caches,
+    update_cached_metadata,
 };
 use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
@@ -30,16 +31,17 @@ use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 use super::{
     fanotify::{
         commit_fanotify_path_alias, fanotify_path_is_dir, fanotify_prepared_event_is_dir,
-        notify_fanotify_create, notify_fanotify_delete, notify_fanotify_move_from,
-        notify_fanotify_move_to, notify_fanotify_prepared_event, prepare_fanotify_delete_event,
-        prepare_fanotify_delete_self_event, prepare_fanotify_move_from_event,
-        prepare_fanotify_move_self_event, prepare_fanotify_path_alias,
-        prepare_fanotify_rename_event,
+        notify_fanotify_attrib_path, notify_fanotify_create, notify_fanotify_delete,
+        notify_fanotify_move_from, notify_fanotify_move_to, notify_fanotify_prepared_event,
+        prepare_fanotify_delete_event, prepare_fanotify_delete_self_event,
+        prepare_fanotify_move_from_event, prepare_fanotify_move_self_event,
+        prepare_fanotify_path_alias, prepare_fanotify_rename_event,
     },
     inotify::{
         next_inotify_cookie, notify_inotify_dirent, notify_inotify_path, notify_inotify_target,
         prepare_inotify_target,
     },
+    stat::check_parent_search_access,
 };
 use crate::{
     file::{
@@ -216,6 +218,7 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
         {
             return Err(AxError::PermissionDenied);
         }
+        check_link_count_limit(&dir)?;
 
         let mut permission = NodePermission::from_bits_truncate(mode as u16);
         let gid = if dir_stat.mode.contains(NodePermission::SET_GID) {
@@ -321,6 +324,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
                 update_cached_metadata(
                     &loc,
                     MetadataUpdate {
+                        mode: Some(permission),
                         owner: Some((euid, gid)),
                         ..Default::default()
                     },
@@ -490,9 +494,9 @@ fn check_link_count_limit(target: &Location) -> AxResult<()> {
     // Keep the limit intentionally modest for this kernel. POSIX only requires
     // LINK_MAX >= 8, and LTP's EMLINK setup depends on the filesystem reaching
     // a finite limit in reasonable time under QEMU.
-    const MAX_HARD_LINKS: u64 = 1024;
+    const MAX_LINK_COUNT: u64 = 1024;
 
-    if target.metadata()?.nlink >= MAX_HARD_LINKS {
+    if target.metadata()?.nlink >= MAX_LINK_COUNT {
         Err(AxError::from(LinuxError::EMLINK))
     } else {
         Ok(())
@@ -555,6 +559,10 @@ pub fn sys_getdents64(fd: i32, buf: *mut u8, len: usize) -> AxResult<isize> {
 
     let dir = Directory::from_fd(fd)?;
     let mut dir_offset = dir.offset.lock();
+
+    if dir.inner().is_unlinked()? {
+        return Err(AxError::NotFound);
+    }
 
     let mut has_remaining = false;
 
@@ -628,6 +636,9 @@ pub fn sys_linkat(
     }
     check_protected_hardlink(&old)?;
     check_link_count_limit(&old)?;
+    if new_dir.lookup_no_follow(new_name).is_ok() {
+        return Err(AxError::AlreadyExists);
+    }
 
     new_dir.link(new_name, &old)?;
     notify_inotify_dirent(new_dirfd, &new_path, IN_CREATE, false, 0);
@@ -696,9 +707,7 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         None
     };
     if let Some(file) = removed_file_cache.as_ref() {
-        // Dirty pages must not be discarded here: an unlinked but still-open
-        // file is expected to retain its data through existing descriptors.
-        invalidate_file_cache(file)?;
+        invalidate_removed_file_cache(file)?;
     }
     parent_dir.unlink(&target_name, remove_dir)?;
     let mut self_event = self_event;
@@ -737,9 +746,6 @@ pub fn sys_unlink(path: *const c_char) -> AxResult<isize> {
 
 pub fn sys_getcwd(buf: *mut u8, size: isize) -> AxResult<isize> {
     let size: usize = size.try_into().map_err(|_| AxError::BadAddress)?;
-    if buf.is_null() {
-        return Ok(0);
-    }
 
     let cwd = FS_CONTEXT.lock().current_dir().absolute_path()?;
     debug!("sys_getcwd => cwd: {cwd}");
@@ -768,13 +774,29 @@ pub fn sys_symlinkat(
     let target = vm_load_string(target)?;
     let linkpath = vm_load_string(linkpath)?;
     debug!("sys_symlinkat <= target: {target:?}, new_dirfd: {new_dirfd}, linkpath: {linkpath:?}");
+    if linkpath.is_empty() {
+        return Err(AxError::NotFound);
+    }
 
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
     let euid = proc_data.euid();
     let egid = proc_data.egid();
+    check_parent_search_access(new_dirfd, Some(linkpath.as_str()), 0, euid, egid)?;
+
     with_fs(new_dirfd, |fs| {
-        let loc = fs.symlink(target, &linkpath)?;
+        let (dir, name) = fs.resolve_nonexistent(Path::new(linkpath.as_str()))?;
+        check_link_dir_access(&dir)?;
+        if dir.lookup_no_follow(name).is_ok() {
+            return Err(AxError::AlreadyExists);
+        }
+        let loc = dir.create(
+            name,
+            NodeType::Symlink,
+            NodePermission::from_bits_truncate(0o777),
+        )?;
+        loc.entry().as_file()?.set_symlink(target.as_str())?;
+        loc.set_cached_len(target.len() as u64, false)?;
         update_cached_metadata(
             &loc,
             MetadataUpdate {
@@ -801,8 +823,24 @@ pub fn sys_readlinkat(
     size: usize,
 ) -> AxResult<isize> {
     let path = vm_load_string(path)?;
+    if path.is_empty() {
+        return Err(AxError::NotFound);
+    }
+    if size == 0 {
+        return Err(AxError::InvalidInput);
+    }
 
     debug!("sys_readlinkat <= dirfd: {dirfd}, path: {path:?}");
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    check_parent_search_access(
+        dirfd,
+        Some(path.as_str()),
+        AT_SYMLINK_NOFOLLOW,
+        proc_data.euid(),
+        proc_data.egid(),
+    )?;
 
     with_fs(dirfd, |fs| {
         let entry = fs.resolve_no_follow(path)?;
@@ -869,12 +907,30 @@ pub fn sys_fchownat(
     gid: i32,
     flags: u32,
 ) -> AxResult<isize> {
+    const VALID_FLAGS: u32 = AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW;
+
+    if flags & !VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
     let path = path.nullable().map(vm_load_string).transpose()?;
     reject_o_path_metadata_fd(dirfd, path.as_deref(), flags)?;
     let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
     let meta = loc.metadata()?;
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    check_parent_search_access(
+        dirfd,
+        path.as_deref(),
+        flags,
+        proc_data.euid(),
+        proc_data.egid(),
+    )?;
+    if loc.mount_flags() & MS_RDONLY != 0 {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
 
     let mut mode = meta.mode;
     debug!(
@@ -898,6 +954,11 @@ pub fn sys_fchownat(
 
     let uid = if uid == -1 { meta.uid } else { uid as _ };
     let gid = if gid == -1 { meta.gid } else { gid as _ };
+    if proc_data.euid() != 0 {
+        if proc_data.euid() != meta.uid || uid != meta.uid || gid != proc_data.egid() {
+            return Err(AxError::OperationNotPermitted);
+        }
+    }
     update_cached_metadata(
         &loc,
         MetadataUpdate {
@@ -906,6 +967,9 @@ pub fn sys_fchownat(
             ..Default::default()
         },
     )?;
+    if let Some(path) = path.as_deref() {
+        notify_fanotify_attrib_path(dirfd, path);
+    }
     Ok(0)
 }
 
@@ -922,11 +986,33 @@ pub fn sys_fchmod(fd: i32, mode: u32) -> AxResult<isize> {
 }
 
 pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> AxResult<isize> {
+    const VALID_FLAGS: u32 = AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW;
+
+    if flags & !VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
     let path = path.nullable().map(vm_load_string).transpose()?;
     reject_o_path_metadata_fd(dirfd, path.as_deref(), flags)?;
     let loc = resolve_at(dirfd, path.as_deref(), flags)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
+    let meta = loc.metadata()?;
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    check_parent_search_access(
+        dirfd,
+        path.as_deref(),
+        flags,
+        proc_data.euid(),
+        proc_data.egid(),
+    )?;
+    if loc.mount_flags() & MS_RDONLY != 0 {
+        return Err(AxError::ReadOnlyFilesystem);
+    }
+    if proc_data.euid() != 0 && proc_data.euid() != meta.uid {
+        return Err(AxError::OperationNotPermitted);
+    }
     let permission = NodePermission::from_bits_truncate(mode as u16);
     debug!(
         "sys_fchmodat: path={:?}, mode={:#o}, permission bits={:#o}, has SET_GID={}",
@@ -943,6 +1029,7 @@ pub fn sys_fchmodat(dirfd: i32, path: *const c_char, mode: u32, flags: u32) -> A
         },
     )?;
     if let Some(path) = path.as_deref() {
+        notify_fanotify_attrib_path(dirfd, path);
         notify_inotify_path(dirfd, path, IN_ATTRIB);
     }
     Ok(0)
@@ -1036,6 +1123,7 @@ fn update_times(
         },
     )?;
     if let Some(path) = path.as_deref() {
+        notify_fanotify_attrib_path(dirfd, path);
         notify_inotify_path(dirfd, path, IN_ATTRIB);
     }
     Ok(())
@@ -1200,6 +1288,9 @@ pub fn sys_renameat2(
         rename_exchange(&old_dir, &old_name, &new_dir, new_name)?;
         return Ok(0);
     }
+    if old_target.is_dir() && !old_dir.ptr_eq(&new_dir) && new_target.is_none() {
+        check_link_count_limit(&new_dir)?;
+    }
     let is_dir = fanotify_path_is_dir(old_dirfd, &old_path).unwrap_or(false);
     let move_from_event = prepare_fanotify_move_from_event(old_dirfd, &old_path, is_dir);
     let move_self_event = prepare_fanotify_move_self_event(old_dirfd, &old_path);
@@ -1215,9 +1306,8 @@ pub fn sys_renameat2(
             .then_some(loc)
     });
 
-    // Flush a replaced inode before rename removes its last link.
     if let Some(file) = replaced_file_cache.as_ref() {
-        invalidate_file_cache(file)?;
+        invalidate_removed_file_cache(file)?;
     }
     old_dir.rename(&old_name, &new_dir, new_name)?;
     commit_fanotify_path_alias(path_alias);

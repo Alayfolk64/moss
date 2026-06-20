@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::{
     mem,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::Context,
 };
 
@@ -38,6 +38,7 @@ use crate::{
 
 const RING_BUFFER_INIT_SIZE: usize = 65536; // 64 KiB
 pub const PIPE_MAX_SIZE: usize = 1048576; // 1 MiB
+static PIPE_MAX_SIZE_LIMIT: AtomicUsize = AtomicUsize::new(PIPE_MAX_SIZE);
 type FifoKey = (u64, u64);
 
 static FIFO_PIPES: RwLock<BTreeMap<FifoKey, Weak<Shared>>> = RwLock::new(BTreeMap::new());
@@ -63,8 +64,9 @@ impl Drop for Pipe {
 
 impl Pipe {
     pub fn new() -> (Pipe, Pipe) {
+        let init_size = initial_pipe_capacity();
         let shared = Arc::new(Shared {
-            buffer: Mutex::new(HeapRb::new(RING_BUFFER_INIT_SIZE)),
+            buffer: Mutex::new(HeapRb::new(init_size)),
             poll_rx: PollSet::new(),
             poll_tx: PollSet::new(),
             poll_close: PollSet::new(),
@@ -206,6 +208,28 @@ impl Pipe {
         notify_async_io(self.async_key());
         Ok(written)
     }
+}
+
+pub fn pipe_max_size() -> usize {
+    PIPE_MAX_SIZE_LIMIT.load(Ordering::Acquire)
+}
+
+pub fn set_pipe_max_size(size: usize) {
+    PIPE_MAX_SIZE_LIMIT.store(round_pipe_size(size), Ordering::Release);
+}
+
+fn initial_pipe_capacity() -> usize {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    if proc_data.euid() == 0 {
+        RING_BUFFER_INIT_SIZE
+    } else {
+        RING_BUFFER_INIT_SIZE.min(pipe_max_size())
+    }
+}
+
+fn round_pipe_size(size: usize) -> usize {
+    size.div_ceil(PAGE_SIZE_4K).max(1) * PAGE_SIZE_4K
 }
 
 fn raise_pipe() {

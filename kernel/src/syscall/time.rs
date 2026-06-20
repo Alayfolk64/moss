@@ -1,5 +1,8 @@
 use alloc::{collections::BTreeMap, format, string::String};
-use core::time::Duration;
+use core::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use axerrno::{AxError, AxResult};
 use axhal::time::{
@@ -63,7 +66,7 @@ const MAX_TICK: isize = 11000;
 const NANOS_PER_SEC_I64: i64 = 1_000_000_000;
 const CAP_SYS_TIME: u32 = 25;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct TimensOffsets {
     active_monotonic_ns: i64,
     active_boottime_ns: i64,
@@ -71,8 +74,14 @@ struct TimensOffsets {
     child_boottime_ns: i64,
 }
 
+static TIMENS_OFFSETS_ACTIVE: AtomicBool = AtomicBool::new(false);
+
 lazy_static! {
     static ref TIMENS_OFFSETS: Mutex<BTreeMap<Pid, TimensOffsets>> = Mutex::new(BTreeMap::new());
+}
+
+fn refresh_timens_offsets_active(offsets: &BTreeMap<Pid, TimensOffsets>) {
+    TIMENS_OFFSETS_ACTIVE.store(!offsets.is_empty(), Ordering::Release);
 }
 
 #[repr(C)]
@@ -135,14 +144,34 @@ impl Timex {
     }
 }
 
+fn valid_clock_read_id(clock_id: __kernel_clockid_t) -> Option<u32> {
+    let clock_id = u32::try_from(clock_id).ok()?;
+    matches!(
+        clock_id,
+        CLOCK_REALTIME
+            | CLOCK_REALTIME_COARSE
+            | CLOCK_REALTIME_ALARM
+            | CLOCK_TAI
+            | CLOCK_MONOTONIC
+            | CLOCK_MONOTONIC_RAW
+            | CLOCK_MONOTONIC_COARSE
+            | CLOCK_BOOTTIME
+            | CLOCK_BOOTTIME_ALARM
+            | CLOCK_PROCESS_CPUTIME_ID
+            | CLOCK_THREAD_CPUTIME_ID
+    )
+    .then_some(clock_id)
+}
+
 pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxResult<isize> {
-    let now = match clock_id as u32 {
+    let clock_id = valid_clock_read_id(clock_id).ok_or(AxError::InvalidInput)?;
+    let now = match clock_id {
         CLOCK_REALTIME | CLOCK_REALTIME_COARSE | CLOCK_REALTIME_ALARM | CLOCK_TAI => realtime_now(),
         CLOCK_MONOTONIC
         | CLOCK_MONOTONIC_RAW
         | CLOCK_MONOTONIC_COARSE
         | CLOCK_BOOTTIME
-        | CLOCK_BOOTTIME_ALARM => timens_clock_now(clock_id as u32),
+        | CLOCK_BOOTTIME_ALARM => timens_clock_now(clock_id),
         CLOCK_PROCESS_CPUTIME_ID => {
             process_cpu_time(current().as_thread().proc_data.proc.pid()).unwrap_or(TimeValue::ZERO)
         }
@@ -150,11 +179,7 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
             let (utime, stime) = current().as_thread().time.borrow().output();
             time_value_add(utime, stime)
         }
-        _ => {
-            warn!("Called sys_clock_gettime for unsupported clock {clock_id}");
-            wall_time()
-            // return Err(AxError::EINVAL);
-        }
+        _ => unreachable!("clock id was validated above"),
     };
     ts.vm_write(timespec::from_time_value(now))?;
     Ok(0)
@@ -163,15 +188,18 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
 pub(crate) fn inherit_child_timens_offsets(parent: Pid, child: Pid) {
     let mut offsets = TIMENS_OFFSETS.lock();
     let parent = offsets.get(&parent).copied().unwrap_or_default();
-    offsets.insert(
-        child,
-        TimensOffsets {
-            active_monotonic_ns: parent.child_monotonic_ns,
-            active_boottime_ns: parent.child_boottime_ns,
-            child_monotonic_ns: parent.child_monotonic_ns,
-            child_boottime_ns: parent.child_boottime_ns,
-        },
-    );
+    let child_offsets = TimensOffsets {
+        active_monotonic_ns: parent.child_monotonic_ns,
+        active_boottime_ns: parent.child_boottime_ns,
+        child_monotonic_ns: parent.child_monotonic_ns,
+        child_boottime_ns: parent.child_boottime_ns,
+    };
+    if child_offsets == TimensOffsets::default() {
+        offsets.remove(&child);
+    } else {
+        offsets.insert(child, child_offsets);
+    }
+    refresh_timens_offsets_active(&offsets);
 }
 
 pub(crate) fn read_child_timens_offsets() -> String {
@@ -195,6 +223,10 @@ pub(crate) fn set_child_timens_offset(clock_id: u32, secs: i64, nsecs: i64) -> A
         CLOCK_BOOTTIME => entry.child_boottime_ns = offset_ns,
         _ => return Err(AxError::InvalidInput),
     }
+    if *entry == TimensOffsets::default() {
+        offsets.remove(&pid);
+    }
+    refresh_timens_offsets_active(&offsets);
     Ok(())
 }
 
@@ -261,13 +293,7 @@ pub fn sys_gettimeofday(tv: *mut timeval, tz: *mut timezone) -> AxResult<isize> 
 }
 
 pub fn sys_clock_getres(clock_id: __kernel_clockid_t, res: *mut timespec) -> AxResult<isize> {
-    if !matches!(
-        clock_id as u32,
-        CLOCK_MONOTONIC | CLOCK_MONOTONIC_COARSE | CLOCK_MONOTONIC_RAW | CLOCK_REALTIME
-            | CLOCK_REALTIME_COARSE | CLOCK_BOOTTIME | CLOCK_TAI
-    ) {
-        warn!("Called sys_clock_getres for unsupported clock {clock_id}");
-    }
+    valid_clock_read_id(clock_id).ok_or(AxError::InvalidInput)?;
     if let Some(res) = res.nullable() {
         res.vm_write(timespec::from_time_value(TimeValue::from_micros(1)))?;
     }
@@ -563,6 +589,11 @@ impl PosixTimerTable {
         self.timers.remove(&(pid, id)).map(|_| ())
     }
 
+    fn remove_process(&mut self, pid: Pid) {
+        self.next_id.remove(&pid);
+        self.timers.retain(|(owner, _), _| *owner != pid);
+    }
+
     fn get(&self, pid: Pid, id: i32) -> Option<&PosixTimer> {
         self.timers.get(&(pid, id))
     }
@@ -604,6 +635,14 @@ impl PosixTimerTable {
 
 lazy_static! {
     static ref POSIX_TIMERS: Mutex<PosixTimerTable> = Mutex::new(PosixTimerTable::default());
+}
+
+pub fn release_process_time_resources(pid: Pid) {
+    let mut offsets = TIMENS_OFFSETS.lock();
+    offsets.remove(&pid);
+    refresh_timens_offsets_active(&offsets);
+    drop(offsets);
+    POSIX_TIMERS.lock().remove_process(pid);
 }
 
 fn spawn_posix_timer(pid: Pid, timerid: i32, deadline: TimeValue, generation: u64) {
@@ -735,6 +774,9 @@ pub(crate) fn timens_clock_now(clock_id: u32) -> TimeValue {
 }
 
 pub(crate) fn current_timens_offset(clock_id: u32) -> i64 {
+    if !TIMENS_OFFSETS_ACTIVE.load(Ordering::Acquire) {
+        return 0;
+    }
     let task = current();
     let Some(thread) = task.try_as_thread() else {
         return 0;
@@ -767,7 +809,10 @@ fn split_offset_ns(ns: i64) -> (i64, i64) {
 }
 
 fn task_cpu_time(task: &axtask::AxTaskRef) -> TimeValue {
-    let (utime, stime) = task.as_thread().time.borrow().output();
+    let Some(thread) = task.try_as_thread() else {
+        return TimeValue::ZERO;
+    };
+    let (utime, stime) = thread.time.borrow().output();
     time_value_add(utime, stime)
 }
 

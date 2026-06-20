@@ -1,0 +1,1651 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-20 06:04:18.013037100 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 0      
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+2026-06-20-06-04-29
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE abort01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+abort01.c:62: [1;32mTPASS: [0mabort() dumped core
+abort01.c:65: [1;32mTPASS: [0mabort() raised SIGIOT
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE abort01 : 0
+2026-06-20-06-04-32
+RUN LTP CASE accept01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept01.c:92: [1;32mTPASS: [0mbad file descriptor : EBADF (9)
+[37m[ 16.382649 0:66 axnet::tcp:708] [33m[AxErrorKind::InvalidInput] not listening[m
+[maccept01.c:92: [1;32mTPASS: [0minvalid socket buffer : EINVAL (22)
+[37m[ 16.393627 0:66 axnet::tcp:708] [33m[AxErrorKind::InvalidInput] not listening[m
+[maccept01.c:92: [1;32mTPASS: [0minvalid salen : EINVAL (22)
+[37m[ 16.395940 0:66 axnet::tcp:708] [33m[AxErrorKind::InvalidInput] not listening[m
+[maccept01.c:92: [1;32mTPASS: [0mno queued connections : EINVAL (22)
+accept01.c:92: [1;32mTPASS: [0mUDP accept : EOPNOTSUPP (95)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept01 : 0
+2026-06-20-06-04-33
+RUN LTP CASE accept02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+accept02.c:131: [1;34mTINFO: [0mStarting listener on port: 49153
+accept02.c:75: [1;32mTPASS: [0mMulticast group was not copied: EADDRNOTAVAIL (99)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE accept02 : 0
+2026-06-20-06-04-35
+RUN LTP CASE accept03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept03.c:48: [1;32mTPASS: [0maccept() on file : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on O_PATH file : EBADF (9)
+accept03.c:48: [1;32mTPASS: [0maccept() on directory : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on /dev/zero : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on /proc/self/maps : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on pipe read end : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on pipe write end : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on epoll : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on eventfd : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on signalfd : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on timerfd : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on pidfd : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on fanotify : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on inotify : ENOTSOCK (88)
+tst_fd.c:170: [1;33mTCONF: [0mSkipping userfaultfd: EPERM (1)
+[37m[ 18.996931 0:80 starry_kernel::syscall::fs::io:59] [33mDummy fd created: perf_event_open[m
+[maccept03.c:48: [1;32mTPASS: [0maccept() on perf event : ENOTSOCK (88)
+tst_fd.c:199: [1;33mTCONF: [0mSkipping io uring: ENOSYS (38)
+accept03.c:48: [1;32mTPASS: [0maccept() on bpf map : ENOTSOCK (88)
+accept03.c:48: [1;32mTPASS: [0maccept() on fsopen : ENOTSOCK (88)
+[37m[ 19.009175 0:80 starry_kernel::syscall::fs::io:59] [33mDummy fd created: fspick[m
+[maccept03.c:48: [1;32mTPASS: [0maccept() on fspick : ENOTSOCK (88)
+tst_fd.c:242: [1;33mTCONF: [0mSkipping open_tree: EINVAL (22)
+accept03.c:48: [1;32mTPASS: [0maccept() on memfd : ENOTSOCK (88)
+[37m[ 19.035993 0:80 starry_kernel::syscall:31] [33mInvalid syscall number: 18446744073709551615[m
+[mtst_fd.c:260: [1;33mTCONF: [0mSkipping memfd secret: ENOSYS (38)
+
+Summary:
+passed   19
+failed   0
+broken   0
+skipped  4
+warnings 0
+FAIL LTP CASE accept03 : 0
+2026-06-20-06-04-36
+RUN LTP CASE accept4_01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+accept4_01.c:71: [1;34mTINFO: [0mTesting variant: libc accept4()
+accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49155
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 0
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 0
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 1
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 1
+accept4_01.c:71: [1;34mTINFO: [0mTesting variant: __NR_accept4 syscall
+accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49160
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 0
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 0
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 0, nonblock 1
+accept4_01.c:151: [1;32mTPASS: [0mClose-on-exec 1, nonblock 1
+accept4_01.c:71: [1;34mTINFO: [0mTesting variant: __NR_socketcall SYS_ACCEPT4 syscall
+accept4_01.c:78: [1;34mTINFO: [0mserver listening on: 49165
+accept4_01.c:43: [1;33mTCONF: [0msyscall(-1) __NR_socketcall not supported on your arch
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE accept4_01 : 0
+2026-06-20-06-04-37
+RUN LTP CASE access01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, W_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK|X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_rwx, R_OK|W_OK|X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK) as nobody passed
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK|X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, W_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK|X_OK) as nobody : EACCES (13)
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_r, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_w, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessfile_x, R_OK|W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, X_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, R_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, W_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, F_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, F_OK) as nobody passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, R_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, W_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, X_OK) as root passed
+access01.c:245: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, X_OK) as nobody passed
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_r/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_w/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_x/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, F_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rw/accessfile_x, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_rx/accessfile_x, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, W_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_r, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, X_OK) as root : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_w, X_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, R_OK) as nobody : EACCES (13)
+access01.c:242: [1;32mTPASS: [0maccess(accessdir_wx/accessfile_x, W_OK) as nobody : EACCES (13)
+
+Summary:
+passed   199
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accBNGHKg) failed: unlink(/tmp/LTP_accBNGHKg) failed; errno=21: EISDIR
+FAIL LTP CASE access01 : 0
+2026-06-20-06-04-39
+RUN LTP CASE access02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+access02.c:139: [1;32mTPASS: [0maccess(file_f, F_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_f, F_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_r, R_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_r, R_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_w, W_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_w, W_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_x, X_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(file_x, X_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_f, F_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_f, F_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_r, R_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_r, R_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_w, W_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_w, W_OK) as nobody behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_x, X_OK) as root behaviour is correct.
+access02.c:139: [1;32mTPASS: [0maccess(symlink_x, X_OK) as nobody behaviour is correct.
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accnoGBLc) failed: remove(/tmp/LTP_accnoGBLc) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE access02 : 0
+2026-06-20-06-04-42
+RUN LTP CASE access03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+access03.c:37: [1;32mTPASS: [0minvalid address as root : EFAULT (14)
+access03.c:46: [1;32mTPASS: [0minvalid address as nobody : EFAULT (14)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE access03 : 0
+2026-06-20-06-04-43
+RUN LTP CASE access04
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accBfOgFA/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+access04.c:68: [1;32mTPASS: [0maccess as root : EINVAL (22)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : EINVAL (22)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENOENT (2)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENOENT (2)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENAMETOOLONG (36)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENAMETOOLONG (36)
+access04.c:68: [1;32mTPASS: [0maccess as root : ENOTDIR (20)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ENOTDIR (20)
+access04.c:68: [1;32mTPASS: [0maccess as root : ELOOP (40)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : ELOOP (40)
+access04.c:68: [1;32mTPASS: [0maccess as root : EROFS (30)
+access04.c:68: [1;32mTPASS: [0maccess as nobody : EROFS (30)
+
+Summary:
+passed   12
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accBfOgFA) failed: unlink(/tmp/LTP_accBfOgFA) failed; errno=21: EISDIR
+FAIL LTP CASE access04 : 0
+2026-06-20-06-04-45
+RUN LTP CASE acct01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_accNadPGd/ro_mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+acct01.c:115: [1;32mTPASS: [0macct(.) : EISDIR (21)
+acct01.c:115: [1;32mTPASS: [0macct(/dev/null) : EACCES (13)
+acct01.c:115: [1;32mTPASS: [0macct(/tmp/does/not/exist) : ENOENT (2)
+acct01.c:115: [1;32mTPASS: [0macct(./tmpfile/) : ENOTDIR (20)
+acct01.c:115: [1;32mTPASS: [0macct(./tmpfile) : EPERM (1)
+acct01.c:115: [1;32mTPASS: [0macct(NULL) : EPERM (1)
+acct01.c:115: [1;32mTPASS: [0macct(test_file_eloop1) : ELOOP (40)
+acct01.c:115: [1;32mTPASS: [0macct(aaaa...) : ENAMETOOLONG (36)
+acct01.c:115: [1;32mTPASS: [0macct(ro_mntpoint/file) : EROFS (30)
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accNadPGd) failed: unlink(/tmp/LTP_accNadPGd) failed; errno=21: EISDIR
+FAIL LTP CASE acct01 : 0
+2026-06-20-06-04-46
+RUN LTP CASE acct02
+tst_kconfig.c:88: [1;34mTINFO: [0mParsing kernel config '/lib/modules/10.0.0/build/.config'
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_kconfig.c:88: [1;34mTINFO: [0mParsing kernel config '/lib/modules/10.0.0/build/.config'
+acct02.c:63: [1;34mTINFO: [0mCONFIG_BSD_PROCESS_ACCT_V3= 
+acct02.c:243: [1;34mTINFO: [0mVerifying using 'struct acct'
+acct02.c:193: [1;34mTINFO: [0m== entry 1 ==
+acct02.c:204: [1;34mTINFO: [0mNumber of accounting file entries tested: 1
+acct02.c:210: [1;32mTPASS: [0macct() wrote correct file contents!
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_accJFbHDe) failed: remove(/tmp/LTP_accJFbHDe) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE acct02 : 0
+2026-06-20-06-04-48
+RUN LTP CASE add_key01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+add_key01.c:63: [1;34mTINFO: [0mThe key type is keyrings and plen is 0
+add_key01.c:79: [1;32mTPASS: [0madd_key call succeeded as expected
+add_key01.c:63: [1;34mTINFO: [0mthe key type is keyrings and plen is 1
+add_key01.c:83: [1;32mTPASS: [0madd_key call failed as expected: EINVAL (22)
+add_key01.c:63: [1;34mTINFO: [0mThe key type is user and plen is 32767
+add_key01.c:79: [1;32mTPASS: [0madd_key call succeeded as expected
+add_key01.c:63: [1;34mTINFO: [0mThe key type is user and plen is 32768
+add_key01.c:83: [1;32mTPASS: [0madd_key call failed as expected: EINVAL (22)
+add_key01.c:63: [1;34mTINFO: [0mThe key type is logon and plen is 32767
+add_key01.c:79: [1;32mTPASS: [0madd_key call succeeded as expected
+add_key01.c:63: [1;34mTINFO: [0mThe key type is logon and plen is 32768
+add_key01.c:83: [1;32mTPASS: [0madd_key call failed as expected: EINVAL (22)
+add_key01.c:63: [1;34mTINFO: [0mThe key type is big_key and plen is 1048575
+add_key01.c:79: [1;32mTPASS: [0madd_key call succeeded as expected
+add_key01.c:63: [1;34mTINFO: [0mThe key type is big_key and plen is 1048576
+add_key01.c:83: [1;32mTPASS: [0madd_key call failed as expected: EINVAL (22)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key01 : 0
+2026-06-20-06-04-49
+RUN LTP CASE add_key02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'asymmetric'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'cifs.idmap'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'cifs.spnego'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'pkcs7_test'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'rxrpc'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'rxrpc_s'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'user'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'logon'
+add_key02.c:59: [1;32mTPASS: [0mreceived expected EFAULT with key type 'big_key'
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key02 : 0
+2026-06-20-06-04-50
+RUN LTP CASE add_key03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+add_key03.c:80: [1;32mTPASS: [0mexpectedly could not create another user's keyrings
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key03 : 0
+2026-06-20-06-04-51
+RUN LTP CASE add_key04
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+add_key04.c:71: [1;32mTPASS: [0mdidn't crash while filling keyring
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key04 : 0
+2026-06-20-06-04-52
+RUN LTP CASE add_key05
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+add_key05.c:50: [1;34mTINFO: [0mCreated user ltp_add_key05_0
+add_key05.c:191: [1;34mTINFO: [0mUser: 0, UID: 2000
+add_key05.c:88: [1;34mTINFO: [0mtest max bytes under unprivileged user
+add_key05.c:113: [1;32mTPASS: [0madd_key(test_inv) failed as expected: EDQUOT (122)
+add_key05.c:136: [1;32mTPASS: [0madd_key(test_max) succeeded as expected
+add_key05.c:139: [1;32mTPASS: [0mallow reaching the max bytes exactly
+add_key05.c:50: [1;34mTINFO: [0mCreated user ltp_add_key05_1
+add_key05.c:191: [1;34mTINFO: [0mUser: 1, UID: 2001
+add_key05.c:149: [1;34mTINFO: [0mtest max keys under unprivileged user
+add_key05.c:167: [1;32mTPASS: [0madd_key(test_invalid_key) failed as expected: EDQUOT (122)
+add_key05.c:174: [1;32mTPASS: [0mallow reaching the max key(200) exactly
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE add_key05 : 0
+2026-06-20-06-04-56
+RUN LTP CASE adjtimex01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+adjtimex01.c:24: [1;32mTPASS: [0madjtimex() with mode 0x403f 
+adjtimex01.c:33: [1;32mTPASS: [0madjtimex() with mode 0x8001 
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex01 : 0
+2026-06-20-06-04-57
+RUN LTP CASE adjtimex02
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: libc adjtimex()
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EPERM (1)
+adjtimex02.c:95: [1;33mTCONF: [0mEFAULT is skipped for libc variant
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:111: [1;34mTINFO: [0mTesting variant: __NR_adjtimex syscall
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EPERM (1)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EFAULT (14)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+adjtimex02.c:100: [1;32mTPASS: [0madjtimex() error : EINVAL (22)
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE adjtimex02 : 0
+2026-06-20-06-04-58
+RUN LTP CASE adjtimex03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:53: [1;34mTINFO: [0mexpecting adjtimex() to fail with EINVAL with mode 0x8000
+adjtimex03.c:62: [1;34mTINFO: [0mtai : 0x00000000
+adjtimex03.c:73: [1;32mTPASS: [0mData leak not observed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE adjtimex03 : 0
+2026-06-20-06-04-59
+RUN LTP CASE alarm02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+alarm02.c:36: [1;32mTPASS: [0malarm(2147483647) passed
+alarm02.c:38: [1;32mTPASS: [0malarm(0) passed
+alarm02.c:36: [1;32mTPASS: [0malarm(2147483647) passed
+alarm02.c:38: [1;32mTPASS: [0malarm(0) passed
+alarm02.c:36: [1;32mTPASS: [0malarm(1073741823) passed
+alarm02.c:38: [1;32mTPASS: [0malarm(0) passed
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm02 : 0
+2026-06-20-06-05-00
+RUN LTP CASE alarm03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+alarm03.c:30: [1;32mTPASS: [0malarm(0) in parent process passed
+alarm03.c:26: [1;32mTPASS: [0malarm(0) in child process passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm03 : 0
+2026-06-20-06-05-01
+RUN LTP CASE alarm05
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+alarm05.c:28: [1;32mTPASS: [0malarm(10) passed
+alarm05.c:30: [1;32mTPASS: [0malarm(1) passed
+alarm05.c:32: [1;32mTPASS: [0malarms_fired == 1 (1)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm05 : 0
+2026-06-20-06-05-04
+RUN LTP CASE alarm06
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+alarm06.c:35: [1;32mTPASS: [0malarm(0) passed
+alarm06.c:40: [1;32mTPASS: [0malarms_received == 0 (0)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm06 : 0
+2026-06-20-06-05-08
+RUN LTP CASE alarm07
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+alarm07.c:36: [1;32mTPASS: [0malarm_cnt == 1 (1)
+alarm07.c:32: [1;32mTPASS: [0malarm_cnt == 0 (0)
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE alarm07 : 0
+2026-06-20-06-05-12
+RUN LTP CASE bind01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind01.c:60: [1;32mTPASS: [0minvalid salen : EINVAL (22)
+bind01.c:60: [1;32mTPASS: [0minvalid socket : ENOTSOCK (88)
+bind01.c:63: [1;32mTPASS: [0mINADDR_ANYPORT passed
+bind01.c:60: [1;32mTPASS: [0mUNIX-domain of current directory : EAFNOSUPPORT (97)
+bind01.c:60: [1;32mTPASS: [0mnon-local address : EADDRNOTAVAIL (99)
+bind01.c:60: [1;32mTPASS: [0msockfd is not a valid file descriptor : EBADF (9)
+bind01.c:60: [1;32mTPASS: [0ma component of addr prefix is not a directory : ENOTDIR (20)
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_binnEEEMm) failed: remove(/tmp/LTP_binnEEEMm) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE bind01 : 0
+2026-06-20-06-05-13
+RUN LTP CASE bind02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind02.c:52: [1;34mTINFO: [0mSwitching credentials to user: nobody, group: nobody
+bind02.c:39: [1;32mTPASS: [0mbind() : EACCES (13)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind02 : 0
+2026-06-20-06-05-15
+RUN LTP CASE bind03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind03.c:31: [1;32mTPASS: [0mre-bind() socket : EINVAL (22)
+bind03.c:38: [1;32mTPASS: [0mbind() with bound pathname : EADDRINUSE (98)
+bind03.c:49: [1;32mTPASS: [0mcheck exist of SNAME_B : ENOENT (2)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_binJpHFcp) failed: remove(/tmp/LTP_binJpHFcp) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE bind03 : 0
+2026-06-20-06-05-16
+RUN LTP CASE bind04
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind04.c:117: [1;34mTINFO: [0mTesting AF_UNIX pathname stream
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting AF_UNIX pathname seqpacket
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting AF_UNIX abstract stream
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting AF_UNIX abstract seqpacket
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv4 loop TCP variant 1
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv4 loop TCP variant 2
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv4 loop SCTP
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv4 any TCP variant 1
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv4 any TCP variant 2
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv4 any SCTP
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv6 loop TCP variant 1
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv6 loop TCP variant 2
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv6 loop SCTP
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv6 any TCP variant 1
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv6 any TCP variant 2
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+bind04.c:117: [1;34mTINFO: [0mTesting IPv6 any SCTP
+bind04.c:149: [1;32mTPASS: [0mCommunication successful
+
+Summary:
+passed   16
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind04 : 0
+2026-06-20-06-05-18
+RUN LTP CASE bind05
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bind05.c:131: [1;34mTINFO: [0mTesting AF_UNIX pathname datagram
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting AF_UNIX abstract datagram
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv4 loop UDP variant 1
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv4 loop UDP variant 2
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv4 loop UDP-Lite
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv4 any UDP variant 1
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv4 any UDP variant 2
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv4 any UDP-Lite
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv6 loop UDP variant 1
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv6 loop UDP variant 2
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv6 loop UDP-Lite
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv6 any UDP variant 1
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv6 any UDP variant 2
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+bind05.c:131: [1;34mTINFO: [0mTesting IPv6 any UDP-Lite
+bind05.c:167: [1;32mTPASS: [0mCommunication successful
+
+Summary:
+passed   14
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bind05 : 0
+2026-06-20-06-05-19
+RUN LTP CASE bpf_map01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097151
+bpf_map01.c:53: [1;32mTPASS: [0mCreated hash map
+bpf_map01.c:70: [1;32mTPASS: [0mEmpty hash map lookup: ENOENT (2)
+bpf_map01.c:102: [1;32mTPASS: [0mUpdate hash map element
+bpf_map01.c:122: [1;32mTPASS: [0mhash map lookup
+bpf_map01.c:53: [1;32mTPASS: [0mCreated array map
+bpf_map01.c:102: [1;32mTPASS: [0mUpdate array map element
+bpf_map01.c:122: [1;32mTPASS: [0marray map lookup
+
+Summary:
+passed   7
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_map01 : 0
+2026-06-20-06-05-21
+RUN LTP CASE bpf_prog01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097151
+bpf_common.c:114: [1;32mTPASS: [0mLoaded program
+bpf_prog01.c:95: [1;32mTPASS: [0mval = 1
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog01 : 0
+2026-06-20-06-05-22
+RUN LTP CASE bpf_prog02
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097151
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+bpf_common.c:114: [1;32mTPASS: [0mLoaded program
+bpf_prog02.c:93: [1;32mTPASS: [0mval = 1152921504606846976 + 1
+bpf_prog02.c:103: [1;32mTPASS: [0mval = 1152921504606846976 - 1
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog02 : 0
+2026-06-20-06-05-22
+RUN LTP CASE bpf_prog03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097151
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+bpf_prog03.c:105: [1;32mTPASS: [0mFailed verification: EACCES (13)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog03 : 0
+2026-06-20-06-05-23
+RUN LTP CASE bpf_prog04
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+bpf_common.c:16: [1;34mTINFO: [0mRaising RLIMIT_MEMLOCK to 2097151
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_SYS_ADMIN(21)
+bpf_prog04.c:79: [1;32mTPASS: [0mBPF program failed verification: EPERM (1)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE bpf_prog04 : 0
+2026-06-20-06-05-24
+RUN LTP CASE brk01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+brk01.c:24: [1;34mTINFO: [0mTesting libc variant
+brk01.c:35: [1;33mTCONF: [0mbrk() not implemented
+brk01.c:21: [1;34mTINFO: [0mTesting syscall variant
+brk01.c:70: [1;32mTPASS: [0mbrk() works fine
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE brk01 : 0
+2026-06-20-06-05-25
+RUN LTP CASE brk02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+brk02.c:42: [1;34mTINFO: [0mTesting libc variant
+brk02.c:53: [1;33mTCONF: [0mbrk() not implemented
+brk02.c:39: [1;34mTINFO: [0mTesting syscall variant
+brk02.c:86: [1;32mTPASS: [0mmunmap at least two VMAs of brk() passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  1
+warnings 0
+FAIL LTP CASE brk02 : 0
+2026-06-20-06-05-26
+RUN LTP CASE capget01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_capability.c:29: [1;34mTINFO: [0mDropping CAP_NET_RAW(13)
+capget01.c:35: [1;32mTPASS: [0mcapget() with LINUX_CAPABILITY_VERSION_1 passed
+capget01.c:41: [1;32mTPASS: [0mcapget() doesn't get CAP_NET_RAW as expected in PE
+capget01.c:35: [1;32mTPASS: [0mcapget() with LINUX_CAPABILITY_VERSION_2 passed
+capget01.c:41: [1;32mTPASS: [0mcapget() doesn't get CAP_NET_RAW as expected in PE
+capget01.c:35: [1;32mTPASS: [0mcapget() with LINUX_CAPABILITY_VERSION_3 passed
+capget01.c:41: [1;32mTPASS: [0mcapget() doesn't get CAP_NET_RAW as expected in PE
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget01 : 0
+2026-06-20-06-05-27
+RUN LTP CASE capget02
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+capget02.c:57: [1;32mTPASS: [0mcapget() with bad address header : EFAULT (14)
+capget02.c:57: [1;32mTPASS: [0mcapget() with bad address data : EFAULT (14)
+capget02.c:57: [1;32mTPASS: [0mcapget() with bad version : EINVAL (22)
+capget02.c:57: [1;32mTPASS: [0mcapget() with bad pid : EINVAL (22)
+capget02.c:57: [1;32mTPASS: [0mcapget() with unused pid : ESRCH (3)
+
+Summary:
+passed   5
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capget02 : 0
+2026-06-20-06-05-28
+RUN LTP CASE capset01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+capset01.c:47: [1;32mTPASS: [0mcapset() with LINUX_CAPABILITY_VERSION_1 passed
+capset01.c:47: [1;32mTPASS: [0mcapset() with LINUX_CAPABILITY_VERSION_2 passed
+capset01.c:47: [1;32mTPASS: [0mcapset() with LINUX_CAPABILITY_VERSION_3 passed
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset01 : 0
+2026-06-20-06-05-29
+RUN LTP CASE capset02
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+capset02.c:71: [1;32mTPASS: [0mcapset() with bad address header : EFAULT (14)
+capset02.c:71: [1;32mTPASS: [0mcapset() with bad address data : EFAULT (14)
+capset02.c:71: [1;32mTPASS: [0mcapset() with bad version : EINVAL (22)
+capset02.c:71: [1;32mTPASS: [0mcapset() with bad value data(when pE is not in pP) : EPERM (1)
+capset02.c:71: [1;32mTPASS: [0mcapset() with bad value data(when pP is not in old pP) : EPERM (1)
+capset02.c:71: [1;32mTPASS: [0mcapset() with bad value data(when pI is not in bounding set or old pI) : EPERM (1)
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset02 : 0
+2026-06-20-06-05-30
+RUN LTP CASE capset03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+capset03.c:30: [1;34mTINFO: [0mTest bad value data(when pI is not old pP or old pI without CAP_SETPCAP)
+capset03.c:32: [1;32mTPASS: [0mcapset() : EPERM (1)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset03 : 0
+2026-06-20-06-05-31
+RUN LTP CASE capset04
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+capset04.c:33: [1;34mTINFO: [0mTest capset() for a different process
+capset04.c:37: [1;32mTPASS: [0mcapset() : EPERM (1)
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE capset04 : 0
+2026-06-20-06-05-32
+RUN LTP CASE chdir01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_device.c:135: [1;34mTINFO: [0mFound free device '/dev/loop0'
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports ext2
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.ext2 does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports ext3
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.ext3 does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports ext4
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.ext4 does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports xfs
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.xfs does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports btrfs
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.btrfs does exist
+tst_supported_fs_types.c:105: [1;34mTINFO: [0mSkipping bcachefs because of FUSE blacklist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports vfat
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.vfat does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports exfat
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.exfat does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports ntfs
+tst_supported_fs_types.c:62: [1;34mTINFO: [0mmkfs.ntfs does exist
+tst_supported_fs_types.c:97: [1;34mTINFO: [0mKernel supports tmpfs
+tst_supported_fs_types.c:49: [1;34mTINFO: [0mmkfs is not needed for tmpfs
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on ext2 ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext2 opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=ext2 flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on ext3 ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext3 opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=ext3 flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on ext4 ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ext4 opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=ext4 flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on xfs ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with xfs opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=xfs flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on btrfs ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with btrfs opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=btrfs flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on vfat ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with vfat opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=vfat flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on exfat ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with exfat opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=exfat flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on ntfs ===
+tst_test.c:1106: [1;34mTINFO: [0mFormatting /dev/loop0 with ntfs opts='' extra opts=''
+tst_test.c:1120: [1;34mTINFO: [0mMounting /dev/loop0 to /tmp/LTP_chdNjINhH/mntpoint fstyp=ntfs flags=0
+tst_test.c:1120: [1;34mTINFO: [0mTrying FUSE...
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+tst_test.c:1693: [1;34mTINFO: [0m=== Testing on tmpfs ===
+tst_test.c:1106: [1;34mTINFO: [0mSkipping mkfs for TMPFS filesystem
+tst_test.c:1087: [1;34mTINFO: [0mLimiting tmpfs size to 32MB
+tst_test.c:1120: [1;34mTINFO: [0mMounting ltp-tmpfs to /tmp/LTP_chdNjINhH/mntpoint fstyp=tmpfs flags=0
+chdir01.c:119: [1;34mTINFO: [0mTesting 'testfile'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("testfile") returned correct value: ENOTDIR (20)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'keep_out'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("keep_out") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("keep_out") returned correct value: EACCES (13)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'subdir'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("subdir") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '.'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir(".") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '..'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("..") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting '/'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("/") returned correct value: SUCCESS (0)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'does_not_exist'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("does_not_exist") returned correct value: ENOENT (2)
+chdir01.c:119: [1;34mTINFO: [0mTesting 'symloop'
+chdir01.c:111: [1;32mTPASS: [0mroot: chdir("symloop") returned correct value: ELOOP (40)
+chdir01.c:111: [1;32mTPASS: [0mnobody: chdir("symloop") returned correct value: ELOOP (40)
+
+Summary:
+passed   144
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chdNjINhH) failed: unlink(/tmp/LTP_chdNjINhH) failed; errno=21: EISDIR
+FAIL LTP CASE chdir01 : 0
+2026-06-20-06-06-09
+RUN LTP CASE chdir04
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chdir04.c:29: [1;32mTPASS: [0mchdir() : ENAMETOOLONG (36)
+chdir04.c:29: [1;32mTPASS: [0mchdir() : ENOENT (2)
+chdir04.c:29: [1;32mTPASS: [0mchdir() : EFAULT (14)
+
+Summary:
+passed   3
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE chdir04 : 0
+2026-06-20-06-06-10
+RUN LTP CASE chmod01
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chmod01.c:60: [1;34mTINFO: [0mTesting variant: verify permissions of file
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 0000) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=0000
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 0007) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=0007
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 0070) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=0070
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 0700) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=0700
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 0777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=0777
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 2777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=2777
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 4777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=4777
+chmod01.c:40: [1;32mTPASS: [0mchmod(testfile, 6777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testfile) mode=6777
+chmod01.c:60: [1;34mTINFO: [0mTesting variant: verify permissions of directory
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 0000) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=0000
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 0007) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=0007
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 0070) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=0070
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 0700) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=0700
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 0777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=0777
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 2777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=2777
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 4777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=4777
+chmod01.c:40: [1;32mTPASS: [0mchmod(testdir_1, 6777) passed
+chmod01.c:50: [1;32mTPASS: [0mstat(testdir_1) mode=6777
+
+Summary:
+passed   32
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chmbgmkiJ) failed: unlink(/tmp/LTP_chmbgmkiJ) failed; errno=21: EISDIR
+FAIL LTP CASE chmod01 : 0
+2026-06-20-06-06-11
+RUN LTP CASE chmod03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chmod03.c:42: [1;32mTPASS: [0mchmod(testfile, 1777) passed
+chmod03.c:54: [1;32mTPASS: [0mstat(testfile) mode=101777
+chmod03.c:42: [1;32mTPASS: [0mchmod(testdir_3, 1777) passed
+chmod03.c:54: [1;32mTPASS: [0mstat(testdir_3) mode=41777
+
+Summary:
+passed   4
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chmjaaGeG) failed: unlink(/tmp/LTP_chmjaaGeG) failed; errno=21: EISDIR
+FAIL LTP CASE chmod03 : 0
+2026-06-20-06-06-12
+RUN LTP CASE chmod06
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_chmfGlnhe/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: EPERM (1)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: EACCES (13)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: EFAULT (14)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: EFAULT (14)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: ENAMETOOLONG (36)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: ENOENT (2)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: ENOTDIR (20)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: EROFS (30)
+chmod06.c:86: [1;32mTPASS: [0mchmod failed as expected: ELOOP (40)
+
+Summary:
+passed   9
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chmfGlnhe) failed: unlink(/tmp/LTP_chmfGlnhe) failed; errno=21: EISDIR
+FAIL LTP CASE chmod06 : 0
+2026-06-20-06-06-13
+RUN LTP CASE chown01
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chown01.c:24: [1;32mTPASS: [0mchown(chown01_testfile,0,0) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chonjfgHB) failed: remove(/tmp/LTP_chonjfgHB) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE chown01 : 0
+2026-06-20-06-06-14
+RUN LTP CASE chown02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chown02.c:46: [1;32mTPASS: [0mchown(testfile1, 0, 0) passed
+chown02.c:46: [1;32mTPASS: [0mchown(testfile2, 0, 0) passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_choFAJaOC) failed: remove(/tmp/LTP_choFAJaOC) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE chown02 : 0
+2026-06-20-06-06-15
+RUN LTP CASE chown03
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chown03.c:63: [1;32mTPASS: [0mchown(chown03_testfile, -1, 65534) passed
+
+Summary:
+passed   1
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_choBEiEgD) failed: remove(/tmp/LTP_choBEiEgD) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE chown03 : 0
+2026-06-20-06-06-16
+RUN LTP CASE chown04
+tst_test.c:1017: [1;34mTINFO: [0mMounting (null) to /tmp/LTP_chojBoLdk/mntpoint fstyp=tmpfs flags=21
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chown04.c:77: [1;32mTPASS: [0mchown() without permissions : EPERM (1)
+chown04.c:77: [1;32mTPASS: [0mchown() without full permissions of the path prefix : EACCES (13)
+chown04.c:77: [1;32mTPASS: [0mchown() with unaccessible pathname points : EFAULT (14)
+chown04.c:77: [1;32mTPASS: [0mchown() when pathname is too long : ENAMETOOLONG (36)
+chown04.c:77: [1;32mTPASS: [0mchown() when file does not exist : ENOENT (2)
+chown04.c:77: [1;32mTPASS: [0mchown() when the path prefix is not a directory : ENOTDIR (20)
+chown04.c:77: [1;32mTPASS: [0mchown() with too many symbolic links : ELOOP (40)
+chown04.c:77: [1;32mTPASS: [0mchown() when the named file resides on a read-only filesystem : EROFS (30)
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chojBoLdk) failed: unlink(/tmp/LTP_chojBoLdk) failed; errno=21: EISDIR
+FAIL LTP CASE chown04 : 0
+2026-06-20-06-06-17
+RUN LTP CASE chown05
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chown05.c:42: [1;32mTPASS: [0mchown(testfile, 700, 701), change owner/group ids passed
+chown05.c:42: [1;32mTPASS: [0mchown(testfile, 702, -1), change owner id only passed
+chown05.c:42: [1;32mTPASS: [0mchown(testfile, 703, 701), change owner id only passed
+chown05.c:42: [1;32mTPASS: [0mchown(testfile, -1, 704), change group id only passed
+chown05.c:42: [1;32mTPASS: [0mchown(testfile, 703, 705), change group id only passed
+chown05.c:42: [1;32mTPASS: [0mchown(testfile, -1, -1), no change passed
+
+Summary:
+passed   6
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chonJEkmM) failed: remove(/tmp/LTP_chonJEkmM) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE chown05 : 0
+2026-06-20-06-06-18
+RUN LTP CASE chroot02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+chroot02.c:30: [1;32mTPASS: [0mchroot(/tmp/LTP_chrJblMjn) passed
+chroot02.c:34: [1;32mTPASS: [0mstat(/chroot02_testfile) passed
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+tst_tmpdir.c:342: [1;35mTWARN: [0mtst_rmdir: rmobj(/tmp/LTP_chrJblMjn) failed: remove(/tmp/LTP_chrJblMjn) failed; errno=39: ENOTEMPTY
+FAIL LTP CASE chroot02 : 0
+2026-06-20-06-06-19
+RUN LTP CASE chroot03
+tst_buffers.c:57: [1;34mTINFO: [0mTest is using guarded buffers
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s

@@ -7,7 +7,7 @@ use axnet::{
     options::{Configurable, GetSocketOption, SetSocketOption},
 };
 use axpoll::{IoEvents, Pollable};
-use linux_raw_sys::general::S_IFSOCK;
+use linux_raw_sys::general::{O_PATH, S_IFSOCK};
 
 use super::{FileLike, Kstat};
 use crate::file::{IoDst, IoSrc, get_file_like};
@@ -60,9 +60,11 @@ impl FileLike for Socket {
     where
         Self: Sized + 'static,
     {
-        get_file_like(fd)?
-            .downcast_arc()
-            .map_err(|_| AxError::NotASocket)
+        let file_like = get_file_like(fd)?;
+        if file_like.status_flags() & O_PATH != 0 {
+            return Err(AxError::BadFileDescriptor);
+        }
+        file_like.downcast_arc().map_err(|_| AxError::NotASocket)
     }
 }
 impl Pollable for Socket {

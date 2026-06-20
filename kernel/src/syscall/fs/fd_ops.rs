@@ -28,14 +28,16 @@ use super::{
         notify_fanotify_fd_close, notify_fanotify_open,
     },
     inotify::{notify_inotify_dirent, notify_inotify_file},
-    memfd_state,
-    protected_symlinks_enabled,
+    memfd_state, protected_symlinks_enabled,
+    stat::check_parent_search_access,
 };
 use crate::{
     file::{
-        Directory, FD_TABLE, File, FileLike, PIPE_MAX_SIZE, Pipe, add_file_like,
-        add_file_like_from, async_fcntl_get_owner, async_fcntl_get_signal, async_fcntl_set_owner,
-        async_fcntl_set_signal, close_file_like, get_file_like, resolve_at, with_fs,
+        Directory, FD_TABLE, File, FileLike, Pipe, add_file_like, add_file_like_from,
+        async_fcntl_get_owner, async_fcntl_get_signal, async_fcntl_set_owner,
+        async_fcntl_set_signal, close_file_like, get_file_like, pipe_max_size,
+        release_async_fcntl_state_for_closed_files, release_async_fcntl_state_if_last, resolve_at,
+        with_fs,
     },
     mm::{UserConstPtr, UserPtr, vm_load_string},
     pseudofs::{Device, dev::tty},
@@ -43,7 +45,7 @@ use crate::{
         sys::{sys_getegid, sys_geteuid},
         task::current_has_cap,
     },
-    task::AsThread,
+    task::{AsThread, processes},
 };
 
 /// Convert open flags to [`OpenOptions`].
@@ -51,6 +53,16 @@ fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32))
     let flags = flags as u32;
     let mut options = OpenOptions::new();
     options.mode(mode).user(uid, gid);
+    if flags & O_PATH != 0 {
+        options.path(true);
+        if flags & O_DIRECTORY != 0 {
+            options.directory(true);
+        }
+        if flags & O_NOFOLLOW != 0 {
+            options.no_follow(true);
+        }
+        return options;
+    }
     match flags & 0b11 {
         O_RDONLY => options.read(true),
         O_WRONLY => options.write(true),
@@ -64,9 +76,6 @@ fn flags_to_options(flags: c_int, mode: __kernel_mode_t, (uid, gid): (u32, u32))
     }
     if flags & O_CREAT != 0 {
         options.create(true);
-    }
-    if flags & O_PATH != 0 {
-        options.path(true);
     }
     if flags & O_EXCL != 0 {
         options.create_new(true);
@@ -165,7 +174,11 @@ fn check_protected_symlink_follow(dirfd: c_int, path: &str, flags: u32, uid: u32
     }
 
     with_fs(dirfd, |fs| {
-        let (parent, name) = fs.resolve_parent(Path::new(path))?;
+        let (parent, name) = match fs.resolve_parent(Path::new(path)) {
+            Ok(result) => result,
+            Err(err) if err.canonicalize() == VfsError::InvalidInput => return Ok(()),
+            Err(err) => return Err(err.into()),
+        };
         let symlink = match parent.lookup_no_follow(name.as_ref()) {
             Ok(symlink) => symlink,
             Err(err) if flags & O_CREAT != 0 && err.canonicalize() == VfsError::NotFound => {
@@ -288,10 +301,7 @@ fn check_open_target_constraints(
     };
     let metadata = loc.metadata()?;
 
-    if flags & O_NOFOLLOW != 0
-        && flags & O_PATH == 0
-        && metadata.node_type == NodeType::Symlink
-    {
+    if flags & O_NOFOLLOW != 0 && flags & O_PATH == 0 && metadata.node_type == NodeType::Symlink {
         return Err(AxError::FilesystemLoop);
     }
 
@@ -347,7 +357,47 @@ fn fifo_has_reader(loc: &Location) -> AxResult<bool> {
     Ok(false)
 }
 
-fn record_created_file(dirfd: c_int, path: &str) -> AxResult {
+fn has_dir_write_search(mode: u32, uid: u32, gid: u32, euid: u32, egid: u32) -> bool {
+    let shift = if euid == uid {
+        6
+    } else if egid == gid {
+        3
+    } else {
+        0
+    };
+    let required = 0o3 << shift;
+    mode & required == required
+}
+
+fn check_create_parent_access(dirfd: c_int, path: &str, (uid, gid): (u32, u32)) -> AxResult {
+    if uid == 0 {
+        return Ok(());
+    }
+
+    check_parent_search_access(dirfd, Some(path), 0, uid, gid)?;
+    with_fs(dirfd, |fs| {
+        let (parent, _) = fs.resolve_parent(Path::new(path))?;
+        let metadata = parent.metadata()?;
+        if has_dir_write_search(
+            metadata.mode.bits() as u32,
+            metadata.uid,
+            metadata.gid,
+            uid,
+            gid,
+        ) {
+            Ok(())
+        } else {
+            Err(AxError::PermissionDenied)
+        }
+    })
+}
+
+fn record_created_file(
+    dirfd: c_int,
+    path: &str,
+    mode: __kernel_mode_t,
+    (uid, gid): (u32, u32),
+) -> AxResult {
     let loc = resolve_at(dirfd, Some(path), 0)?
         .into_file()
         .ok_or(AxError::BadFileDescriptor)?;
@@ -355,6 +405,8 @@ fn record_created_file(dirfd: c_int, path: &str) -> AxResult {
     update_cached_metadata(
         &loc,
         MetadataUpdate {
+            owner: Some((uid, gid)),
+            mode: Some(NodePermission::from_bits_truncate(mode as u16)),
             atime: Some(now),
             mtime: Some(now),
             ctime: Some(now),
@@ -433,45 +485,45 @@ fn add_to_fd(result: OpenResult, flags: u32) -> AxResult<i32> {
                 let read_side = flags & O_ACCMODE != O_WRONLY;
                 Arc::new(Pipe::new_fifo(metadata.device, metadata.inode, read_side))
             } else {
-            // /dev/xx handling
-            if let Ok(device) = file.location().entry().downcast::<Device>() {
-                let inner = device.inner().as_any();
-                if let Some(ptmx) = inner.downcast_ref::<tty::Ptmx>() {
-                    // Opening /dev/ptmx creates a new pseudo-terminal
-                    let (master, pty_number) = ptmx.create_pty()?;
-                    // TODO: this is cursed
-                    let pts = FS_CONTEXT.lock().resolve("/dev/pts")?;
-                    let entry = DirEntry::new_file(
-                        FileNode::new(master),
-                        NodeType::CharacterDevice,
-                        Reference::new(Some(pts.entry().clone()), pty_number.to_string()),
-                    );
-                    let loc = Location::new(file.location().mountpoint().clone(), entry);
-                    file = axfs::File::new(FileBackend::Direct(loc), file.flags());
-                } else if inner.is::<tty::CurrentTty>() {
-                    let term = current()
-                        .as_thread()
-                        .proc_data
-                        .proc
-                        .group()
-                        .session()
-                        .terminal()
-                        .ok_or(AxError::NotFound)?;
-                    let path = if term.is::<tty::NTtyDriver>() {
-                        "/dev/console".to_string()
-                    } else if let Some(pts) = term.downcast_ref::<tty::PtyDriver>() {
-                        format!("/dev/pts/{}", pts.pty_number())
-                    } else {
-                        panic!("unknown terminal type")
-                    };
-                    let loc = FS_CONTEXT.lock().resolve(&path)?;
-                    file = axfs::File::new(FileBackend::Direct(loc), file.flags());
+                // /dev/xx handling
+                if let Ok(device) = file.location().entry().downcast::<Device>() {
+                    let inner = device.inner().as_any();
+                    if let Some(ptmx) = inner.downcast_ref::<tty::Ptmx>() {
+                        // Opening /dev/ptmx creates a new pseudo-terminal
+                        let (master, pty_number) = ptmx.create_pty()?;
+                        // TODO: this is cursed
+                        let pts = FS_CONTEXT.lock().resolve("/dev/pts")?;
+                        let entry = DirEntry::new_file(
+                            FileNode::new(master),
+                            NodeType::CharacterDevice,
+                            Reference::new(Some(pts.entry().clone()), pty_number.to_string()),
+                        );
+                        let loc = Location::new(file.location().mountpoint().clone(), entry);
+                        file = axfs::File::new(FileBackend::Direct(loc), file.flags());
+                    } else if inner.is::<tty::CurrentTty>() {
+                        let term = current()
+                            .as_thread()
+                            .proc_data
+                            .proc
+                            .group()
+                            .session()
+                            .terminal()
+                            .ok_or(AxError::NotFound)?;
+                        let path = if term.is::<tty::NTtyDriver>() {
+                            "/dev/console".to_string()
+                        } else if let Some(pts) = term.downcast_ref::<tty::PtyDriver>() {
+                            format!("/dev/pts/{}", pts.pty_number())
+                        } else {
+                            panic!("unknown terminal type")
+                        };
+                        let loc = FS_CONTEXT.lock().resolve(&path)?;
+                        file = axfs::File::new(FileBackend::Direct(loc), file.flags());
+                    }
                 }
-            }
-            Arc::new(File::new_with_status_flags(file, flags))
+                Arc::new(File::new_with_status_flags(file, flags))
             }
         }
-        OpenResult::Dir(dir) => Arc::new(Directory::new(dir)),
+        OpenResult::Dir(dir) => Arc::new(Directory::new_with_status_flags(dir, flags)),
     };
     if flags & O_NONBLOCK != 0 {
         f.set_nonblocking(true)?;
@@ -514,6 +566,9 @@ pub fn sys_openat(
         flags_u32 & O_CREAT != 0 && resolve_at(dirfd, Some(path.as_str()), 0).is_ok();
     check_mount_open_constraints(dirfd, path.as_str(), flags_u32)?;
     check_open_target_constraints(dirfd, path.as_str(), flags_u32, ids)?;
+    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+        check_create_parent_access(dirfd, path.as_str(), ids)?;
+    }
 
     // axfs::OpenOptions rejects (read-only + create), but Linux permits
     // O_RDONLY|O_CREAT. Handle it locally without modifying third-party crates.
@@ -527,7 +582,7 @@ pub fn sys_openat(
             match open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32) {
                 Ok(result) => {
                     if flags_u32 & O_CREAT != 0 && !existed_before_create {
-                        record_created_file(dirfd, path.as_str())?;
+                        record_created_file(dirfd, path.as_str(), mode, ids)?;
                         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
                     }
                     let fd = add_to_fd(result, flags_u32)?;
@@ -546,7 +601,7 @@ pub fn sys_openat(
         open_with_create_follow(dirfd, path.as_str(), &create_options, flags_u32)?;
 
         if !existed_before_create {
-            record_created_file(dirfd, path.as_str())?;
+            record_created_file(dirfd, path.as_str(), mode, ids)?;
             notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         }
         let fd = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)
@@ -562,7 +617,7 @@ pub fn sys_openat(
     check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
     if flags_u32 & O_CREAT != 0 && !existed_before_create {
         let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
-        record_created_file(dirfd, path.as_str())?;
+        record_created_file(dirfd, path.as_str(), mode, ids)?;
         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         let fd = add_to_fd(result, flags as _)?;
         notify_fanotify_create(dirfd, &path, false);
@@ -600,6 +655,7 @@ pub fn sys_close(fd: c_int) -> AxResult<isize> {
     );
     notify_fanotify_close(&file_like, writable);
     release_bsd_flocks_for_file_like_if_last(&file_like);
+    release_async_fcntl_state_if_last(&file_like);
     Ok(0)
 }
 
@@ -654,6 +710,7 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
                     release_posix_locks_for_file_like(&file_desc.inner);
                     release_file_lease_for_file_like(&file_desc.inner);
                     release_bsd_flocks_for_file_like_if_last(&file_desc.inner);
+                    release_async_fcntl_state_if_last(&file_desc.inner);
                 }
             }
         }
@@ -1095,34 +1152,87 @@ fn release_bsd_flocks_for_file_like_if_last(file_like: &Arc<dyn FileLike>) {
     }
 }
 
-pub fn close_all_files_for_current_process() {
-    let fd_table_ref = FD_TABLE.clone();
-    // CLONE_FILES shares the table Arc across process scopes; only the last
-    // process that references it should close the underlying descriptors.
-    if Arc::strong_count(&fd_table_ref) > 2 {
-        return;
+fn release_bsd_flocks_for_closed_files(files: &[Arc<dyn FileLike>]) {
+    let mut closing = BTreeMap::<usize, usize>::new();
+    for file in files {
+        *closing.entry(file_description_owner(file)).or_default() += 1;
     }
-    drop(fd_table_ref);
 
-    let file_likes = {
-        let fd_table = FD_TABLE.read();
-        fd_table
-            .ids()
-            .filter_map(|fd| fd_table.get(fd).map(|file_desc| file_desc.inner.clone()))
-            .collect::<Vec<_>>()
-    };
+    for file in files {
+        let owner = file_description_owner(file);
+        let Some(count) = closing.remove(&owner) else {
+            continue;
+        };
+        if Arc::strong_count(file) == count {
+            release_bsd_flocks_for_file_like(file);
+        }
+    }
+}
 
-    for file_like in &file_likes {
+fn current_fd_table_shared_by_live_process() -> bool {
+    let fd_table_ref = FD_TABLE.clone();
+    let curr_pid = current().as_thread().proc_data.proc.pid();
+
+    processes().iter().any(|proc_data| {
+        if proc_data.proc.pid() == curr_pid || proc_data.proc.is_zombie() {
+            return false;
+        }
+        let scope = proc_data.scope.read();
+        let other_fd_table = FD_TABLE.scope(&scope).clone();
+        Arc::ptr_eq(&fd_table_ref, &other_fd_table)
+    })
+}
+
+fn current_file_likes() -> Vec<Arc<dyn FileLike>> {
+    let fd_table = FD_TABLE.read();
+    fd_table
+        .ids()
+        .filter_map(|fd| fd_table.get(fd).map(|file_desc| file_desc.inner.clone()))
+        .collect()
+}
+
+fn release_file_likes_for_process_exit(file_likes: &[Arc<dyn FileLike>]) {
+    for file_like in file_likes {
         release_posix_locks_for_file_like(file_like);
         release_file_lease_for_file_like(file_like);
-        release_bsd_flocks_for_file_like(file_like);
         notify_fanotify_fd_close(file_like);
     }
+}
 
+fn close_current_fd_table() {
     let mut fd_table = FD_TABLE.write();
     let fds = fd_table.ids().collect::<Vec<_>>();
     for fd in fds {
         fd_table.remove(fd);
+    }
+}
+
+pub fn close_all_files_for_current_process() {
+    if current_fd_table_shared_by_live_process() {
+        return;
+    }
+
+    let file_likes = current_file_likes();
+    release_file_likes_for_process_exit(&file_likes);
+    close_current_fd_table();
+    release_bsd_flocks_for_closed_files(&file_likes);
+    release_async_fcntl_state_for_closed_files(&file_likes);
+}
+
+pub fn close_cloexec_files_for_current_process() {
+    let mut fd_table = FD_TABLE.write();
+    let fds = fd_table
+        .ids()
+        .filter(|fd| fd_table.get(*fd).is_some_and(|desc| desc.cloexec))
+        .collect::<Vec<_>>();
+
+    for fd in fds {
+        if let Some(file_desc) = fd_table.remove(fd) {
+            release_posix_locks_for_file_like(&file_desc.inner);
+            release_file_lease_for_file_like(&file_desc.inner);
+            release_bsd_flocks_for_file_like_if_last(&file_desc.inner);
+            release_async_fcntl_state_if_last(&file_desc.inner);
+        }
     }
 }
 
@@ -1371,6 +1481,7 @@ pub fn sys_dup3(old_fd: c_int, new_fd: c_int, flags: c_int) -> AxResult<isize> {
         release_posix_locks_for_file_like(&file_desc.inner);
         release_file_lease_for_file_like(&file_desc.inner);
         release_bsd_flocks_for_file_like_if_last(&file_desc.inner);
+        release_async_fcntl_state_if_last(&file_desc.inner);
     }
     fd_table
         .add_at(new_fd as _, f)
@@ -1450,7 +1561,7 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> AxResult<isize> {
             if arg > (1usize << 31) {
                 return Err(AxError::InvalidInput);
             }
-            if arg > PIPE_MAX_SIZE && !current_has_cap(CAP_SYS_RESOURCE) {
+            if arg > pipe_max_size() && !current_has_cap(CAP_SYS_RESOURCE) {
                 return Err(AxError::from(LinuxError::EPERM));
             }
             Ok(pipe.resize(arg)? as _)

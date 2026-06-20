@@ -110,10 +110,10 @@ pub trait BackendOps {
 #[derive(Clone)]
 #[enum_dispatch(BackendOps)]
 pub enum Backend {
-    Linear(linear::LinearBackend), //线性映射，虚拟地址和物理地址有固定偏移关系
-    Cow(cow::CowBackend),          //Copy-on-write，写时复制
-    Shared(shared::SharedBackend), //共享内存
-    File(file::FileBackend),       //文件映射
+    Linear(linear::LinearBackend), // 线性映射，虚拟地址和物理地址有固定偏移关系
+    Cow(cow::CowBackend),          // Copy-on-write，写时复制
+    Shared(shared::SharedBackend), // 共享内存
+    File(file::FileBackend),       // 文件映射
 }
 
 impl MappingBackend for Backend {

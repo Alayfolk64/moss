@@ -1,11 +1,12 @@
 use alloc::{boxed::Box, vec::Vec};
-use core::net::Ipv4Addr;
+use core::net::{Ipv4Addr, SocketAddr};
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axio::prelude::*;
 use axnet::{CMsgData, RecvFlags, RecvOptions, SendFlags, SendOptions, SocketAddrEx, SocketOps};
 use linux_raw_sys::net::{
-    MSG_PEEK, MSG_TRUNC, SCM_RIGHTS, SOL_SOCKET, cmsghdr, msghdr, sockaddr, socklen_t,
+    __kernel_sockaddr_storage, MSG_ERRQUEUE, MSG_OOB, MSG_PEEK, MSG_TRUNC, SCM_RIGHTS, SOL_SOCKET,
+    cmsghdr, mmsghdr, msghdr, sockaddr, socklen_t,
 };
 
 use super::addr::SocketAddrExt;
@@ -23,6 +24,10 @@ fn send_impl(
     addrlen: socklen_t,
     cmsg: Vec<CMsgData>,
 ) -> AxResult<isize> {
+    if flags & MSG_OOB != 0 {
+        return Err(AxError::from(LinuxError::EOPNOTSUPP));
+    }
+
     let addr = if addr.is_null() || addrlen == 0 {
         None
     } else {
@@ -52,11 +57,18 @@ pub fn sys_sendto(
     addr: UserConstPtr<sockaddr>,
     addrlen: socklen_t,
 ) -> AxResult<isize> {
+    if len != 0 {
+        let mut probe = [0u8; 1];
+        VmBytes::new(buf, 1).read(&mut probe)?;
+    }
     send_impl(fd, VmBytes::new(buf, len), flags, addr, addrlen, Vec::new())
 }
 
 pub fn sys_sendmsg(fd: i32, msg: UserConstPtr<msghdr>, flags: u32) -> AxResult<isize> {
     let msg = msg.get_as_ref()?;
+    if msg.msg_iovlen > 1024 {
+        return Err(AxError::from(LinuxError::EMSGSIZE));
+    }
     let mut cmsg = Vec::new();
     if !msg.msg_control.is_null() {
         let mut ptr = msg.msg_control as usize;
@@ -80,6 +92,35 @@ pub fn sys_sendmsg(fd: i32, msg: UserConstPtr<msghdr>, flags: u32) -> AxResult<i
     )
 }
 
+pub fn sys_sendmmsg(fd: i32, msgvec: UserPtr<mmsghdr>, vlen: u32, flags: u32) -> AxResult<isize> {
+    let messages = msgvec.get_as_mut_slice(vlen as usize)?;
+    let mut sent = 0;
+
+    for message in messages {
+        let msg_ptr = UserConstPtr::from(&message.msg_hdr as *const msghdr);
+        match sys_sendmsg(fd, msg_ptr, flags) {
+            Ok(len) => {
+                message.msg_len = len as _;
+                sent += 1;
+            }
+            Err(_err) if sent > 0 => return Ok(sent),
+            Err(err) => return Err(err),
+        }
+    }
+
+    Ok(sent)
+}
+
+fn is_unspecified_remote_addr(addr: &SocketAddrEx) -> bool {
+    match addr {
+        SocketAddrEx::Ip(SocketAddr::V4(addr)) => addr.ip().is_unspecified() && addr.port() == 0,
+        SocketAddrEx::Ip(SocketAddr::V6(addr)) => addr.ip().is_unspecified() && addr.port() == 0,
+        SocketAddrEx::Unix(_) => false,
+        #[cfg(feature = "vsock")]
+        SocketAddrEx::Vsock(_) => false,
+    }
+}
+
 fn recv_impl(
     fd: i32,
     mut dst: impl Write + IoBufMut,
@@ -89,6 +130,19 @@ fn recv_impl(
     cmsg_builder: Option<CMsgBuilder>,
 ) -> AxResult<isize> {
     debug!("sys_recv <= fd: {fd}, flags: {flags}");
+
+    if flags & MSG_OOB != 0 {
+        return Err(AxError::InvalidInput);
+    }
+    if flags & MSG_ERRQUEUE != 0 {
+        return Err(AxError::from(LinuxError::EAGAIN));
+    }
+    if !addr.is_null() {
+        let len = *addrlen.get_as_mut()?;
+        if len as usize > size_of::<__kernel_sockaddr_storage>() {
+            return Err(AxError::InvalidInput);
+        }
+    }
 
     let socket = Socket::from_fd(fd)?;
     let mut recv_flags = RecvFlags::empty();
@@ -112,7 +166,9 @@ fn recv_impl(
         },
     )?;
 
-    if let Some(remote_addr) = remote_addr {
+    if let Some(remote_addr) = remote_addr
+        && !is_unspecified_remote_addr(&remote_addr)
+    {
         remote_addr.write_to_user(addr, addrlen.get_as_mut()?)?;
     }
 
@@ -157,6 +213,9 @@ pub fn sys_recvfrom(
 
 pub fn sys_recvmsg(fd: i32, msg: UserPtr<msghdr>, flags: u32) -> AxResult<isize> {
     let msg = msg.get_as_mut()?;
+    if msg.msg_iovlen > 1024 {
+        return Err(AxError::from(LinuxError::EMSGSIZE));
+    }
     recv_impl(
         fd,
         IoVectorBuf::new(msg.msg_iov as *mut IoVec, msg.msg_iovlen)?.into_io(),

@@ -6,10 +6,11 @@ use linux_raw_sys::general::{
     FUTEX_CLOCK_REALTIME, FUTEX_CMD_MASK, FUTEX_CMP_REQUEUE, FUTEX_REQUEUE, FUTEX_WAIT,
     FUTEX_WAIT_BITSET, FUTEX_WAKE, FUTEX_WAKE_BITSET, robust_list_head, timespec,
 };
+use starry_process::{Pid, init_proc};
 use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::{
-    task::{AsThread, FutexKey, futex_table_for, get_task},
+    task::{AsThread, FutexKey, ProcessData, futex_table_for, get_process_data, get_task},
     time::TimeValueLike,
 };
 
@@ -128,11 +129,38 @@ pub fn sys_get_robust_list(
     head: *mut *const robust_list_head,
     size: *mut usize,
 ) -> AxResult<isize> {
+    let tid = resolve_robust_list_tid(tid);
     let task = get_task(tid)?;
+    check_get_robust_list_permission(
+        &current().as_thread().proc_data,
+        &task.as_thread().proc_data,
+    )?;
     head.vm_write(task.as_thread().robust_list_head() as _)?;
     size.vm_write(size_of::<robust_list_head>())?;
 
     Ok(0)
+}
+
+fn resolve_robust_list_tid(tid: Pid) -> Pid {
+    if tid == 1 && get_process_data(1).is_err() {
+        init_proc().pid()
+    } else {
+        tid
+    }
+}
+
+fn check_get_robust_list_permission(caller: &ProcessData, target: &ProcessData) -> AxResult<()> {
+    if caller.proc.pid() == target.proc.pid()
+        || caller.euid() == 0
+        || caller.uid() == target.uid()
+        || caller.uid() == target.suid()
+        || caller.euid() == target.uid()
+        || caller.euid() == target.suid()
+    {
+        Ok(())
+    } else {
+        Err(AxError::from(LinuxError::EPERM))
+    }
 }
 
 pub fn sys_set_robust_list(head: *const robust_list_head, size: usize) -> AxResult<isize> {

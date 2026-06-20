@@ -5,15 +5,18 @@ use alloc::{
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use axerrno::{AxError, AxResult, LinuxError};
+use axtask::current;
 use bytemuck::AnyBitPattern;
 use lazy_static::lazy_static;
 use linux_raw_sys::general::{O_ACCMODE, O_RDONLY, O_WRONLY};
 use spin::Mutex;
+use starry_process::Pid;
 use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::{
     file::{File, FileLike},
     mm::{VmBytes, VmBytesMut},
+    task::AsThread,
 };
 
 const AIO_MAX_NR: usize = 1024;
@@ -47,6 +50,7 @@ pub(crate) struct AioEvent {
 }
 
 struct AioContext {
+    owner_pid: Pid,
     max_events: usize,
     events: VecDeque<AioEvent>,
 }
@@ -56,6 +60,27 @@ lazy_static! {
 }
 
 static NEXT_AIO_CTX: AtomicUsize = AtomicUsize::new(1);
+
+fn current_pid() -> Pid {
+    current().as_thread().proc_data.proc.pid()
+}
+
+fn current_context_mut(
+    contexts: &mut BTreeMap<u64, AioContext>,
+    ctx: u64,
+) -> AxResult<&mut AioContext> {
+    let aio = contexts.get_mut(&ctx).ok_or(AxError::InvalidInput)?;
+    if aio.owner_pid != current_pid() {
+        return Err(AxError::InvalidInput);
+    }
+    Ok(aio)
+}
+
+pub fn release_process_aio_resources(pid: Pid) {
+    AIO_CONTEXTS
+        .lock()
+        .retain(|_, context| context.owner_pid != pid);
+}
 
 fn aio_err(err: AxError) -> i64 {
     -LinuxError::from(err).code() as i64
@@ -80,6 +105,7 @@ pub fn sys_io_setup(nr_events: isize, ctxp: *mut u64) -> AxResult<isize> {
     contexts.insert(
         id,
         AioContext {
+            owner_pid: current_pid(),
             max_events: nr_events,
             events: VecDeque::new(),
         },
@@ -89,10 +115,9 @@ pub fn sys_io_setup(nr_events: isize, ctxp: *mut u64) -> AxResult<isize> {
 }
 
 pub fn sys_io_destroy(ctx: u64) -> AxResult<isize> {
-    AIO_CONTEXTS
-        .lock()
-        .remove(&ctx)
-        .ok_or(AxError::InvalidInput)?;
+    let mut contexts = AIO_CONTEXTS.lock();
+    current_context_mut(&mut contexts, ctx)?;
+    contexts.remove(&ctx);
     Ok(0)
 }
 
@@ -133,7 +158,7 @@ fn run_iocb(iocb: AioIocb) -> AxResult<isize> {
 
 pub fn sys_io_submit(ctx: u64, nr: isize, iocbpp: *const *const AioIocb) -> AxResult<isize> {
     let mut contexts = AIO_CONTEXTS.lock();
-    let aio = contexts.get_mut(&ctx).ok_or(AxError::InvalidInput)?;
+    let aio = current_context_mut(&mut contexts, ctx)?;
     if nr < 0 {
         return Err(AxError::InvalidInput);
     }
@@ -173,7 +198,7 @@ pub fn sys_io_getevents(
     _timeout: *const (),
 ) -> AxResult<isize> {
     let mut contexts = AIO_CONTEXTS.lock();
-    let aio = contexts.get_mut(&ctx).ok_or(AxError::InvalidInput)?;
+    let aio = current_context_mut(&mut contexts, ctx)?;
     if min_nr < 0 || nr < min_nr {
         return Err(AxError::InvalidInput);
     }
@@ -198,7 +223,7 @@ pub fn sys_io_cancel(ctx: u64, iocb: *const AioIocb, result: *mut AioEvent) -> A
         return Err(AxError::BadAddress);
     }
     let mut contexts = AIO_CONTEXTS.lock();
-    let aio = contexts.get_mut(&ctx).ok_or(AxError::InvalidInput)?;
+    let aio = current_context_mut(&mut contexts, ctx)?;
     let obj = iocb as u64;
     let index = aio
         .events

@@ -19,6 +19,9 @@ bitflags! {
 pub fn sys_pidfd_open(pid: u32, flags: u32) -> AxResult<isize> {
     debug!("sys_pidfd_open <= pid: {pid}, flags: {flags}");
 
+    if pid == 0 || pid > i32::MAX as u32 {
+        return Err(AxError::InvalidInput);
+    }
     let flags = PidFdFlags::from_bits(flags).ok_or(AxError::InvalidInput)?;
 
     let fd = if flags.contains(PidFdFlags::THREAD) {

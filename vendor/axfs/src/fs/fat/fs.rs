@@ -11,6 +11,8 @@ use slab::Slab;
 use super::{dir::FatDirNode, ff, util::into_vfs_err};
 use crate::disk::SeekableDisk;
 
+pub(crate) const SYNTHETIC_INODE_BASE: u64 = 1 << 32;
+
 pub struct FatFilesystemInner {
     pub inner: ff::FileSystem,
     inode_allocator: Slab<()>,

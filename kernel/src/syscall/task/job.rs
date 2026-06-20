@@ -1,13 +1,19 @@
 use axerrno::{AxError, AxResult};
 use axtask::current;
-use starry_process::Pid;
+use starry_process::{Pid, init_proc};
 
 use crate::task::{
     AsThread, add_process_group_to_table, add_session_to_table, get_process_data, get_process_group,
 };
 
 pub fn sys_getsid(pid: Pid) -> AxResult<isize> {
-    Ok(get_process_data(pid)?.proc.group().session().sid() as _)
+    match get_process_data(pid) {
+        Ok(proc_data) => Ok(proc_data.proc.group().session().sid() as _),
+        Err(AxError::NoSuchProcess) if pid == 1 || pid == init_proc().pid() => {
+            Ok(init_proc().group().session().sid() as _)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 pub fn sys_setsid() -> AxResult<isize> {
@@ -27,7 +33,13 @@ pub fn sys_setsid() -> AxResult<isize> {
 }
 
 pub fn sys_getpgid(pid: Pid) -> AxResult<isize> {
-    Ok(get_process_data(pid)?.proc.group().pgid() as _)
+    match get_process_data(pid) {
+        Ok(proc_data) => Ok(proc_data.proc.group().pgid() as _),
+        Err(AxError::NoSuchProcess) if pid == 1 || pid == init_proc().pid() => {
+            Ok(init_proc().group().pgid() as _)
+        }
+        Err(err) => Err(err),
+    }
 }
 
 pub fn sys_setpgid(pid: Pid, pgid: Pid) -> AxResult<isize> {

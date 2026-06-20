@@ -62,9 +62,10 @@ impl Inode {
         let mut reader = fs.read_dir(self.ino, 0).map_err(into_vfs_err)?;
         let mut nlink = 2;
         while let Some(entry) = reader.current() {
+            let ino = entry.ino();
             let name = core::str::from_utf8(entry.name()).map_err(|_| VfsError::InvalidData)?;
             let is_child_dir =
-                entry.inode_type() == InodeType::Directory && name != "." && name != "..";
+                ino != 0 && entry.inode_type() == InodeType::Directory && name != "." && name != "..";
             reader.step().map_err(into_vfs_err)?;
             if is_child_dir {
                 nlink += 1;
@@ -269,6 +270,9 @@ impl DirNodeOps for Inode {
             let ino = entry.ino() as u64;
             let node_type = into_vfs_type(entry.inode_type());
             reader.step().map_err(into_vfs_err)?;
+            if ino == 0 {
+                continue;
+            }
             if !sink.accept(&name, ino, node_type, reader.offset()) {
                 break;
             }

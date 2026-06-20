@@ -252,7 +252,15 @@ enum FanotifyMarkKind {
 
 static FANOTIFY_FDS: RwLock<Vec<Weak<FanotifyFd>>> = RwLock::new(Vec::new());
 static FANOTIFY_PATH_ALIASES: RwLock<Vec<FanotifyPathAlias>> = RwLock::new(Vec::new());
+static FANOTIFY_USER_LIMITS: RwLock<Vec<FanotifyUserLimits>> = RwLock::new(Vec::new());
 static FANOTIFY_INTEREST_MASK: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy)]
+struct FanotifyUserLimits {
+    pid: u32,
+    max_groups: usize,
+    max_marks: usize,
+}
 
 pub struct FanotifyFd {
     init_flags: u32,
@@ -317,18 +325,27 @@ impl FanotifyFd {
         self.destroyed.load(Ordering::Acquire)
     }
 
+    fn release_pending_permissions(&self) {
+        {
+            let mut permissions = self.permissions.lock();
+            for permission in permissions.iter_mut() {
+                if permission.response.is_none() {
+                    permission.response = Some(FAN_ALLOW);
+                }
+            }
+            permissions.clear();
+        }
+        self.permission_event.notify(usize::MAX);
+    }
+
     fn destroy(&self) {
         if self.destroyed.swap(true, Ordering::AcqRel) {
             return;
         }
 
+        self.marks.lock().clear();
         self.events.lock().clear();
-        for permission in self.permissions.lock().iter_mut() {
-            if permission.response.is_none() {
-                permission.response = Some(FAN_ALLOW);
-            }
-        }
-        self.permission_event.notify(usize::MAX);
+        self.release_pending_permissions();
         self.poll.wake();
     }
 
@@ -387,7 +404,13 @@ impl FanotifyFd {
             }
             mark.path = target.path;
         } else {
-            if self.init_flags & FAN_UNLIMITED_MARKS == 0 && marks.len() >= FANOTIFY_MAX_USER_MARKS
+            let mark_count = owner_mark_count_with_current(
+                self.owner_pid,
+                self as *const FanotifyFd,
+                marks.len(),
+            );
+            if self.init_flags & FAN_UNLIMITED_MARKS == 0
+                && mark_count >= fanotify_max_user_marks_for_pid(self.owner_pid as u32)
             {
                 return Err(AxError::StorageFull);
             }
@@ -872,6 +895,92 @@ impl FanotifyFd {
     }
 }
 
+fn current_pid() -> u32 {
+    current().as_thread().proc_data.proc.pid()
+}
+
+fn fanotify_user_limits_for_pid(pid: u32) -> (usize, usize) {
+    FANOTIFY_USER_LIMITS
+        .read()
+        .iter()
+        .find(|limits| limits.pid == pid)
+        .map(|limits| (limits.max_groups, limits.max_marks))
+        .unwrap_or((FANOTIFY_MAX_USER_GROUPS, FANOTIFY_MAX_USER_MARKS))
+}
+
+fn fanotify_max_user_groups_for_pid(pid: u32) -> usize {
+    fanotify_user_limits_for_pid(pid).0
+}
+
+fn fanotify_max_user_marks_for_pid(pid: u32) -> usize {
+    fanotify_user_limits_for_pid(pid).1
+}
+
+fn update_current_fanotify_limits(update: impl FnOnce(&mut FanotifyUserLimits)) {
+    let pid = current_pid();
+    let mut limits = FANOTIFY_USER_LIMITS.write();
+    if let Some(entry) = limits.iter_mut().find(|entry| entry.pid == pid) {
+        update(entry);
+    } else {
+        let mut entry = FanotifyUserLimits {
+            pid,
+            max_groups: FANOTIFY_MAX_USER_GROUPS,
+            max_marks: FANOTIFY_MAX_USER_MARKS,
+        };
+        update(&mut entry);
+        limits.push(entry);
+    }
+}
+
+pub(crate) fn fanotify_max_user_groups() -> usize {
+    fanotify_max_user_groups_for_pid(current_pid())
+}
+
+pub(crate) fn set_fanotify_max_user_groups(value: usize) {
+    update_current_fanotify_limits(|limits| limits.max_groups = value);
+}
+
+pub(crate) fn fanotify_max_user_marks() -> usize {
+    fanotify_max_user_marks_for_pid(current_pid())
+}
+
+pub(crate) fn set_fanotify_max_user_marks(value: usize) {
+    update_current_fanotify_limits(|limits| limits.max_marks = value);
+}
+
+pub(crate) fn release_process_fanotify_resources(pid: u32) {
+    FANOTIFY_USER_LIMITS
+        .write()
+        .retain(|limits| limits.pid != pid);
+}
+
+fn owner_group_count(fds: &[Weak<FanotifyFd>], owner_pid: i32) -> usize {
+    fds.iter()
+        .filter_map(Weak::upgrade)
+        .filter(|fd| !fd.is_destroyed() && fd.owner_pid == owner_pid)
+        .count()
+}
+
+fn owner_mark_count_with_current(
+    owner_pid: i32,
+    current_fd: *const FanotifyFd,
+    current_marks_len: usize,
+) -> usize {
+    FANOTIFY_FDS
+        .read()
+        .iter()
+        .filter_map(Weak::upgrade)
+        .filter(|fd| !fd.is_destroyed() && fd.owner_pid == owner_pid)
+        .map(|fd| {
+            if core::ptr::eq(Arc::as_ptr(&fd), current_fd) {
+                current_marks_len
+            } else {
+                fd.marks.lock().len()
+            }
+        })
+        .sum()
+}
+
 fn close_fanotify_record_fds(fd: c_int, pidfd: Option<c_int>) {
     if fd >= 0 {
         let _ = close_file_like(fd);
@@ -1110,6 +1219,12 @@ fn open_fanotify_event_file(path: &str, event_f_flags: u32) -> AxResult<Arc<dyn 
     Ok(file)
 }
 
+impl Drop for FanotifyFd {
+    fn drop(&mut self) {
+        self.destroy();
+    }
+}
+
 impl FileLike for FanotifyFd {
     fn read(&self, dst: &mut IoDst) -> AxResult<usize> {
         block_on(poll_io(self, IoEvents::IN, self.nonblocking(), || {
@@ -1304,9 +1419,10 @@ pub fn sys_fanotify_init(flags: u32, event_f_flags: u32) -> AxResult<isize> {
 
     validate_init_flags(flags, event_f_flags)?;
 
+    let pid = current_pid();
     let mut fds = FANOTIFY_FDS.write();
     fds.retain(|weak| weak.upgrade().is_some_and(|fd| !fd.is_destroyed()));
-    if fds.len() >= FANOTIFY_MAX_USER_GROUPS {
+    if owner_group_count(&fds, pid as i32) >= fanotify_max_user_groups_for_pid(pid) {
         return Err(AxError::TooManyOpenFiles);
     }
 
@@ -1760,6 +1876,10 @@ pub(super) fn prepare_fanotify_move_self_event(
 
 pub(super) fn notify_fanotify_modify_path(dirfd: c_int, path: &str) {
     notify_fanotify_resolved_path(dirfd, path, FAN_MODIFY);
+}
+
+pub(super) fn notify_fanotify_attrib_path(dirfd: c_int, path: &str) {
+    notify_fanotify_resolved_path(dirfd, path, FAN_ATTRIB);
 }
 
 pub(super) fn notify_fanotify_open(file: &Arc<dyn FileLike>) {

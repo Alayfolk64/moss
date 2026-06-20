@@ -1,7 +1,8 @@
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
 use core::{
     ffi::c_char,
     fmt::Write as _,
+    mem::MaybeUninit,
     sync::atomic::{AtomicI32, Ordering},
 };
 
@@ -14,7 +15,7 @@ use linux_raw_sys::{
     general::{GRND_INSECURE, GRND_NONBLOCK, GRND_RANDOM, MS_RDONLY},
     system::{new_utsname, sysinfo},
 };
-use starry_vm::{VmMutPtr, vm_load, vm_write_slice};
+use starry_vm::{VmMutPtr, vm_load, vm_read_slice, vm_write_slice};
 
 use crate::{
     file::{resolve_at, with_fs},
@@ -112,15 +113,54 @@ pub fn sys_personality(personality: usize) -> AxResult<isize> {
 }
 
 pub fn sys_getgroups(size: usize, list: *mut u32) -> AxResult<isize> {
+    const LINUX_NGROUPS_MAX: usize = 65536;
+
     debug!("sys_getgroups <= size: {size}");
-    if size < 1 {
+    if size > LINUX_NGROUPS_MAX {
         return Err(AxError::InvalidInput);
     }
-    vm_write_slice(list, &[0])?;
-    Ok(1)
+    let groups = axtask::current()
+        .as_thread()
+        .proc_data
+        .supplementary_groups();
+    if size == 0 {
+        return Ok(groups.len() as isize);
+    }
+    if size < groups.len() {
+        return Err(AxError::InvalidInput);
+    }
+    vm_write_slice(list, &groups)?;
+    Ok(groups.len() as isize)
 }
 
-pub fn sys_setgroups(_size: usize, _list: *const u32) -> AxResult<isize> {
+pub fn sys_setgroups(size: usize, list: *const u32) -> AxResult<isize> {
+    const LINUX_NGROUPS_MAX: usize = 65536;
+    const STARRY_NGROUPS_MAX: usize = 32;
+
+    debug!("sys_setgroups <= size: {size}");
+    let curr = axtask::current();
+    let proc_data = &curr.as_thread().proc_data;
+    if proc_data.euid() != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+    if size > LINUX_NGROUPS_MAX {
+        return Err(AxError::InvalidInput);
+    }
+
+    let groups = if size == 0 {
+        Vec::new()
+    } else if size > STARRY_NGROUPS_MAX {
+        let mut buf = vec![MaybeUninit::<u32>::uninit(); size];
+        vm_read_slice(list, &mut buf)?;
+        return Err(AxError::InvalidInput);
+    } else {
+        let mut buf = vec![MaybeUninit::<u32>::uninit(); size];
+        vm_read_slice(list, &mut buf)?;
+        buf.into_iter()
+            .map(|gid| unsafe { gid.assume_init() })
+            .collect()
+    };
+    proc_data.set_supplementary_groups(groups);
     Ok(0)
 }
 
@@ -181,10 +221,10 @@ bitflags::bitflags! {
 }
 
 pub fn sys_getrandom(buf: *mut u8, len: usize, flags: u32) -> AxResult<isize> {
+    let flags = GetRandomFlags::from_bits(flags).ok_or(AxError::InvalidInput)?;
     if len == 0 {
         return Ok(0);
     }
-    let flags = GetRandomFlags::from_bits_retain(flags);
 
     debug!("sys_getrandom <= buf: {buf:p}, len: {len}, flags: {flags:?}");
 

@@ -422,6 +422,10 @@ impl Epoll {
         Ok(())
     }
 
+    pub fn has_ready_events(&self) -> bool {
+        !self.inner.ready_queue.lock().is_empty()
+    }
+
     pub fn poll_events(&self, out: &mut [epoll_event]) -> AxResult<usize> {
         trace!("Epoll: poll_events called, out.len()={}", out.len());
         let mut count = 0;

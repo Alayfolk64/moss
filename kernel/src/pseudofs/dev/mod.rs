@@ -11,7 +11,7 @@ mod memtrack;
 mod rtc;
 pub mod tty;
 
-use alloc::{format, sync::Arc};
+use alloc::{format, sync::Arc, vec::Vec};
 use core::any::Any;
 
 use axerrno::AxError;
@@ -328,18 +328,30 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     );
 
     // Loop devices
+    let mut loop_devices = Vec::new();
     for i in 0..16 {
-        let dev_id = DeviceId::new(7, 0);
+        let dev_id = DeviceId::new(7, i);
+        let loop_device = Arc::new(r#loop::LoopDevice::new(i, dev_id));
         root.add(
             format!("loop{i}"),
             Device::new(
                 fs.clone(),
                 NodeType::BlockDevice,
                 dev_id,
-                Arc::new(r#loop::LoopDevice::new(i, dev_id)),
+                loop_device.clone(),
             ),
         );
+        loop_devices.push(loop_device);
     }
+    root.add(
+        "loop-control",
+        Device::new(
+            fs.clone(),
+            NodeType::CharacterDevice,
+            DeviceId::new(10, 237),
+            Arc::new(r#loop::LoopControl::new(loop_devices)),
+        ),
+    );
 
     // Input devices
     #[cfg(feature = "input")]

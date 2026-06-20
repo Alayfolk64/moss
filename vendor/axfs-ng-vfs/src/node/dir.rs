@@ -378,7 +378,12 @@ impl DirNode {
         verify_entry_name(name)?;
 
         let mut children = self.cache.lock();
-        match self.lookup_locked(name, &mut children) {
+        let lookup_result = if options.create_new {
+            self.lookup_fresh_locked(name, &mut children)
+        } else {
+            self.lookup_locked(name, &mut children)
+        };
+        match lookup_result {
             Ok(val) => {
                 if options.create_new {
                     return Err(VfsError::AlreadyExists);

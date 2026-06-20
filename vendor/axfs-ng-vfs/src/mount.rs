@@ -177,6 +177,29 @@ impl Location {
         &self.entry
     }
 
+    pub fn is_unlinked(&self) -> VfsResult<bool> {
+        if self.is_root() || self.is_root_of_mount() {
+            return Ok(false);
+        }
+
+        let Some(parent) = self.parent() else {
+            return Ok(true);
+        };
+
+        match parent.entry.as_dir()?.lookup_fresh(self.name()) {
+            Ok(entry) => {
+                if entry.ptr_eq(&self.entry) {
+                    return Ok(false);
+                }
+                let current = self.entry.metadata()?;
+                let fresh = entry.metadata()?;
+                Ok(current.device != fresh.device || current.inode != fresh.inode)
+            }
+            Err(err) if err.canonicalize() == VfsError::NotFound => Ok(true),
+            Err(err) => Err(err),
+        }
+    }
+
     pub fn name(&self) -> &str {
         if self.is_root_of_mount() {
             self.mountpoint.location.as_ref().map_or("", Location::name)
@@ -251,6 +274,10 @@ impl Location {
 
     pub fn invalidate_metadata_cache(&self) {
         self.entry.invalidate_metadata_cache()
+    }
+
+    pub fn discard_metadata_cache(&self) {
+        self.entry.discard_metadata_cache()
     }
 
     pub fn absolute_path(&self) -> VfsResult<PathBuf> {

@@ -45,7 +45,7 @@ pub use self::{
         set_inode_flags, update_atime_for_access, with_fs,
     },
     pidfd::PidFd,
-    pipe::{PIPE_MAX_SIZE, Pipe},
+    pipe::{Pipe, pipe_max_size, set_pipe_max_size},
     timerfd::TimerFd,
 };
 use crate::task::{
@@ -300,6 +300,30 @@ pub fn async_fcntl_get_signal(file: &Arc<dyn FileLike>) -> i32 {
         .read()
         .get(&file_like_key(file))
         .map_or(0, |state| state.signal)
+}
+
+pub fn release_async_fcntl_state_if_last(file: &Arc<dyn FileLike>) {
+    if Arc::strong_count(file) == 1 {
+        ASYNC_FCNTL_STATE.write().remove(&file_like_key(file));
+    }
+}
+
+pub fn release_async_fcntl_state_for_closed_files(files: &[Arc<dyn FileLike>]) {
+    let mut closing = BTreeMap::<usize, usize>::new();
+    for file in files {
+        *closing.entry(file_like_key(file)).or_default() += 1;
+    }
+
+    let mut state = ASYNC_FCNTL_STATE.write();
+    for file in files {
+        let key = file_like_key(file);
+        let Some(count) = closing.remove(&key) else {
+            continue;
+        };
+        if Arc::strong_count(file) == count {
+            state.remove(&key);
+        }
+    }
 }
 
 pub fn notify_async_io(file_data_ptr: usize) {

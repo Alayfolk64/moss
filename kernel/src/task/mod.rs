@@ -8,7 +8,7 @@ mod stat;
 mod timer;
 mod user;
 
-use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     cell::RefCell,
     ops::Deref,
@@ -280,6 +280,8 @@ pub struct ProcessData {
 
     personality: AtomicUsize,
     membarrier_state: AtomicU32,
+    sched_policy: AtomicU32,
+    sched_priority: AtomicI32,
 
     /// The default mask for file permissions.
     umask: AtomicU32,
@@ -290,6 +292,7 @@ pub struct ProcessData {
     gid: AtomicU32,
     egid: AtomicU32,
     sgid: AtomicU32,
+    supplementary_groups: SpinNoIrq<Vec<u32>>,
 }
 
 impl ProcessData {
@@ -329,6 +332,8 @@ impl ProcessData {
             namespaces: SpinNoIrq::new(ProcessNamespaces::init()),
             personality: AtomicUsize::new(0),
             membarrier_state: AtomicU32::new(0),
+            sched_policy: AtomicU32::new(0),
+            sched_priority: AtomicI32::new(0),
 
             umask: AtomicU32::new(0o022),
             ioprio: AtomicU32::new((2 << 13) | 4),
@@ -338,6 +343,7 @@ impl ProcessData {
             gid: AtomicU32::new(0),
             egid: AtomicU32::new(0),
             sgid: AtomicU32::new(0),
+            supplementary_groups: SpinNoIrq::new(vec![0]),
         })
     }
 
@@ -366,8 +372,7 @@ impl ProcessData {
     }
 
     pub fn record_child_maxrss_kb(&self, maxrss_kb: usize) {
-        self.child_maxrss_kb
-            .fetch_max(maxrss_kb, Ordering::AcqRel);
+        self.child_maxrss_kb.fetch_max(maxrss_kb, Ordering::AcqRel);
     }
 
     pub fn namespaces(&self) -> ProcessNamespaces {
@@ -442,6 +447,19 @@ impl ProcessData {
         self.membarrier_state.fetch_or(state, Ordering::SeqCst);
     }
 
+    pub fn sched_policy(&self) -> u32 {
+        self.sched_policy.load(Ordering::SeqCst)
+    }
+
+    pub fn sched_priority(&self) -> i32 {
+        self.sched_priority.load(Ordering::SeqCst)
+    }
+
+    pub fn set_sched_state(&self, policy: u32, priority: i32) {
+        self.sched_policy.store(policy, Ordering::SeqCst);
+        self.sched_priority.store(priority, Ordering::SeqCst);
+    }
+
     pub fn uid(&self) -> u32 {
         self.uid.load(Ordering::SeqCst)
     }
@@ -500,5 +518,13 @@ impl ProcessData {
 
     pub fn set_sgid(&self, sgid: u32) {
         self.sgid.store(sgid, Ordering::SeqCst);
+    }
+
+    pub fn supplementary_groups(&self) -> Vec<u32> {
+        self.supplementary_groups.lock().clone()
+    }
+
+    pub fn set_supplementary_groups(&self, groups: Vec<u32>) {
+        *self.supplementary_groups.lock() = groups;
     }
 }

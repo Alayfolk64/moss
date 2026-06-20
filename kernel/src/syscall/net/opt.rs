@@ -1,6 +1,6 @@
 use axerrno::{AxError, AxResult, LinuxError};
 use axnet::options::{Configurable, GetSocketOption, SetSocketOption, TcpInfo};
-use linux_raw_sys::net::{SO_ATTACH_BPF, SOL_SOCKET, socklen_t};
+use linux_raw_sys::net::{SO_ATTACH_BPF, SO_OOBINLINE, SOL_SOCKET, socklen_t};
 
 use crate::{
     file::{BpfProgram, FileLike, Socket},
@@ -11,6 +11,7 @@ const PROTO_TCP: u32 = linux_raw_sys::net::IPPROTO_TCP as u32;
 
 const PROTO_IP: u32 = linux_raw_sys::net::IPPROTO_IP as u32;
 const PROTO_IPV6: u32 = linux_raw_sys::net::IPPROTO_IPV6 as u32;
+const PROTO_UDP: u32 = linux_raw_sys::net::IPPROTO_UDP as u32;
 const MCAST_JOIN_GROUP: u32 = linux_raw_sys::net::MCAST_JOIN_GROUP;
 const MCAST_LEAVE_GROUP: u32 = linux_raw_sys::net::MCAST_LEAVE_GROUP;
 
@@ -150,6 +151,9 @@ pub fn sys_getsockopt(
     optlen: UserPtr<socklen_t>,
 ) -> AxResult<isize> {
     let optlen = optlen.get_as_mut()?;
+    if *optlen > i32::MAX as socklen_t {
+        return Err(AxError::InvalidInput);
+    }
     debug!(
         "sys_getsockopt <= fd: {}, level: {}, optname: {}, optval: {:?}, optlen: {}",
         fd,
@@ -168,6 +172,11 @@ pub fn sys_getsockopt(
     }
 
     let socket = Socket::from_fd(fd)?;
+    if unsupported_getsockopt(level, optname) {
+        check_getsockopt_output(optval, *optlen)?;
+        return Err(AxError::from(LinuxError::EOPNOTSUPP));
+    }
+
     if level == PROTO_TCP && optname == linux_raw_sys::net::TCP_INFO {
         if *optlen == 0 {
             return Err(AxError::InvalidInput);
@@ -177,9 +186,7 @@ pub fn sys_getsockopt(
         let len = (*optlen as usize).min(size_of::<TcpInfo>());
         let info_bytes =
             unsafe { core::slice::from_raw_parts(&info as *const _ as *const u8, len) };
-        optval
-            .get_as_mut_slice(len)?
-            .copy_from_slice(info_bytes);
+        optval.get_as_mut_slice(len)?.copy_from_slice(info_bytes);
         *optlen = len as socklen_t;
         return Ok(0);
     }
@@ -197,6 +204,19 @@ pub fn sys_getsockopt(
     call_dispatch!(dispatch, (level, optname));
 
     Ok(0)
+}
+
+fn unsupported_getsockopt(level: u32, optname: u32) -> bool {
+    !matches!(level, SOL_SOCKET | PROTO_TCP | PROTO_IP | PROTO_IPV6)
+        || level == PROTO_UDP
+        || (level == SOL_SOCKET && optname == SO_OOBINLINE)
+}
+
+fn check_getsockopt_output(optval: UserPtr<u8>, optlen: socklen_t) -> AxResult<()> {
+    if (optlen as usize) < size_of::<i32>() {
+        return Err(AxError::InvalidInput);
+    }
+    optval.get_as_mut_slice(size_of::<i32>()).map(|_| ())
 }
 
 pub fn sys_setsockopt(

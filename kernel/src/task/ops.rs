@@ -98,10 +98,30 @@ pub fn processes() -> Vec<Arc<ProcessData>> {
     PROCESS_TABLE.read().values().collect()
 }
 
+fn is_live_process_peer(proc_data: &ProcessData, other: &ProcessData) -> bool {
+    other.proc.pid() != proc_data.proc.pid() && !other.proc.is_zombie()
+}
+
+fn address_space_shared_with_live_process(proc_data: &ProcessData) -> bool {
+    processes().iter().any(|other| {
+        is_live_process_peer(proc_data, other) && Arc::ptr_eq(&other.aspace, &proc_data.aspace)
+    })
+}
+
+fn reclaim_process_address_space(proc_data: &ProcessData) {
+    if !address_space_shared_with_live_process(proc_data) {
+        proc_data.aspace.lock().clear();
+    }
+}
+
 /// Finds the process with the given PID.
 pub fn get_process_data(pid: Pid) -> AxResult<Arc<ProcessData>> {
-    if pid == 0 {
-        return Ok(current().as_thread().proc_data.clone());
+    let curr = current();
+    if let Some(thread) = curr.try_as_thread() {
+        let proc_data = &thread.proc_data;
+        if pid == 0 || pid == proc_data.proc.pid() {
+            return Ok(proc_data.clone());
+        }
     }
     PROCESS_TABLE.read().get(&pid).ok_or(AxError::NoSuchProcess)
 }
@@ -233,19 +253,31 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         axtask::yield_now();
     }
 
+    let tid = curr.id().as_u64() as Pid;
+    thr.signal.detach_from_process();
+    let (utime, stime) = {
+        let mut time = thr.time.borrow_mut();
+        let output = time.output();
+        time.cancel_all();
+        output
+    };
+
     let process = &thr.proc_data.proc;
-    if process.exit_thread(curr.id().as_u64() as Pid, exit_code) {
-        let (utime, stime) = thr.time.borrow().output();
+    let last_thread = process.exit_thread(tid, exit_code);
+    if last_thread {
         process.record_maxrss_kb(
             thr.proc_data
                 .current_rss_kb()
                 .max(thr.proc_data.child_maxrss_kb()),
         );
-        if Arc::strong_count(&thr.proc_data.aspace) == 1 {
-            thr.proc_data.aspace.lock().clear();
-        }
         crate::syscall::release_key_quota(thr.proc_data.uid());
+        crate::syscall::release_process_aio_resources(process.pid());
+        crate::syscall::release_process_cap_state(process.pid());
+        crate::syscall::release_process_time_resources(process.pid());
+        crate::syscall::release_process_mmap_resources(process.pid());
+        crate::syscall::release_process_fanotify_resources(process.pid());
         crate::syscall::close_all_files_for_current_process();
+        reclaim_process_address_space(&thr.proc_data);
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());

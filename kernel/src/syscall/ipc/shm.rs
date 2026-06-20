@@ -1,9 +1,9 @@
 use alloc::{collections::btree_map::BTreeMap, sync::Arc, vec::Vec};
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axhal::{
     paging::{MappingFlags, PageSize},
-    time::monotonic_time_nanos,
+    time::realtime_time,
 };
 use axsync::Mutex;
 use axtask::current;
@@ -11,9 +11,9 @@ use linux_raw_sys::{ctypes::c_ushort, general::*};
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 use starry_process::Pid;
 
-use super::{IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, IpcPerm, next_ipc_id};
+use super::{IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, IpcPerm, has_ipc_permission, next_ipc_id};
 use crate::{
-    mm::{Backend, SharedPages, UserPtr, nullable},
+    mm::{Backend, SharedPages, UserPtr},
     task::AsThread,
 };
 
@@ -28,6 +28,16 @@ bitflags::bitflags! {
         /* take-over region on attach */
         const SHM_REMAP = 0o40000;
     }
+}
+
+const IPC_MODE_MASK: __kernel_mode_t = 0o777;
+const SHM_DEST: __kernel_mode_t = 0o1000;
+const SHM_LOCKED: __kernel_mode_t = 0o2000;
+const SHM_LOCK_CMD: i32 = 11;
+const SHM_UNLOCK_CMD: i32 = 12;
+
+fn ipc_time_secs() -> __kernel_time_t {
+    realtime_time().as_secs() as __kernel_time_t
 }
 
 /// Data structure describing a shared memory segment.
@@ -53,15 +63,22 @@ pub struct ShmidDs {
 }
 
 impl ShmidDs {
-    fn new(key: i32, size: usize, mode: __kernel_mode_t, pid: __kernel_pid_t) -> Self {
+    fn new(
+        key: i32,
+        size: usize,
+        mode: __kernel_mode_t,
+        pid: __kernel_pid_t,
+        uid: __kernel_uid_t,
+        gid: __kernel_gid_t,
+    ) -> Self {
         Self {
             shm_perm: IpcPerm {
                 key,
-                uid: 0,
-                gid: 0,
-                cuid: 0,
-                cgid: 0,
-                mode,
+                uid,
+                gid,
+                cuid: uid,
+                cgid: gid,
+                mode: mode & IPC_MODE_MASK,
                 seq: 0,
                 pad: 0,
                 unused0: 0,
@@ -70,7 +87,7 @@ impl ShmidDs {
             shm_segsz: size as __kernel_size_t,
             shm_atime: 0,
             shm_dtime: 0,
-            shm_ctime: 0,
+            shm_ctime: ipc_time_secs(),
             shm_cpid: pid,
             shm_lpid: pid,
             shm_nattch: 0,
@@ -97,7 +114,16 @@ pub struct ShmInner {
 
 impl ShmInner {
     /// Creates a new [`ShmInner`].
-    pub fn new(key: i32, shmid: i32, size: usize, mapping_flags: MappingFlags, pid: Pid) -> Self {
+    pub fn new(
+        key: i32,
+        shmid: i32,
+        size: usize,
+        mode: __kernel_mode_t,
+        mapping_flags: MappingFlags,
+        pid: Pid,
+        uid: u32,
+        gid: u32,
+    ) -> Self {
         ShmInner {
             shmid,
             page_num: memory_addr::align_up_4k(size) / PAGE_SIZE_4K,
@@ -108,8 +134,10 @@ impl ShmInner {
             shmid_ds: ShmidDs::new(
                 key,
                 size,
-                mapping_flags.bits() as __kernel_mode_t,
+                mode,
                 pid as __kernel_pid_t,
+                uid as __kernel_uid_t,
+                gid as __kernel_gid_t,
             ),
         }
     }
@@ -122,12 +150,11 @@ impl ShmInner {
         mapping_flags: MappingFlags,
         pid: Pid,
     ) -> AxResult<isize> {
-        if size as __kernel_size_t != self.shmid_ds.shm_segsz
-            || mapping_flags.bits() as __kernel_mode_t != self.shmid_ds.shm_perm.mode
-        {
+        let _ = mapping_flags;
+        if size as __kernel_size_t > self.shmid_ds.shm_segsz {
             return Err(AxError::InvalidInput);
         }
-        self.shmid_ds.shm_lpid = pid as i32;
+        let _ = pid;
         Ok(self.shmid as isize)
     }
 
@@ -153,7 +180,7 @@ impl ShmInner {
         self.va_range.insert(pid, va_range);
         self.shmid_ds.shm_nattch += 1;
         self.shmid_ds.shm_lpid = pid as __kernel_pid_t;
-        self.shmid_ds.shm_atime = monotonic_time_nanos() as __kernel_time_t;
+        self.shmid_ds.shm_atime = ipc_time_secs();
     }
 
     /// Called by sys_shmdt
@@ -162,7 +189,7 @@ impl ShmInner {
         self.va_range.remove(&pid);
         self.shmid_ds.shm_nattch -= 1;
         self.shmid_ds.shm_lpid = pid as __kernel_pid_t;
-        self.shmid_ds.shm_dtime = monotonic_time_nanos() as __kernel_time_t;
+        self.shmid_ds.shm_dtime = ipc_time_secs();
     }
 }
 
@@ -388,7 +415,11 @@ pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> AxResult<isize> {
         mapping_flags.insert(MappingFlags::EXECUTE);
     }
 
-    let cur_pid = current().as_thread().proc_data.proc.pid();
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let cur_pid = proc_data.proc.pid();
+    let euid = proc_data.euid();
+    let egid = proc_data.egid();
     let mut shm_manager = SHM_MANAGER.lock();
 
     if key != IPC_PRIVATE {
@@ -408,8 +439,11 @@ pub fn sys_shmget(key: i32, size: usize, shmflg: usize) -> AxResult<isize> {
         key,
         shmid,
         size,
+        (shmflg as __kernel_mode_t) & IPC_MODE_MASK,
         mapping_flags,
         cur_pid,
+        euid,
+        egid,
     )));
     shm_manager.insert_key_shmid(key, shmid);
     shm_manager.insert_shmid_inner(shmid, shm_inner);
@@ -500,19 +534,54 @@ pub fn sys_shmctl(shmid: i32, cmd: u32, buf: UserPtr<ShmidDs>) -> AxResult<isize
     let mut shm_inner = shm_inner.lock();
 
     let cmd = cmd as i32;
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let euid = proc_data.euid();
+    let egid = proc_data.egid();
+    let is_owner = euid == 0
+        || euid == shm_inner.shmid_ds.shm_perm.uid
+        || euid == shm_inner.shmid_ds.shm_perm.cuid;
+
     if cmd == IPC_SET {
-        shm_inner.shmid_ds = *buf.get_as_mut()?;
-    } else if cmd == IPC_STAT {
-        if let Some(shmid_ds) = nullable!(buf.get_as_mut())? {
-            *shmid_ds = shm_inner.shmid_ds;
+        if !is_owner {
+            return Err(AxError::from(LinuxError::EPERM));
         }
+        let new_ds = *buf.get_as_mut()?;
+        shm_inner.shmid_ds.shm_perm.uid = new_ds.shm_perm.uid;
+        shm_inner.shmid_ds.shm_perm.gid = new_ds.shm_perm.gid;
+        shm_inner.shmid_ds.shm_perm.mode = (shm_inner.shmid_ds.shm_perm.mode & !IPC_MODE_MASK)
+            | (new_ds.shm_perm.mode & IPC_MODE_MASK);
+    } else if cmd == IPC_STAT {
+        if !has_ipc_permission(&shm_inner.shmid_ds.shm_perm, euid, egid, false) {
+            return Err(AxError::PermissionDenied);
+        }
+        *buf.get_as_mut()? = shm_inner.shmid_ds;
     } else if cmd == IPC_RMID {
+        if !is_owner {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
         shm_inner.rmid = true;
+        shm_inner.shmid_ds.shm_perm.mode |= SHM_DEST;
+        if shm_inner.attach_count() == 0 {
+            drop(shm_inner);
+            SHM_MANAGER.lock().remove_shmid(shmid);
+            return Ok(0);
+        }
+    } else if cmd == SHM_LOCK_CMD {
+        if !is_owner {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
+        shm_inner.shmid_ds.shm_perm.mode |= SHM_LOCKED;
+    } else if cmd == SHM_UNLOCK_CMD {
+        if !is_owner {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
+        shm_inner.shmid_ds.shm_perm.mode &= !SHM_LOCKED;
     } else {
         return Err(AxError::InvalidInput);
     }
 
-    shm_inner.shmid_ds.shm_ctime = monotonic_time_nanos() as __kernel_time_t;
+    shm_inner.shmid_ds.shm_ctime = ipc_time_secs();
     Ok(0)
 }
 

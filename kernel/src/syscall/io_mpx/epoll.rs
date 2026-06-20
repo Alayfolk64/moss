@@ -14,6 +14,7 @@ use linux_raw_sys::general::{
 use starry_signal::SignalSet;
 use starry_vm::vm_read_slice;
 
+use super::poll_network_once;
 use crate::{
     file::{
         FileLike,
@@ -24,8 +25,6 @@ use crate::{
     task::with_blocked_signals,
     time::TimeValueLike,
 };
-
-use super::poll_network_once;
 
 bitflags! {
     /// Flags for the `epoll_create` syscall.
@@ -53,6 +52,14 @@ fn read_epoll_event(event: UserConstPtr<epoll_event>) -> AxResult<epoll_event> {
     };
     vm_read_slice(event.address().as_usize() as *const u8, bytes)?;
     Ok(unsafe { raw.assume_init() })
+}
+
+fn poll_epoll_events(epoll: &Epoll, events: &mut [epoll_event]) -> AxResult<isize> {
+    match epoll.poll_events(events) {
+        Ok(n) => Ok(n as _),
+        Err(AxError::WouldBlock) => Ok(0),
+        Err(err) => Err(err),
+    }
 }
 
 pub fn sys_epoll_ctl(
@@ -105,24 +112,29 @@ fn do_epoll_wait(
     sigmask: UserConstPtr<SignalSet>,
     sigsetsize: usize,
 ) -> AxResult<isize> {
-    check_sigset_size(sigsetsize)?;
     debug!("sys_epoll_wait <= epfd: {epfd}, maxevents: {maxevents}, timeout: {timeout:?}");
-
-    let epoll = Epoll::from_fd(epfd)?;
 
     if maxevents <= 0 {
         return Err(AxError::InvalidInput);
     }
+    check_sigset_size(sigsetsize)?;
+
+    if timeout == Some(Duration::ZERO) && sigmask.is_null() {
+        let epoll = Epoll::from_fd(epfd)?;
+        if !epoll.has_ready_events() {
+            return Ok(0);
+        }
+        return poll_epoll_events(&epoll, events.get_as_mut_slice(maxevents as usize)?);
+    }
+
+    let epoll = Epoll::from_fd(epfd)?;
+    let sigmask = nullable!(sigmask.get_as_ref())?.copied();
+
     let events = events.get_as_mut_slice(maxevents as usize)?;
 
-    with_blocked_signals(nullable!(sigmask.get_as_ref())?.copied(), || {
+    with_blocked_signals(sigmask, || {
         if timeout == Some(Duration::ZERO) {
-            poll_network_once();
-            return match epoll.poll_events(events) {
-                Ok(n) => Ok(n as _),
-                Err(AxError::WouldBlock) => Ok(0),
-                Err(err) => Err(err),
-            };
+            return poll_epoll_events(&epoll, events);
         }
 
         match block_on(future::timeout(

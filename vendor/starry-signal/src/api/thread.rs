@@ -24,6 +24,8 @@ struct SignalFrame {
 
 /// Thread-level signal manager.
 pub struct ThreadSignalManager {
+    tid: u32,
+
     /// The process-level signal manager
     proc: Arc<ProcessSignalManager>,
 
@@ -40,6 +42,7 @@ pub struct ThreadSignalManager {
 impl ThreadSignalManager {
     pub fn new(tid: u32, proc: Arc<ProcessSignalManager>) -> Arc<Self> {
         let this = Arc::new(Self {
+            tid,
             proc: proc.clone(),
 
             pending: SpinNoIrq::new(PendingSignals::default()),
@@ -48,8 +51,12 @@ impl ThreadSignalManager {
 
             possibly_has_signal: AtomicBool::new(false),
         });
-        proc.children.lock().push((tid, Arc::downgrade(&this)));
+        proc.add_thread(tid, &this);
         this
+    }
+
+    pub fn detach_from_process(&self) {
+        self.proc.remove_thread(self.tid);
     }
 
     /// Dequeues a signal from the thread's pending signals.
@@ -133,7 +140,9 @@ impl ThreadSignalManager {
                 }
 
                 if action.flags.contains(SignalActionFlags::RESETHAND) {
-                    self.proc.actions.lock()[signo] = SignalAction::default();
+                    let mut reset_action = action.clone();
+                    reset_action.disposition = SignalDisposition::Default;
+                    self.proc.actions.lock()[signo] = reset_action;
                 }
                 *self.blocked.lock() |= add_blocked;
                 Some(SignalOSAction::Handler)
@@ -251,5 +260,11 @@ impl ThreadSignalManager {
     /// Gets current pending signals.
     pub fn pending(&self) -> SignalSet {
         self.pending.lock().set | self.proc.pending()
+    }
+}
+
+impl Drop for ThreadSignalManager {
+    fn drop(&mut self) {
+        self.detach_from_process();
     }
 }

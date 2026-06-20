@@ -14,7 +14,7 @@ use linux_raw_sys::general::{
     P_ALL, P_PGID, P_PID, P_PIDFD, WCONTINUED, WEXITED, WNOHANG, WNOWAIT, WUNTRACED, siginfo_t,
 };
 use starry_process::{Pid, Process};
-use starry_signal::Signo;
+use starry_signal::{SignalDisposition, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
 
 use super::{ptrace_has_wait_target, ptrace_take_wait_event};
@@ -191,10 +191,15 @@ fn wait_status_waitpid(child: &Process, options: WaitOptions) -> AxResult<Option
 }
 
 fn reap_exited_child(parent: &ProcessData, child: &Process) {
-    if !parent.signal.signal_ignored(Signo::SIGCHLD) {
+    let sigchld_explicitly_ignored = matches!(
+        parent.signal.actions.lock()[Signo::SIGCHLD].disposition,
+        SignalDisposition::Ignore
+    );
+    if !sigchld_explicitly_ignored {
         parent.record_child_maxrss_kb(child.maxrss_kb());
     }
     child.free();
+    yield_now();
 }
 
 fn waitid_children(

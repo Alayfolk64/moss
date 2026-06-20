@@ -13,7 +13,7 @@ use axfs::{FS_CONTEXT, OpenOptions, OpenResult};
 use axfs_ng_vfs::Location;
 use axtask::current;
 use linux_raw_sys::general::{
-    __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
+    __kernel_fsid_t, AT_EACCESS, AT_EMPTY_PATH, AT_FDCWD, AT_NO_AUTOMOUNT, AT_STATX_DONT_SYNC,
     AT_STATX_FORCE_SYNC, AT_STATX_SYNC_TYPE, AT_SYMLINK_FOLLOW, AT_SYMLINK_NOFOLLOW, MS_NOATIME,
     MS_NODEV, MS_NODIRATIME, MS_NOEXEC, MS_NOSUID, MS_NOSYMFOLLOW, MS_RDONLY, MS_RELATIME,
     O_ACCMODE, O_CLOEXEC, O_DIRECTORY, O_NONBLOCK, O_PATH, O_RDWR, O_WRONLY, R_OK, S_IFLNK, S_IFMT,
@@ -62,9 +62,32 @@ pub fn sys_fstatat(
     statbuf: *mut stat,
     flags: u32,
 ) -> AxResult<isize> {
-    let path = path.nullable().map(vm_load_string).transpose()?;
+    const VALID_FLAGS: u32 = AT_EMPTY_PATH | AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW;
+
+    if flags & !VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    let path = if path.is_null() {
+        if flags & AT_EMPTY_PATH == 0 {
+            return Err(AxError::BadAddress);
+        }
+        None
+    } else {
+        Some(vm_load_string(path)?)
+    };
 
     debug!("sys_fstatat <= dirfd: {dirfd}, path: {path:?}, flags: {flags}");
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    check_parent_search_access(
+        dirfd,
+        path.as_deref(),
+        flags,
+        proc_data.euid(),
+        proc_data.egid(),
+    )?;
 
     let loc = resolve_at(dirfd, path.as_deref(), flags)?;
     statbuf.vm_write(loc.stat()?.into())?;
@@ -313,6 +336,16 @@ pub fn sys_statx(
     let path = path.nullable().map(vm_load_string).transpose()?;
     debug!("sys_statx <= dirfd: {dirfd}, path: {path:?}, flags: {flags}");
 
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    check_parent_search_access(
+        dirfd,
+        path.as_deref(),
+        flags,
+        proc_data.euid(),
+        proc_data.egid(),
+    )?;
+
     statxbuf.vm_write(resolve_at(dirfd, path.as_deref(), flags)?.stat()?.into())?;
 
     Ok(0)
@@ -325,12 +358,24 @@ pub fn sys_access(path: *const c_char, mode: u32) -> AxResult<isize> {
     sys_faccessat2(AT_FDCWD, path, mode, 0)
 }
 
-pub fn sys_faccessat2(dirfd: c_int, path: *const c_char, mode: u32, flags: u32) -> AxResult<isize> {
+pub fn sys_faccessat2(
+    mut dirfd: c_int,
+    path: *const c_char,
+    mode: u32,
+    flags: u32,
+) -> AxResult<isize> {
     let path = path.nullable().map(vm_load_string).transpose()?;
     debug!("sys_faccessat2 <= dirfd: {dirfd}, path: {path:?}, mode: {mode}, flags: {flags}");
 
+    let supported_flags = AT_EACCESS | AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH;
+    if flags & !supported_flags != 0 {
+        return Err(AxError::InvalidInput);
+    }
     if mode & !(R_OK | W_OK | X_OK) != 0 {
         return Err(AxError::InvalidInput);
+    }
+    if path.as_deref().is_some_and(|path| path.starts_with('/')) {
+        dirfd = AT_FDCWD;
     }
 
     let file = resolve_at(dirfd, path.as_deref(), flags)?;
@@ -365,8 +410,8 @@ fn access_ids(flags: u32) -> (u32, u32) {
     }
 }
 
-fn check_parent_search_access(
-    dirfd: c_int,
+pub(super) fn check_parent_search_access(
+    mut dirfd: c_int,
     path: Option<&str>,
     flags: u32,
     uid: u32,
@@ -377,6 +422,18 @@ fn check_parent_search_access(
     };
     if path.is_empty() || uid == 0 {
         return Ok(());
+    }
+    if path.starts_with('/') {
+        dirfd = AT_FDCWD;
+    }
+
+    if needs_base_dir_search(path) {
+        let base = if dirfd == AT_FDCWD {
+            FS_CONTEXT.lock().current_dir().clone()
+        } else {
+            Directory::from_fd(dirfd)?.inner().clone()
+        };
+        check_search_access(&base, uid, gid)?;
     }
 
     let parent_flags = flags & !AT_SYMLINK_NOFOLLOW;
@@ -394,13 +451,36 @@ fn check_parent_search_access(
             continue;
         }
 
-        let stat = resolve_at(dirfd, Some(parent), parent_flags)?.stat()?;
-        if !has_access(X_OK, stat.mode, stat.uid, stat.gid, uid, gid) {
-            return Err(AxError::PermissionDenied);
-        }
+        let parent = resolve_at(dirfd, Some(parent), parent_flags)?
+            .into_file()
+            .ok_or(AxError::NotADirectory)?;
+        check_search_access(&parent, uid, gid)?;
     }
 
     Ok(())
+}
+
+fn needs_base_dir_search(path: &str) -> bool {
+    !path.starts_with('/')
+        && path
+            .split('/')
+            .any(|component| !component.is_empty() && component != ".")
+}
+
+fn check_search_access(dir: &Location, uid: u32, gid: u32) -> AxResult<()> {
+    let metadata = dir.metadata()?;
+    if has_access(
+        X_OK,
+        metadata.mode.bits() as u32,
+        metadata.uid,
+        metadata.gid,
+        uid,
+        gid,
+    ) {
+        Ok(())
+    } else {
+        Err(AxError::PermissionDenied)
+    }
 }
 
 fn has_access(mode: u32, st_mode: u32, st_uid: u32, st_gid: u32, uid: u32, gid: u32) -> bool {

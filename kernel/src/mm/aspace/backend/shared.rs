@@ -84,12 +84,7 @@ impl BackendOps for SharedBackend {
         self.pages.size
     }
 
-    fn map(
-        &self,
-        range: VirtAddrRange,
-        flags: MappingFlags,
-        _pt: &mut PageTableMut,
-    ) -> AxResult {
+    fn map(&self, range: VirtAddrRange, flags: MappingFlags, _pt: &mut PageTableMut) -> AxResult {
         debug!("Shared::map: {:?} {:?}", range, flags);
         Ok(())
     }

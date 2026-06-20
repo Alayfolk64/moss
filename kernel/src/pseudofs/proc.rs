@@ -15,24 +15,24 @@ use core::{
     task::Context,
 };
 
-use axfs_ng_vfs::{
-    DeviceId, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate, NodeFlags,
-    NodeOps, NodePermission, NodeType, VfsError, VfsResult,
-};
 use axfs::drop_global_file_caches;
+use axfs_ng_vfs::{
+    DeviceId, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate, NodeFlags, NodeOps,
+    NodePermission, NodeType, VfsError, VfsResult,
+};
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use indoc::indoc;
 use linux_raw_sys::{
-    general::{CLONE_NEWPID, CLONE_NEWUSER, CLONE_NEWUTS, CLOCK_BOOTTIME, CLOCK_MONOTONIC},
+    general::{CLOCK_BOOTTIME, CLOCK_MONOTONIC, CLONE_NEWPID, CLONE_NEWUSER, CLONE_NEWUTS},
     ioctl::{NS_GET_NSTYPE, NS_GET_OWNER_UID, NS_GET_PARENT, NS_GET_USERNS},
 };
-use starry_process::Process;
+use starry_process::{Process, init_proc};
 use starry_vm::VmMutPtr;
 
 use crate::{
-    file::{FD_TABLE, FileLike, Kstat, PIPE_MAX_SIZE, add_file_like},
+    file::{FD_TABLE, FileLike, Kstat, add_file_like, pipe_max_size, set_pipe_max_size},
     pseudofs::{
         DirMaker, DirMapping, NodeOpsMux, RwFile, SimpleDir, SimpleDirOps, SimpleFile,
         SimpleFileOperation, SimpleFs, StaticFile,
@@ -137,6 +137,28 @@ fn task_status(task: &AxTaskRef) -> String {
     )
 }
 
+#[rustfmt::skip]
+fn process_status(process: &Process) -> String {
+    format!(
+        "Tgid:\t{}\n\
+        Pid:\t{}\n\
+        Uid:\t0 0 0 0\n\
+        Gid:\t0 0 0 0\n\
+        VmHWM:\t{} kB\n\
+        VmRSS:\t0 kB\n\
+        VmSwap:\t0 kB\n\
+        VmLck:\t{} kB\n\
+        Cpus_allowed:\t1\n\
+        Cpus_allowed_list:\t0\n\
+        Mems_allowed:\t1\n\
+        Mems_allowed_list:\t0",
+        process.pid(),
+        process.pid(),
+        process.maxrss_kb(),
+        crate::syscall::mmap_locked_kb(),
+    )
+}
+
 fn proc_meminfo() -> String {
     const PAGE_SIZE: usize = 4096;
 
@@ -147,16 +169,9 @@ fn proc_meminfo() -> String {
     let cached = usages.get(axalloc::UsageKind::PageCache);
 
     format!(
-        "MemTotal:       {} kB\n\
-         MemFree:        {} kB\n\
-         MemAvailable:   {} kB\n\
-         Buffers:        0 kB\n\
-         Cached:         {} kB\n\
-         SwapCached:     0 kB\n\
-         Active:         0 kB\n\
-         Inactive:       0 kB\n\
-         SwapTotal:      0 kB\n\
-         SwapFree:       0 kB\n",
+        "MemTotal:       {} kB\nMemFree:        {} kB\nMemAvailable:   {} kB\nBuffers:        0 \
+         kB\nCached:         {} kB\nSwapCached:     0 kB\nActive:         0 kB\nInactive:       0 \
+         kB\nSwapTotal:      0 kB\nSwapFree:       0 kB\n",
         total / 1024,
         available / 1024,
         available / 1024,
@@ -186,6 +201,30 @@ fn proc_rw_file(fs: Arc<SimpleFs>, initial: impl Into<Vec<u8>>) -> Arc<SimpleFil
                 let mut data = data.lock();
                 data.clear();
                 data.extend_from_slice(input);
+                Ok(None::<Vec<u8>>)
+            }
+        }),
+    )
+}
+
+fn proc_pipe_max_size_file(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
+    SimpleFile::new_regular(
+        fs,
+        RwFile::new(move |req| match req {
+            SimpleFileOperation::Read => Ok(Some(format!("{}\n", pipe_max_size()).into_bytes())),
+            SimpleFileOperation::Write(input) => {
+                if input.is_empty() {
+                    return Ok(None::<Vec<u8>>);
+                }
+                let value = str::from_utf8(input)
+                    .map_err(|_| VfsError::InvalidInput)?
+                    .trim()
+                    .parse::<usize>()
+                    .map_err(|_| VfsError::InvalidInput)?;
+                if value == 0 {
+                    return Err(VfsError::InvalidInput);
+                }
+                set_pipe_max_size(value);
                 Ok(None::<Vec<u8>>)
             }
         }),
@@ -263,9 +302,15 @@ fn proc_usize_sysctl_file(
         RwFile::new(move |req| match req {
             SimpleFileOperation::Read => Ok(Some(format!("{}\n", read()).into_bytes())),
             SimpleFileOperation::Write(input) => {
+                if input.is_empty() {
+                    return Ok(None::<Vec<u8>>);
+                }
                 let input = str::from_utf8(input)
                     .map_err(|_| VfsError::InvalidInput)?
                     .trim();
+                if input.is_empty() {
+                    return Ok(None::<Vec<u8>>);
+                }
                 write(input.parse().map_err(|_| VfsError::InvalidInput)?);
                 Ok(None::<Vec<u8>>)
             }
@@ -398,9 +443,7 @@ impl ProcNamespaceObject {
     }
 
     fn open_parent(self) -> VfsResult<usize> {
-        let parent = self
-            .parent_state()
-            .ok_or(VfsError::OperationNotPermitted)?;
+        let parent = self.parent_state().ok_or(VfsError::OperationNotPermitted)?;
         if self.current_inode() == self.state.inode {
             return Err(VfsError::OperationNotPermitted);
         }
@@ -832,17 +875,60 @@ impl SimpleDirOps for ThreadDir {
     }
 }
 
+struct ProcessOnlyDir {
+    fs: Arc<SimpleFs>,
+    process: Weak<Process>,
+}
+
+impl SimpleDirOps for ProcessOnlyDir {
+    fn child_names<'a>(&'a self) -> Box<dyn Iterator<Item = Cow<'a, str>> + 'a> {
+        Box::new(["stat", "status", "task"].into_iter().map(Cow::Borrowed))
+    }
+
+    fn lookup_child(&self, name: &str) -> VfsResult<NodeOpsMux> {
+        let fs = self.fs.clone();
+        let process = self.process.upgrade().ok_or(VfsError::NotFound)?;
+        Ok(match name {
+            "stat" => SimpleFile::new_regular(fs, move || {
+                Ok(format!("{}", TaskStat::from_process(&process)).into_bytes())
+            })
+            .into(),
+            "status" => SimpleFile::new_regular(fs, move || Ok(process_status(&process))).into(),
+            "task" => SimpleDir::new_maker(
+                fs.clone(),
+                Arc::new(ProcessTaskDir {
+                    fs,
+                    process: Arc::downgrade(&process),
+                }),
+            )
+            .into(),
+            _ => return Err(VfsError::NotFound),
+        })
+    }
+
+    fn is_cacheable(&self) -> bool {
+        false
+    }
+}
+
 /// Handles /proc/[pid] & /proc/self
 struct ProcFsHandler(Arc<SimpleFs>);
 
 impl SimpleDirOps for ProcFsHandler {
     fn child_names<'a>(&'a self) -> Box<dyn Iterator<Item = Cow<'a, str>> + 'a> {
-        Box::new(
-            tasks()
-                .into_iter()
-                .map(|task| task.id().as_u64().to_string().into())
-                .chain([Cow::Borrowed("self")]),
-        )
+        let init_pid = init_proc().pid().to_string();
+        let mut names: Vec<Cow<'a, str>> = tasks()
+            .into_iter()
+            .map(|task| Cow::Owned(task.id().as_u64().to_string()))
+            .collect();
+        if !names.iter().any(|name| name.as_ref() == init_pid.as_str()) {
+            names.push(Cow::Owned(init_pid));
+        }
+        if !names.iter().any(|name| name.as_ref() == "1") {
+            names.push(Cow::Borrowed("1"));
+        }
+        names.push(Cow::Borrowed("self"));
+        Box::new(names.into_iter())
     }
 
     fn lookup_child(&self, name: &str) -> VfsResult<NodeOpsMux> {
@@ -850,7 +936,20 @@ impl SimpleDirOps for ProcFsHandler {
             current().clone()
         } else {
             let tid = name.parse::<u32>().map_err(|_| VfsError::NotFound)?;
-            get_task(tid).map_err(|_| VfsError::NotFound)?
+            match get_task(tid) {
+                Ok(task) => task,
+                Err(_) if tid == 1 || tid == init_proc().pid() => {
+                    let process = init_proc();
+                    return Ok(NodeOpsMux::Dir(SimpleDir::new_maker(
+                        self.0.clone(),
+                        Arc::new(ProcessOnlyDir {
+                            fs: self.0.clone(),
+                            process: Arc::downgrade(&process),
+                        }),
+                    )));
+                }
+                Err(_) => return Err(VfsError::NotFound),
+            }
         };
         let node = NodeOpsMux::Dir(SimpleDir::new_maker(
             self.0.clone(),
@@ -985,10 +1084,7 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
         sys.add("fs", {
             let mut fs_sys = DirMapping::new();
 
-            fs_sys.add(
-                "pipe-max-size",
-                SimpleFile::new_regular(fs.clone(), || Ok(format!("{PIPE_MAX_SIZE}\n"))),
-            );
+            fs_sys.add("pipe-max-size", proc_pipe_max_size_file(fs.clone()));
             fs_sys.add(
                 "aio-max-nr",
                 SimpleFile::new_regular(fs.clone(), StaticFile::new(b"1024\n")),
@@ -1097,6 +1193,22 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
             user.add(
                 "max_user_namespaces",
                 proc_rw_file(fs.clone(), b"1024\n".to_vec()),
+            );
+            user.add(
+                "max_fanotify_groups",
+                proc_usize_sysctl_file(
+                    fs.clone(),
+                    crate::syscall::fanotify_max_user_groups,
+                    crate::syscall::set_fanotify_max_user_groups,
+                ),
+            );
+            user.add(
+                "max_fanotify_marks",
+                proc_usize_sysctl_file(
+                    fs.clone(),
+                    crate::syscall::fanotify_max_user_marks,
+                    crate::syscall::set_fanotify_max_user_marks,
+                ),
             );
 
             SimpleDir::new_maker(fs.clone(), Arc::new(user))

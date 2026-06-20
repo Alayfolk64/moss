@@ -1,3 +1,4 @@
+use alloc::{sync::Arc, vec::Vec};
 use core::{
     any::Any,
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
@@ -14,8 +15,9 @@ use linux_raw_sys::{
         BLKROTATIONAL, BLKSECDISCARD, BLKSSZGET, BLKZEROOUT, FDGETPRM,
     },
     loop_device::{
-        LOOP_CLR_FD, LOOP_GET_STATUS, LOOP_GET_STATUS64, LOOP_SET_BLOCK_SIZE, LOOP_SET_CAPACITY,
-        LOOP_SET_FD, LOOP_SET_STATUS, LOOP_SET_STATUS64, loop_info, loop_info64,
+        LOOP_CLR_FD, LOOP_CTL_ADD, LOOP_CTL_GET_FREE, LOOP_CTL_REMOVE, LOOP_GET_STATUS,
+        LOOP_GET_STATUS64, LOOP_SET_BLOCK_SIZE, LOOP_SET_CAPACITY, LOOP_SET_FD, LOOP_SET_STATUS,
+        LOOP_SET_STATUS64, loop_info, loop_info64,
     },
 };
 use starry_vm::{VmMutPtr, VmPtr};
@@ -112,6 +114,27 @@ impl LoopDevice {
         file.ok_or(AxError::from(LinuxError::ENXIO))
     }
 
+    pub fn is_free(&self) -> bool {
+        self.file.lock().is_none()
+    }
+
+    fn clear_file(&self) -> AxResult<()> {
+        let file = self
+            .file
+            .lock()
+            .take()
+            .ok_or(AxError::from(LinuxError::ENXIO))?;
+        if let Err(err) = file.sync(false) {
+            warn!(
+                "loop{}: failed to sync backing file during detach: {err:?}",
+                self.number
+            );
+        }
+        self.ro.store(false, Ordering::Relaxed);
+        self.ra.store(512, Ordering::Relaxed);
+        Ok(())
+    }
+
     fn geometry(&self) -> VfsResult<(u64, u32, u32, u32)> {
         let sectors = self.len()? / 512;
         let heads = 64;
@@ -161,11 +184,7 @@ impl DeviceOps for LoopDevice {
                 *guard = Some(file.inner().backend()?.clone());
             }
             LOOP_CLR_FD => {
-                let mut guard = self.file.lock();
-                if guard.is_none() {
-                    return Err(AxError::from(LinuxError::ENXIO));
-                }
-                *guard = None;
+                self.clear_file()?;
             }
             LOOP_GET_STATUS => {
                 (arg as *mut loop_info).vm_write(self.get_info()?)?;
@@ -266,5 +285,64 @@ impl DeviceOps for LoopDevice {
 
     fn flags(&self) -> NodeFlags {
         NodeFlags::NON_CACHEABLE
+    }
+}
+
+/// /dev/loop-control
+pub struct LoopControl {
+    devices: Vec<Arc<LoopDevice>>,
+}
+
+impl LoopControl {
+    pub(crate) fn new(devices: Vec<Arc<LoopDevice>>) -> Self {
+        Self { devices }
+    }
+
+    fn get(&self, number: u32) -> Option<&Arc<LoopDevice>> {
+        self.devices.iter().find(|dev| dev.number == number)
+    }
+}
+
+impl DeviceOps for LoopControl {
+    fn read_at(&self, _buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
+        Ok(0)
+    }
+
+    fn write_at(&self, buf: &[u8], _offset: u64) -> VfsResult<usize> {
+        Ok(buf.len())
+    }
+
+    fn ioctl(&self, cmd: u32, arg: usize) -> VfsResult<usize> {
+        match cmd {
+            LOOP_CTL_GET_FREE => self
+                .devices
+                .iter()
+                .find(|dev| dev.is_free())
+                .map(|dev| dev.number as usize)
+                .ok_or(AxError::from(LinuxError::ENXIO)),
+            LOOP_CTL_ADD => {
+                let number = arg as u32;
+                self.get(number)
+                    .map(|dev| dev.number as usize)
+                    .ok_or(AxError::NoSuchDevice)
+            }
+            LOOP_CTL_REMOVE => {
+                let number = arg as u32;
+                let dev = self.get(number).ok_or(AxError::NoSuchDevice)?;
+                if !dev.is_free() {
+                    return Err(AxError::ResourceBusy);
+                }
+                Ok(0)
+            }
+            _ => Err(AxError::NotATty),
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn flags(&self) -> NodeFlags {
+        NodeFlags::NON_CACHEABLE | NodeFlags::STREAM
     }
 }

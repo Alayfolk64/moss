@@ -1,11 +1,15 @@
 use alloc::{format, sync::Arc, vec::Vec};
-use core::{ffi::c_char, str, sync::atomic::{AtomicU32, Ordering}};
+use core::{
+    ffi::c_char,
+    str,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, OpenOptions};
 use linux_raw_sys::general::{
-    F_SEAL_FUTURE_WRITE, F_SEAL_GROW, F_SEAL_SEAL, F_SEAL_SHRINK, F_SEAL_WRITE,
-    MFD_ALLOW_SEALING, MFD_CLOEXEC, MFD_HUGETLB, MFD_HUGE_MASK, MFD_HUGE_SHIFT,
+    F_SEAL_FUTURE_WRITE, F_SEAL_GROW, F_SEAL_SEAL, F_SEAL_SHRINK, F_SEAL_WRITE, MFD_ALLOW_SEALING,
+    MFD_CLOEXEC, MFD_HUGE_MASK, MFD_HUGE_SHIFT, MFD_HUGETLB,
 };
 
 use crate::{
@@ -60,9 +64,7 @@ pub fn check_memfd_write(file: &File) -> AxResult {
 }
 
 pub fn memfd_write_sealed(file: &File) -> bool {
-    memfd_state(file).is_some_and(|state| {
-        state.seals() & (F_SEAL_WRITE | F_SEAL_FUTURE_WRITE) != 0
-    })
+    memfd_state(file).is_some_and(|state| state.seals() & (F_SEAL_WRITE | F_SEAL_FUTURE_WRITE) != 0)
 }
 
 pub fn check_memfd_write_at(file: &File, offset: u64, len: usize) -> AxResult {

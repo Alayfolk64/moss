@@ -1,0 +1,87 @@
+info: using existing install for nightly-2025-05-20-x86_64-unknown-linux-gnu
+info: default toolchain set to nightly-2025-05-20-x86_64-unknown-linux-gnu
+
+  nightly-2025-05-20-x86_64-unknown-linux-gnu unchanged - rustc 1.89.0-nightly (60dabef95 2025-05-19)
+
+info: note that the toolchain 'nightly-2025-05-20-x86_64-unknown-linux-gnu' is currently in use (overridden by environment variable RUSTUP_TOOLCHAIN)
+make ARCH=riscv64 build
+make[1]: Entering directory '/work'
+info: using existing install for nightly-2025-05-20-x86_64-unknown-linux-gnu
+info: default toolchain set to nightly-2025-05-20-x86_64-unknown-linux-gnu
+
+  nightly-2025-05-20-x86_64-unknown-linux-gnu unchanged - rustc 1.89.0-nightly (60dabef95 2025-05-19)
+
+info: note that the toolchain 'nightly-2025-05-20-x86_64-unknown-linux-gnu' is currently in use (overridden by environment variable RUSTUP_TOOLCHAIN)
+make[2]: Entering directory '/work/make'
+info: using existing install for nightly-2025-05-20-x86_64-unknown-linux-gnu
+info: default toolchain set to nightly-2025-05-20-x86_64-unknown-linux-gnu
+
+  nightly-2025-05-20-x86_64-unknown-linux-gnu unchanged - rustc 1.89.0-nightly (60dabef95 2025-05-19)
+
+info: note that the toolchain 'nightly-2025-05-20-x86_64-unknown-linux-gnu' is currently in use (overridden by environment variable RUSTUP_TOOLCHAIN)
+[37m/work/.tools/x86_64-linux/bin/axconfig-gen[0m [90mdefconfig.toml /work/vendor/axplat-riscv64-qemu-virt/axconfig.toml  -w arch=riscv64 -w platform=riscv64-qemu-virt -o "/work/.axconfig.toml" -w plat.phys-memory-size=1073741824[0m
+make[2]: Leaving directory '/work/make'
+make[2]: Entering directory '/work/make'
+info: using existing install for nightly-2025-05-20-x86_64-unknown-linux-gnu
+info: default toolchain set to nightly-2025-05-20-x86_64-unknown-linux-gnu
+
+  nightly-2025-05-20-x86_64-unknown-linux-gnu unchanged - rustc 1.89.0-nightly (60dabef95 2025-05-19)
+
+info: note that the toolchain 'nightly-2025-05-20-x86_64-unknown-linux-gnu' is currently in use (overridden by environment variable RUSTUP_TOOLCHAIN)
+[37m/work/.tools/x86_64-linux/bin/axconfig-gen[0m [90mdefconfig.toml /work/vendor/axplat-riscv64-qemu-virt/axconfig.toml  -w arch=riscv64 -w platform=riscv64-qemu-virt -o "/work/.axconfig.toml" -w plat.phys-memory-size=1073741824 -c "/work/.axconfig.toml"[0m
+    [92;1mBuilding[0m App: work, Arch: riscv64, Platform: riscv64-qemu-virt, App type: rust
+[37mcargo -C /work build[0m [90m-Z unstable-options --config source.crates-io.replace-with="vendored-sources" --config source.vendored-sources.directory="/work/vendor" --locked --offline --target riscv64gc-unknown-none-elf --target-dir /work/target --release  --features "axfeat/defplat axfeat/bus-mmio qemu shell-init"[0m
+warning: `/root/.cargo/config` is deprecated in favor of `config.toml`
+note: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+warning: `/root/.cargo/config` is deprecated in favor of `config.toml`
+note: if you need to support cargo 1.38 or earlier, you can symlink `config` to `config.toml`
+   Compiling lwext4_rust v0.3.1-preview.1 (/work/third_party/lwext4_rust)
+warning: unused import: `super::fragmentation::PacketAssemblerSet`
+  --> vendor/starry-smoltcp/src/iface/interface/mod.rs:35:5
+   |
+35 | use super::fragmentation::PacketAssemblerSet;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `IFACE_MAX_SIXLOWPAN_ADDRESS_CONTEXT_COUNT`
+  --> vendor/starry-smoltcp/src/iface/interface/mod.rs:41:43
+   |
+41 | use crate::config::{IFACE_MAX_ADDR_COUNT, IFACE_MAX_SIXLOWPAN_ADDRESS_CONTEXT_COUNT};
+   |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `frag`
+  --> vendor/starry-smoltcp/src/iface/interface/ipv4.rs:91:9
+   |
+91 |         frag: &'a mut FragmentsBuffer,
+   |         ^^^^ help: if this is intentional, prefix it with an underscore: `_frag`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: variable does not need to be mutable
+   --> vendor/starry-smoltcp/src/socket/dns.rs:249:13
+    |
+249 |         let mut mdns = MulticastDns::Disabled;
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: `starry-smoltcp` (lib) generated 4 warnings (run `cargo fix --lib -p starry-smoltcp` to apply 3 suggestions)
+   Compiling axfs v0.2.2-preview.1 (/work/vendor/axfs)
+   Compiling axmm v0.2.2-preview.1
+   Compiling axnet v0.2.2-preview.1
+   Compiling axruntime v0.2.2-preview.2
+   Compiling axfeat v0.2.2-preview.1
+   Compiling starry-kernel v0.2.0-preview.2 (/work/kernel)
+   Compiling starryos v0.2.0-preview.2 (/work)
+    Finished `release` profile [optimized] target(s) in 1m 07s
+[37m/root/.cargo/bin/rust-objcopy --binary-architecture=riscv64[0m [90m/work/work_riscv64-qemu-virt.elf --strip-debug /work/work_riscv64-qemu-virt.elf[0m
+[37m/root/.cargo/bin/rust-objcopy --binary-architecture=riscv64[0m [90m/work/work_riscv64-qemu-virt.elf --strip-all -O binary /work/work_riscv64-qemu-virt.bin[0m
+make[2]: Leaving directory '/work/make'
+make[1]: Leaving directory '/work'
+rust-objcopy -I binary -O elf64-littleriscv -B riscv --rename-section .data=.text,alloc,load,readonly,code /work/work_riscv64-qemu-virt.bin /work/kernel-rv.bin.o
+rust-lld -flavor gnu -m elf64lriscv -T /work/make/kernel-rv-wrap.ld -o /work/kernel-rv /work/kernel-rv.bin.o
+rm -f /work/kernel-rv.bin.o /work/work_riscv64-qemu-virt.bin
+rm -f /work/work_riscv64-qemu-virt.elf

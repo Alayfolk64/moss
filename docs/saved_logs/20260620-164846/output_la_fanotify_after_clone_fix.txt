@@ -1,0 +1,183 @@
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = loongarch64
+platform = loongarch64-qemu-virt
+target = loongarch64-unknown-none-softfloat
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-20 08:48:17.004547630 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-loongarch-lp64d.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-loongarch-lp64d.so.1' -> '/glibc/lib/ld-linux-loongarch-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrwxrwxrwx    1 root     root          40 Jan  1  1970 [1;36mld-linux-loongarch-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-loongarch-lp64d.so.1[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-loongarch-lp64d.so.1[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 4K     
+-rw-r--r--    1 root     root         106 Jun 20 08:48 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+HUSH_VERSION=1.33.1
+PWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+2026-06-20-08-48-24
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE fanotify02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=20 pid=78 fd=4
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=2 pid=78 fd=5
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=8 pid=78 fd=6
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=20 pid=78 fd=7
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=1 pid=78 fd=8
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=10 pid=78 fd=9
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=20 pid=78 fd=10
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=10 pid=78 fd=11
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify02 : 0
+2026-06-20-08-48-25
+RUN LTP CASE fanotify11
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+fanotify11.c:64: [1;34mTINFO: [0mTest #0: without FAN_REPORT_TID: tgid=84, tid=0, event.pid=0
+fanotify11.c:85: [1;32mTPASS: [0mevent.pid == tgid
+fanotify11.c:64: [1;34mTINFO: [0mTest #1: with FAN_REPORT_TID: tgid=84, tid=85, event.pid=0
+fanotify11.c:83: [1;32mTPASS: [0mevent.pid == tid
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify11 : 0
+2026-06-20-08-48-25
+#### OS COMP TEST GROUP END ltp-musl ####
+2026-06-20-08-48-26
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START lmbench-musl ####
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+prepare glibc runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libgcc_s.so.1' -> '/glibc/lib/libgcc_s.so.1'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+2026-06-20-08-48-26
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE fanotify02
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=20 pid=105 fd=4
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=2 pid=105 fd=5
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=8 pid=105 fd=6
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=20 pid=105 fd=7
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=1 pid=105 fd=8
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=10 pid=105 fd=9
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=20 pid=105 fd=10
+fanotify02.c:159: [1;32mTPASS: [0mgot event: mask=10 pid=105 fd=11
+
+Summary:
+passed   8
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify02 : 0
+2026-06-20-08-48-27
+RUN LTP CASE fanotify11
+tst_test.c:1733: [1;34mTINFO: [0mLTP version: 20240524
+tst_test.c:1617: [1;34mTINFO: [0mTimeout per run is 0h 00m 30s
+fanotify11.c:64: [1;34mTINFO: [0mTest #0: without FAN_REPORT_TID: tgid=111, tid=0, event.pid=0
+fanotify11.c:85: [1;32mTPASS: [0mevent.pid == tgid
+fanotify11.c:64: [1;34mTINFO: [0mTest #1: with FAN_REPORT_TID: tgid=111, tid=112, event.pid=0
+fanotify11.c:83: [1;32mTPASS: [0mevent.pid == tid
+
+Summary:
+passed   2
+failed   0
+broken   0
+skipped  0
+warnings 0
+FAIL LTP CASE fanotify11 : 0
+2026-06-20-08-48-28
+#### OS COMP TEST GROUP END ltp-glibc ####
+2026-06-20-08-48-28
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####

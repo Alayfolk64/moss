@@ -94,6 +94,17 @@ impl ProcessSignalManager {
             .contains(SignalActionFlags::RESTART)
     }
 
+    pub(crate) fn add_thread(&self, tid: u32, thread: &Arc<ThreadSignalManager>) {
+        self.children.lock().push((tid, Arc::downgrade(thread)));
+    }
+
+    pub(crate) fn remove_thread(&self, tid: u32) {
+        let mut children = self.children.lock();
+        if let Some(pos) = children.iter().position(|(child_tid, _)| *child_tid == tid) {
+            children.swap_remove(pos);
+        }
+    }
+
     /// Sends a signal to the process.
     ///
     /// Returns `Some(tid)` if the signal wakes up a thread.

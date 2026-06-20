@@ -14,7 +14,7 @@ mod socket;
 #[cfg(not(feature = "net"))]
 use axerrno::{AxError, AxResult, LinuxError};
 #[cfg(not(feature = "net"))]
-use linux_raw_sys::net::{msghdr, sockaddr, socklen_t};
+use linux_raw_sys::net::{mmsghdr, msghdr, sockaddr, socklen_t};
 
 #[cfg(feature = "net")]
 pub use self::{cmsg::*, io::*, name::*, opt::*, socket::*};
@@ -138,6 +138,12 @@ pub fn sys_recvfrom(
 #[cfg(not(feature = "net"))]
 pub fn sys_sendmsg(fd: i32, msg: UserConstPtr<msghdr>, flags: u32) -> AxResult<isize> {
     let _ = (fd, msg, flags);
+    Err(net_disabled())
+}
+
+#[cfg(not(feature = "net"))]
+pub fn sys_sendmmsg(fd: i32, msgvec: UserPtr<mmsghdr>, vlen: u32, flags: u32) -> AxResult<isize> {
+    let _ = (fd, msgvec, vlen, flags);
     Err(net_disabled())
 }
 

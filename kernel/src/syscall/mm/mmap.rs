@@ -12,7 +12,7 @@ use starry_vm::{vm_load, vm_write_slice};
 
 use crate::{
     file::{File, FileLike},
-    mm::{Backend, SharedPages},
+    mm::{AddrSpace, Backend, SharedPages},
     pseudofs::{Device, DeviceMmap},
     syscall::{fs::memfd_write_sealed, notify_inotify_file},
     task::AsThread,
@@ -105,6 +105,14 @@ struct GrowdownArea {
     blocked: bool,
 }
 
+#[derive(Clone, Copy)]
+struct WipeOnForkArea {
+    pid: u32,
+    start: usize,
+    end: usize,
+}
+
+#[derive(Clone, Copy)]
 struct MapRecord {
     pid: u32,
     start: usize,
@@ -113,6 +121,7 @@ struct MapRecord {
     shared: bool,
     file_backed: bool,
     write_sealed: bool,
+    locked: bool,
 }
 
 struct SigbusArea {
@@ -123,6 +132,7 @@ struct SigbusArea {
 
 static MMAP_LOCKED_BYTES: AtomicUsize = AtomicUsize::new(0);
 static GROW_DOWN_AREAS: Mutex<Vec<GrowdownArea>> = Mutex::new(Vec::new());
+static WIPEONFORK_AREAS: Mutex<Vec<WipeOnForkArea>> = Mutex::new(Vec::new());
 static MMAP_RECORDS: Mutex<Vec<MapRecord>> = Mutex::new(Vec::new());
 static SIGBUS_AREAS: Mutex<Vec<SigbusArea>> = Mutex::new(Vec::new());
 
@@ -242,6 +252,7 @@ fn record_mmap(
     shared: bool,
     file_backed: bool,
     write_sealed: bool,
+    locked: bool,
 ) {
     MMAP_RECORDS.lock().push(MapRecord {
         pid,
@@ -251,6 +262,7 @@ fn record_mmap(
         shared,
         file_backed,
         write_sealed,
+        locked,
     });
 }
 
@@ -290,17 +302,142 @@ fn update_mmap_prot(pid: u32, start: usize, length: usize, prot: MmapProt) {
     *records = updated;
 }
 
-fn forget_mmap(pid: u32, start: usize, length: usize) {
+fn overlap_len(a_start: usize, a_end: usize, b_start: usize, b_end: usize) -> usize {
+    a_end.min(b_end).saturating_sub(a_start.max(b_start))
+}
+
+fn forget_mmap(pid: u32, start: usize, length: usize) -> usize {
     let end = start + length;
-    MMAP_RECORDS
-        .lock()
-        .retain(|record| record.pid != pid || record.end <= start || record.start >= end);
+    let mut locked_bytes = 0;
+    let mut records = MMAP_RECORDS.lock();
+    let mut updated = Vec::with_capacity(records.len());
+
+    for record in records.drain(..) {
+        if record.pid != pid || record.end <= start || record.start >= end {
+            updated.push(record);
+            continue;
+        }
+
+        if record.locked {
+            locked_bytes += overlap_len(record.start, record.end, start, end);
+        }
+        if record.start < start {
+            updated.push(MapRecord {
+                end: start,
+                ..record
+            });
+        }
+        if record.end > end {
+            updated.push(MapRecord {
+                start: end,
+                ..record
+            });
+        }
+    }
+    *records = updated;
+
     SIGBUS_AREAS
         .lock()
         .retain(|area| area.pid != pid || area.end <= start || area.start >= end);
     GROW_DOWN_AREAS
         .lock()
         .retain(|area| area.pid != pid || area.high <= start || area.low >= end);
+    remove_wipeonfork_range(pid, start, length);
+    locked_bytes
+}
+
+pub fn release_process_mmap_resources(pid: u32) {
+    let mut locked_bytes = 0;
+    {
+        let mut records = MMAP_RECORDS.lock();
+        records.retain(|record| {
+            if record.pid == pid {
+                if record.locked {
+                    locked_bytes += record.end.saturating_sub(record.start);
+                }
+                false
+            } else {
+                true
+            }
+        });
+    }
+    if locked_bytes != 0 {
+        sub_locked_bytes(locked_bytes);
+    }
+    SIGBUS_AREAS.lock().retain(|area| area.pid != pid);
+    GROW_DOWN_AREAS.lock().retain(|area| area.pid != pid);
+    WIPEONFORK_AREAS.lock().retain(|area| area.pid != pid);
+}
+
+fn is_recorded_private_anonymous(pid: u32, start: usize, length: usize) -> bool {
+    let end = start + length;
+    MMAP_RECORDS.lock().iter().rev().any(|record| {
+        record.pid == pid
+            && !record.shared
+            && !record.file_backed
+            && record.start <= start
+            && record.end >= end
+    })
+}
+
+fn add_wipeonfork_range(pid: u32, start: usize, length: usize) {
+    if length == 0 {
+        return;
+    }
+    WIPEONFORK_AREAS.lock().push(WipeOnForkArea {
+        pid,
+        start,
+        end: start + length,
+    });
+}
+
+fn remove_wipeonfork_range(pid: u32, start: usize, length: usize) {
+    if length == 0 {
+        return;
+    }
+    let end = start + length;
+    let mut areas = WIPEONFORK_AREAS.lock();
+    let mut updated = Vec::with_capacity(areas.len());
+
+    for area in areas.drain(..) {
+        if area.pid != pid || area.end <= start || area.start >= end {
+            updated.push(area);
+            continue;
+        }
+        if area.start < start {
+            updated.push(WipeOnForkArea { end: start, ..area });
+        }
+        if area.end > end {
+            updated.push(WipeOnForkArea { start: end, ..area });
+        }
+    }
+    *areas = updated;
+}
+
+pub fn inherit_wipeonfork_ranges(
+    parent_pid: u32,
+    child_pid: u32,
+    child_aspace: &mut AddrSpace,
+) -> AxResult<()> {
+    let inherited: Vec<_> = WIPEONFORK_AREAS
+        .lock()
+        .iter()
+        .filter(|area| area.pid == parent_pid)
+        .copied()
+        .collect();
+
+    let zero_page = [0u8; PageSize::Size4K as usize];
+    for area in inherited {
+        let mut pos = area.start;
+        while pos < area.end {
+            let len = (area.end - pos).min(zero_page.len());
+            child_aspace.write(VirtAddr::from(pos), &zero_page[..len])?;
+            pos += len;
+        }
+        add_wipeonfork_range(child_pid, area.start, area.end - area.start);
+    }
+
+    Ok(())
 }
 
 fn is_recorded_shared_file(pid: u32, start: usize, length: usize) -> bool {
@@ -436,7 +573,10 @@ pub fn sys_mmap(
         }
         if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
             aspace.unmap(dst_addr, length)?;
-            forget_mmap(pid, dst_addr.as_usize(), length);
+            let locked_bytes = forget_mmap(pid, dst_addr.as_usize(), length);
+            if locked_bytes != 0 {
+                sub_locked_bytes(locked_bytes);
+            }
         }
         dst_addr
     } else {
@@ -561,6 +701,7 @@ pub fn sys_mmap(
         is_shared,
         file_backed,
         write_sealed,
+        map_flags.contains(MmapFlags::LOCKED),
     );
     if map_flags.contains(MmapFlags::LOCKED) {
         MMAP_LOCKED_BYTES.fetch_add(length, Ordering::Relaxed);
@@ -589,14 +730,25 @@ pub fn sys_mmap(
 
 pub fn sys_munmap(addr: usize, length: usize) -> AxResult<isize> {
     debug!("sys_munmap <= addr: {addr:#x}, length: {length:x}");
+    let start_addr = VirtAddr::from(addr);
+    if length == 0 || !start_addr.is_aligned_4k() {
+        return Err(AxError::InvalidInput);
+    }
+    let length = length
+        .checked_add(PageSize::Size4K as usize - 1)
+        .map(|length| length & !(PageSize::Size4K as usize - 1))
+        .ok_or(AxError::InvalidInput)?;
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
     let mut aspace = curr.as_thread().proc_data.aspace.lock();
-    let length = align_up_4k(length);
-    let start_addr = VirtAddr::from(addr);
+    if !aspace.contains_range(start_addr, length) {
+        return Err(AxError::InvalidInput);
+    }
     aspace.unmap(start_addr, length)?;
-    forget_mmap(pid, addr, length);
-    sub_locked_bytes(length);
+    let locked_bytes = forget_mmap(pid, addr, length);
+    if locked_bytes != 0 {
+        sub_locked_bytes(locked_bytes);
+    }
     Ok(0)
 }
 
@@ -627,16 +779,27 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
     Ok(0)
 }
 
-pub fn sys_mremap(addr: usize, old_size: usize, new_size: usize, flags: u32) -> AxResult<isize> {
+pub fn sys_mremap(
+    addr: usize,
+    old_size: usize,
+    new_size: usize,
+    flags: u32,
+    new_addr: usize,
+) -> AxResult<isize> {
     debug!(
         "sys_mremap <= addr: {addr:#x}, old_size: {old_size:x}, new_size: {new_size:x}, flags: \
-         {flags:#x}"
+         {flags:#x}, new_addr: {new_addr:#x}"
     );
 
     if !addr.is_multiple_of(PageSize::Size4K as usize) {
         return Err(AxError::InvalidInput);
     }
-    if flags & !(MREMAP_MAYMOVE | MREMAP_FIXED) != 0 || flags & MREMAP_FIXED != 0 {
+    if flags & !(MREMAP_MAYMOVE | MREMAP_FIXED) != 0 {
+        return Err(AxError::InvalidInput);
+    }
+    let fixed = flags & MREMAP_FIXED != 0;
+    if fixed && (flags & MREMAP_MAYMOVE == 0 || !new_addr.is_multiple_of(PageSize::Size4K as usize))
+    {
         return Err(AxError::InvalidInput);
     }
     let addr = VirtAddr::from(addr);
@@ -650,9 +813,39 @@ pub fn sys_mremap(addr: usize, old_size: usize, new_size: usize, flags: u32) -> 
     let old_flags = aspace.find_area(addr).ok_or(AxError::NoMemory)?.flags();
     let old_prot = recorded_prot(pid, addr.as_usize(), old_size)
         .unwrap_or_else(|| prot_from_mapping_flags(old_flags));
+
+    if fixed {
+        let src_start = addr.as_usize();
+        let src_end = src_start.checked_add(old_size).ok_or(AxError::NoMemory)?;
+        let dst_start = new_addr;
+        let dst_end = dst_start.checked_add(new_size).ok_or(AxError::NoMemory)?;
+        if src_start < dst_end && dst_start < src_end {
+            return Err(AxError::InvalidInput);
+        }
+
+        drop(aspace);
+        let copy_len = old_size.min(new_size);
+        let data = vm_load(addr.as_ptr(), copy_len)?;
+        let mapped_addr = sys_mmap(
+            new_addr,
+            new_size,
+            old_prot.bits(),
+            (MmapFlags::PRIVATE | MmapFlags::ANONYMOUS | MmapFlags::FIXED).bits(),
+            -1,
+            0,
+        )? as usize;
+        vm_write_slice(mapped_addr as *mut u8, &data)?;
+        sys_munmap(addr.as_usize(), old_size)?;
+        return Ok(mapped_addr as isize);
+    }
+
     if new_size <= old_size {
         if old_size > new_size {
             aspace.unmap(addr + new_size, old_size - new_size)?;
+            let locked_bytes = forget_mmap(pid, addr.as_usize() + new_size, old_size - new_size);
+            if locked_bytes != 0 {
+                sub_locked_bytes(locked_bytes);
+            }
         }
         return Ok(addr.as_usize() as isize);
     }
@@ -688,6 +881,7 @@ pub fn sys_mremap(addr: usize, old_size: usize, new_size: usize, flags: u32) -> 
             false,
             false,
             false,
+            false,
         );
         return Ok(addr.as_usize() as isize);
     }
@@ -716,6 +910,44 @@ pub fn sys_mremap(addr: usize, old_size: usize, new_size: usize, flags: u32) -> 
 
 pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
     debug!("sys_madvise <= addr: {addr:#x}, length: {length:x}, advice: {advice:#x}");
+    let advice = u32::try_from(advice).map_err(|_| AxError::InvalidInput)?;
+    if !addr.is_multiple_of(PageSize::Size4K as usize) {
+        return Err(AxError::InvalidInput);
+    }
+    if length == 0 {
+        return Ok(0);
+    }
+
+    let length = align_up_4k(length);
+    let start = VirtAddr::from(addr);
+    let curr = current();
+    let pid = curr.as_thread().proc_data.proc.pid();
+    let aspace = curr.as_thread().proc_data.aspace.lock();
+    if !aspace.can_access_range(start, length, MappingFlags::USER) {
+        return Err(AxError::NoMemory);
+    }
+    drop(aspace);
+
+    match advice {
+        MADV_WIPEONFORK => {
+            if !is_recorded_private_anonymous(pid, addr, length) {
+                return Err(AxError::InvalidInput);
+            }
+            add_wipeonfork_range(pid, addr, length);
+        }
+        MADV_KEEPONFORK => remove_wipeonfork_range(pid, addr, length),
+        MADV_FREE => {
+            if !is_recorded_private_anonymous(pid, addr, length) {
+                return Err(AxError::InvalidInput);
+            }
+        }
+        MADV_NORMAL | MADV_RANDOM | MADV_SEQUENTIAL | MADV_WILLNEED | MADV_DONTNEED
+        | MADV_REMOVE | MADV_DONTFORK | MADV_DOFORK | MADV_HWPOISON | MADV_MERGEABLE
+        | MADV_UNMERGEABLE | MADV_HUGEPAGE | MADV_NOHUGEPAGE | MADV_DONTDUMP | MADV_DODUMP
+        | MADV_COLD | MADV_PAGEOUT | MADV_SOFT_OFFLINE => {}
+        _ => return Err(AxError::InvalidInput),
+    }
+
     Ok(0)
 }
 
@@ -729,9 +961,43 @@ pub fn sys_mlock(addr: usize, length: usize) -> AxResult<isize> {
     sys_mlock2(addr, length, 0)
 }
 
-pub fn sys_mlock2(_addr: usize, _length: usize, flags: u32) -> AxResult<isize> {
+pub fn sys_mlock2(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
     if flags & !MLOCK_ONFAULT != 0 {
         return Err(AxError::from(LinuxError::EINVAL));
+    }
+    if length == 0 {
+        return Ok(0);
+    }
+
+    let start = VirtAddr::from(addr).align_down_4k();
+    let end = addr
+        .checked_add(length)
+        .and_then(|end| end.checked_add(PageSize::Size4K as usize - 1))
+        .map(|end| end & !(PageSize::Size4K as usize - 1))
+        .ok_or(AxError::NoMemory)?;
+    let locked_len = end
+        .checked_sub(start.as_usize())
+        .filter(|len| *len != 0)
+        .ok_or(AxError::NoMemory)?;
+
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    if !proc_data
+        .aspace
+        .lock()
+        .can_access_range(start, locked_len, MappingFlags::USER)
+    {
+        return Err(AxError::NoMemory);
+    }
+
+    if proc_data.euid() != 0 {
+        let limit = proc_data.rlim.read()[RLIMIT_MEMLOCK].current;
+        if limit == 0 {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
+        if locked_len as u64 > limit {
+            return Err(AxError::NoMemory);
+        }
     }
     Ok(0)
 }

@@ -1,0 +1,278 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-20 12:35:29.004608500 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrwxrwxrwx    1 root     root          38 Jan  1  1970 [1;36mld-linux-riscv64-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-riscv64-lp64d.so.1[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64-sf.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64.so.1[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 4K     
+-rw-r--r--    1 root     root         106 Jun 20 12:35 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+2026-06-20-12-35-36
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE mmap11
+[37m[  8.794748 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=1000 created=1000 dropped=492[m
+[m[37m[  8.837117 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=1000 len=1111 capacity=1111[m
+[m[37m[  9.519283 0:1508 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=1000 tid=1508 last_thread=false process_threads=760 task_table=785 proc_data_refs=783[m
+[m[37m[  9.559379 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=1000 created=1763 dropped=1000[m
+[m[37m[  9.595838 0:513 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=1000 len=1390 capacity=1392[m
+[m[37m[  9.828452 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=2000 created=2000 dropped=1302[m
+[m[37m[  9.846302 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=2000 len=1215 capacity=1215[m
+[m[37m[ 10.424609 0:2552 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=2000 tid=2552 last_thread=false process_threads=754 task_table=819 proc_data_refs=817[m
+[m[37m[ 10.430126 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=2000 created=2756 dropped=2000[m
+[m[37m[ 10.515930 0:1545 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=2000 len=1390 capacity=1392[m
+[m[37m[ 10.714101 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=3000 created=3000 dropped=2263[m
+[m[37m[ 10.734795 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=3000 len=1433 capacity=1433[m
+[m[37m[ 11.327659 0:3586 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=3000 tid=3586 last_thread=false process_threads=838 task_table=852 proc_data_refs=850[m
+[m[37m[ 11.337752 0:2437 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=3000 len=1544 capacity=1546[m
+[m[37m[ 11.367788 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=3000 created=3840 dropped=3000[m
+[m[37m[ 11.440488 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=4000 created=4000 dropped=3062[m
+[m[37m[ 11.555027 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=4000 len=1371 capacity=1371[m
+[m[37m[ 12.197261 0:3401 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=4000 len=1346 capacity=1348[m
+[m[37m[ 12.202463 0:4636 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=4000 tid=4636 last_thread=false process_threads=740 task_table=768 proc_data_refs=766[m
+[m[37m[ 12.222087 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=4000 created=4742 dropped=4000[m
+[m[37m[ 12.429857 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=5000 created=5000 dropped=4221[m
+[m[37m[ 12.448472 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=5000 len=1363 capacity=1363[m
+[m[37m[ 13.061425 0:4547 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=5000 len=1324 capacity=1326[m
+[m[37m[ 13.190948 0:4415 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=5000 tid=4415 last_thread=false process_threads=875 task_table=880 proc_data_refs=878[m
+[m[37m[ 13.198828 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=5000 created=5877 dropped=5000[m
+[m[37m[ 13.312492 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=6000 created=6000 dropped=5151[m
+[m[37m[ 13.418787 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=6000 len=1187 capacity=1187[m
+[m[37m[ 13.951240 0:6546 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=6000 len=1258 capacity=1260[m
+[m[37m[ 13.955995 0:5495 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=6000 tid=5495 last_thread=false process_threads=696 task_table=723 proc_data_refs=721[m
+[m[37m[ 13.986501 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=6000 created=6699 dropped=6000[m
+[m[37m[ 14.153316 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=7000 created=7000 dropped=6144[m
+[m[37m[ 14.215435 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=7000 len=1393 capacity=1393[m
+[m[37m[ 14.864062 0:7620 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=7000 len=1190 capacity=1192[m
+[m[37m[ 14.870908 0:6355 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=7000 tid=6355 last_thread=false process_threads=662 task_table=719 proc_data_refs=717[m
+[m[37m[ 14.931862 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=7000 created=7808 dropped=7000[m
+[m[37m[ 15.134763 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=8000 created=8000 dropped=7250[m
+[m[37m[ 15.152507 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=8000 len=1297 capacity=1297[m
+[m[37m[ 15.715969 0:8516 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=8000 tid=8516 last_thread=false process_threads=763 task_table=784 proc_data_refs=782[m
+[m[37m[ 15.726811 0:7523 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=8000 len=1394 capacity=1396[m
+[m[37m[ 15.748290 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=8000 created=8765 dropped=8000[m
+[m[37m[ 15.900112 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=9000 created=9000 dropped=8209[m
+[m[37m[ 15.978618 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=9000 len=1413 capacity=1413[m
+[m[37m[ 16.546124 0:9668 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=9000 len=1268 capacity=1270[m
+[m[37m[ 16.602451 0:8467 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=9000 tid=8467 last_thread=false process_threads=859 task_table=936 proc_data_refs=934[m
+[m[37m[ 16.618901 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=9000 created=9861 dropped=9000[m
+[m[37m[ 16.731428 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=10000 created=10000 dropped=9086[m
+[m[37m[ 16.841928 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=10000 len=1353 capacity=1353[m
+[mmmap11      1  [1;32mTPASS[0m  :  test completed.
+[37m[ 16.989600 0:9939 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=10000 tid=9939 last_thread=false process_threads=67 task_table=349 proc_data_refs=347[m
+[m[37m[ 16.997728 0:10073 starry_kernel::syscall::mm::mmap:383] [33mltp_mmap11_mmap_release_diag pid=74 removed=1152 len=0 capacity=1154 locked_bytes=0[m
+[m[37m[ 17.038039 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=10000 created=10069 dropped=10000[m
+[mFAIL LTP CASE mmap11 : 0
+2026-06-20-12-35-45
+#### OS COMP TEST GROUP END ltp-musl ####
+2026-06-20-12-35-46
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START lmbench-musl ####
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+prepare glibc runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libgcc_s.so.1' -> '/glibc/lib/libgcc_s.so.1'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+2026-06-20-12-35-46
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE mmap11
+[37m[ 19.134502 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=11000 created=11000 dropped=10361[m
+[m[37m[ 19.261554 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=11000 len=1601 capacity=1601[m
+[m[37m[ 19.954152 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=12000 created=12000 dropped=10874[m
+[m[37m[ 20.153158 0:10545 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=10000 len=2224 capacity=2226[m
+[m[37m[ 20.445065 0:10345 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=11000 tid=10345 last_thread=false process_threads=1252 task_table=1380 proc_data_refs=1378[m
+[m[37m[ 20.532664 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=11000 created=12314 dropped=11000[m
+[m[37m[ 20.774959 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=12000 len=1253 capacity=1253[m
+[m[37m[ 21.046381 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=13000 created=13000 dropped=11977[m
+[m[37m[ 21.158830 0:12466 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=11000 len=1734 capacity=1736[m
+[m[37m[ 21.332063 0:11577 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=12000 tid=11577 last_thread=false process_threads=1225 task_table=1250 proc_data_refs=1248[m
+[m[37m[ 21.430473 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=12000 created=13409 dropped=12000[m
+[m[37m[ 21.989153 0:12549 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=13000 tid=12549 last_thread=false process_threads=884 task_table=1001 proc_data_refs=999[m
+[m[37m[ 22.035195 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=13000 len=1487 capacity=1487[m
+[m[37m[ 22.069101 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=13000 created=13988 dropped=13000[m
+[m[37m[ 22.107968 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=14000 created=14000 dropped=13176[m
+[m[37m[ 22.425691 0:14090 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=12000 len=1588 capacity=1590[m
+[m[37m[ 22.921342 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=15000 created=15000 dropped=13794[m
+[m[37m[ 22.987703 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=14000 len=2567 capacity=2567[m
+[m[37m[ 23.375390 0:13643 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=14000 tid=13643 last_thread=false process_threads=1280 task_table=1488 proc_data_refs=1486[m
+[m[37m[ 23.522425 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=14000 created=15433 dropped=14000[m
+[m[37m[ 23.585217 0:14509 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=13000 len=1246 capacity=1248[m
+[m[37m[ 23.981992 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=16000 created=16000 dropped=14985[m
+[m[37m[ 24.005940 0:14577 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=15000 tid=14577 last_thread=false process_threads=1059 task_table=1076 proc_data_refs=1074[m
+[m[37m[ 24.132467 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=15000 created=16239 dropped=15000[m
+[m[37m[ 24.364458 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=15000 len=1831 capacity=1831[m
+[m[37m[ 24.863821 0:16822 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=14000 len=1560 capacity=1562[m
+[m[37m[ 24.901503 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=17000 created=17000 dropped=15873[m
+[m[37m[ 24.950281 0:15383 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=16000 tid=15383 last_thread=false process_threads=1170 task_table=1299 proc_data_refs=1297[m
+[m[37m[ 25.047946 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=16000 created=17293 dropped=16000[m
+[m[37m[ 25.623888 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=16000 len=1685 capacity=1685[m
+[m[37m[ 25.836571 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=18000 created=18000 dropped=16946[m
+[m[37m[ 25.871585 0:16541 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=17000 tid=16541 last_thread=false process_threads=1085 task_table=1141 proc_data_refs=1139[m
+[m[37m[ 25.959648 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=17000 created=18264 dropped=17000[m
+[m[37m[ 26.072164 0:17125 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=15000 len=1706 capacity=1708[m
+[m[37m[ 26.528867 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=19000 created=19000 dropped=17770[m
+[m[37m[ 26.566213 0:10092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=17000 len=2511 capacity=2511[m
+[m[37m[ 27.315911 0:17853 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=18000 tid=17853 last_thread=false process_threads=1546 task_table=1778 proc_data_refs=1776[m
+[m[37m[ 27.391357 0:18731 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=16000 len=1738 capacity=1740[m
+[m[37m[ 27.503700 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=18000 created=19692 dropped=18000[m
+[m[37m[ 28.000602 0:10092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=20000 created=20000 dropped=18852[m
+[m[37m[ 28.045471 0:19055 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=19000 tid=19055 last_thread=false process_threads=1085 task_table=1235 proc_data_refs=1233[m
+[mmmap11      1  [1;32mTPASS[0m  :  test completed.
+[37m[ 28.096404 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=19000 created=20087 dropped=19000[m
+[m[37m[ 28.230323 0:18596 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=20000 tid=18596 last_thread=false process_threads=86 task_table=89 proc_data_refs=87[m
+[m[37m[ 28.231150 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=20000 created=20087 dropped=20000[m
+[m[37m[ 28.276710 0:17191 starry_kernel::syscall::mm::mmap:383] [33mltp_mmap11_mmap_release_diag pid=10092 removed=1480 len=0 capacity=1481 locked_bytes=0[m
+[mFAIL LTP CASE mmap11 : 0
+2026-06-20-12-35-57
+#### OS COMP TEST GROUP END ltp-glibc ####
+2026-06-20-12-35-57
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####

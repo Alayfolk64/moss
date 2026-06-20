@@ -59,7 +59,7 @@ fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> 
     Ok(())
 }
 
-//处理C字符串
+// 处理C字符串
 fn check_null_terminated<T: PartialEq + Default>(
     start: VirtAddr,
     access_flags: MappingFlags,
@@ -122,7 +122,7 @@ impl<T> From<usize> for UserPtr<T> {
     }
 }
 
-///可写用户指针
+/// 可写用户指针
 impl<T> From<*mut T> for UserPtr<T> {
     fn from(value: *mut T) -> Self {
         UserPtr(value)
@@ -184,7 +184,7 @@ impl<T> From<usize> for UserConstPtr<T> {
     }
 }
 
-//只读用户指针
+// 只读用户指针
 impl<T> From<*const T> for UserConstPtr<T> {
     fn from(value: *const T) -> Self {
         UserConstPtr(value)
@@ -258,7 +258,7 @@ macro_rules! nullable {
 
 pub(crate) use nullable;
 
-//内核访问用户内存时，也可能缺页
+// 内核访问用户内存时，也可能缺页
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags) -> bool {
     debug!("Page fault at {vaddr:#x}, access_flags: {access_flags:#x?}");

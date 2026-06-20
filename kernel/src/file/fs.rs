@@ -37,6 +37,7 @@ struct SpecialNodeMetadata {
 
 static SPECIAL_NODES: RwLock<BTreeMap<String, SpecialNodeMetadata>> = RwLock::new(BTreeMap::new());
 static INODE_FLAGS: RwLock<BTreeMap<String, u32>> = RwLock::new(BTreeMap::new());
+const PATH_MAX: usize = 4096;
 
 pub fn register_special_node(path: String, mode: u32, rdev: axfs_ng_vfs::DeviceId) {
     SPECIAL_NODES
@@ -168,14 +169,24 @@ pub fn resolve_at(dirfd: c_int, path: Option<&str>, flags: u32) -> AxResult<Reso
                 ResolveAtResult::Other(file_like)
             })
         }
-        Some(path) => with_fs(dirfd, |fs| {
-            if flags & AT_SYMLINK_NOFOLLOW != 0 {
-                fs.resolve_no_follow(path)
-            } else {
-                fs.resolve(path)
+        Some(path) => {
+            if path.len() >= PATH_MAX {
+                return Err(AxError::NameTooLong);
             }
-            .map(ResolveAtResult::File)
-        }),
+            let dirfd = if path.starts_with('/') {
+                AT_FDCWD
+            } else {
+                dirfd
+            };
+            with_fs(dirfd, |fs| {
+                if flags & AT_SYMLINK_NOFOLLOW != 0 {
+                    fs.resolve_no_follow(path)
+                } else {
+                    fs.resolve(path)
+                }
+                .map(ResolveAtResult::File)
+            })
+        }
     }
 }
 
@@ -183,6 +194,11 @@ pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
     let ty = metadata.node_type as u8;
     let perm = metadata.mode.bits() as u32;
     let mode = ((ty as u32) << 12) | perm;
+    let blksize = if metadata.block_size == 0 {
+        4096
+    } else {
+        metadata.block_size
+    };
     Kstat {
         dev: metadata.device,
         ino: metadata.inode,
@@ -191,7 +207,7 @@ pub fn metadata_to_kstat(metadata: &Metadata) -> Kstat {
         uid: metadata.uid,
         gid: metadata.gid,
         size: metadata.size,
-        blksize: metadata.block_size as _,
+        blksize: blksize as _,
         blocks: metadata.blocks,
         rdev: metadata.rdev,
         attributes: 0,
@@ -414,13 +430,19 @@ impl Pollable for File {
 pub struct Directory {
     inner: Location,
     pub offset: Mutex<u64>,
+    status_flags: AtomicU32,
 }
 
 impl Directory {
     pub fn new(inner: Location) -> Self {
+        Self::new_with_status_flags(inner, 0)
+    }
+
+    pub fn new_with_status_flags(inner: Location, status_flags: u32) -> Self {
         Self {
             inner,
             offset: Mutex::new(0),
+            status_flags: AtomicU32::new(status_flags),
         }
     }
 
@@ -432,7 +454,7 @@ impl Directory {
 
 impl FileLike for Directory {
     fn read(&self, _dst: &mut IoDst) -> AxResult<usize> {
-        Err(AxError::BadFileDescriptor)
+        Err(AxError::IsADirectory)
     }
 
     fn write(&self, _src: &mut IoSrc) -> AxResult<usize> {
@@ -445,6 +467,18 @@ impl FileLike for Directory {
 
     fn path(&self) -> Cow<'_, str> {
         path_for(&self.inner)
+    }
+
+    fn status_flags(&self) -> u32 {
+        self.status_flags.load(Ordering::Acquire)
+    }
+
+    fn set_status_flags(&self, flags: u32) -> AxResult {
+        const MUTABLE_STATUS_BITS: u32 = O_NONBLOCK;
+        let old = self.status_flags.load(Ordering::Acquire);
+        let new = (old & !MUTABLE_STATUS_BITS) | (flags & MUTABLE_STATUS_BITS);
+        self.status_flags.store(new, Ordering::Release);
+        Ok(())
     }
 
     fn from_fd(fd: c_int) -> AxResult<Arc<Self>> {

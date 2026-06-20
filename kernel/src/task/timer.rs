@@ -243,6 +243,13 @@ impl TimeManager {
         )
     }
 
+    /// Cancels all active interval timers owned by this thread.
+    pub fn cancel_all(&mut self) {
+        for itimer in &mut self.itimers {
+            itimer.cancel_timer();
+        }
+    }
+
     fn update_itimer(
         &mut self,
         owner: &AxTaskRef,
@@ -258,6 +265,12 @@ impl TimeManager {
     fn entry_is_current(&self, key: TimerKey, entry: &Entry) -> bool {
         let timer = &self.itimers[entry.ty as usize];
         timer.remained_ns > 0 && timer.active_key == Some(key)
+    }
+}
+
+impl Drop for TimeManager {
+    fn drop(&mut self) {
+        self.cancel_all();
     }
 }
 

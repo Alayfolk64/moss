@@ -1,0 +1,200 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-20 12:32:51.006037200 UTC
+
+created directory: '/bin'
+created directory: '/lib'
+'/lib/ld-musl-riscv64.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-musl-riscv64-sf.so.1' -> '/musl/lib/libc.so'
+'/lib/ld-linux-riscv64-lp64d.so.1' -> '/glibc/lib/ld-linux-riscv64-lp64d.so.1'
+'/lib64' -> '/lib'
+created directory: '/usr'
+'/usr/lib64' -> '/lib'
+created directory: '/var/'
+created directory: '/var/tmp'
+created directory: '/var/log'
+created directory: '/etc'
+created directory: '/lib/modules/'
+created directory: '/lib/modules/10.0.0/'
+created directory: '/lib/modules/10.0.0/build'
+@@@@@@@@@@ files @@@@@@@@@@
+/lib:
+total 4K     
+lrwxrwxrwx    1 root     root          38 Jan  1  1970 [1;36mld-linux-riscv64-lp64d.so.1[m -> [1;32m/glibc/lib/ld-linux-riscv64-lp64d.so.1[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64-sf.so.1[m -> [1;32m/musl/lib/libc.so[m
+lrwxrwxrwx    1 root     root          17 Jan  1  1970 [1;36mld-musl-riscv64.so.1[m -> [1;32m/musl/lib/libc.so[m
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34mmodules[m
+
+/lib/modules:
+total 4K     
+drwxr-xr-x    3 root     root        4.0K Jan  1  1970 [1;34m10.0.0[m
+
+/lib/modules/10.0.0:
+total 4K     
+drwxr-xr-x    2 root     root        4.0K Jan  1  1970 [1;34mbuild[m
+
+/lib/modules/10.0.0/build:
+total 4K     
+-rw-r--r--    1 root     root         106 Jun 20 12:32 [0;0m.config[m
+@@@@@@@@@@ env @@@@@@@@@@
+SHLVL=1
+OLDPWD=/
+PATH=/bin:/sbin:/usr/sbin:/bin:/usr/bin
+PWD=/
+
+prepare musl runtime
+'/lib/libc.so' -> '/musl/lib/libc.so'
+#### OS COMP TEST GROUP START basic-musl ####
+#### OS COMP TEST GROUP END basic-musl ####
+#### OS COMP TEST GROUP START busybox-musl ####
+#### OS COMP TEST GROUP END busybox-musl ####
+#### OS COMP TEST GROUP START libctest-musl ####
+#### OS COMP TEST GROUP END libctest-musl ####
+2026-06-20-12-32-58
+#### OS COMP TEST GROUP START ltp-musl ####
+RUN LTP CASE mmap11
+[37m[  9.128672 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=1000 created=1000 dropped=462[m
+[m[37m[  9.167512 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=1000 len=1083 capacity=1083[m
+[m[37m[  9.801770 0:1668 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=1000 len=1324 capacity=1326[m
+[m[37m[  9.865233 0:391 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=1000 tid=391 last_thread=false process_threads=931 task_table=963 proc_data_refs=961[m
+[m[37m[  9.885074 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=1000 created=1933 dropped=1000[m
+[m[37m[ 10.073305 0:74 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=2000 created=2000 dropped=1343[m
+[m[37m[ 10.088757 0:74 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=2000 len=1337 capacity=1337[m
+[mmmap11      1  [1;32mTPASS[0m  :  test completed.
+[37m[ 10.250104 0:1939 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=2000 tid=1939 last_thread=false process_threads=67 task_table=251 proc_data_refs=249[m
+[m[37m[ 10.292815 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=2000 created=2069 dropped=2000[m
+[mFAIL LTP CASE mmap11 : 0
+2026-06-20-12-33-01
+#### OS COMP TEST GROUP END ltp-musl ####
+2026-06-20-12-33-01
+#### OS COMP TEST GROUP START cyclictest-musl ####
+#### OS COMP TEST GROUP END cyclictest-musl ####
+#### OS COMP TEST GROUP START iozone-musl ####
+#### OS COMP TEST GROUP END iozone-musl ####
+#### OS COMP TEST GROUP START iperf-musl ####
+#### OS COMP TEST GROUP END iperf-musl ####
+#### OS COMP TEST GROUP START libcbench-musl ####
+#### OS COMP TEST GROUP END libcbench-musl ####
+#### OS COMP TEST GROUP START lmbench-musl ####
+#### OS COMP TEST GROUP END lmbench-musl ####
+#### OS COMP TEST GROUP START lua-musl ####
+#### OS COMP TEST GROUP END lua-musl ####
+#### OS COMP TEST GROUP START netperf-musl ####
+#### OS COMP TEST GROUP END netperf-musl ####
+prepare glibc runtime
+'/lib/libc.so.6' -> '/glibc/lib/libc.so.6'
+'/lib/libm.so.6' -> '/glibc/lib/libm.so.6'
+'/lib/libgcc_s.so.1' -> '/glibc/lib/libgcc_s.so.1'
+'/lib/libc.so' -> '/lib/libc.so.6'
+'/lib/libm.so' -> '/lib/libm.so.6'
+#### OS COMP TEST GROUP START basic-glibc ####
+#### OS COMP TEST GROUP END basic-glibc ####
+#### OS COMP TEST GROUP START busybox-glibc ####
+#### OS COMP TEST GROUP END busybox-glibc ####
+2026-06-20-12-33-02
+#### OS COMP TEST GROUP START ltp-glibc ####
+RUN LTP CASE mmap11
+[37m[ 12.276503 0:2092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=3000 created=3000 dropped=2133[m
+[m[37m[ 12.448825 0:2092 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=add count=3000 len=1531 capacity=1531[m
+[m[37m[ 13.076863 0:3640 starry_kernel::syscall::mm::mmap:142] [33mltp_mmap11_mmap_record_diag reason=forget count=2000 len=1850 capacity=1852[m
+[m[37m[ 13.151243 0:2092 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=create count=4000 created=4000 dropped=2846[m
+[m[37m[ 13.209733 0:2399 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=3000 tid=2399 last_thread=false process_threads=1072 task_table=1228 proc_data_refs=1226[m
+[mmmap11      1  [1;32mTPASS[0m  :  test completed.
+[37m[ 13.336555 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=3000 created=4087 dropped=3000[m
+[m[37m[ 13.502631 0:3557 starry_kernel::task::ops:273] [33mltp_mmap11_exit_diag exited=4000 tid=3557 last_thread=false process_threads=267 task_table=561 proc_data_refs=559[m
+[m[37m[ 13.590506 0:3 starry_kernel::task:43] [33mltp_mmap11_thread_diag reason=drop count=4000 created=4087 dropped=4000[m
+[mFAIL LTP CASE mmap11 : 0
+2026-06-20-12-33-04
+#### OS COMP TEST GROUP END ltp-glibc ####
+2026-06-20-12-33-04
+#### OS COMP TEST GROUP START cyclictest-glibc ####
+#### OS COMP TEST GROUP END cyclictest-glibc ####
+#### OS COMP TEST GROUP START iozone-glibc ####
+#### OS COMP TEST GROUP END iozone-glibc ####
+#### OS COMP TEST GROUP START iperf-glibc ####
+#### OS COMP TEST GROUP END iperf-glibc ####
+#### OS COMP TEST GROUP START libcbench-glibc ####
+#### OS COMP TEST GROUP END libcbench-glibc ####
+#### OS COMP TEST GROUP START lmbench-glibc ####
+#### OS COMP TEST GROUP END lmbench-glibc ####
+#### OS COMP TEST GROUP START lua-glibc ####
+#### OS COMP TEST GROUP END lua-glibc ####
+#### OS COMP TEST GROUP START netperf-glibc ####
+#### OS COMP TEST GROUP END netperf-glibc ####

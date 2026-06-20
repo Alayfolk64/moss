@@ -218,7 +218,13 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
             child_ref.dec_nlink();
         }
         if child_ref.nlink() == 0 {
-            child_ref.truncate(0)?;
+            let truncate_data = matches!(
+                child_ref.inode_type(),
+                InodeType::RegularFile | InodeType::Directory | InodeType::Symlink
+            );
+            if truncate_data {
+                child_ref.truncate(0)?;
+            }
             unsafe {
                 ext4_inode_set_del_time(child_ref.inner.inode, u32::MAX);
                 child_ref.mark_dirty();

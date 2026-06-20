@@ -269,6 +269,7 @@ impl OpenOptions {
             (true, true, false) => FileFlags::READ | FileFlags::WRITE,
             (false, _, true) => FileFlags::WRITE | FileFlags::APPEND,
             (true, _, true) => FileFlags::READ | FileFlags::WRITE | FileFlags::APPEND,
+            (false, false, false) if self.path => FileFlags::empty(),
             (false, false, false) => return Err(VfsError::InvalidInput),
         } | if self.path {
             FileFlags::PATH
@@ -1052,6 +1053,40 @@ impl CachedFile {
         }
     }
 
+    fn discard_cached_pages(&self) {
+        let _cache_guard = self.shared().cache_op.lock();
+        let removed = {
+            let mut cache = self.shared().page_cache.lock();
+            let mut removed = Vec::new();
+            while let Some((pn, page)) = cache.pop_lru() {
+                removed.push((pn, page));
+            }
+            removed
+        };
+
+        for (pn, mut page) in removed {
+            page.dirty = false;
+            self.notify_evict_listeners(pn, &page);
+        }
+    }
+
+    fn remove_unused_global_record(&self, discard_metadata: bool) {
+        let mut caches = FILE_CACHES.write();
+        if Arc::strong_count(&self.record) == 2
+            && caches
+                .get(&self.record.key)
+                .is_some_and(|record| Arc::ptr_eq(record, &self.record))
+        {
+            caches.remove(&self.record.key);
+            self.inner.user_data().remove::<FileUserData>();
+            if discard_metadata {
+                self.inner.discard_metadata_cache();
+            } else {
+                self.inner.invalidate_metadata_cache();
+            }
+        }
+    }
+
     fn writeback_dirty_pages_in_cache(&self) -> VfsResult<()> {
         if self.in_memory() {
             return Ok(());
@@ -1136,6 +1171,26 @@ impl CachedFile {
     }
 }
 
+impl Drop for CachedFile {
+    fn drop(&mut self) {
+        if self.in_memory() || Arc::strong_count(&self.record) != 2 {
+            return;
+        }
+
+        if let Err(err) = self.drop_cached_pages() {
+            if err.canonicalize() == VfsError::StorageFull {
+                self.discard_cached_pages();
+                self.remove_unused_global_record(true);
+                return;
+            }
+            warn!("Failed to drop unused file cache: {err:?}");
+            return;
+        }
+
+        self.remove_unused_global_record(false);
+    }
+}
+
 pub fn sync_global_file_caches() -> VfsResult<()> {
     let records = FILE_CACHES.read().values().cloned().collect::<Vec<_>>();
     for record in records {
@@ -1198,6 +1253,36 @@ pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
         location.invalidate_metadata_cache();
         return Ok(());
     }
+    CachedFile::from_record(&record).drop_cached_pages()?;
+    FILE_CACHES.write().remove(&key);
+    location.user_data().remove::<FileUserData>();
+    location.invalidate_metadata_cache();
+    Ok(())
+}
+
+pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<()> {
+    let key = CachedFile::file_cache_key(location);
+    let Some(record) = FILE_CACHES.read().get(&key).cloned() else {
+        location.discard_metadata_cache();
+        return Ok(());
+    };
+
+    debug_assert_eq!(record.key, key);
+    if Arc::strong_count(&record) == 2 {
+        CachedFile::from_record(&record).discard_cached_pages();
+        FILE_CACHES.write().remove(&key);
+        location.user_data().remove::<FileUserData>();
+        location.discard_metadata_cache();
+        return Ok(());
+    }
+
+    if record.in_memory {
+        FILE_CACHES.write().remove(&key);
+        location.user_data().remove::<FileUserData>();
+        location.invalidate_metadata_cache();
+        return Ok(());
+    }
+
     CachedFile::from_record(&record).drop_cached_pages()?;
     FILE_CACHES.write().remove(&key);
     location.user_data().remove::<FileUserData>();

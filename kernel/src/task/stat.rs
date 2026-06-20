@@ -2,6 +2,7 @@ use alloc::{borrow::ToOwned, fmt, string::String};
 
 use axerrno::AxResult;
 use axtask::{TaskInner, TaskState};
+use starry_process::Process;
 use starry_signal::Signo;
 
 use crate::task::AsThread;
@@ -67,6 +68,25 @@ pub struct TaskStat {
 }
 
 impl TaskStat {
+    /// Create a [`TaskStat`] from process-level data when no live thread is
+    /// available, for example for the persistent init process view in procfs.
+    pub fn from_process(process: &Process) -> Self {
+        let pid = process.pid();
+        let group = process.group();
+        Self {
+            pid,
+            comm: "init".to_owned(),
+            state: if process.is_zombie() { 'Z' } else { 'S' },
+            ppid: process.parent().map_or(0, |p| p.pid()),
+            pgrp: group.pgid(),
+            session: group.session().sid(),
+            num_threads: process.threads().len() as u32,
+            exit_signal: Signo::SIGCHLD as u8,
+            exit_code: process.exit_code(),
+            ..Default::default()
+        }
+    }
+
     /// Create a new [`TaskStat`] from a [`AxTaskRef`].
     pub fn from_thread(task: &TaskInner) -> AxResult<Self> {
         let thread = task.as_thread();

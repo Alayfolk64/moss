@@ -10,7 +10,7 @@ use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use crate::{
     mm::vm_load_string,
-    task::{AsThread, get_process_data},
+    task::{AsThread, get_process_data, get_task},
 };
 
 const CAPABILITY_VERSION_1: u32 = 0x19980330;
@@ -63,6 +63,10 @@ fn set_state(pid: u32, state: CapState) {
     CAP_STATE.lock().insert(pid, state);
 }
 
+pub fn release_process_cap_state(pid: u32) {
+    CAP_STATE.lock().remove(&pid);
+}
+
 fn read_caps(version: u32, data: *mut __user_cap_data_struct) -> AxResult<(u64, u64, u64)> {
     let d0 = unsafe { data.vm_read_uninit()?.assume_init() };
     let d1 = if version == CAPABILITY_VERSION_1 {
@@ -103,7 +107,7 @@ fn write_caps(version: u32, data: *mut __user_cap_data_struct, caps: CapState) -
     Ok(())
 }
 
-fn validate_cap_header(header_ptr: *mut __user_cap_header_struct) -> AxResult<u32> {
+fn validate_cap_header(header_ptr: *mut __user_cap_header_struct) -> AxResult<(u32, u32)> {
     // FIXME: AnyBitPattern
     let mut header = unsafe { header_ptr.vm_read_uninit()?.assume_init() };
 
@@ -119,22 +123,22 @@ fn validate_cap_header(header_ptr: *mut __user_cap_header_struct) -> AxResult<u3
     if header.pid < 0 {
         return Err(AxError::InvalidInput);
     }
-    let _ = get_process_data(header.pid as u32)?;
-    Ok(version)
+    let target_pid = if header.pid == 0 {
+        current_pid()
+    } else {
+        let id = header.pid as u32;
+        get_process_data(id)
+            .map(|proc_data| proc_data.proc.pid())
+            .or_else(|_| get_task(id).map(|task| task.as_thread().proc_data.proc.pid()))?
+    };
+    Ok((version, target_pid))
 }
 
 pub fn sys_capget(
     header: *mut __user_cap_header_struct,
     data: *mut __user_cap_data_struct,
 ) -> AxResult<isize> {
-    let version = validate_cap_header(header)?;
-    // FIXME: AnyBitPattern
-    let h = unsafe { header.vm_read_uninit()?.assume_init() };
-    let target_pid = if h.pid == 0 {
-        current_pid()
-    } else {
-        h.pid as u32
-    };
+    let (version, target_pid) = validate_cap_header(header)?;
     let caps = get_state(target_pid);
     write_caps(version, data, caps)?;
     Ok(0)
@@ -144,13 +148,9 @@ pub fn sys_capset(
     header: *mut __user_cap_header_struct,
     data: *mut __user_cap_data_struct,
 ) -> AxResult<isize> {
-    let version = validate_cap_header(header)?;
-    // FIXME: AnyBitPattern
-    let h = unsafe { header.vm_read_uninit()?.assume_init() };
+    let (version, target_pid) = validate_cap_header(header)?;
     let pid = current_pid();
-    let tid = current().id().as_u64() as u32;
-    let target_pid = if h.pid == 0 { tid } else { h.pid as u32 };
-    if target_pid != tid && target_pid != pid {
+    if target_pid != pid {
         return Err(eperm());
     }
 
@@ -240,7 +240,7 @@ pub fn sys_setregid(rgid: u32, egid: u32) -> AxResult<isize> {
         old_egid
     };
 
-    if old_egid != 0
+    if proc_data.euid() != 0
         && (!valid_id_change(rgid, &[old_rgid, old_egid])
             || !valid_id_change(egid, &[old_rgid, old_egid, old_sgid]))
     {
@@ -293,7 +293,7 @@ pub fn sys_setresgid(rgid: u32, egid: u32, _sgid: u32) -> AxResult<isize> {
     let old_egid = proc_data.egid();
     let old_sgid = proc_data.sgid();
 
-    if old_egid != 0 {
+    if proc_data.euid() != 0 {
         let allowed = [old_rgid, old_egid, old_sgid];
         if !valid_id_change(rgid, &allowed)
             || !valid_id_change(egid, &allowed)

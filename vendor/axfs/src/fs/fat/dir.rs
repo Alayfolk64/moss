@@ -9,7 +9,7 @@ use axfs_ng_vfs::{
 use super::{
     FsRef, ff,
     file::FatFileNode,
-    fs::FatFilesystem,
+    fs::{FatFilesystem, SYNTHETIC_INODE_BASE},
     util::{file_metadata, into_vfs_err},
 };
 
@@ -45,6 +45,15 @@ impl FatDirNode {
                 reference,
             )
         }
+    }
+
+    fn inode_for_child(parent_inode: u64, name: &str) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64 ^ parent_inode;
+        for byte in name.bytes() {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        SYNTHETIC_INODE_BASE | hash
     }
 }
 
@@ -108,7 +117,7 @@ impl NodeOps for FatDirNode {
 
 impl DirNodeOps for FatDirNode {
     fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
-        let mut fs = self.fs.lock();
+        let fs = self.fs.lock();
         let dir = self.inner.borrow(&fs);
         let this_entry = self.this.upgrade().unwrap();
         let dir_node = this_entry.as_dir()?;
@@ -125,7 +134,8 @@ impl DirNodeOps for FatDirNode {
             let inode = if let Some(entry) = dir_node.lookup_cache(&name) {
                 entry.inode()
             } else {
-                let entry = self.create_entry(entry, name.clone(), fs.alloc_inode());
+                let inode = Self::inode_for_child(self.inode, &name);
+                let entry = self.create_entry(entry, name.clone(), inode);
                 let inode = entry.inode();
                 dir_node.insert_cache(name.clone(), entry);
                 inode
@@ -139,11 +149,15 @@ impl DirNodeOps for FatDirNode {
     }
 
     fn lookup(&self, name: &str) -> VfsResult<DirEntry> {
-        let mut fs = self.fs.lock();
+        let fs = self.fs.lock();
         let dir = self.inner.borrow(&fs);
         dir.iter()
             .find_map(|entry| entry.ok().filter(|it| it.eq_name(name)))
-            .map(|entry| self.create_entry(entry, name.to_ascii_lowercase(), fs.alloc_inode()))
+            .map(|entry| {
+                let name = name.to_ascii_lowercase();
+                let inode = Self::inode_for_child(self.inode, &name);
+                self.create_entry(entry, name, inode)
+            })
             .ok_or(VfsError::NotFound)
     }
 
@@ -213,6 +227,8 @@ impl DirNodeOps for FatDirNode {
 
 impl Drop for FatDirNode {
     fn drop(&mut self) {
-        self.fs.lock().release_inode(self.inode);
+        if self.inode < SYNTHETIC_INODE_BASE {
+            self.fs.lock().release_inode(self.inode);
+        }
     }
 }

@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::FS_CONTEXT;
 use axhal::uspace::UserContext;
-use axtask::{AxTaskExt, current, spawn_task};
+use axtask::{AxTaskExt, current, spawn_task, yield_now};
 use bitflags::bitflags;
 use kspin::SpinNoIrq;
 use linux_raw_sys::general::*;
@@ -16,6 +16,8 @@ use crate::{
     mm::copy_from_kernel,
     task::{AsThread, ProcessData, Thread, add_task_to_table, new_user_task},
 };
+
+const THREAD_GROUP_BACKPRESSURE_THRESHOLD: usize = 1024;
 
 bitflags! {
     /// Options for use with [`sys_clone`] and [`sys_clone3`].
@@ -208,7 +210,15 @@ impl CloneArgs {
             } else {
                 let mut aspace = old_proc_data.aspace.lock();
                 let aspace = aspace.try_clone()?;
-                copy_from_kernel(&mut aspace.lock())?;
+                {
+                    let mut child_aspace = aspace.lock();
+                    copy_from_kernel(&mut child_aspace)?;
+                    crate::syscall::inherit_wipeonfork_ranges(
+                        old_proc_data.proc.pid(),
+                        tid,
+                        &mut child_aspace,
+                    )?;
+                }
                 aspace
             };
             new_task
@@ -240,12 +250,19 @@ impl CloneArgs {
             proc_data.set_personality(old_proc_data.personality());
             proc_data.set_umask(old_proc_data.umask());
             proc_data.set_heap_top(old_proc_data.get_heap_top());
+            if old_proc_data.sched_policy() & SCHED_RESET_ON_FORK != 0 {
+                proc_data.set_sched_state(SCHED_NORMAL, 0);
+            } else {
+                proc_data
+                    .set_sched_state(old_proc_data.sched_policy(), old_proc_data.sched_priority());
+            }
             proc_data.set_uid(old_proc_data.uid());
             proc_data.set_euid(old_proc_data.euid());
             proc_data.set_suid(old_proc_data.suid());
             proc_data.set_gid(old_proc_data.gid());
             proc_data.set_egid(old_proc_data.egid());
             proc_data.set_sgid(old_proc_data.sgid());
+            proc_data.set_supplementary_groups(old_proc_data.supplementary_groups());
             crate::syscall::inherit_child_timens_offsets(
                 old_proc_data.proc.pid(),
                 proc_data.proc.pid(),
@@ -312,6 +329,12 @@ impl CloneArgs {
 
         let task = spawn_task(new_task);
         add_task_to_table(&task);
+        // Keep detached pthread storms from pinning thousands of 256 KiB kernel stacks.
+        if flags.contains(CloneFlags::THREAD)
+            && new_proc_data.proc.threads().len() > THREAD_GROUP_BACKPRESSURE_THRESHOLD
+        {
+            yield_now();
+        }
 
         Ok(tid as _)
     }

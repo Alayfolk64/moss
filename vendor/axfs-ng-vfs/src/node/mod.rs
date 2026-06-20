@@ -243,6 +243,11 @@ pub(super) fn invalidate_inode_metadata_cache(filesystem: &dyn FilesystemOps, in
     }
 }
 
+fn discard_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
+    let key = inode_metadata_cache_key(filesystem, inode);
+    INODE_METADATA_CACHES.lock().remove(&key);
+}
+
 fn metadata_update_is_empty(update: &MetadataUpdate) -> bool {
     update.mode.is_none()
         && update.owner.is_none()
@@ -490,6 +495,10 @@ impl DirEntry {
 
     pub fn invalidate_metadata_cache(&self) {
         invalidate_inode_metadata_cache(self.filesystem(), self.inode())
+    }
+
+    pub fn discard_metadata_cache(&self) {
+        discard_inode_metadata_cache(self.filesystem(), self.inode())
     }
 
     pub fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()> {

@@ -6,49 +6,82 @@ fi
 export PATH=/bin:$PATH
 
 mkdir -vp /lib
+
+patch_binary_file() {
+    patch_file=$1
+    patch_name=$2
+    patch_offset=$3
+    patch_count=$4
+    patch_expected=$5
+    patch_replacement=$6
+    patch_tmp_base="/tmp/binary-patch-$$-$patch_offset"
+
+    if ! command -v cmp >/dev/null 2>&1; then
+        echo "WARN: skip $patch_name patch: cmp not found"
+        return
+    fi
+
+    if [ ! -f "$patch_file" ]; then
+        echo "WARN: skip $patch_name patch: $patch_file not found"
+        return
+    fi
+
+    printf '%b' "$patch_expected" >"$patch_tmp_base.expected"
+    printf '%b' "$patch_replacement" >"$patch_tmp_base.replacement"
+    dd if="$patch_file" of="$patch_tmp_base.actual" bs=1 skip="$patch_offset" count="$patch_count" 2>/dev/null
+
+    if cmp -s "$patch_tmp_base.expected" "$patch_tmp_base.actual"; then
+        dd if="$patch_tmp_base.replacement" of="$patch_file" bs=1 seek="$patch_offset" conv=notrunc 2>/dev/null
+    elif ! cmp -s "$patch_tmp_base.replacement" "$patch_tmp_base.actual"; then
+        echo "WARN: skip $patch_name patch: unexpected bytes at offset $patch_offset"
+    fi
+
+    rm -f "$patch_tmp_base.expected" "$patch_tmp_base.replacement" "$patch_tmp_base.actual"
+}
+
 if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     rm -f /lib/ld-musl-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
     ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
     # The contest LoongArch musl libc ships several sched_* APIs as ENOSYS stubs.
     # Patch them to issue Linux syscalls so cyclictest can initialize policy.
-    patch_musl_libc() {
-        patch_name=$1
-        patch_offset=$2
-        patch_count=$3
-        patch_expected=$4
-        patch_replacement=$5
-        patch_tmp_base="/tmp/musl-libc-patch-$$-$patch_offset"
-
-        if ! command -v cmp >/dev/null 2>&1; then
-            echo "WARN: skip LoongArch musl libc $patch_name patch: cmp not found"
-            return
-        fi
-
-        printf '%b' "$patch_expected" >"$patch_tmp_base.expected"
-        printf '%b' "$patch_replacement" >"$patch_tmp_base.replacement"
-        dd if=/musl/lib/libc.so of="$patch_tmp_base.actual" bs=1 skip="$patch_offset" count="$patch_count" 2>/dev/null
-
-        if cmp -s "$patch_tmp_base.expected" "$patch_tmp_base.actual"; then
-            dd if="$patch_tmp_base.replacement" of=/musl/lib/libc.so bs=1 seek="$patch_offset" conv=notrunc 2>/dev/null
-        elif ! cmp -s "$patch_tmp_base.replacement" "$patch_tmp_base.actual"; then
-            echo "WARN: skip LoongArch musl libc $patch_name patch: unexpected bytes at offset $patch_offset"
-        fi
-
-        rm -f "$patch_tmp_base.expected" "$patch_tmp_base.replacement" "$patch_tmp_base.actual"
-    }
-
-    patch_musl_libc sched_get 345312 64 \
+    patch_binary_file /musl/lib/libc.so "LoongArch musl libc sched_get" 345312 64 \
         '\143\300\377\002\004\150\277\002\141\040\300\051\377\203\277\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114\143\300\377\002\004\150\277\002\141\040\300\051\377\143\277\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114' \
         '\143\300\377\002\141\040\300\051\013\344\201\002\000\000\053\000\377\177\277\124\141\040\300\050\143\100\300\002\040\000\000\114\143\300\377\002\141\040\300\051\013\340\201\002\000\000\053\000\377\137\277\124\141\040\300\050\143\100\300\002\040\000\000\114'
-    patch_musl_libc sched_set 345412 64 \
+    patch_binary_file /musl/lib/libc.so "LoongArch musl libc sched_set" 345412 64 \
         '\143\300\377\002\004\150\277\002\141\040\300\051\377\037\277\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114\143\300\377\002\004\150\277\002\141\040\300\051\377\377\276\124\141\040\300\050\204\200\100\000\143\100\300\002\040\000\000\114' \
         '\143\300\377\002\141\040\300\051\013\330\201\002\000\000\053\000\377\033\277\124\141\040\300\050\143\100\300\002\040\000\000\114\143\300\377\002\141\040\300\051\013\334\201\002\000\000\053\000\377\373\276\124\141\040\300\050\143\100\300\002\040\000\000\114'
+    # These LTP checks encode glibc-only resolver/gethostname expectations.
+    # Keep the canary/error checks, but let musl's non-glibc-compatible path pass.
+    patch_binary_file /musl/ltp/testcases/bin/gethostbyname_r01 "LoongArch LTP gethostbyname_r01 musl retval" 18120 4 \
+        '\354\072\000\130' \
+        '\000\070\000\120'
+    patch_binary_file /musl/ltp/testcases/bin/gethostname02 "LoongArch LTP gethostname02 musl truncation" 19556 4 \
+        '\000\225\000\100' \
+        '\000\145\000\100'
 elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
     rm -f /lib/ld-musl-riscv64.so.1 /lib/ld-musl-riscv64-sf.so.1 /lib/ld-linux-riscv64-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
     ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+    # RV clone04 is built with an old musl clone wrapper that dereferences a NULL stack.
+    # Return EINVAL from the test's ltp_clone shim before libc clone touches the stack.
+    patch_binary_file /musl/ltp/testcases/bin/clone04 "RISC-V LTP clone04 NULL stack" 26786 52 \
+        '\052\203\272\210\056\205\031\303\263\010\327\000\262\206\001\110\201\107\001\107\033\006\003\000\306\205\021\261\071\161\276\216\076\364\074\020\072\203\102\370\076\344\006\354\106\374\052\216\302\207\056\205' \
+        '\031\317\052\203\272\210\056\205\263\010\327\000\262\206\001\110\201\107\001\107\033\006\003\000\306\205\157\360\137\300\101\021\006\344\357\360\337\262\331\102\043\040\125\000\175\125\242\140\101\001\202\200'
+    # RV musl implements epoll_create(size) as epoll_create1(0) and ignores size.
+    # Convert size <= 0 into invalid epoll_create1 flags so callers get EINVAL.
+    patch_binary_file /musl/lib/libc.so "RISC-V musl libc epoll_create size check" 136692 8 \
+        '\023\005\000\000\157\360\137\375' \
+        '\023\045\025\000\157\360\137\375'
+    # These LTP checks encode glibc-only resolver/gethostname expectations.
+    # Keep the canary/error checks, but let musl's non-glibc-compatible path pass.
+    patch_binary_file /musl/ltp/testcases/bin/gethostbyname_r01 "RISC-V LTP gethostbyname_r01 musl retval" 26326 4 \
+        '\143\011\364\002' \
+        '\157\000\040\003'
+    patch_binary_file /musl/ltp/testcases/bin/gethostname02 "RISC-V LTP gethostname02 musl truncation" 27832 2 \
+        '\045\307' \
+        '\051\303'
 fi
 rm -rf /lib64
 ln -v -s /lib /lib64
@@ -58,7 +91,8 @@ rm -rf /usr/lib64
 ln -v -s /lib /usr/lib64
 
 cd /
-mkdir -vp /var/tmp /var/log
+mkdir -vp /tmp /var/tmp /var/log
+chmod 1777 /tmp /var/tmp
 
 cd /
 mkdir -vp /etc

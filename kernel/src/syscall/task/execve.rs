@@ -20,7 +20,7 @@ use crate::{
     mm::{load_user_app, load_user_app_from_location, vm_load_string},
     syscall::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
-        notify_fanotify_open_exec_path,
+        close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
     },
     task::{AsThread, processes},
 };
@@ -229,16 +229,7 @@ fn execve_common(
     curr.as_thread().set_clear_child_tid(0);
     curr.as_thread().set_robust_list_head(0);
 
-    // Close CLOEXEC file descriptors
-    let mut fd_table = FD_TABLE.write();
-    let cloexec_fds = fd_table
-        .ids()
-        .filter(|it| fd_table.get(*it).unwrap().cloexec)
-        .collect::<Vec<_>>();
-    for fd in cloexec_fds {
-        fd_table.remove(fd);
-    }
-    drop(fd_table);
+    close_cloexec_files_for_current_process();
 
     ptrace_on_exec(proc_data.proc.pid());
 

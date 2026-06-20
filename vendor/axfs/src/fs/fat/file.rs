@@ -10,7 +10,7 @@ use fatfs::{Read, Seek, SeekFrom, Write};
 
 use super::{
     FsRef, ff,
-    fs::FatFilesystem,
+    fs::{FatFilesystem, SYNTHETIC_INODE_BASE},
     util::{file_metadata, into_vfs_err, update_file_metadata},
 };
 use crate::fs::fat::fs::FatFilesystemInner;
@@ -166,6 +166,8 @@ impl Pollable for FatFileNode {
 
 impl Drop for FatFileNode {
     fn drop(&mut self) {
-        self.fs.lock().release_inode(self.inode);
+        if self.inode < SYNTHETIC_INODE_BASE {
+            self.fs.lock().release_inode(self.inode);
+        }
     }
 }
