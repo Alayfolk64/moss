@@ -198,9 +198,9 @@ iperf=0
 libcbench=0
 libctest=0
 lmbench=0
-ltp=1
+ltp=0
 lua=0
-netperf=0
+netperf=1
 
 if [ -n "$some_testcases" ]; then
     basic=0

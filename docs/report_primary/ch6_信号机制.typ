@@ -1,7 +1,7 @@
 #import "template.typ": chapter-start, report-style
 
 #show: report-style
-#chapter-start(4)
+#chapter-start(6)
 
 = 信号机制
 
