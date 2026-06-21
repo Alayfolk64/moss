@@ -147,7 +147,10 @@ impl GeneralOptions {
     }
 
     pub fn register_waker(&self, waker: &Waker) {
-        SERVICE.lock().register_waker(self.device_mask(), waker);
+        let mask = self.device_mask();
+        if mask != 0 {
+            SERVICE.lock().register_waker(mask, waker);
+        }
     }
 
     pub fn send_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(

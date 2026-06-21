@@ -144,11 +144,15 @@ pub fn sys_accept4(
         socket.set_nonblocking(true)?;
     }
 
-    let remote_addr = socket.peer_addr()?;
+    let remote_addr = if !addr.is_null() {
+        Some(socket.peer_addr()?)
+    } else {
+        None
+    };
     let fd = socket.add_to_fd_table(cloexec).map(|fd| fd as isize)?;
     debug!("sys_accept => fd: {fd}, addr: {remote_addr:?}");
 
-    if !addr.is_null() {
+    if let Some(remote_addr) = remote_addr {
         remote_addr.write_to_user(addr, addrlen.get_as_mut()?)?;
     }
 

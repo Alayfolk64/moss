@@ -157,10 +157,7 @@ impl UdpSocket {
         }
 
         match self.local.send(src, remote_addr, source_addr)? {
-            Ok(sent) => {
-                SERVICE.lock().notify_route_device(&remote_addr.addr);
-                Ok(Ok(sent))
-            }
+            Ok(sent) => Ok(Ok(sent)),
             Err(src) => Ok(Err(src)),
         }
     }

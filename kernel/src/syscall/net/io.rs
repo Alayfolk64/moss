@@ -57,10 +57,6 @@ pub fn sys_sendto(
     addr: UserConstPtr<sockaddr>,
     addrlen: socklen_t,
 ) -> AxResult<isize> {
-    if len != 0 {
-        let mut probe = [0u8; 1];
-        VmBytes::new(buf, 1).read(&mut probe)?;
-    }
     send_impl(fd, VmBytes::new(buf, len), flags, addr, addrlen, Vec::new())
 }
 
@@ -153,7 +149,7 @@ fn recv_impl(
         recv_flags |= RecvFlags::TRUNCATE;
     }
 
-    let mut cmsg = Vec::new();
+    let mut cmsg = cmsg_builder.as_ref().map(|_| Vec::new());
 
     let mut remote_addr =
         (!addr.is_null()).then(|| SocketAddrEx::Ip((Ipv4Addr::UNSPECIFIED, 0).into()));
@@ -162,7 +158,7 @@ fn recv_impl(
         RecvOptions {
             from: remote_addr.as_mut(),
             flags: recv_flags,
-            cmsg: Some(&mut cmsg),
+            cmsg: cmsg.as_mut(),
         },
     )?;
 
@@ -172,7 +168,7 @@ fn recv_impl(
         remote_addr.write_to_user(addr, addrlen.get_as_mut()?)?;
     }
 
-    if let Some(mut builder) = cmsg_builder {
+    if let (Some(mut builder), Some(cmsg)) = (cmsg_builder, cmsg) {
         for cmsg in cmsg {
             let Ok(cmsg) = cmsg.downcast::<CMsg>() else {
                 warn!("received unexpected cmsg");

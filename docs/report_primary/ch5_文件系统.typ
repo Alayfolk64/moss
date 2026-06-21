@@ -576,11 +576,53 @@ fanotify 的核心也是“关注集合 + 事件队列”，但 mark 的作用�
   caption: [fanotify 权限事件时序],
 ) <fig:fanotify-perm>
 
-moss 的 fanotify 实现覆盖了打开、读写、创建、删除、重命名、关闭等路径上的通知点。
+moss 的 inotify 和 fanotify 实现覆盖了打开、读写、创建、删除、重命名、关闭等路径上的通知点。
 
 === 无监听快速路径
 
 inotify 和 fanotify 的实现需要在 read、write、open、close 等系统调用路径上插入事件投递逻辑。没有注册监听者时，这些逻辑不应带来任何额外开销。
+
+== 性能对比
+
+为验证优化效果，使用 iozone 进行文件系统 I/O 性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比优化前后以及 Ubuntu 26.04 基准的性能数据。以下选取部分有代表性的测试项进行对比（单位：kB/sec）：
+
+#figure(
+  table(
+    columns: (2.8fr, 1fr, 1fr, 1fr),
+    inset: 6pt,
+    stroke: 0.5pt + gray,
+    table.header([测试场景], [优化前], [优化后], [Ubuntu]),
+    [顺序写\ （initial writers）], [3524], [24714], [51922],
+    [顺序读\ （readers）], [13136], [65286], [104754],
+    [顺序重写\ （rewriters）], [7471], [99332], [72760],
+    [随机读\ （random readers）], [11082], [54088], [57175],
+    [随机写\ （random writers）], [7141], [61903], [59817],
+    [反向读\ （reverse readers）], [10743], [54166], [67361],
+    [pread 并发读], [14184], [124120], [125270],
+    [pwrite 并发写], [3724], [40442], [39335],
+  ),
+  caption: [iozone 性能对比（glibc，本地文件系统）],
+) <tab:iozone-glibc>
+
+#figure(
+  table(
+    columns: (2.8fr, 1fr, 1fr, 1fr),
+    inset: 6pt,
+    stroke: 0.5pt + gray,
+    table.header([测试场景], [优化前], [优化后], [Ubuntu]),
+    [顺序写\ （initial writers）], [3524], [46887], [44818],
+    [顺序读\ （readers）], [13136], [64080], [98518],
+    [顺序重写\ （rewriters）], [7471], [99475], [69316],
+    [随机读\ （random readers）], [11082], [55908], [91905],
+    [随机写\ （random writers）], [7141], [61222], [57648],
+    [反向读\ （reverse readers）], [10743], [53428], [78861],
+    [pread 并发读], [14184], [77865], [141988],
+    [pwrite 并发写], [3724], [37922], [49303],
+  ),
+  caption: [iozone 性能对比（musl，本地文件系统）],
+) <tab:iozone-musl>
+
+优化前的 StarryOS 在文件系统 I/O 吞吐测试中远低于 Ubuntu 基准。优化后，顺序写提升约 7-13 倍，顺序读提升约 5 倍，随机读写提升约 5-9 倍。优化后的 moss 在部分场景（如顺序重写）已超过 Ubuntu，在其他场景（如顺序读、随机读）接近 Ubuntu 水平。主要优化得益于页缓存容量扩展（从默认配置提升到 1MiB per-file）和统一的 LRU 管理策略。
 
 moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维护全局 watch 计数，计数为零时通知函数立即返回；fanotify 维护全局兴趣掩码，掩码对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听时不进入任何路径解析、mark 匹配或事件队列操作。一旦用户注册了 watch 或 mark，仍会走完整的匹配和投递流程，功能语义不受影响。
 

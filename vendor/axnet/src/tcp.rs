@@ -146,11 +146,6 @@ impl TcpSocket {
         };
         result.general.set_recv_buffer(rx_buf_len);
         result.general.set_send_buffer(tx_buf_len);
-        if let Some(endpoint) = result.local.bound_endpoint() {
-            result
-                .general
-                .set_device_mask(SERVICE.lock().device_mask_for(&endpoint));
-        }
         result
     }
 }
@@ -326,6 +321,15 @@ impl TcpSocket {
         Ok(endpoint)
     }
 
+    fn needs_smol_listener(endpoint: IpListenEndpoint) -> bool {
+        endpoint.addr.map_or(true, |addr| !addr.is_loopback())
+    }
+
+    fn can_accept_smol_listener(endpoint: IpListenEndpoint) -> bool {
+        Self::needs_smol_listener(endpoint)
+            && LISTEN_TABLE.can_accept(endpoint.port).unwrap_or(false)
+    }
+
     fn poll_connect(&self) -> IoEvents {
         let mut events = IoEvents::empty();
         let writable = self
@@ -373,13 +377,11 @@ impl TcpSocket {
 
     fn poll_listener(&self) -> IoEvents {
         let mut events = IoEvents::empty();
-        events.set(
-            IoEvents::IN,
-            self.local.can_accept()
-                || LISTEN_TABLE
-                    .can_accept(self.bound_endpoint().unwrap().port)
-                    .unwrap(),
-        );
+        if self.local.can_accept() {
+            events.set(IoEvents::IN, true);
+        } else if let Ok(endpoint) = self.bound_endpoint() {
+            events.set(IoEvents::IN, Self::can_accept_smol_listener(endpoint));
+        }
         events
     }
 }
@@ -579,8 +581,11 @@ impl SocketOps for TcpSocket {
                         port: 0,
                     });
                 if bound_endpoint.addr.is_none() {
-                    bound_endpoint.addr =
-                        Some(SERVICE.lock().get_source_address(&remote_endpoint.addr)?);
+                    bound_endpoint.addr = Some(if remote_endpoint.addr.is_loopback() {
+                        remote_endpoint.addr
+                    } else {
+                        SERVICE.lock().get_source_address(&remote_endpoint.addr)?
+                    });
                 }
                 if bound_endpoint.port == 0 {
                     bound_endpoint.port = get_ephemeral_port()?;
@@ -597,8 +602,7 @@ impl SocketOps for TcpSocket {
                     self.configured_rx_buf_len(),
                     self.configured_tx_buf_len(),
                 )? {
-                    self.general
-                        .set_device_mask(SERVICE.lock().device_mask_for(&bound_endpoint));
+                    self.general.set_device_mask(0);
                     self.remove_smol_socket(false);
                     self.ever_connected.store(true, Ordering::Release);
                     return Ok(true);
@@ -681,18 +685,22 @@ impl SocketOps for TcpSocket {
                     }
                     return Err(err);
                 }
-                if let Err(err) = LISTEN_TABLE.listen(
-                    bound_endpoint,
-                    self.family,
-                    self.general.ipv6_only(),
-                    self.configured_rx_buf_len(),
-                    self.configured_tx_buf_len(),
-                ) {
-                    self.local.reset_listener();
-                    if self.local.bound_endpoint() == Some(bound_endpoint) {
-                        self.local.reset_bound_if(bound_endpoint);
+                if Self::needs_smol_listener(bound_endpoint) {
+                    if let Err(err) = LISTEN_TABLE.listen(
+                        bound_endpoint,
+                        self.family,
+                        self.general.ipv6_only(),
+                        self.configured_rx_buf_len(),
+                        self.configured_tx_buf_len(),
+                    ) {
+                        self.local.reset_listener();
+                        if self.local.bound_endpoint() == Some(bound_endpoint) {
+                            self.local.reset_bound_if(bound_endpoint);
+                        }
+                        return Err(err);
                     }
-                    return Err(err);
+                } else {
+                    self.general.set_device_mask(0);
                 }
                 debug!("listening on {}", bound_endpoint);
                 Ok(())
@@ -708,7 +716,6 @@ impl SocketOps for TcpSocket {
             ax_bail!(InvalidInput, "not listening");
         }
 
-        let bound_port = self.bound_endpoint()?.port;
         self.general.recv_poller(self, || {
             match self.local.accept() {
                 Ok(stream) => {
@@ -724,8 +731,13 @@ impl SocketOps for TcpSocket {
                 Err(err) => return Err(err),
             }
 
+            let bound_endpoint = self.bound_endpoint()?;
+            if !Self::needs_smol_listener(bound_endpoint) {
+                return Err(AxError::WouldBlock);
+            }
+
             poll_interfaces();
-            LISTEN_TABLE.accept(bound_port).map(|handle| {
+            LISTEN_TABLE.accept(bound_endpoint.port).map(|handle| {
                 let socket = TcpSocket::new_connected(
                     handle,
                     self.family,
@@ -877,8 +889,11 @@ impl SocketOps for TcpSocket {
         // listener
         if let Ok(guard) = self.state.lock(State::Listening) {
             guard.transit(State::Closed, || {
+                let endpoint = self.bound_endpoint()?;
                 self.local.close();
-                LISTEN_TABLE.unlisten(self.bound_endpoint()?.port);
+                if Self::needs_smol_listener(endpoint) {
+                    LISTEN_TABLE.unlisten(endpoint.port);
+                }
                 poll_interfaces();
                 Ok(())
             })?;

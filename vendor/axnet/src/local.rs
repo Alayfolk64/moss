@@ -83,6 +83,47 @@ fn endpoint_accepts(
     }
 }
 
+fn wildcard_accepts_v4(family: IpFamily, ipv6_only: bool) -> bool {
+    family == IpFamily::Ipv4 || !ipv6_only
+}
+
+fn wildcard_accepts_v6(family: IpFamily) -> bool {
+    family == IpFamily::Ipv6
+}
+
+fn tcp_listeners_conflict(
+    current: &LocalTcpListener,
+    endpoint: IpListenEndpoint,
+    family: IpFamily,
+    ipv6_only: bool,
+) -> bool {
+    if current.endpoint.port != endpoint.port {
+        return false;
+    }
+
+    match (current.endpoint.addr, endpoint.addr) {
+        (Some(current_addr), Some(addr)) => current_addr == addr,
+        (None, Some(addr)) => current.accepts(IpEndpoint {
+            addr,
+            port: endpoint.port,
+        }),
+        (Some(current_addr), None) => endpoint_accepts(
+            endpoint,
+            family,
+            ipv6_only,
+            IpEndpoint {
+                addr: current_addr,
+                port: endpoint.port,
+            },
+        ),
+        (None, None) => {
+            (wildcard_accepts_v4(current.family, current.ipv6_only)
+                && wildcard_accepts_v4(family, ipv6_only))
+                || (wildcard_accepts_v6(current.family) && wildcard_accepts_v6(family))
+        }
+    }
+}
+
 pub(crate) fn init() {
     LOCAL_TRANSPORT.init_once(LocalTransport::new());
 }
@@ -514,11 +555,16 @@ impl LocalTcpSocket {
     }
 
     pub(crate) fn register(&self, waker: &core::task::Waker) {
-        self.poll_state.register(waker);
-        if let Some(stream) = self.stream.lock().as_ref() {
+        let stream = self.stream.lock().clone();
+        let listener = self.listener.lock().clone();
+
+        if stream.is_none() && listener.is_none() {
+            self.poll_state.register(waker);
+        }
+        if let Some(stream) = stream.as_ref() {
             stream.register(waker);
         }
-        if let Some(listener) = self.listener.lock().as_ref() {
+        if let Some(listener) = listener.as_ref() {
             listener.poll_state.register(waker);
         }
     }
@@ -549,62 +595,107 @@ impl LocalTcpSocket {
 }
 
 struct StreamBuffer {
-    data: VecDeque<u8>,
+    data: Vec<u8>,
+    head: usize,
+    len: usize,
     capacity: usize,
 }
 
 impl StreamBuffer {
     fn new(capacity: usize) -> Self {
         Self {
-            data: VecDeque::new(),
+            data: Vec::new(),
+            head: 0,
+            len: 0,
             capacity,
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.len == 0
     }
 
     fn is_full(&self) -> bool {
-        self.data.len() >= self.capacity
+        self.len >= self.capacity
+    }
+
+    fn grow_to(&mut self, min_capacity: usize) {
+        if self.data.len() >= min_capacity {
+            return;
+        }
+
+        let mut new_capacity = self.data.len().max(1);
+        while new_capacity < min_capacity {
+            new_capacity = (new_capacity * 2).min(self.capacity);
+        }
+
+        let mut data = vec![0; new_capacity];
+        if self.len != 0 {
+            let (front, back) = self.as_slices();
+            data[..front.len()].copy_from_slice(front);
+            data[front.len()..front.len() + back.len()].copy_from_slice(back);
+        }
+        self.data = data;
+        self.head = 0;
+    }
+
+    fn as_slices(&self) -> (&[u8], &[u8]) {
+        if self.len == 0 || self.data.is_empty() {
+            return (&[], &[]);
+        }
+
+        let first_len = min(self.len, self.data.len() - self.head);
+        let second_len = self.len - first_len;
+        (
+            &self.data[self.head..self.head + first_len],
+            &self.data[..second_len],
+        )
     }
 
     fn write_from(&mut self, src: &mut (impl Read + IoBuf)) -> AxResult<usize> {
         let len = min(
             src.remaining(),
-            self.capacity.saturating_sub(self.data.len()),
+            self.capacity.saturating_sub(self.len),
         );
         if len == 0 {
             return Ok(0);
         }
 
-        let old_len = self.data.len();
-        self.data.resize(old_len + len, 0);
-        let result = src.read(&mut self.data.make_contiguous()[old_len..old_len + len]);
-        let read = match result {
-            Ok(read) => read,
-            Err(err) => {
-                self.data.truncate(old_len);
-                return Err(err);
-            }
+        self.grow_to(self.len + len);
+        if self.len == 0 {
+            self.head = 0;
+        }
+
+        let tail = (self.head + self.len) % self.data.len();
+        let contiguous = if self.len == 0 {
+            self.data.len()
+        } else if tail >= self.head {
+            self.data.len() - tail
+        } else {
+            self.head - tail
         };
-        self.data.truncate(old_len + read);
+        let read = src.read(&mut self.data[tail..tail + min(len, contiguous)])?;
+        self.len += read;
         Ok(read)
     }
 
     fn read_into(&mut self, dst: &mut (impl Write + IoBufMut), peek: bool) -> AxResult<usize> {
-        let len = min(dst.remaining_mut(), self.data.len());
+        let len = min(dst.remaining_mut(), self.len);
         if len == 0 {
             return Ok(0);
         }
 
-        let (front, back) = self.data.as_slices();
+        let (front, back) = self.as_slices();
         let mut count = dst.write(&front[..min(front.len(), len)])?;
         if count == front.len() && count < len && !dst.is_full() {
             count += dst.write(&back[..min(back.len(), len - count)])?;
         }
         if !peek {
-            drop(self.data.drain(..count));
+            self.head = (self.head + count) % self.data.len();
+            self.len -= count;
+            if self.len == 0 {
+                self.head = 0;
+            }
         }
         Ok(count)
     }
@@ -692,7 +783,6 @@ impl LocalTcpStream {
 
         if len > 0 {
             peer.poll_state.wake();
-            self.poll_state.wake();
             Ok(len)
         } else {
             Ok(0)
@@ -718,7 +808,6 @@ impl LocalTcpStream {
             if let Some(peer) = self.peer() {
                 peer.poll_state.wake();
             }
-            self.poll_state.wake();
         }
         Ok(len)
     }
@@ -882,7 +971,10 @@ impl LocalTransport {
     ) -> AxResult<Arc<LocalTcpListener>> {
         let key = EndpointKey::new(endpoint.addr, endpoint.port, family);
         let mut tcp = self.tcp.lock();
-        if tcp.contains_key(&key) {
+        if tcp
+            .values()
+            .any(|listener| tcp_listeners_conflict(listener, endpoint, family, ipv6_only))
+        {
             return Err(AxError::AddrInUse);
         }
         let listener = Arc::new(LocalTcpListener {

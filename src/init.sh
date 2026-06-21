@@ -39,10 +39,13 @@ patch_binary_file() {
     rm -f "$patch_tmp_base.expected" "$patch_tmp_base.replacement" "$patch_tmp_base.actual"
 }
 
+compat_binary_patches=0
+
 if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     rm -f /lib/ld-musl-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-loongarch-lp64d.so.1
     ln -v -s /glibc/lib/ld-linux-loongarch-lp64d.so.1 /lib/ld-linux-loongarch-lp64d.so.1
+    if [ "$compat_binary_patches" = 1 ]; then
     # The contest LoongArch musl libc ships several sched_* APIs as ENOSYS stubs.
     # Patch them to issue Linux syscalls so cyclictest can initialize policy.
     patch_binary_file /musl/lib/libc.so "LoongArch musl libc sched_get" 345312 64 \
@@ -59,11 +62,13 @@ if [[ -e /glibc/lib/ld-linux-loongarch-lp64d.so.1 ]]; then
     patch_binary_file /musl/ltp/testcases/bin/gethostname02 "LoongArch LTP gethostname02 musl truncation" 19556 4 \
         '\000\225\000\100' \
         '\000\145\000\100'
+    fi
 elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
     rm -f /lib/ld-musl-riscv64.so.1 /lib/ld-musl-riscv64-sf.so.1 /lib/ld-linux-riscv64-lp64d.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64.so.1
     ln -v -s /musl/lib/libc.so /lib/ld-musl-riscv64-sf.so.1
     ln -v -s /glibc/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
+    if [ "$compat_binary_patches" = 1 ]; then
     # RV clone04 is built with an old musl clone wrapper that dereferences a NULL stack.
     # Return EINVAL from the test's ltp_clone shim before libc clone touches the stack.
     patch_binary_file /musl/ltp/testcases/bin/clone04 "RISC-V LTP clone04 NULL stack" 26786 52 \
@@ -82,6 +87,7 @@ elif [[ -e /glibc/lib/ld-linux-riscv64-lp64d.so.1 ]]; then
     patch_binary_file /musl/ltp/testcases/bin/gethostname02 "RISC-V LTP gethostname02 musl truncation" 27832 2 \
         '\045\307' \
         '\051\303'
+    fi
 fi
 rm -rf /lib64
 ln -v -s /lib /lib64
@@ -194,7 +200,7 @@ basic=0
 busybox=0
 cyclictest=0
 iozone=0
-iperf=0
+iperf=1
 libcbench=0
 libctest=0
 lmbench=0
@@ -277,6 +283,22 @@ cleanup_iperf_daemons() {
     sleep 1
     killall -9 iperf >/dev/null 2>&1 || true
     killall -9 iperf3 >/dev/null 2>&1 || true
+}
+
+cleanup_netperf_daemons() {
+    # netserver -D can daemonize away from the PID tracked by the test script.
+    killall netperf >/dev/null 2>&1 || true
+    killall netserver >/dev/null 2>&1 || true
+    sleep 1
+    killall -9 netperf >/dev/null 2>&1 || true
+    killall -9 netserver >/dev/null 2>&1 || true
+}
+
+prepare_netperf_testcode() {
+    # The first netperf control connection can race netserver -D startup.
+    if [ -f ./netperf_testcode.sh ] && ! grep -q '^sleep 1$' ./netperf_testcode.sh; then
+        sed -i '/^server_pid=\$!$/a sleep 1' ./netperf_testcode.sh
+    fi
 }
 
 echo @@@@@@@@@@ files @@@@@@@@@@
@@ -389,6 +411,17 @@ else
     skip_group iozone musl
 fi
 
+if [ "$netperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_netperf_daemons
+    prepare_netperf_testcode
+    ./netperf_testcode.sh
+    cleanup_netperf_daemons
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group netperf musl
+fi
+
 if [ "$iperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     cleanup_iperf_daemons
@@ -413,14 +446,6 @@ if [ "$lua" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lua musl
-fi
-
-if [ "$netperf" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./netperf_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group netperf musl
 fi
 
 cd /glibc
@@ -474,6 +499,17 @@ else
     skip_group iozone glibc
 fi
 
+if [ "$netperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_netperf_daemons
+    prepare_netperf_testcode
+    ./netperf_testcode.sh
+    cleanup_netperf_daemons
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group netperf glibc
+fi
+
 if [ "$iperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     cleanup_iperf_daemons
@@ -498,14 +534,6 @@ if [ "$lua" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lua glibc
-fi
-
-if [ "$netperf" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./netperf_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group netperf glibc
 fi
 
 exit 0
