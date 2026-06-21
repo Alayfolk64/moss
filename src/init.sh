@@ -200,13 +200,13 @@ basic=0
 busybox=0
 cyclictest=0
 iozone=0
-iperf=1
+iperf=0
 libcbench=0
 libctest=0
 lmbench=0
-ltp=0
+ltp=1
 lua=0
-netperf=1
+netperf=0
 
 if [ -n "$some_testcases" ]; then
     basic=0
