@@ -2293,8 +2293,6 @@ dependencies = [
 [[package]]
 name = "starry-signal"
 version = "0.2.4-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56ca4375da151b08a60f80291ea5a705e8c4e3e70195d26d26796210722c0f25"
 dependencies = [
  "axcpu",
  "bitflags 2.11.0",

@@ -2,14 +2,14 @@
 # Active/commented state comes from init.sh; summary-only additions are commented.
 # Previously commented TODO syscall cases moved to todo_syscall.sh.
 
-# abort01 abort01
-# accept01 accept01
-# accept02 accept02
-# accept03 accept03
-# accept4_01 accept4_01
+abort01 abort01
+accept01 accept01
+accept02 accept02
+accept03 accept03
+accept4_01 accept4_01
 access01 access01
 access02 access02
-# access03 access03
+access03 access03
 access04 access04
 # acct01 acct01
 # acct02 acct02
@@ -364,28 +364,28 @@ getrlimit01 getrlimit01
 # inotify10 inotify10
 # inotify11 inotify11
 # inotify12 inotify12
-# fanotify01 fanotify01
-# fanotify02 fanotify02
-# fanotify03 fanotify03
-# fanotify04 fanotify04
-# fanotify05 fanotify05
-# fanotify06 fanotify06
-# fanotify07 fanotify07
-# fanotify08 fanotify08
-# fanotify09 fanotify09
+fanotify01 fanotify01
+fanotify02 fanotify02
+fanotify03 fanotify03
+fanotify04 fanotify04
+fanotify05 fanotify05
+fanotify06 fanotify06
+fanotify07 fanotify07
+fanotify08 fanotify08
+fanotify09 fanotify09
 fanotify10 fanotify10
-# fanotify11 fanotify11
-# fanotify12 fanotify12
-# fanotify13 fanotify13
-# fanotify14 fanotify14
-# fanotify15 fanotify15
+fanotify11 fanotify11
+fanotify12 fanotify12
+fanotify13 fanotify13
+fanotify14 fanotify14
+fanotify15 fanotify15
 fanotify16 fanotify16
-# fanotify17 fanotify17
-# fanotify18 fanotify18
-# fanotify19 fanotify19
-# fanotify20 fanotify20
-# fanotify21 fanotify21
-# fanotify23 fanotify23
+fanotify17 fanotify17
+fanotify18 fanotify18
+fanotify19 fanotify19
+fanotify20 fanotify20
+fanotify21 fanotify21
+fanotify23 fanotify23
 # ioprio_get01 ioprio_get01
 # ioprio_set01 ioprio_set01
 # ioprio_set02 ioprio_set02
