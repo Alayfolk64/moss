@@ -41,12 +41,12 @@ moss 的主要目标是增强系统运行 Linux 用户态程序的能力。系�
 
 moss 采用分层与模块化结合的系统结构。整体上，系统可以划分为用户空间、系统服务接口层、内核核心功能层、组件化内核基础层以及平台适配层。用户程序通过系统调用、异常或中断等入口进入内核，内核根据请求类型调度相应的功能模块完成资源管理与系统服务，并最终通过硬件抽象层适配不同体系结构和运行平台。
 
-#figure(
-  image("pictrues/架构图.svg", width: 85%),
-  caption: [moss 系统整体架构图],
-) <fig:moss-arch>
+// #figure(
+//   image("pictrues/架构图.svg", width: 85%),
+//   caption: [moss 系统整体架构图],
+// ) <fig:moss-arch>
 
-如 @fig:moss-arch 所示，moss 的核心功能并不是由单一模块完成，而是由多个内核子系统协同构成。任务与执行管理负责进程、线程和调度相关逻辑；地址空间与内存管理负责虚拟内存、物理内存和缺页处理；文件与存储管理负责文件系统抽象、路径解析和文件对象管理；I/O 与事件通知负责文件描述符、异步 I/O、事件等待和多路复用；IPC 与同步机制负责信号、管道、futex 和等待队列等进程间协作能力。网络通信子系统、系统资源管理和内核运行支撑则共同补充完整的操作系统运行环境。
+// 如 @fig:moss-arch 所示，moss 的核心功能并不是由单一模块完成，而是由多个内核子系统协同构成。任务与执行管理负责进程、线程和调度相关逻辑；地址空间与内存管理负责虚拟内存、物理内存和缺页处理；文件与存储管理负责文件系统抽象、路径解析和文件对象管理；I/O 与事件通知负责文件描述符、异步 I/O、事件等待和多路复用；IPC 与同步机制负责信号、管道、futex 和等待队列等进程间协作能力。网络通信子系统、系统资源管理和内核运行支撑则共同补充完整的操作系统运行环境。
 
 从代码组织上看，moss 主要目录结构如下所示。
 
@@ -554,270 +554,245 @@ pub fn visible_pid(&self) -> u32 {
 
 命名空间 inode 用于实现 `/proc/self/ns/*` 接口，每个命名空间文件的 inode 编号对应 NamespaceState.inode，供用户空间程序查询和比较命名空间。
 
-                                     == 进程创建与执行
+== 进程创建与执行
 
-                                     === clone 系统调用完善
+=== clone 系统调用完善
 
-                                     clone 是 Linux 统一的进程/线程创建接口，通过 CloneFlags 控制资源共享策略。moss 支持的主要标志如下表所示。
+clone 是 Linux 统一的进程/线程创建接口，通过 CloneFlags 控制资源共享策略。moss 支持的主要标志如下表所示。
 
-                                     #[
-                                       #set text(size: 9pt)
-                                       #table(
-                                         columns: (1.5fr, 3.5fr),
-                                         align: (left, left),
-                                         inset: 5pt,
-                                         table.header(
-                                           [CloneFlags],
-                                           [含义],
-                                         ),
-                                         [CLONE_VM],
-                                         [共享地址空间（线程）；否则 COW 复制（进程）],
-                                         [CLONE_FILES],
-                                         [共享文件描述符表；否则复制 FD 表],
-                                         [CLONE_SIGHAND],
-                                         [共享信号处理器；否则继承处理器],
-                                         [CLONE_THREAD],
-                                         [加入同一线程组，共享 PID],
-                                         [CLONE_PARENT_SETTID],
-                                         [在父进程内存写入子进程 TID],
-                                         [CLONE_CHILD_SETTID],
-                                         [在子进程内存写入子进程 TID],
-                                         [CLONE_CHILD_CLEARTID],
-                                         [子进程退出时清零指定地址并唤醒 futex],
-                                         [CLONE_PIDFD],
-                                         [创建 pidfd 文件描述符],
-                                         [CLONE_VFORK],
-                                         [父进程阻塞直到子进程 exec 或 exit],
-                                       )
-                                     ]
+#[
+  #set text(size: 9pt)
+  #table(
+    columns: (1.5fr, 3.5fr),
+    align: (left, left),
+    inset: 5pt,
+    table.header([CloneFlags], [含义]),
+    [CLONE_VM], [共享地址空间（线程）；否则 COW 复制（进程）],
+    [CLONE_FILES], [共享文件描述符表；否则复制 FD 表],
+    [CLONE_SIGHAND], [共享信号处理器；否则继承处理器],
+    [CLONE_THREAD], [加入同一线程组，共享 PID],
+    [CLONE_PARENT_SETTID], [在父进程内存写入子进程 TID],
+    [CLONE_CHILD_SETTID], [在子进程内存写入子进程 TID],
+    [CLONE_CHILD_CLEARTID], [子进程退出时清零指定地址并唤醒 futex],
+    [CLONE_PIDFD], [创建 pidfd 文件描述符],
+    [CLONE_VFORK], [父进程阻塞直到子进程 exec 或 exit],
+  )
+]
 
 
-                                     clone 系统调用首先验证标志组合的合法性。Linux 要求 CLONE_THREAD 必须同时指定 CLONE_VM 和 CLONE_SIGHAND，因为线程必须共享地址空间和信号处理器；CLONE_SIGHAND 必须指定 CLONE_VM，因为信号处理器位于共享内存中。验证代码位于 `kernel/src/syscall/task/clone.rs`：
+clone 系统调用首先验证标志组合的合法性。Linux 要求 CLONE_THREAD 必须同时指定 CLONE_VM 和 CLONE_SIGHAND，因为线程必须共享地址空间和信号处理器；CLONE_SIGHAND 必须指定 CLONE_VM，因为信号处理器位于共享内存中。验证代码位于 `kernel/src/syscall/task/clone.rs`：
 
-                                     ```rust
-                                     fn validate(&self) -> AxResult<()> {
-                                         let flags = self.flags;
+```rust
+fn validate(&self) -> AxResult<()> {
+    let flags = self.flags;
 
-                                         if flags.contains(CloneFlags::THREAD)
-                                             && !flags.contains(CloneFlags::VM | CloneFlags::SIGHAND)
-                                         {
-                                             return Err(AxError::InvalidInput);
-                                         }
+    if flags.contains(CloneFlags::THREAD)
+        && !flags.contains(CloneFlags::VM | CloneFlags::SIGHAND)
+    {
+        return Err(AxError::InvalidInput);
+    }
 
-                                         if flags.contains(CloneFlags::SIGHAND) && !flags.contains(CloneFlags::VM) {
-                                             return Err(AxError::InvalidInput);
-                                         }
+    if flags.contains(CloneFlags::SIGHAND) && !flags.contains(CloneFlags::VM) {
+        return Err(AxError::InvalidInput);
+    }
 
-                                         if flags.contains(CloneFlags::VFORK | CloneFlags::THREAD) {
-                                             return Err(AxError::InvalidInput);
-                                         }
+    if flags.contains(CloneFlags::VFORK | CloneFlags::THREAD) {
+        return Err(AxError::InvalidInput);
+    }
 
-                                         Ok(())
-                                     }
-                                     ```
+    Ok(())
+}
+```
 
-                                     根据标志组合，clone 创建不同类型的任务。若包含 CLONE_THREAD，则创建线程，共享 ProcessData；否则创建新进程，fork ProcessData 并复制地址空间：
+根据标志组合，clone 创建不同类型的任务。若包含 CLONE_THREAD，则创建线程，共享 ProcessData；否则创建新进程，fork ProcessData 并复制地址空间：
 
-                                     ```rust
-                                     let new_proc_data = if flags.contains(CloneFlags::THREAD) {
-                                         // 线程：共享 ProcessData
-                                         new_task.ctx_mut().set_page_table_root(old_proc_data.aspace.lock().page_table_root());
-                                         old_proc_data.clone()
-                                     } else {
-                                         // 进程：fork 新 ProcessData
-                                         let proc = old_proc_data.proc.fork(tid);
-                                         let new_aspace = if flags.contains(CloneFlags::VM) {
-                                             old_proc_data.aspace.clone()  // CLONE_VM：共享地址空间
-                                         } else {
-                                             Arc::new(Mutex::new(old_proc_data.aspace.lock().fork()))  // COW 复制
-                                         };
-                                         // 创建新 ProcessData...
-                                     };
-                                     ```
+```rust
+let new_proc_data = if flags.contains(CloneFlags::THREAD) {
+    // 线程：共享 ProcessData
+    new_task.ctx_mut().set_page_table_root(old_proc_data.aspace.lock().page_table_root());
+    old_proc_data.clone()
+} else {
+    // 进程：fork 新 ProcessData
+    let proc = old_proc_data.proc.fork(tid);
+    let new_aspace = if flags.contains(CloneFlags::VM) {
+        old_proc_data.aspace.clone()  // CLONE_VM：共享地址空间
+    } else {
+        Arc::new(Mutex::new(old_proc_data.aspace.lock().fork()))  // COW 复制
+    };
+    // 创建新 ProcessData...
+};
+```
 
-                                     moss 修复了 CLONE_PARENT_SETTID、CHILD_SETTID、CHILD_CLEARTID 的多个 bug（commit f82940ee），确保 TID 写入的时机和地址正确。修复了 fork 时堆指针未继承的问题（commit 759a887e），避免子进程 brk 损坏。实现了 clone3 系统调用（commit 0f15bf48），支持更多扩展参数。
+moss 修复了 CLONE_PARENT_SETTID、CHILD_SETTID、CHILD_CLEARTID 的多个 bug（commit f82940ee），确保 TID 写入的时机和地址正确。修复了 fork 时堆指针未继承的问题（commit 759a887e），避免子进程 brk 损坏。实现了 clone3 系统调用（commit 0f15bf48），支持更多扩展参数。
 
-                                     === execve 系统调用增强
+=== execve 系统调用增强
 
-                                     execve 系统调用用于加载新程序，替换当前进程的地址空间。moss 在 StarryOS 基础上增强了 execve 的多个方面。
+execve 系统调用用于加载新程序，替换当前进程的地址空间。moss 在 StarryOS 基础上增强了 execve 的多个方面。
 
-                                     第一，实现 execveat 系统调用（commit aaeea303），支持相对目录文件描述符打开可执行文件，并支持 AT_EMPTY_PATH 和 AT_SYMLINK_NOFOLLOW 标志：
+第一，实现 execveat 系统调用（commit aaeea303），支持相对目录文件描述符打开可执行文件，并支持 AT_EMPTY_PATH 和 AT_SYMLINK_NOFOLLOW 标志：
 
-                                     ```rust
-                                     pub fn sys_execveat(
-                                         uctx: &mut UserContext,
-                                         dirfd: c_int,
-                                         path: *const c_char,
-                                         argv: *const *const c_char,
-                                         envp: *const *const c_char,
-                                         flags: u32,
-                                     ) -> AxResult<isize> {
-                                         let path = vm_load_string(path)?;
-                                         let exec_loc = if path.is_empty() && (flags & AT_EMPTY_PATH != 0) {
-                                             // AT_EMPTY_PATH：dirfd 直接指向可执行文件
-                                             let fd_table = FD_TABLE.current();
-                                             let file = fd_table.get(dirfd)?.inner.downcast_ref::<File>()?;
-                                             Some(file.inner().location().clone())
-                                         } else {
-                                             // 普通路径解析
-                                             resolve_at(dirfd, &path, flags).ok()
-                                         };
-                                         execve_common(uctx, path, exec_loc, None, argv, envp)
-                                     }
-                                     ```
+```rust
+pub fn sys_execveat(
+    uctx: &mut UserContext,
+    dirfd: c_int,
+    path: *const c_char,
+    argv: *const *const c_char,
+    envp: *const *const c_char,
+    flags: u32,
+) -> AxResult<isize> {
+    let path = vm_load_string(path)?;
+    let exec_loc = if path.is_empty() && (flags & AT_EMPTY_PATH != 0) {
+        // AT_EMPTY_PATH：dirfd 直接指向可执行文件
+        let fd_table = FD_TABLE.current();
+        let file = fd_table.get(dirfd)?.inner.downcast_ref::<File>()?;
+        Some(file.inner().location().clone())
+    } else {
+        // 普通路径解析
+        resolve_at(dirfd, &path, flags).ok()
+    };
+    execve_common(uctx, path, exec_loc, None, argv, envp)
+}
+```
 
-                                     第二，实现 shebang 支持（commit c720e652）。当可执行文件以 `#!` 开头时，解析 shebang 行，提取解释器路径，将原文件作为参数传递给解释器：
+第二，实现 shebang 支持（commit c720e652）。当可执行文件以 `#!` 开头时，解析 shebang 行，提取解释器路径，将原文件作为参数传递给解释器：
 
-                                     ```rust
-                                     if content.starts_with(b"#!") {
-                                         let shebang_line = content.split(|&b| b == b'\n').next()?;
-                                         let interpreter = parse_shebang(shebang_line)?;
-                                         // 递归执行解释器，原文件路径作为参数
-                                         return execve_common(uctx, interpreter, None, Some(&path), argv, envp);
-                                     }
-                                     ```
+```rust
+if content.starts_with(b"#!") {
+    let shebang_line = content.split(|&b| b == b'\n').next()?;
+    let interpreter = parse_shebang(shebang_line)?;
+    // 递归执行解释器，原文件路径作为参数
+    return execve_common(uctx, interpreter, None, Some(&path), argv, envp);
+}
+```
 
-                                     第三，修复 execve 允许 NULL argv 和 envp（commit ed0e8be4），符合 POSIX 语义。修复 execve 导致的 brk 损坏（commit 26d53945），在加载新程序时正确重置堆指针。
+第三，修复 execve 允许 NULL argv 和 envp（commit ed0e8be4），符合 POSIX 语义。修复 execve 导致的 brk 损坏（commit 26d53945），在加载新程序时正确重置堆指针。
 
-                                     第四，execve 执行前进行安全检查，包括权限检查、ETXTBSY 检测（文件被写入打开时禁止执行）、fanotify 执行通知等。
+第四，execve 执行前进行安全检查，包括权限检查、ETXTBSY 检测（文件被写入打开时禁止执行）、fanotify 执行通知等。
 
 
-                                     == 调试与控制接口
+== 调试与控制接口
 
-                                     === ptrace 调试支持
+=== ptrace 调试支持
 
-                                     ptrace 是 Linux 调试器的基础，允许一个进程观察和控制另一个进程的执行。moss 实现了 sys_ptrace 系统调用（commit 09d4c46c），支持多种 ptrace 操作。
+ptrace 是 Linux 调试器的基础，允许一个进程观察和控制另一个进程的执行。moss 实现了 sys_ptrace 系统调用（commit 09d4c46c），支持多种 ptrace 操作。
 
-                                     #[
-                                       #set text(size: 9pt)
-                                       #table(
-                                         columns: (1.8fr, 3.2fr),
-                                         align: (left, left),
-                                         inset: 5pt,
-                                         table.header(
-                                           [ptrace 操作],
-                                           [功能],
-                                         ),
-                                         [PTRACE_TRACEME],
-                                         [标记当前进程为被跟踪状态，父进程成为调试器],
-                                         [PTRACE_ATTACH],
-                                         [附加到目标进程，开始跟踪],
-                                         [PTRACE_DETACH],
-                                         [停止跟踪目标进程],
-                                         [PTRACE_CONT],
-                                         [继续执行被停止的进程],
-                                         [PTRACE_SYSCALL],
-                                         [继续执行，在下一个系统调用入口或出口停止],
-                                         [PTRACE_SINGLESTEP],
-                                         [单步执行一条指令],
-                                         [PTRACE_GETREGS],
-                                         [读取目标进程的寄存器],
-                                         [PTRACE_SETREGS],
-                                         [设置目标进程的寄存器],
-                                         [PTRACE_PEEKDATA],
-                                         [读取目标进程内存],
-                                         [PTRACE_POKEDATA],
-                                         [写入目标进程内存],
-                                       )
-                                     ]
+#[
+  #set text(size: 9pt)
+  #table(
+    columns: (1.8fr, 3.2fr),
+    align: (left, left),
+    inset: 5pt,
+    table.header([ptrace 操作], [功能]),
+    [PTRACE_TRACEME], [标记当前进程为被跟踪状态，父进程成为调试器],
+    [PTRACE_ATTACH], [附加到目标进程，开始跟踪],
+    [PTRACE_DETACH], [停止跟踪目标进程],
+    [PTRACE_CONT], [继续执行被停止的进程],
+    [PTRACE_SYSCALL], [继续执行，在下一个系统调用入口或出口停止],
+    [PTRACE_SINGLESTEP], [单步执行一条指令],
+    [PTRACE_GETREGS], [读取目标进程的寄存器],
+    [PTRACE_SETREGS], [设置目标进程的寄存器],
+    [PTRACE_PEEKDATA], [读取目标进程内存],
+    [PTRACE_POKEDATA], [写入目标进程内存],
+  )
+]
 
-                                     ptrace 实现维护了一个全局的跟踪状态表，记录每个进程的调试状态和等待事件。当被跟踪进程执行系统调用、收到信号或触发断点时，会停止执行并通知调试器：
+ptrace 实现维护了一个全局的跟踪状态表，记录每个进程的调试状态和等待事件。当被跟踪进程执行系统调用、收到信号或触发断点时，会停止执行并通知调试器：
 
-                                     ```rust
-                                     pub fn ptrace_wait_if_stopped(thr: &Thread) {
-                                         let pid = thr.proc_data.proc.pid();
-                                         if !ptrace_is_traced(pid) {
-                                             return;
-                                         }
+```rust
+pub fn ptrace_wait_if_stopped(thr: &Thread) {
+    let pid = thr.proc_data.proc.pid();
+    if !ptrace_is_traced(pid) {
+        return;
+    }
 
-                                         // 检查是否有待处理的停止事件
-                                         while ptrace_should_stop(pid) {
-                                             // 阻塞等待调试器发送 PTRACE_CONT 或 PTRACE_SYSCALL
-                                             block_on(ptrace_wait_continue(pid));
-                                         }
-                                     }
-                                     ```
+    // 检查是否有待处理的停止事件
+    while ptrace_should_stop(pid) {
+        // 阻塞等待调试器发送 PTRACE_CONT 或 PTRACE_SYSCALL
+        block_on(ptrace_wait_continue(pid));
+    }
+}
+```
 
-                                     ptrace 修复了多个等待事件处理的 bug（commit 71e46a7c、faa52684），确保调试器能正确获取进程状态。通过 ptrace 实现，moss 支持了 gdb、strace 等调试工具。
+ptrace 修复了多个等待事件处理的 bug（commit 71e46a7c、faa52684），确保调试器能正确获取进程状态。通过 ptrace 实现，moss 支持了 gdb、strace 等调试工具。
 
-                                     === prctl 进程控制
+=== prctl 进程控制
 
-                                     prctl 系统调用提供了进程属性的细粒度控制。moss 实现了多个常用的 prctl 选项（commit 6b393c38、4669f0fa）：
+prctl 系统调用提供了进程属性的细粒度控制。moss 实现了多个常用的 prctl 选项（commit 6b393c38、4669f0fa）：
 
-                                     ```rust
-                                     pub fn sys_prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
-                                         -> AxResult<isize>
-                                     {
-                                         match option as u32 {
-                                             PR_SET_NAME => {
-                                                 // 设置进程名称（最多 16 字节）
-                                                 let name = vm_load_until_nul(arg2 as *const u8, 16)?;
-                                                 current().set_name(name);
-                                                 Ok(0)
-                                             }
-                                             PR_GET_NAME => {
-                                                 // 获取进程名称
-                                                 let name = current().name();
-                                                 let buf = arg2 as *mut u8;
-                                                 buf.vm_write_slice(name.as_bytes())?;
-                                                 Ok(0)
-                                             }
-                                             PR_SET_PDEATHSIG => {
-                                                 // 设置父进程死亡时发送的信号
-                                                 // 实现省略
-                                                 Ok(0)
-                                             }
-                                             PR_CAPBSET_READ => {
-                                                 // 查询 capability bounding set
-                                                 let cap = arg2 as u32;
-                                                 Ok(if current_has_cap(cap) { 1 } else { 0 })
-                                             }
-                                             _ => {
-                                                 warn!("Unsupported prctl option: {}", option);
-                                                 Ok(0)  // 返回成功，避免程序崩溃
-                                             }
-                                         }
-                                     }
-                                     ```
+```rust
+pub fn sys_prctl(option: i32, arg2: usize, arg3: usize, arg4: usize, arg5: usize)
+    -> AxResult<isize>
+{
+    match option as u32 {
+        PR_SET_NAME => {
+            // 设置进程名称（最多 16 字节）
+            let name = vm_load_until_nul(arg2 as *const u8, 16)?;
+            current().set_name(name);
+            Ok(0)
+        }
+        PR_GET_NAME => {
+            // 获取进程名称
+            let name = current().name();
+            let buf = arg2 as *mut u8;
+            buf.vm_write_slice(name.as_bytes())?;
+            Ok(0)
+        }
+        PR_SET_PDEATHSIG => {
+            // 设置父进程死亡时发送的信号
+            // 实现省略
+            Ok(0)
+        }
+        PR_CAPBSET_READ => {
+            // 查询 capability bounding set
+            let cap = arg2 as u32;
+            Ok(if current_has_cap(cap) { 1 } else { 0 })
+        }
+        _ => {
+            warn!("Unsupported prctl option: {}", option);
+            Ok(0)  // 返回成功，避免程序崩溃
+        }
+    }
+}
+```
 
-                                     === pidfd 文件描述符机制
+=== pidfd 文件描述符机制
 
-                                     pidfd 将进程表示为文件描述符，提供了更安全的进程操作方式。传统的 PID 可能被回收重用，而 pidfd 在进程存活期间保持有效。
+pidfd 将进程表示为文件描述符，提供了更安全的进程操作方式。传统的 PID 可能被回收重用，而 pidfd 在进程存活期间保持有效。
 
-                                     moss 实现了 pidfd_open 和 pidfd_send_signal（commit 71c73e0d）：
+moss 实现了 pidfd_open 和 pidfd_send_signal（commit 71c73e0d）：
 
-                                     ```rust
-                                     pub fn sys_pidfd_open(pid: u32, flags: u32) -> AxResult<isize> {
-                                         // 获取目标进程
-                                         let proc_data = get_process_data(pid)?;
+```rust
+pub fn sys_pidfd_open(pid: u32, flags: u32) -> AxResult<isize> {
+    // 获取目标进程
+    let proc_data = get_process_data(pid)?;
 
-                                         // 创建 PidFd 对象
-                                         let pidfd = PidFd::new(pid, proc_data.exit_event.clone());
+    // 创建 PidFd 对象
+    let pidfd = PidFd::new(pid, proc_data.exit_event.clone());
 
-                                         // 加入文件描述符表
-                                         let fd_table = FD_TABLE.current();
-                                         let fd = fd_table.insert(Arc::new(pidfd))?;
+    // 加入文件描述符表
+    let fd_table = FD_TABLE.current();
+    let fd = fd_table.insert(Arc::new(pidfd))?;
 
-                                         Ok(fd as isize)
-                                     }
+    Ok(fd as isize)
+}
 
-                                     pub fn sys_pidfd_send_signal(pidfd: i32, sig: u32, info: *mut siginfo_t, flags: u32)
-                                         -> AxResult<isize>
-                                     {
-                                         let fd_table = FD_TABLE.current();
-                                         let pidfd_obj = fd_table.get(pidfd)?.inner.downcast_ref::<PidFd>()?;
+pub fn sys_pidfd_send_signal(pidfd: i32, sig: u32, info: *mut siginfo_t, flags: u32)
+    -> AxResult<isize>
+{
+    let fd_table = FD_TABLE.current();
+    let pidfd_obj = fd_table.get(pidfd)?.inner.downcast_ref::<PidFd>()?;
 
-                                         let pid = pidfd_obj.pid();
-                                         let signo = Signo::from_repr(sig as u8).ok_or(AxError::InvalidInput)?;
+    let pid = pidfd_obj.pid();
+    let signo = Signo::from_repr(sig as u8).ok_or(AxError::InvalidInput)?;
 
-                                         // 发送信号到目标进程
-                                         send_signal_to_process(pid, SignalInfo::new_kernel(signo))?;
+    // 发送信号到目标进程
+    send_signal_to_process(pid, SignalInfo::new_kernel(signo))?;
 
-                                         Ok(0)
-                                     }
-                                     ```
+    Ok(0)
+}
+```
 
-                                     clone 系统调用支持 CLONE_PIDFD 标志，自动创建 pidfd 并写回用户空间指针。pidfd 可以通过 epoll 监听进程退出事件（commit 46a389f3），为异步进程管理提供了便利。
+clone 系统调用支持 CLONE_PIDFD 标志，自动创建 pidfd 并写回用户空间指针。pidfd 可以通过 epoll 监听进程退出事件（commit 46a389f3），为异步进程管理提供了便利。
 
-                                     moss 的进程与线程管理从 StarryOS 的基础框架出发，通过补齐权限管理、作业控制、命名空间、调试接口等关键能力，显著提升了 Linux 兼容性。这些改进使得 moss 能够运行更多真实世界的 Linux 程序，通过了大量 LTP 测试用例，为后续系统功能扩展奠定了坚实基础。
+moss 的进程与线程管理从 StarryOS 的基础框架出发，通过补齐权限管理、作业控制、命名空间、调试接口等关键能力，显著提升了 Linux 兼容性。这些改进使得 moss 能够运行更多真实世界的 Linux 程序，通过了大量 LTP 测试用例，为后续系统功能扩展奠定了坚实基础。
 

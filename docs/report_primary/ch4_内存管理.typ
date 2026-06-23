@@ -181,7 +181,7 @@ COW 页面在父子进程共享阶段会临时去掉 `WRITE` 位，硬件写访�
 #figure(
   [
     #align(center)[
-      #image("./pictrues/图-4.3.1.svg", width: 70%)
+      #image("./pictrues/图-4.3.1.svg", width: 80%)
     ]
   ],
   caption: [moss 用户虚拟地址空间布局],
