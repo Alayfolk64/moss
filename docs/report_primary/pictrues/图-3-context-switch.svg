@@ -1,0 +1,70 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 330">
+  <defs>
+    <marker id="arr-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arr-r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <!-- ===== Task A (prev) ===== -->
+  <text x="110" y="18" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#1e293b">任务 A（prev）</text>
+  <!-- Kernel stack dashed outline -->
+  <rect x="10" y="26" width="200" height="278" rx="5" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="110" y="44" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#94a3b8">内核栈</text>
+  <!-- TaskContext A -->
+  <rect x="28" y="52" width="164" height="210" rx="3" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="28" y="52" width="164" height="26" rx="3" fill="#3b82f6"/>
+  <text x="110" y="69" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="white">TaskContext</text>
+  <!-- Fields -->
+  <text x="48" y="94" font-family="monospace" font-size="14" fill="#374151">ra</text>
+  <line x1="28" y1="101" x2="192" y2="101" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="48" y="117" font-family="monospace" font-size="14" fill="#374151">sp</text>
+  <line x1="28" y1="124" x2="192" y2="124" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="48" y="140" font-family="monospace" font-size="14" fill="#374151">s0 – s11</text>
+  <line x1="28" y1="147" x2="192" y2="147" stroke="#64748b" stroke-width="1" stroke-dasharray="3,2"/>
+  <!-- satp highlighted -->
+  <rect x="28" y="147" width="164" height="30" fill="#fef9c3"/>
+  <text x="48" y="167" font-family="monospace" font-size="14" fill="#92400e">satp</text>
+  <text x="95" y="167" font-family="sans-serif" font-size="14" fill="#92400e">（页表根）</text>
+  <line x1="28" y1="177" x2="192" y2="177" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="48" y="196" font-family="monospace" font-size="14" fill="#9ca3af">…</text>
+
+  <!-- ===== Task B (next) ===== -->
+  <text x="590" y="18" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#1e293b">任务 B（next）</text>
+  <rect x="490" y="26" width="200" height="278" rx="5" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="590" y="44" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#94a3b8">内核栈</text>
+  <!-- TaskContext B -->
+  <rect x="508" y="52" width="164" height="210" rx="3" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="508" y="52" width="164" height="26" rx="3" fill="#3b82f6"/>
+  <text x="590" y="69" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="white">TaskContext</text>
+  <text x="528" y="94" font-family="monospace" font-size="14" fill="#374151">ra</text>
+  <line x1="508" y1="101" x2="672" y2="101" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="528" y="117" font-family="monospace" font-size="14" fill="#374151">sp</text>
+  <line x1="508" y1="124" x2="672" y2="124" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="528" y="140" font-family="monospace" font-size="14" fill="#374151">s0 – s11</text>
+  <line x1="508" y1="147" x2="672" y2="147" stroke="#64748b" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="508" y="147" width="164" height="30" fill="#fef9c3"/>
+  <text x="528" y="167" font-family="monospace" font-size="14" fill="#92400e">satp</text>
+  <text x="575" y="167" font-family="sans-serif" font-size="14" fill="#92400e">（页表根）</text>
+  <line x1="508" y1="177" x2="672" y2="177" stroke="#bfdbfe" stroke-width="1"/>
+  <text x="528" y="196" font-family="monospace" font-size="14" fill="#9ca3af">…</text>
+
+  <!-- ===== switch_to() center box ===== -->
+  <rect x="248" y="112" width="204" height="62" rx="6" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="350" y="137" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="#15803d">switch_to(</text>
+  <text x="350" y="158" text-anchor="middle" font-family="monospace" font-size="13.5" fill="#15803d">  prev, next )</text>
+
+  <!-- Arrow: A → switch_to (保存现场) -->
+  <line x1="194" y1="140" x2="246" y2="140" stroke="#3b82f6" stroke-width="2" marker-end="url(#arr-b)"/>
+  <text x="220" y="132" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#3b82f6">保存现场</text>
+
+  <!-- Arrow: switch_to → B (恢复现场) -->
+  <line x1="454" y1="145" x2="506" y2="145" stroke="#ef4444" stroke-width="2" marker-end="url(#arr-r)"/>
+  <text x="480" y="137" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#ef4444">恢复现场</text>
+
+  <!-- Footer -->
+  <line x1="10" y1="318" x2="690" y2="318" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="350" y="328" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#64748b">satp 在切换同一时刻更新，任务 B 运行后立即使用自己进程的页表</text>
+</svg>

@@ -1,0 +1,99 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 490">
+  <defs>
+    <marker id="arr-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arr-s" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- ===== SCENARIO 1: 正常路径 ===== -->
+  <rect x="0" y="0" width="580" height="22" fill="#f0f9ff"/>
+  <text x="290" y="15" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0369a1">正常路径：阻塞先完成，通知后到</text>
+
+  <text x="105" y="38" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#334155">等待任务</text>
+  <text x="455" y="38" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#334155">事件 / Waker</text>
+
+  <line x1="105" y1="44" x2="105" y2="228" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="455" y1="44" x2="455" y2="228" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- 等待任务 events -->
+  <circle cx="105" cy="62" r="4" fill="#3b82f6"/>
+  <text x="95" y="66" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#1e40af">poll() → Pending</text>
+
+  <circle cx="105" cy="86" r="4" fill="#3b82f6"/>
+  <text x="95" y="90" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#1e40af">注册 Waker</text>
+
+  <circle cx="105" cy="110" r="4" fill="#3b82f6"/>
+  <text x="95" y="114" text-anchor="end" font-family="sans-serif" font-size="12.5">
+    <tspan fill="#1e40af">检查 woke = </tspan><tspan fill="#dc2626">false</tspan>
+  </text>
+
+  <circle cx="105" cy="142" r="5" fill="#64748b"/>
+  <text x="95" y="146" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#475569">进入 Blocked</text>
+
+  <!-- dashed wait line: task is blocked waiting for event -->
+  <line x1="105" y1="142" x2="455" y2="178" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="5,3"/>
+
+  <circle cx="105" cy="215" r="5" fill="#16a34a"/>
+  <text x="95" y="219" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#15803d">→ 回到 Ready</text>
+
+  <!-- 事件/Waker events -->
+  <circle cx="455" cy="178" r="4" fill="#475569"/>
+  <text x="465" y="182" font-family="sans-serif" font-size="12.5" fill="#1e293b">wake_by_ref()</text>
+
+  <circle cx="455" cy="194" r="4" fill="#475569"/>
+  <text x="465" y="198" font-family="sans-serif" font-size="12.5" fill="#1e293b">woke ← true</text>
+
+  <circle cx="455" cy="210" r="4" fill="#16a34a"/>
+  <text x="465" y="214" font-family="sans-serif" font-size="12.5" fill="#15803d">unblock_task()</text>
+
+  <!-- Arrow: unblock_task → 等待任务 回到 Ready -->
+  <line x1="452" y1="212" x2="112" y2="215" stroke="#16a34a" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+  <!-- ===== DIVIDER ===== -->
+  <line x1="0" y1="234" x2="580" y2="234" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- ===== SCENARIO 2: 竞争路径 ===== -->
+  <rect x="0" y="235" width="580" height="22" fill="#fff7ed"/>
+  <text x="290" y="250" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#c2410c">竞争路径：通知先于 Waker 登记到达</text>
+
+  <text x="105" y="274" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#334155">等待任务</text>
+  <text x="455" y="274" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#334155">事件 / Waker</text>
+
+  <line x1="105" y1="280" x2="105" y2="480" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="455" y1="280" x2="455" y2="480" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- poll() → Pending -->
+  <circle cx="105" cy="298" r="4" fill="#3b82f6"/>
+  <text x="95" y="302" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#1e40af">poll() → Pending</text>
+
+  <!-- Race window -->
+  <rect x="107" y="312" width="346" height="72" rx="3" fill="#fff8f0" stroke="#f97316" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="280" y="326" text-anchor="middle" font-family="sans-serif" font-size="13.5" font-style="italic" fill="#ea580c">竞争窗口：Waker 尚未登记</text>
+
+  <!-- 事件/Waker events in window -->
+  <circle cx="455" cy="343" r="4" fill="#f97316"/>
+  <text x="465" y="347" font-family="sans-serif" font-size="12.5" fill="#c2410c">wake_by_ref()</text>
+
+  <circle cx="455" cy="359" r="4" fill="#f97316"/>
+  <text x="465" y="363" font-family="sans-serif" font-size="12.5" fill="#c2410c">woke ← true</text>
+
+  <circle cx="455" cy="375" r="4" fill="#94a3b8"/>
+  <text x="465" y="379" font-family="sans-serif" font-size="12.5" fill="#94a3b8">unblock_task() → no-op</text>
+
+  <!-- 等待任务 events after window -->
+  <circle cx="105" cy="408" r="4" fill="#3b82f6"/>
+  <text x="95" y="412" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#1e40af">注册 Waker</text>
+
+  <circle cx="105" cy="432" r="4" fill="#16a34a"/>
+  <text x="95" y="436" text-anchor="end" font-family="sans-serif" font-size="12.5">
+    <tspan fill="#1e40af">检查 woke = </tspan><tspan fill="#16a34a">true</tspan>
+  </text>
+
+  <circle cx="105" cy="460" r="5" fill="#16a34a"/>
+  <text x="95" y="464" text-anchor="end" font-family="sans-serif" font-size="12.5" fill="#15803d">yield_now()</text>
+
+  <text x="95" y="478" text-anchor="end" font-family="sans-serif" font-size="13.5" fill="#6b7280">不进入 Blocked，轮询继续</text>
+</svg>
