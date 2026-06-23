@@ -15,6 +15,9 @@
 - 保存的调整前 RV 日志：`docs/saved_logs/20260623-030450-pre-ltp-selection/output_rv.txt`
 - 复跑 RV 日志：`docs/output_rv.txt`
 - 复跑 LA 日志：`docs/output_la.txt`
+- 复跑 RV 保存副本：`docs/saved_logs/20260623-201553-before-conflict-fix-rerun/output_rv.txt`
+- 复跑 LA 保存副本：`docs/saved_logs/20260623-201553-before-conflict-fix-rerun/output_la.txt`
+- 后续 cyclictest/iozone-only 输出已另存到 `docs/saved_logs/20260623-215313-before-restoring-ltp-rerun-outputs/`；当前 `docs/output_rv.txt` 和 `docs/output_la.txt` 已恢复为本报告对应的 LTP 复跑日志。
 
 ## 选择规则
 
@@ -22,6 +25,7 @@
 - 候选用例必须在保存的 RV 基线日志中有 `ltp-musl` 和 `ltp-glibc` 两边的 `Summary`。
 - 按后续要求强制保留 `fanotify14`、`splice07`、`epoll_ctl03`。
 - 除强制保留项外，继续排除单边超过 500 分的 fanotify/splice 高分项。
+- 当前 RV/LA 复跑日志均确认，除强制保留项外，没有其它已选 fanotify/splice 用例单边 `passed` 超过 500。
 - 高分且快的用例优先保留；慢用例优先淘汰。选完后用 RV/LA 都重新跑了一遍验证。
 
 ## 强制保留与高分剔除
