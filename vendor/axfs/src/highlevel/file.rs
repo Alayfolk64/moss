@@ -307,6 +307,7 @@ impl Default for OpenOptions {
 
 const PAGE_SIZE: usize = 4096;
 const DEFAULT_LOCAL_FILE_CACHE_PAGES: usize = 256;
+const MAX_RETAINED_FILE_CACHE_RECORDS: usize = 64;
 const MAX_READAHEAD_BYTES: usize = DEFAULT_LOCAL_FILE_CACHE_PAGES * PAGE_SIZE;
 const DEFERRED_FILE_LEN_THRESHOLD: u64 = 64 * 1024;
 const WRITEBACK_BATCH_PAGES: usize = 16;
@@ -1087,6 +1088,44 @@ impl CachedFile {
         }
     }
 
+    fn prune_inactive_file_caches(retain_key: FileCacheKey) {
+        let inactive = FILE_CACHES
+            .read()
+            .iter()
+            .filter(|(key, record)| {
+                **key != retain_key && !record.in_memory && Arc::strong_count(record) == 1
+            })
+            .map(|(key, record)| (*key, record.clone()))
+            .collect::<Vec<_>>();
+        let inactive_after_current_drop = inactive.len() + 1;
+        if inactive_after_current_drop <= MAX_RETAINED_FILE_CACHE_RECORDS {
+            return;
+        }
+
+        for (key, record) in inactive
+            .into_iter()
+            .take(inactive_after_current_drop - MAX_RETAINED_FILE_CACHE_RECORDS)
+        {
+            let cached = Self::from_record(&record);
+            if let Err(err) = cached.drop_cached_pages() {
+                warn!("Failed to prune inactive file cache: {err:?}");
+                continue;
+            }
+            drop(cached);
+
+            let mut caches = FILE_CACHES.write();
+            if Arc::strong_count(&record) == 2
+                && caches
+                    .get(&key)
+                    .is_some_and(|current| Arc::ptr_eq(current, &record))
+            {
+                caches.remove(&key);
+                record.location.user_data().remove::<FileUserData>();
+                record.location.invalidate_metadata_cache();
+            }
+        }
+    }
+
     fn writeback_dirty_pages_in_cache(&self) -> VfsResult<()> {
         if self.in_memory() {
             return Ok(());
@@ -1177,17 +1216,17 @@ impl Drop for CachedFile {
             return;
         }
 
-        if let Err(err) = self.drop_cached_pages() {
+        if let Err(err) = self.writeback_dirty_pages_in_cache().and_then(|_| self.commit_atime()) {
             if err.canonicalize() == VfsError::StorageFull {
                 self.discard_cached_pages();
                 self.remove_unused_global_record(true);
                 return;
             }
-            warn!("Failed to drop unused file cache: {err:?}");
+            warn!("Failed to write back unused file cache: {err:?}");
             return;
         }
 
-        self.remove_unused_global_record(false);
+        Self::prune_inactive_file_caches(self.record.key);
     }
 }
 

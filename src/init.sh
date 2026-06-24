@@ -355,6 +355,67 @@ skip_group() {
 cd /musl
 
 musl_runtime
+if [ "$iozone" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./iozone_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group iozone musl
+fi
+
+if [ "$iperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_iperf_daemons
+    ./iperf_testcode.sh
+    cleanup_iperf_daemons
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group iperf musl
+fi
+
+if [ "$netperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_netperf_daemons
+    prepare_netperf_testcode
+    ./netperf_testcode.sh
+    cleanup_netperf_daemons
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group netperf musl
+fi
+
+if [ "$lmbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./lmbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group lmbench musl
+fi
+
+if [ "$libcbench" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./libcbench_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group libcbench musl
+fi
+
+if [ "$cyclictest" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./cyclictest_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group cyclictest musl
+fi
+
+if [ "$lua" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./lua_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group lua musl
+fi
+
 if [ "$basic" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./basic_testcode.sh
@@ -379,14 +440,6 @@ else
     skip_group libctest musl
 fi
 
-if [ "$lmbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lmbench musl
-fi
-
 if [ "$ltp" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     run_ltp musl
@@ -395,20 +448,25 @@ else
     skip_group ltp musl
 fi
 
-if [ "$cyclictest" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./cyclictest_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group cyclictest musl
-fi
+cd /glibc
 
+glibc_runtime
 if [ "$iozone" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./iozone_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
-    skip_group iozone musl
+    skip_group iozone glibc
+fi
+
+if [ "$iperf" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    cleanup_iperf_daemons
+    ./iperf_testcode.sh
+    cleanup_iperf_daemons
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group iperf glibc
 fi
 
 if [ "$netperf" = 1 ]; then
@@ -419,17 +477,15 @@ if [ "$netperf" = 1 ]; then
     cleanup_netperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
-    skip_group netperf musl
+    skip_group netperf glibc
 fi
 
-if [ "$iperf" = 1 ]; then
+if [ "$lmbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    cleanup_iperf_daemons
-    ./iperf_testcode.sh
-    cleanup_iperf_daemons
+    ./lmbench_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
-    skip_group iperf musl
+    skip_group lmbench glibc
 fi
 
 if [ "$libcbench" = 1 ]; then
@@ -437,7 +493,15 @@ if [ "$libcbench" = 1 ]; then
     ./libcbench_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
-    skip_group libcbench musl
+    skip_group libcbench glibc
+fi
+
+if [ "$cyclictest" = 1 ]; then
+    date '+%Y-%m-%d-%H-%M-%S'
+    ./cyclictest_testcode.sh
+    date '+%Y-%m-%d-%H-%M-%S'
+else
+    skip_group cyclictest glibc
 fi
 
 if [ "$lua" = 1 ]; then
@@ -445,12 +509,9 @@ if [ "$lua" = 1 ]; then
     ./lua_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
-    skip_group lua musl
+    skip_group lua glibc
 fi
 
-cd /glibc
-
-glibc_runtime
 if [ "$basic" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     ./basic_testcode.sh
@@ -467,73 +528,12 @@ else
     skip_group busybox glibc
 fi
 
-if [ "$lmbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lmbench glibc
-fi
-
 if [ "$ltp" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     run_ltp glibc
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group ltp glibc
-fi
-
-if [ "$cyclictest" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./cyclictest_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group cyclictest glibc
-fi
-
-if [ "$iozone" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./iozone_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group iozone glibc
-fi
-
-if [ "$netperf" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    cleanup_netperf_daemons
-    prepare_netperf_testcode
-    ./netperf_testcode.sh
-    cleanup_netperf_daemons
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group netperf glibc
-fi
-
-if [ "$iperf" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    cleanup_iperf_daemons
-    ./iperf_testcode.sh
-    cleanup_iperf_daemons
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group iperf glibc
-fi
-
-if [ "$libcbench" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./libcbench_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group libcbench glibc
-fi
-
-if [ "$lua" = 1 ]; then
-    date '+%Y-%m-%d-%H-%M-%S'
-    ./lua_testcode.sh
-    date '+%Y-%m-%d-%H-%M-%S'
-else
-    skip_group lua glibc
 fi
 
 exit 0

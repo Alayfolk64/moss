@@ -47,20 +47,20 @@ capset02 capset02
 # chdir01 chdir01
 chdir04 chdir04
 chmod01 chmod01
-# chmod03 chmod03
-# chmod06 chmod06
-# chown01 chown01
-# chown02 chown02
-# chown03 chown03
-# chown04 chown04
-# chown05 chown05
-# chroot02 chroot02
-# chroot03 chroot03
-# clock_adjtime01 clock_adjtime01
-# clock_adjtime02 clock_adjtime02
-# clock_getres01 clock_getres01
-# clock_nanosleep01 clock_nanosleep01
-# clock_nanosleep04 clock_nanosleep04
+chmod03 chmod03
+chmod06 chmod06
+chown01 chown01
+chown02 chown02
+chown03 chown03
+chown04 chown04
+chown05 chown05
+chroot02 chroot02
+chroot03 chroot03
+clock_adjtime01 clock_adjtime01
+clock_adjtime02 clock_adjtime02
+clock_getres01 clock_getres01
+clock_nanosleep01 clock_nanosleep01
+clock_nanosleep04 clock_nanosleep04
 clock_gettime01 clock_gettime01
 clock_gettime02 clock_gettime02
 clone01 clone01
@@ -289,12 +289,12 @@ getgid03 getgid03
 gethostname01 gethostname01
 gethostname02 gethostname02
 getitimer01 getitimer01
-# getitimer02 getitimer02
-# getpagesize01 getpagesize01
-# getpeername01 getpeername01
-# getpgid01 getpgid01
-# getpgid02 getpgid02
-# getpgrp01 getpgrp01
+getitimer02 getitimer02
+getpagesize01 getpagesize01
+getpeername01 getpeername01
+getpgid01 getpgid01
+getpgid02 getpgid02
+getpgrp01 getpgrp01
 getpid01 getpid01
 getpid02 getpid02
 getppid01 getppid01
@@ -669,7 +669,7 @@ setresuid05 setresuid05
 setreuid01 setreuid01
 setreuid02 setreuid02
 setreuid03 setreuid03
-# setreuid04 setreuid04
+setreuid04 setreuid04
 setreuid05 setreuid05
 setreuid06 setreuid06
 setreuid07 setreuid07
@@ -711,7 +711,7 @@ splice03 splice03
 splice05 splice05
 splice07 splice07
 splice08 splice08
-# splice09 splice09
+splice09 splice09
 stat01 stat01
 stat01_64 stat01_64
 stat02 stat02
@@ -737,15 +737,15 @@ time01 time01
 # times01 times01
 times03 times03
 timerfd01 timerfd01
-# timerfd02 timerfd02
-# timerfd04 timerfd04
-# timerfd_create01 timerfd_create01
-# timerfd_gettime01 timerfd_gettime01
-# timerfd_settime01 timerfd_settime01
-# timer_delete01 timer_delete01
-# timer_delete02 timer_delete02
-# timer_getoverrun01 timer_getoverrun01
-# timer_gettime01 timer_gettime01
+timerfd02 timerfd02
+timerfd04 timerfd04
+timerfd_create01 timerfd_create01
+timerfd_gettime01 timerfd_gettime01
+timerfd_settime01 timerfd_settime01
+timer_delete01 timer_delete01
+timer_delete02 timer_delete02
+timer_getoverrun01 timer_getoverrun01
+timer_gettime01 timer_gettime01
 timer_settime01 timer_settime01
 timer_settime02 timer_settime02
 # timer_settime03 timer_settime03
