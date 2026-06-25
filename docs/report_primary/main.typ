@@ -51,12 +51,12 @@
   align(center)[
     #text(size: 30pt, weight: "bold", report-title)
   ]
-  v(2.25cm)
+  v(0.25cm)
   align(center)[
     #text(size: 20pt, report-subtitle)
   ]
 
-  v(4.2cm)
+  v(5.2cm)
   align(center)[
     #block(width: 10cm)[
       #set text(size: 14pt)
@@ -68,7 +68,7 @@
     ]
   ]
 
-  v(1.2cm)
+  v(2.2cm)
   align(center)[
     #text(size: 13pt, report-date)
   ]

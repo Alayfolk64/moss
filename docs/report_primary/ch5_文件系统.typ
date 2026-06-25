@@ -582,49 +582,71 @@ moss 的 inotify 和 fanotify 实现覆盖了打开、读写、创建、删除�
 
 inotify 和 fanotify 的实现需要在 read、write、open、close 等系统调用路径上插入事件投递逻辑。没有注册监听者时，这些逻辑不应带来任何额外开销。
 
+moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维护全局 watch 计数，计数为零时通知函数立即返回；fanotify 维护全局兴趣掩码，掩码对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听时不进入任何路径解析、mark 匹配或事件队列操作。一旦用户注册了 watch 或 mark，仍会走完整的匹配和投递流程，功能语义不受影响。
+
 == 性能对比
 
-为验证优化效果，使用 iozone 进行文件系统 I/O 性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比优化前后以及 Ubuntu 26.04 基准的性能数据。以下选取部分有代表性的测试项进行对比（单位：kB/sec）：
+为验证文件系统 I/O 优化效果，使用 iozone 进行吞吐性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比对象包括优化前的 StarryOS、优化后的 moss，以及 Ubuntu 26.04 基准。以下选取部分有代表性的测试项进行对比（单位：kB/sec）；为便于观察相对差距，后文图中将 Ubuntu 作为 100% 参考线，展示优化前后相对 Ubuntu 的比例。
 
 #figure(
   table(
-    columns: (2.8fr, 1fr, 1fr, 1fr),
+    columns: (1.5fr, 1fr, 1fr, 1fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([测试场景], [优化前], [优化后], [Ubuntu]),
-    [顺序写\ （initial writers）], [3524], [24714], [51922],
-    [顺序读\ （readers）], [13136], [65286], [104754],
-    [顺序重写\ （rewriters）], [7471], [99332], [72760],
-    [随机读\ （random readers）], [11082], [54088], [57175],
-    [随机写\ （random writers）], [7141], [61903], [59817],
-    [反向读\ （reverse readers）], [10743], [54166], [67361],
-    [pread 并发读], [14184], [124120], [125270],
-    [pwrite 并发写], [3724], [40442], [39335],
+    [顺序写\ （initial writers）], [3524], [33221], [51922],
+    [顺序读\ （readers）], [13136], [81470], [104754],
+    [顺序重写\ （rewriters）], [7471], [81639], [72760],
+    [随机读\ （random readers）], [11082], [57668], [57175],
+    [随机写\ （random writers）], [7141], [59978], [59817],
+    [反向读\ （reverse readers）], [10743], [58824], [67361],
+    [pread 并发读], [14184], [108348], [125270],
+    [pwrite 并发写], [3724], [28263], [39335],
   ),
   caption: [iozone 性能对比（glibc，本地文件系统）],
 ) <tab:iozone-glibc>
 
+如 @tab:iozone-glibc 所示，glibc 环境下优化后的 moss 在顺序读写、随机读写和并发读写场景中均有明显提升。@fig:iozone-glibc-opt 进一步以 Ubuntu 为参考线展示了优化幅度，其中顺序重写、随机读和随机写已经达到或超过 Ubuntu 同场景基准。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/iozone_glibc_优化对比.png", width: 95%)
+    ]
+  ],
+  caption: [iozone 优化前后对比（glibc，Ubuntu 为 100% 参考线）],
+) <fig:iozone-glibc-opt>
+
 #figure(
   table(
-    columns: (2.8fr, 1fr, 1fr, 1fr),
+    columns: (1.5fr, 1fr, 1fr, 1fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([测试场景], [优化前], [优化后], [Ubuntu]),
-    [顺序写\ （initial writers）], [3524], [46887], [44818],
-    [顺序读\ （readers）], [13136], [64080], [98518],
-    [顺序重写\ （rewriters）], [7471], [99475], [69316],
-    [随机读\ （random readers）], [11082], [55908], [91905],
-    [随机写\ （random writers）], [7141], [61222], [57648],
-    [反向读\ （reverse readers）], [10743], [53428], [78861],
-    [pread 并发读], [14184], [77865], [141988],
-    [pwrite 并发写], [3724], [37922], [49303],
+    [顺序写\ （initial writers）], [3524], [26407], [44818],
+    [顺序读\ （readers）], [13136], [62733], [98518],
+    [顺序重写\ （rewriters）], [7471], [62254], [69316],
+    [随机读\ （random readers）], [11082], [43813], [91905],
+    [随机写\ （random writers）], [7141], [51344], [57648],
+    [反向读\ （reverse readers）], [10743], [54217], [78861],
+    [pread 并发读], [14184], [88315], [141988],
+    [pwrite 并发写], [3724], [28192], [49303],
   ),
   caption: [iozone 性能对比（musl，本地文件系统）],
 ) <tab:iozone-musl>
 
-优化前的 StarryOS 在文件系统 I/O 吞吐测试中远低于 Ubuntu 基准。优化后，顺序写提升约 7-13 倍，顺序读提升约 5 倍，随机读写提升约 5-9 倍。优化后的 moss 在部分场景（如顺序重写）已超过 Ubuntu，在其他场景（如顺序读、随机读）接近 Ubuntu 水平。主要优化得益于页缓存容量扩展（从默认配置提升到 1MiB per-file）和统一的 LRU 管理策略。
+musl 环境的整体趋势与 glibc 一致：优化前的 StarryOS 与 Ubuntu 基准差距较大，优化后的 moss 在所有测试项上均显著提升。@fig:iozone-musl-opt 展示了 musl 环境下的相对比例，可以看到顺序写、顺序读、随机写和并发写等场景已大幅缩小与 Ubuntu 的差距。
 
-moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维护全局 watch 计数，计数为零时通知函数立即返回；fanotify 维护全局兴趣掩码，掩码对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听时不进入任何路径解析、mark 匹配或事件队列操作。一旦用户注册了 watch 或 mark，仍会走完整的匹配和投递流程，功能语义不受影响。
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/iozone_musl_优化对比.png", width: 95%)
+    ]
+  ],
+  caption: [iozone 优化前后对比（musl，Ubuntu 为 100% 参考线）],
+) <fig:iozone-musl-opt>
+
+综合两组 libc 结果来看，优化前的 StarryOS 在文件系统 I/O 吞吐测试中远低于 Ubuntu 基准；优化后，顺序写提升约 7-13 倍，顺序读提升约 5 倍，随机读写提升约 5-9 倍。优化效果主要来自页缓存容量扩展（从默认配置提升到 1MiB per-file）和统一的 LRU 管理策略，减少了小块 I/O 中的重复访盘和元数据访问开销。
 
 == 本章小结
 
