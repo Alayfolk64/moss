@@ -586,7 +586,7 @@ moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维�
 
 == 性能对比
 
-为验证文件系统 I/O 优化效果，使用 iozone 进行吞吐性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比对象包括优化前的 StarryOS、优化后的 moss，以及 Ubuntu 26.04 基准。以下选取部分有代表性的测试项进行对比（单位：kB/sec）；为便于观察相对差距，后文图中将 Ubuntu 作为 100% 参考线，展示优化前后相对 Ubuntu 的比例。
+为验证文件系统 I/O 优化效果，使用 iozone 进行吞吐性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比对象包括优化前的 StarryOS、优化后的 moss，以及 Ubuntu 26.04 基准。以下选取部分有代表性的测试项进行对比（单位：kB/sec），并通过柱状图直接展示优化前后的原始吞吐量及相对提升幅度。
 
 #figure(
   table(
@@ -606,15 +606,15 @@ moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维�
   caption: [iozone 性能对比（glibc，本地文件系统）],
 ) <tab:iozone-glibc>
 
-如 @tab:iozone-glibc 所示，glibc 环境下优化后的 moss 在顺序读写、随机读写和并发读写场景中均有明显提升。@fig:iozone-glibc-opt 进一步以 Ubuntu 为参考线展示了优化幅度，其中顺序重写、随机读和随机写已经达到或超过 Ubuntu 同场景基准。
+如 @tab:iozone-glibc 所示，glibc 环境下优化后的 moss 在顺序读写、随机读写和并发读写场景中均有明显提升。@fig:iozone-glibc-opt 进一步对照优化前后的原始吞吐量，柱顶的百分比给出了相对提升幅度。
 
 #figure(
   [
     #align(center)[
-      #image("./pictrues/iozone_glibc_优化对比.png", width: 95%)
+      #image("./pictrues/code/iozone_glibc_before_after.png", width: 96%)
     ]
   ],
-  caption: [iozone 优化前后对比（glibc，Ubuntu 为 100% 参考线）],
+  caption: [iozone 原始吞吐量优化前后对比（glibc）],
 ) <fig:iozone-glibc-opt>
 
 #figure(
@@ -635,15 +635,15 @@ moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维�
   caption: [iozone 性能对比（musl，本地文件系统）],
 ) <tab:iozone-musl>
 
-musl 环境的整体趋势与 glibc 一致：优化前的 StarryOS 与 Ubuntu 基准差距较大，优化后的 moss 在所有测试项上均显著提升。@fig:iozone-musl-opt 展示了 musl 环境下的相对比例，可以看到顺序写、顺序读、随机写和并发写等场景已大幅缩小与 Ubuntu 的差距。
+musl 环境的整体趋势与 glibc 一致：优化前的 StarryOS 吞吐较低，优化后的 moss 在所有测试项上均显著提升。@fig:iozone-musl-opt 直接展示了各场景优化前后的原始吞吐量，其中顺序写、顺序读、随机写和并发写的改善尤为明显。
 
 #figure(
   [
     #align(center)[
-      #image("./pictrues/iozone_musl_优化对比.png", width: 95%)
+      #image("./pictrues/code/iozone_musl_before_after.png", width: 96%)
     ]
   ],
-  caption: [iozone 优化前后对比（musl，Ubuntu 为 100% 参考线）],
+  caption: [iozone 原始吞吐量优化前后对比（musl）],
 ) <fig:iozone-musl-opt>
 
 综合两组 libc 结果来看，优化前的 StarryOS 在文件系统 I/O 吞吐测试中远低于 Ubuntu 基准；优化后，顺序写提升约 7-13 倍，顺序读提升约 5 倍，随机读写提升约 5-9 倍。优化效果主要来自页缓存容量扩展（从默认配置提升到 1MiB per-file）和统一的 LRU 管理策略，减少了小块 I/O 中的重复访盘和元数据访问开销。

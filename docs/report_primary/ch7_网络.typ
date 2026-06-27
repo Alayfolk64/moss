@@ -213,6 +213,19 @@ moss 将轮询策略改为按需触发。`send()`/`recv()` 先尝试一次真实
   caption: [iperf3 性能对比（glibc，本地 loopback）],
 ) <tab:iperf-glibc>
 
+@tab:iperf-glibc 给出了 glibc 环境下各测试项的原始吞吐量。@fig:iperf-glibc-comparison 进一步用柱状图直接对照优化前后的测试结果，并在柱顶标出相对提升幅度。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/code/iperf3_glibc_before_after.png", width: 96%)
+    ]
+  ],
+  caption: [iperf3 原始吞吐量优化前后对比（glibc）],
+) <fig:iperf-glibc-comparison>
+
+musl 环境采用相同的测试场景和统计口径，原始吞吐量如下。
+
 #figure(
   table(
     columns: (2.3fr, 1.1fr, 1.1fr, 1.1fr),
@@ -229,7 +242,20 @@ moss 将轮询策略改为按需触发。`send()`/`recv()` 先尝试一次真实
   caption: [iperf3 性能对比（musl，本地 loopback）],
 ) <tab:iperf-musl>
 
+@fig:iperf-musl-comparison 使用相同方式展示 musl 结果。可以看到，TCP 和 UDP 各场景均有显著提升，其中 TCP 并发以及 UDP 基本、反向场景的改善尤为明显。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/code/iperf3_musl_before_after.png", width: 96%)
+    ]
+  ],
+  caption: [iperf3 原始吞吐量优化前后对比（musl）],
+) <fig:iperf-musl-comparison>
+
 === netperf 测试结果
+
+iperf3 侧重持续吞吐，netperf 则进一步覆盖流式传输、请求响应和连接建立等不同负载。由于这些子项的原始单位并不完全相同，表格保留各自单位，后续柱状图也按单位分区展示。
 
 #figure(
   table(
@@ -246,7 +272,18 @@ moss 将轮询策略改为按需触发。`send()`/`recv()` 先尝试一次真实
   caption: [netperf 性能对比（glibc，本地 loopback）],
 ) <tab:netperf>
 
-优化前的 moss 在 loopback 吞吐测试中远低于 Ubuntu 基准，主要原因是 loopback 流量仍走完整网络栈路径且受拥塞窗口限制。优化后，TCP loopback 吞吐提升约 6-27 倍，UDP loopback 吞吐提升约 32-64 倍，已接近或部分超过 Ubuntu 在同等测试环境下的表现。netperf TCP_STREAM 从约 11 Mbits/sec 提升至 299 Mbits/sec，与 Ubuntu 的 277 Mbits/sec 基本持平。
+为避免把 Mbits/s 与传输率/秒混在同一坐标轴中，@fig:netperf-glibc-comparison 将 TCP_STREAM 单独绘制，其余事务率项目使用另一坐标区，并直接比较优化前后的原始结果。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/code/netperf_glibc_before_after.png", width: 96%)
+    ]
+  ],
+  caption: [netperf 原始性能优化前后对比（glibc）],
+) <fig:netperf-glibc-comparison>
+
+综合表格和柱状图可见，优化前的 moss 在 loopback 吞吐测试中远低于 Ubuntu 基准，主要原因是 loopback 流量仍走完整网络栈路径且受拥塞窗口限制。优化后，TCP loopback 吞吐提升约 6-27 倍，UDP loopback 吞吐提升约 32-64 倍，已接近或部分超过 Ubuntu 在同等测试环境下的表现。netperf TCP_STREAM 从约 11 Mbits/sec 提升至 299 Mbits/sec，超过 Ubuntu 的 277 Mbits/sec；UDP_STREAM 和 TCP_RR 也超过对应 Ubuntu 参考值，而 UDP_RR 与 TCP_CRR 仍有进一步优化空间。
 
 == 小结
 
