@@ -5,13 +5,13 @@
 
 = QEMU 虚拟硬件平台与设备驱动
 
-初赛阶段在两种 QEMU 虚拟机上运行：RISC-V64（`qemu-system-riscv64 -machine virt`）和 LoongArch64（`qemu-system-loongarch64`）。两种架构的页表格式、异常编码、中断控制器和设备总线完全不同。把这些差异直接暴露给上层，调度器、内存管理器和系统调用处理代码就会散布架构条件分支。本章说明 moss 如何通过三层平台抽象将差异封死在平台实现层，VirtIO 则在两种架构上提供行为一致的设备接口。
+初赛阶段在两种 QEMU 虚拟机上运行：RISC-V64（`qemu-system-riscv64 -machine virt`）和 LoongArch64（`qemu-system-loongarch64`）。两种架构的页表格式、异常编码、中断控制器和设备总线完全不同。把这些差异直接暴露给上层，调度器、内存管理器和系统调用处理代码就会散布架构条件分支。本章说明 Moss 如何通过三层平台抽象将差异封死在平台实现层，VirtIO 则在两种架构上提供行为一致的设备接口。
 
 == 平台抽象层架构
 
 === 三层隔离设计
 
-moss 将硬件差异分三层处理，每层只吸收它自己那一层的差异。
+Moss 将硬件差异分三层处理，每层只吸收它自己那一层的差异。
 
 第一层是 `axcpu`，处理 CPU 本身的寄存器和异常机制。`axcpu/src/riscv/` 实现 RISC-V 的 Trap 上下文保存与恢复、用户态进入与返回；`axcpu/src/loongarch64/` 做同样的事，用 LoongArch 的 `era`/`badv` 等 CSR。两边向上提供相同的 `TrapFrame`、`context_switch`、`uspace` 接口。
 

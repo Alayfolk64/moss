@@ -9,7 +9,7 @@
 
 正如众计算机学子所周知的 Linux 设计哲学 —— “一切皆文件” 。文件系统要解决的核心问题是：让用户程序用同一套接口（open/read/write/stat）去访问性质完全不同的对象——磁盘上的 ext4 文件、内存里的临时文件、内核生成的 /proc 条目和/dev 下的设备节点。这些对象的存储方式、内容来源和访问语义差异很大，但用户程序不该感知这种差异。
 
-moss 的文件系统沿用 StarryOS 的做法分四层来处理这个问题。最底层 axfs-ng-vfs 只定义接口：文件系统是什么、目录节点能做什么、文件节点能做什么，不涉及任何存储细节。axfs 在此之上实现路径解析、页缓存和具体的 ext4/FAT32 后端。再往上，kernel/src/file/ 提供 Linux 兼容的 `FileLike` 接口，把 VFS 的文件对象、管道、socket、设备文件统一进一张文件描述符表。最顶层 syscall/fs/ 负责把系统调用的参数翻译成对上层接口的调用。
+Moss 的文件系统沿用 StarryOS 的做法分四层来处理这个问题。最底层 axfs-ng-vfs 只定义接口：文件系统是什么、目录节点能做什么、文件节点能做什么，不涉及任何存储细节。axfs 在此之上实现路径解析、页缓存和具体的 ext4/FAT32 后端。再往上，kernel/src/file/ 提供 Linux 兼容的 `FileLike` 接口，把 VFS 的文件对象、管道、socket、设备文件统一进一张文件描述符表。最顶层 syscall/fs/ 负责把系统调用的参数翻译成对上层接口的调用。
 
 #figure(
   [
@@ -17,10 +17,10 @@ moss 的文件系统沿用 StarryOS 的做法分四层来处理这个问题。�
       #image("./pictrues/图-5-1.svg", width: 80%)
     ]
   ],
-  caption: [moss 文件系统分层架构],
+  caption: [Moss 文件系统分层架构],
 ) <fig:fs-arch>
 
-这种分层的好处是职责清晰：路径解析、挂载语义、权限检查在各自的层处理，不会混入具体文件系统的实现里。StarryOS 提供了这套框架的雏形，moss 的工作主要集中在挂载命名空间的完整化、页缓存的统一管理、I/O 多路复用和文件事件通知上。
+这种分层的好处是职责清晰：路径解析、挂载语义、权限检查在各自的层处理，不会混入具体文件系统的实现里。StarryOS 提供了这套框架的雏形，Moss 的工作主要集中在挂载接口的补充、页缓存的统一管理、I/O 多路复用和文件事件通知上。
 
 == 挂载子系统
 
@@ -41,12 +41,12 @@ moss 的文件系统沿用 StarryOS 的做法分四层来处理这个问题。�
     [`MS_BIND`], [bind mount：让已有目录树在另一条路径下可见，不复制任何文件],
     [`MS_MOVE`], [迁移挂载点：将挂载从一个路径移到另一个路径，不卸载重挂],
     [`MS_REMOUNT`], [修改现有挂载的标志，如将读写挂载改为只读],
-    [`MS_PRIVATE`], [命名空间隔离：本挂载点的变动不向父/子命名空间传播],
+    [`MS_PRIVATE`], [接受该标志并校验目标，挂载传播关系尚未实现],
   ),
   caption: [sys_mount 支持的操作模式],
 ) <tab:mount-flags>
 
-bind mount 值得单独说一下。它不创建新的文件系统实例，只是让同一棵目录树从另一条路径也可以访问到。容器场景里常用这个：把宿主机的某个目录以只读方式 bind mount 进容器，容器内用户能读到内容，但任何写操作都会被挂载标志拦下来，底层数据不受影响。moss 的实现直接复用源挂载点对象，新的 `Location` 指向同一个 `Mountpoint`，device_id 天然相同，`stat()` 结果与 Linux 一致。
+bind mount 值得单独说一下。它不创建新的文件系统实例，只是让同一棵目录树从另一条路径也可以访问到，容器常用它把宿主机目录接入自身目录树。Moss 的实现直接复用源挂载点对象，新的 `Location` 指向同一个 `Mountpoint`，device_id 天然相同，`stat()` 结果与 Linux 一致。
 
 `sys_umount2` 卸载时会向所有关注该挂载点的 inotify watch 发送 IN_UNMOUNT 事件，监视 /mnt 的应用能在文件系统被卸载时收到通知。
 
@@ -54,7 +54,7 @@ bind mount 值得单独说一下。它不创建新的文件系统实例，只是
 
 传统 `sys_mount` 有个历史包袱：调用者必须同时拥有源设备的访问权限和目标路径的挂载权限，两者缺一不可。在容器场景里这很别扭——容器进程应该能在自己的命名空间里自由挂载，却因为没有宿主机路径的权限而卡住。
 
-Linux 5.2 针对这个问题引入了基于 fd 的新式挂载 API。StarryOS 没有实现这套接口，moss 参考 Linux 内核的语义补上了这部分，把挂载拆成几个独立步骤：
+基于 fd 的新式挂载 API 将配置和挂载拆开。StarryOS 没有实现这套接口，Moss 补上了其中的主要路径：
 
 #figure(
   [
@@ -63,13 +63,13 @@ Linux 5.2 针对这个问题引入了基于 fd 的新式挂载 API。StarryOS �
           fsconfig(fd, "source", "/dev/loop0")  // 配置设备路径
           fsconfig(fd, "cmd", "create")          // 完成配置，准备挂载
     mfd = fsmount(fd, 0, 0)                     // 实例化为挂载对象 fd
-          move_mount(mfd, "/mnt")               // 将挂载接入目录树
+          move_mount(mfd, "", "/mnt", MOVE_MOUNT_F_EMPTY_PATH)
     ```
   ],
   caption: [新式挂载 API 的调用流程],
 ) <lst:new-mount-api>
 
-关键在于 `fsopen` 到 `fsmount` 这几步可以在无特权的用户命名空间里完成，只有最后的 `move_mount` 才需要对目标路径的权限。`open_tree` 反向工作，把现有的挂载子树克隆成一个 fd，可以跨命名空间传递再接入。这五个调用共同构成了容器运行时和命名空间工具所依赖的挂载语义基础。
+当前实现支持 `fsopen`、`fsconfig`、`fsmount`，以及 detached mount fd 配合空路径的 `move_mount`；路径形式的 `move_mount`、挂载传播和独立挂载命名空间尚未实现。
 
 == VFS 抽象层
 
@@ -77,7 +77,7 @@ Linux 5.2 针对这个问题引入了基于 fd 的新式挂载 API。StarryOS �
 
 路径解析看起来简单——逐级查目录——但挂载的存在让它变得复杂。`/mnt` 可能挂载了一个 ext4 镜像，`/mnt` 里的某个子目录又做了 bind mount。穿越挂载点时，"当前位置"不只是一个目录项，还包括它处于哪个挂载上下文里——因为挂载标志（只读、noatime 等）是挂载级别的属性，同一个目录项在不同挂载下行为可以不同。
 
-moss 用 `Location` 把这两者绑在一起：
+Moss 用 `Location` 把这两者绑在一起：
 
 #figure(
   [
@@ -115,7 +115,7 @@ moss 用 `Location` 把这两者绑在一起：
 
 === 节点能力标志
 
-把 pipe、procfs 节点、普通文件、设备节点统一抽象为"文件节点"，上层就需要知道怎么对待它们的差异。一种做法是在 VFS 里做类型判断，但这样每增加一种节点类型都要修改上层，很不利于代码的实现。moss 的做法是让节点自己声明 I/O 契约，用 `NodeFlags` 表达。
+把 pipe、procfs 节点、普通文件、设备节点统一抽象为"文件节点"，上层就需要知道怎么对待它们的差异。一种做法是在 VFS 里做类型判断，但这样每增加一种节点类型都要修改上层，很不利于代码的实现。Moss 的做法是让节点自己声明 I/O 契约，用 `NodeFlags` 表达。
 
 #figure(
   table(
@@ -139,7 +139,7 @@ moss 用 `Location` 把这两者绑在一起：
 
 路径解析需要处理几个彼此独立的问题：每个进程有自己的工作目录和 chroot 根；符号链接可能形成循环；穿越挂载点要切换文件系统上下文。
 
-moss 用 `scope_local!` 给每个任务绑定一个独立的 `FsContext`，里面存着 `root_dir` 和 `current_dir`。`scope_local!` 是 ArceOS 提供的机制，类似线程局部存储，但生命周期和任务绑定，fork/clone 时从父任务继承。`root_dir` 既是 chroot 的锚点，也是路径向上遍历的上界——遇到 `..` 到达根之后继续向上，会被静默截断，这正是 chroot 应有的行为。
+Moss 用 `scope_local!` 给每个任务绑定一个独立的 `FsContext`，里面存着 `root_dir` 和 `current_dir`。`scope_local!` 是 ArceOS 提供的机制，类似线程局部存储，但生命周期和任务绑定，fork/clone 时从父任务继承。`root_dir` 既是 chroot 的锚点，也是路径向上遍历的上界——遇到 `..` 到达根之后继续向上，会被静默截断，这正是 chroot 应有的行为。
 
 符号链接的循环检测靠一个共享计数器 `follow_count`，它以可变引用的形式贯穿整个解析调用栈。A→B→C 这样的间接链，三次跳转都计入同一个计数器，不会因为"每次只跟一跳"而绕过上限。上限设为 40，与 Linux 一致，超过就返回错误，避免死循环。
 
@@ -174,9 +174,9 @@ moss 用 `scope_local!` 给每个任务绑定一个独立的 `FsContext`，里�
 
 === 磁盘文件系统
 
-ext4 是承载根文件系统和用户程序的主力，moss 通过 `lwext4_rust`（lwext4 C 库的 Rust FFI 绑定）接入，底层块访问通过 `BlockDriverOps` trait 向下适配。这里有一个实际的测试问题：LTP 中很多用例会在运行时用 `mount` 把一个镜像文件挂载成 ext4，然后在里面做文件操作测试。要支持这个场景，需要能把普通文件当成块设备用。
+ext4 是承载根文件系统和用户程序的主力，Moss 通过 `lwext4_rust`（lwext4 C 库的 Rust FFI 绑定）接入，底层块访问通过 `BlockDriverOps` trait 向下适配。这里有一个实际的测试问题：LTP 中很多用例会在运行时用 `mount` 把一个镜像文件挂载成 ext4，然后在里面做文件操作测试。要支持这个场景，需要能把普通文件当成块设备用。
 
-moss 为此实现了 `LoopFileBlockDevice`：
+Moss 为此实现了 `LoopFileBlockDevice`：
 
 #figure(
   [
@@ -212,7 +212,7 @@ FAT32 基于 `starry-fatfs`（StarryOS 基础层的纯 Rust 实现）接入，�
 
 === 内存文件系统
 
-tmpfs 的核心需求是：快速创建销毁文件，不访问磁盘，支持 /dev/shm 和 /tmp 这类高频场景。moss 实现的 `MemoryFs` 在 inode 管理和文件内容存储上都做了针对性的设计。
+tmpfs 的核心需求是：快速创建销毁文件，不访问磁盘，支持 /dev/shm 和 /tmp 这类高频场景。Moss 实现的 `MemoryFs` 在 inode 管理和文件内容存储上都做了针对性的设计。
 
 inode 用 `slab::Slab<Arc<Inode>>` 分配。slab 分配的好处是 inode 号直接等于 slab 下标加一，这样分配和按号查找都是 O(1)，不需要维护额外的 id 映射表。
 
@@ -248,7 +248,7 @@ inode 用 `slab::Slab<Arc<Inode>>` 分配。slab 分配的好处是 inode 号直
 
 procfs 和 devfs 解决的是一个本质问题：/proc 里的文件内容由内核按当前状态动态生成，/dev 下的设备文件背后是驱动而不是存储，但两者都需要出现在文件系统的路径空间里，能被普通的 open/read/stat 访问。
 
-moss 用 `SimpleFs` 框架处理这类伪文件系统，它提供 slab inode 分配和基本的目录结构，具体的目录内容和文件读取逻辑通过 `SimpleDirOps` trait 注入。procfs 和 devfs 只需要实现"这个目录下有哪些条目"和"读这个文件返回什么"，其他的框架处理。两者的目录结构如下：
+Moss 用 `SimpleFs` 框架处理这类伪文件系统，它提供 slab inode 分配和基本的目录结构，具体的目录内容和文件读取逻辑通过 `SimpleDirOps` trait 注入。procfs 和 devfs 只需要实现"这个目录下有哪些条目"和"读这个文件返回什么"，其他的框架处理。两者的目录结构如下：
 
 #figure(
   [
@@ -275,7 +275,7 @@ moss 用 `SimpleFs` 框架处理这类伪文件系统，它提供 slab inode 分
 
 procfs 中 `[pid]/` 目录是动态的，每个运行中的进程对应一个。其中有个容易出错的地方：进程可能在 procfs 条目被访问的同时退出。`ProcessTaskDir` 用 `Weak<Process>` 持有进程引用，升级 `Weak` 失败时直接返回空目录，不会悬空也不会 panic。
 
-devfs 里 `/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并不存在，但 stat 时要返回正确的 major/minor 号。moss 用全局 `SPECIAL_NODES` 表处理这个问题——stat 调用时检查路径是否在表里，如果是则用表项中的 mode 和 rdev 覆盖底层节点的返回值。这个覆盖发生在 VFS 层，不需要修改任何文件系统后端。
+devfs 里 `/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并不存在，但 stat 时要返回正确的 major/minor 号。Moss 用全局 `SPECIAL_NODES` 表处理这个问题——stat 调用时检查路径是否在表里，如果是则用表项中的 mode 和 rdev 覆盖底层节点的返回值。这个覆盖发生在 VFS 层，不需要修改任何文件系统后端。
 
 == I/O 子系统
 
@@ -292,7 +292,7 @@ devfs 里 `/dev/null`、`/dev/zero` 等设备文件在真实文件系统上并�
 
 === 页缓存
 
-moss 采用"全局索引 + per-file LRU"的结构管理页缓存：全局表以 `(fs_ptr, inode)` 为键记录各文件的缓存入口，真正的数据页缓存在每个文件自己的 LRU 里，默认容量 256 个 4KiB 页（1MiB）。这样设置有两个好处：单个文件的大规模顺序扫描不会把其他文件的缓存挤出；对于能完整装入缓存的小文件，一旦内容被读入，后续的重复读、非顺序访问都可以直接命中缓存，无需再访问底层存储。
+Moss 采用"全局索引 + per-file LRU"的结构管理页缓存：全局表以 `(fs_ptr, inode)` 为键记录各文件的缓存入口，真正的数据页缓存在每个文件自己的 LRU 里，默认容量 256 个 4KiB 页（1MiB）。这样设置有两个好处：单个文件的大规模顺序扫描不会把其他文件的缓存挤出；对于能完整装入缓存的小文件，一旦内容被读入，后续的重复读、非顺序访问都可以直接命中缓存，无需再访问底层存储。
 
 这个结构的关键代码如@lst:file-cache-record 所示。全局表只负责"同一个文件找到同一份缓存记录"，页数据本身仍然放在每个文件自己的 `CachedFileShared` 里。
 
@@ -321,7 +321,7 @@ moss 采用"全局索引 + per-file LRU"的结构管理页缓存：全局表以 
 
 tmpfs 走 in-memory 路径：它也通过全局索引找到自己的缓存记录，但记录中的 `in_memory` 为 true，内部使用无界缓存，且不需要写回块设备。读未分配页时直接返回全局 `ZERO_PAGE` 中对应的内容，写入全零数据时不分配真实缓存页，能够支持稀疏文件或者全零写入。
 
-写路径做了一项针对性的优化，避免 read-before-write。页缓存以 4KiB 为单位操作，朴素的实现在目标页缺失时会先读出完整旧页再部分覆盖——这对修改已有文件的中间段是必要的，但对新文件顺序写或 EOF 之后 append 而言，旧内容根本不存在或即将全部被覆盖，先读旧页纯属浪费。moss 用 `can_zero_fill_write_page` 判断：如果当前页完全在旧 EOF 之后，或者本次写入从页内偏移 0 开始且覆盖了页内所有旧有效内容时，直接分配清零页而不调用底层 `read_at()`，消除了新页写入前的无效读取。
+写路径做了一项针对性的优化，避免 read-before-write。页缓存以 4KiB 为单位操作，朴素的实现在目标页缺失时会先读出完整旧页再部分覆盖——这对修改已有文件的中间段是必要的，但对新文件顺序写或 EOF 之后 append 而言，旧内容根本不存在或即将全部被覆盖，先读旧页纯属浪费。Moss 用 `can_zero_fill_write_page` 判断：如果当前页完全在旧 EOF 之后，或者本次写入从页内偏移 0 开始且覆盖了页内所有旧有效内容时，直接分配清零页而不调用底层 `read_at()`，消除了新页写入前的无效读取。
 
 脏页写回时，所有脏页按页号排序，连续页合并成一批写入，每批最多 16 页（64KiB）。如@fig:dirty-writeback 所示，相比逐页提交，顺序写场景下的块设备请求数量可以明显减少，对 fsync、close/drop 等需要落盘的路径尤为有效。
 
@@ -334,11 +334,11 @@ tmpfs 走 in-memory 路径：它也通过全局索引找到自己的缓存记录
   caption: [脏页按页号排序后合并为批次写回],
 ) <fig:dirty-writeback>
 
-O_DIRECT 读写绕过页缓存，但同一文件可能同时有 cached fd 在访问，如果进程 A 用 cached I/O 写了数据，还在缓存里没落盘，此时进程 B 又要用 direct I/O 读同一段，如果不处理，B 可能读到旧数据。为维护一致性，moss 在 direct 读前先将目标范围内的 dirty cached 页写回，direct 写后使对应干净页失效，这样两条路径就不会读到不一致的内容。
+O_DIRECT 读写绕过页缓存，但同一文件可能同时有 cached fd 在访问，如果进程 A 用 cached I/O 写了数据，还在缓存里没落盘，此时进程 B 又要用 direct I/O 读同一段，如果不处理，B 可能读到旧数据。为维护一致性，Moss 在 direct 读前先将目标范围内的 dirty cached 页写回，direct 写后使对应干净页失效，这样两条路径就不会读到不一致的内容。
 
 === 元数据缓存
 
-频繁的 stat 调用和读写带来的时间戳更新如果每次都穿透底层文件系统，会在 I/O 密集场景产生大量元数据写。如果一个任务只是想读文件，却要附加一次写的任务，就会产生很多无用的开销。为解决这一问题，moss 在 VFS 层引入 inode 元数据缓存，以 `(fs_ptr, inode)` 为键将 size、atime、mtime、ctime 缓存在内存中。目录的 nlink 随子节点增删变化，缓存容易读到过期值，被排除在外；`NON_CACHEABLE` 节点（procfs、sysfs 等）内容动态生成，同样不进入缓存。
+频繁的 stat 调用和读写带来的时间戳更新如果每次都穿透底层文件系统，会在 I/O 密集场景产生大量元数据写。如果一个任务只是想读文件，却要附加一次写的任务，就会产生很多无用的开销。为解决这一问题，Moss 在 VFS 层引入 inode 元数据缓存，以 `(fs_ptr, inode)` 为键将 size、atime、mtime、ctime 缓存在内存中。目录的 nlink 随子节点增删变化，缓存容易读到过期值，被排除在外；`NON_CACHEABLE` 节点（procfs、sysfs 等）内容动态生成，同样不进入缓存。
 
 元数据缓存的核心字段如@lst:metadata-cache 所示。它只保留当前报告需要理解的字段：一份缓存后的 `metadata`，以及两个表示"还有东西没提交到底层"的 dirty 标记。
 
@@ -370,9 +370,9 @@ O_DIRECT 读写绕过页缓存，但同一文件可能同时有 cached fd 在访
 
 预读在应用程序实际访问页面之前提前将文件内容放入页缓存，降低后续访问的等待时间。
 
-StarryOS 基线的 `fadvise(WILLNEED)` 只做参数检查，不实际预读。moss 补全了这条路径：`sys_readahead()` 和 `fadvise(POSIX_FADV_WILLNEED)` 找到文件对应的 cached backend，按请求范围同步地将页面放入缓存，单次最多 1MiB。direct I/O 场景保持 no-op，符合绕过缓存的语义。
+StarryOS 基线的 `fadvise(WILLNEED)` 只做参数检查，不实际预读。Moss 补全了这条路径：`sys_readahead()` 和 `fadvise(POSIX_FADV_WILLNEED)` 找到文件对应的 cached backend，按请求范围同步地将页面放入缓存，单次最多 1MiB。direct I/O 场景保持 no-op，符合绕过缓存的语义。
 
-mmap 访问时每次 page fault 只处理当前缺失页。moss 在 fault 后检查 `last_fault_page`：若当前页号比上次大 1，说明是顺序扫描，额外将后续 4 页预热入缓存。预读只把文件页放入页缓存，不建立页表映射，后续 fault 命中缓存时等待时间更短，且不影响随机访问场景下单次 fault 的延迟。
+mmap 访问时每次 page fault 只处理当前缺失页。Moss 在 fault 后检查 `last_fault_page`：若当前页号比上次大 1，说明是顺序扫描，额外将后续 4 页预热入缓存。预读只把文件页放入页缓存，不建立页表映射，后续 fault 命中缓存时等待时间更短，且不影响随机访问场景下单次 fault 的延迟。
 
 共享匿名映射的物理页采用懒分配：初始化时只创建占位槽，首次 fault 时才申请物理页，未被访问的页不占用真实内存。
 
@@ -380,9 +380,9 @@ mmap 访问时每次 page fault 只处理当前缺失页。moss 在 fault 后检
 
 服务器程序需要同时等待多个 fd 上的事件，轮询是一种做法但 CPU 的开销极大。正确的实现应该是：没有事件时挂起任务，有事件时精准唤醒。
 
-moss 实现了 select、poll 和 epoll 三种接口。select 和 poll 的实现相对直接：通过 `block_on(timeout(poll_io(...)))` 把当前任务交给调度器，等到有 fd 就绪或超时时再返回，全程不占用 CPU。
+Moss 实现了 select、poll 和 epoll 三种接口。select 和 poll 的实现相对直接：通过 `block_on(timeout(poll_io(...)))` 把当前任务交给调度器，等到有 fd 就绪或超时时再返回，全程不占用 CPU。
 
-epoll 需要更精细的控制，因为它要在 fd 就绪时立刻通知，而不是等调用者再次轮询。moss 的实现里，每个被监视的 fd 对应一个 `EpollInterest`，持有一个实现了 `std::task::Wake` 的 `InterestWaker`。当底层文件对象（pipe、socket、设备等）的状态变化时，它调用 `InterestWaker::wake()`，后者把这个 interest 推入 epoll 的 ready queue，并唤醒阻塞在 `epoll_wait` 上的任务。整条路径是事件驱动的，没有任何轮询。
+epoll 需要更精细的控制，因为它要在 fd 就绪时立刻通知，而不是等调用者再次轮询。Moss 的实现里，每个被监视的 fd 对应一个 `EpollInterest`，持有一个实现了 `std::task::Wake` 的 `InterestWaker`。当底层文件对象（pipe、socket、设备等）的状态变化时，它调用 `InterestWaker::wake()`，后者把这个 interest 推入 epoll 的 ready queue，并唤醒阻塞在 `epoll_wait` 上的任务。整条路径是事件驱动的，没有任何轮询。
 
 epoll 的核心状态可以见@lst:epoll-inner 这一段：一张"关注表"记录用户关心哪些 fd，一个 ready queue 记录已经就绪的 fd，再加一个 `PollSet` 用来唤醒睡在 `epoll_wait` 上的任务。
 
@@ -420,22 +420,22 @@ epoll 还支持三种触发模式：
   caption: [epoll 的三种触发模式],
 ) <tab:epoll-modes>
 
-嵌套 epoll（把一个 epoll fd 加入另一个 epoll）需要防止形成环形等待。moss 在 `epoll_ctl` 时递归检查，深度上限 5 层，同时记录已访问的实例指针来发现环。
+嵌套 epoll（把一个 epoll fd 加入另一个 epoll）需要防止形成环形等待。Moss 在 `epoll_ctl` 时递归检查，深度上限 5 层，同时记录已访问的实例指针来发现环。
 
-`ppoll` 和 `pselect6` 需要原子地切换信号掩码然后进入等待——如果先换掩码再等待，中间有个窗口期可能丢失信号。moss 在进入 `block_on` 前完成掩码切换，返回时恢复，保证原子语义。
+`ppoll` 和 `pselect6` 需要原子地切换信号掩码然后进入等待——如果先换掩码再等待，中间有个窗口期可能丢失信号。Moss 在进入 `block_on` 前完成掩码切换，返回时恢复，保证原子语义。
 
 == 文件元数据与权限
 
 === 元数据查询
 
-stat 系列（stat/fstat/lstat）返回固定字段集合。moss 参考 Linux 语义实现了扩展版本 statx，在兼容 stat 全部字段的基础上增加了两类能力：文件系统无法提供的字段（如 `stx_btime` 创建时间）可以用 `STATX_ATTR_*` 标志标记为"不可用"而不是返回错误；`stx_mnt_id` 返回挂载 ID，让调用者知道这个文件属于哪个挂载点。`SPECIAL_NODES` 表中的设备文件在 stat 时用表项值覆盖 mode 和 rdev。
+stat 系列（stat/fstat/lstat）返回固定字段集合。Moss 参考 Linux 语义实现了扩展版本 statx，在兼容 stat 全部字段的基础上增加了两类能力：文件系统无法提供的字段（如 `stx_btime` 创建时间）可以用 `STATX_ATTR_*` 标志标记为"不可用"而不是返回错误；`stx_mnt_id` 返回挂载 ID，让调用者知道这个文件属于哪个挂载点。`SPECIAL_NODES` 表中的设备文件在 stat 时用表项值覆盖 mode 和 rdev。
 
 #figure(
   table(
     columns: (1.3fr, 1.2fr, 2.8fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
-    table.header([接口], [字段集合], [moss 实现要点]),
+    table.header([接口], [字段集合], [Moss 实现要点]),
     [`stat/fstat/lstat`], [固定字段集], [设备文件的 mode/rdev 由 `SPECIAL_NODES` 表覆盖],
     [`statx`], [可选扩展字段], [`STATX_ATTR_*` 标记不可用字段；`stx_mnt_id` 报告挂载点 ID],
   ),
@@ -444,7 +444,7 @@ stat 系列（stat/fstat/lstat）返回固定字段集合。moss 参考 Linux �
 
 === 权限检查
 
-`access` 和 `faccessat2` 看起来只是查 mode 位，实际要处理几条叠加规则，还要区分使用哪套 uid。moss 把这些都做全了：
+`access` 和 `faccessat2` 看起来只是查 mode 位，实际要处理几条叠加规则，还要区分使用哪套 uid。Moss 把这些都做全了：
 
 #figure(
   table(
@@ -461,13 +461,13 @@ stat 系列（stat/fstat/lstat）返回固定字段集合。moss 参考 Linux �
   caption: [权限检查的叠加规则与 uid 语义],
 ) <tab:access-rules>
 
-StarryOS 不区分 real 与 effective uid，moss 补上了这一差异。
+StarryOS 不区分 real 与 effective uid，Moss 补上了这一差异。
 
-inode flags（`FS_IMMUTABLE_FL`、`FS_APPEND_FL` 等）不依赖文件系统后端，moss 用全局 `INODE_FLAGS` 表按路径存储，`FS_IOC_GETFLAGS`/`FS_IOC_SETFLAGS` ioctl 读写，stat 和写操作时查表叠加到检查逻辑里。xattr 在 MemoryFs 上有完整实现，ext4 通过 lwext4 接口透传。
+inode flags（`FS_IMMUTABLE_FL`、`FS_APPEND_FL` 等）不依赖文件系统后端，Moss 用全局 `INODE_FLAGS` 表按路径存储，`FS_IOC_GETFLAGS`/`FS_IOC_SETFLAGS` ioctl 读写，stat 和写操作时查表叠加到检查逻辑里。xattr 在 MemoryFs 上有完整实现，ext4 通过 lwext4 接口透传。
 
 == 文件事件通知
 
-用户程序有时需要知道文件系统上发生了什么——备份工具要感知哪些文件被修改，安全软件要在文件被访问时介入。Linux 提供了两套机制，能够覆盖不同的使用场景，moss 对此也进行了实现。
+用户程序有时需要知道文件系统上发生了什么——备份工具要感知哪些文件被修改，安全软件要在文件被访问时介入。Linux 提供了两套机制，能够覆盖不同的使用场景，Moss 对此也进行了实现。
 
 === inotify
 
@@ -509,7 +509,7 @@ inotify 面向具体文件或目录的变化监视。用户态对目标路径添
   caption: [inotify：watch 表和事件队列],
 ) <lst:inotify-structs>
 
-@fig:inotify-flow 展示了 inotify 从注册 watch 到用户态取出事件的完整数据流，其中 rename 产生的 IN_MOVED_FROM 与 IN_MOVED_TO 通过相同的 cookie 值关联为一对。moss 在 VFS 的创建、删除、重命名和属性更新路径上插入通知点，卸载时向相关 watch 发送 IN_UNMOUNT。
+@fig:inotify-flow 展示了 inotify 从注册 watch 到用户态取出事件的完整数据流，其中 rename 产生的 IN_MOVED_FROM 与 IN_MOVED_TO 通过相同的 cookie 值关联为一对。Moss 在 VFS 的创建、删除、重命名和属性更新路径上插入通知点，卸载时向相关 watch 发送 IN_UNMOUNT。
 
 #figure(
   [
@@ -576,17 +576,17 @@ fanotify 的核心也是“关注集合 + 事件队列”，但 mark 的作用�
   caption: [fanotify 权限事件时序],
 ) <fig:fanotify-perm>
 
-moss 的 inotify 和 fanotify 实现覆盖了打开、读写、创建、删除、重命名、关闭等路径上的通知点。
+Moss 的 inotify 和 fanotify 实现覆盖了打开、读写、创建、删除、重命名、关闭等路径上的通知点。
 
 === 无监听快速路径
 
 inotify 和 fanotify 的实现需要在 read、write、open、close 等系统调用路径上插入事件投递逻辑。没有注册监听者时，这些逻辑不应带来任何额外开销。
 
-moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维护全局 watch 计数，计数为零时通知函数立即返回；fanotify 维护全局兴趣掩码，掩码对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听时不进入任何路径解析、mark 匹配或事件队列操作。一旦用户注册了 watch 或 mark，仍会走完整的匹配和投递流程，功能语义不受影响。
+Moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维护全局 watch 计数，计数为零时通知函数立即返回；fanotify 维护全局兴趣掩码，掩码对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听时不进入任何路径解析、mark 匹配或事件队列操作。一旦用户注册了 watch 或 mark，仍会走完整的匹配和投递流程，功能语义不受影响。
 
 == 性能对比
 
-为验证文件系统 I/O 优化效果，使用 iozone 进行吞吐性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比对象包括优化前的 StarryOS、优化后的 moss，以及 Ubuntu 26.04 基准。以下选取部分有代表性的测试项进行对比（单位：kB/sec），并通过柱状图直接展示优化前后的原始吞吐量及相对提升幅度。
+为验证文件系统 I/O 优化效果，使用 iozone 进行吞吐性能测试。所有测试均在本地 QEMU 虚拟机（RISC-V 架构）上运行，单核，1GB 内存。对比对象包括优化前的 StarryOS、优化后的 Moss，以及 Ubuntu 26.04 基准。以下选取部分有代表性的测试项进行对比（单位：kB/sec），并通过柱状图直接展示优化前后的原始吞吐量及相对提升幅度。
 
 #figure(
   table(
@@ -606,7 +606,7 @@ moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维�
   caption: [iozone 性能对比（glibc，本地文件系统）],
 ) <tab:iozone-glibc>
 
-如 @tab:iozone-glibc 所示，glibc 环境下优化后的 moss 在顺序读写、随机读写和并发读写场景中均有明显提升。@fig:iozone-glibc-opt 进一步对照优化前后的原始吞吐量，柱顶的百分比给出了相对提升幅度。
+如 @tab:iozone-glibc 所示，glibc 环境下优化后的 Moss 在顺序读写、随机读写和并发读写场景中均有明显提升。@fig:iozone-glibc-opt 进一步对照优化前后的原始吞吐量，柱顶的百分比给出了相对提升幅度。
 
 #figure(
   [
@@ -635,7 +635,7 @@ moss 用全局计数和掩码在事件投递入口做早期过滤：inotify 维�
   caption: [iozone 性能对比（musl，本地文件系统）],
 ) <tab:iozone-musl>
 
-musl 环境的整体趋势与 glibc 一致：优化前的 StarryOS 吞吐较低，优化后的 moss 在所有测试项上均显著提升。@fig:iozone-musl-opt 直接展示了各场景优化前后的原始吞吐量，其中顺序写、顺序读、随机写和并发写的改善尤为明显。
+musl 环境的整体趋势与 glibc 一致：优化前的 StarryOS 吞吐较低，优化后的 Moss 在所有测试项上均显著提升。@fig:iozone-musl-opt 直接展示了各场景优化前后的原始吞吐量，其中顺序写、顺序读、随机写和并发写的改善尤为明显。
 
 #figure(
   [
@@ -650,4 +650,4 @@ musl 环境的整体趋势与 glibc 一致：优化前的 StarryOS 吞吐较低�
 
 == 本章小结
 
-本章介绍了 moss 文件系统从底层存储到用户接口的整体设计。挂载子系统支持 bind mount、命名空间隔离与新式挂载 API，VFS 层通过 `Location` 和 `NodeFlags` 将路径解析与挂载切换解耦，使上层调用方无需感知挂载点跳转。I/O 子系统在 StarryOS 基础上引入 per-file 页缓存与元数据缓存，并在写路径、脏页写回、显式预读和 mmap fault 预热四个维度做了针对性优化，减少小块 I/O 中的无效读写和元数据开销。文件事件通知提供了 inotify 和 fanotify 的完整实现，在无监听者时通过全局计数与兴趣掩码早期过滤，使事件投递逻辑不干扰正常 I/O 路径的性能。
+本章介绍了 Moss 文件系统从底层存储到用户接口的整体设计。挂载子系统支持 bind mount 与部分新式挂载 API，VFS 层通过 `Location` 和 `NodeFlags` 将路径解析与挂载切换解耦，使上层调用方无需感知挂载点跳转。I/O 子系统在 StarryOS 基础上引入 per-file 页缓存与元数据缓存，并在写路径、脏页写回、显式预读和 mmap fault 预热四个维度做了针对性优化，减少小块 I/O 中的无效读写和元数据开销。文件事件通知实现了 inotify 和 fanotify 的主要路径，在无监听者时通过全局计数与兴趣掩码早期过滤，使事件投递逻辑不干扰正常 I/O 路径的性能。

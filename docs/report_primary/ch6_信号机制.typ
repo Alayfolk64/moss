@@ -5,106 +5,208 @@
 
 = 信号机制
 
-信号是 Unix/Linux 用于异步事件通知的基本机制。进程之间借助信号传递事件，内核也利用信号将异常、终端中断、子进程状态变化等事件转交给进程处理。
+信号是进程间传递异步事件的基本手段。进程之间可以用信号通知对方，内核也借助信号把硬件异常、终端中断、子进程状态变化等事件交给进程处理。
 
-moss 基于 StarryOS 改造而来，信号机制的整体框架沿用了 StarryOS 已有的设计。在此基础上，moss 针对若干语义缺口进行了补充：进程的可暂停状态、信号发送时的权限校验，以及父进程对子进程停止与继续事件的可见性。本章先介绍 StarryOS 信号机制的整体结构与现存问题，随后逐一说明 moss 所做的增量。
+Moss 沿用 StarryOS 的信号框架，重点补了三块缺口：进程的可暂停状态、信号发送的权限校验，以及父进程对子进程停止与继续事件的感知。
 
 == StarryOS 的信号机制
 
 === 整体结构
 
-StarryOS 的信号机制由底层库 `starry-signal` 提供核心语义，内核负责将其接入任务管理、系统调用以及返回用户态的处理路径。信号管理器按进程和线程两层组织：
+StarryOS 的信号机制由底层库 `starry-signal` 提供核心语义，内核负责将其接入任务管理、系统调用以及返回用户态的处理路径。信号管理器分两层组织：
 
-- *进程级*：每个进程持有一个进程级信号管理器，保存进程共享的待处理信号队列、信号处理动作表，以及进程内所有线程的引用。当信号发往进程时，会从中挑选一个未屏蔽该信号的线程负责处理。
-- *线程级*：每个线程持有一个线程级信号管理器，保存该线程私有的待处理信号、屏蔽集和信号栈。
+- *进程级*：保存共享的待处理信号队列、信号处理动作表，以及进程内所有线程的引用。信号发给进程时，从中挑一个没有屏蔽该信号的线程来处理。
+- *线程级*：保存线程私有的待处理信号、屏蔽集和信号栈。
 
-待处理信号按类型分别存储。标准信号仅保留一份，重复发送会被合并；实时信号按发送顺序排队，确保每次发送都不丢失。
+标准信号只保留一份，重复发送会合并；实时信号按发送顺序排队，每次发送都不丢。
 
 === 信号检查与递送
 
-信号检查发生在每次从内核返回用户态之前。内核从待处理队列中取出一个未被屏蔽的信号，根据当前的信号处理动作决定后续行为。可能的动作包括默认终止、默认核心转储、默认忽略、默认停止与继续，以及调用用户注册的信号处理函数。
+每次从内核返回用户态之前都会检查信号。内核从队列里取出一个未屏蔽的信号，根据处理动作决定后续行为——终止、忽略、停止，或者跳到用户注册的处理函数。
 
-对于用户处理函数，内核在用户栈上构造一个信号栈帧，其中保存被中断时的寄存器状态、信号信息以及用于恢复执行的上下文，随后将控制流转移到用户处理函数。用户处理函数执行结束后，通过 `sigreturn` 系统调用回到内核，由内核恢复栈帧并继续原有执行流。
+调用用户处理函数时，内核在用户栈上构造信号栈帧，保存被中断时的寄存器状态和恢复所需的上下文，再把控制流转过去。函数执行完后，通过 `sigreturn` 系统调用回到内核，内核恢复栈帧继续原来的执行流。
 
-这一发送、入队、检查、递送、恢复的完整链路在 StarryOS 中已经实现，`kill`、`tkill`、`tgkill`、`sigaction`、`sigprocmask`、`sigsuspend`、`sigtimedwait` 等系统调用均建立在该链路之上，moss 完全沿用。
+`kill`、`tkill`、`tgkill`、`sigaction`、`sigprocmask`、`sigsuspend`、`sigtimedwait` 等系统调用都建立在这条链路上，Moss 对此沿用。
 
 === 现存问题
 
-围绕信号语义的完整性，StarryOS 的实现仍存在若干明显缺口：
+StarryOS 的实现存在三个明显缺口：
 
-1. *停止与继续语义未真正实现*。StarryOS 在收到 `SIGSTOP`、`SIGTSTP` 等停止信号时直接令进程退出，对 `SIGCONT` 则不做任何处理。其结果是进程无法真正暂停，Shell 的作业控制功能（如 `Ctrl-Z`、`fg`、`bg`）无法工作。
+1. *停止与继续没有实现*。收到 `SIGSTOP`、`SIGTSTP` 时直接让进程退出，对 `SIGCONT` 不做处理。Shell 的作业控制因此完全无法工作。
 
-2. *信号发送缺少权限校验*。各信号发送接口未对发送者与目标进程之间的身份关系做检查。按 POSIX 规范，普通用户只能向同 UID 的目标发送信号，root 才能向任意进程发送信号，缺少此检查将导致权限隔离失效。
+2. *信号发送没有权限校验*。普通用户理论上只能向同 UID 的进程发信号，这个检查在 StarryOS 里缺失。
 
-3. *父进程无法感知子进程的状态变化*。`wait` 系列系统调用只能获取子进程的退出状态，对子进程的停止和继续事件无任何通知机制，`waitid` 的 `WSTOPPED`、`WCONTINUED` 语义形同虚设。
+3. *父进程看不到子进程的停止与继续*。`waitid` 的 `WSTOPPED`、`WCONTINUED` 选项形同虚设。
 
-== 进程可暂停状态的引入
+后面几节分别说明 Moss 如何处理这三个问题。
 
-实现停止与继续语义的关键在于：进程需要能够处于"存活但不参与调度"的状态。StarryOS 中进程仅有运行与退出两种状态，缺少描述"暂停"的中间形态。为此，moss 引入了一个新的进程等待状态枚举，用以表示进程对外可见的暂停与恢复信息：
+== 进程可暂停状态
+
+=== 问题所在
+
+StarryOS 里进程只有两条路：继续运行，或者退出。`SIGSTOP` 走的是退出路径，但 POSIX 规定停止信号应该让进程暂停、保留现场，等 `SIGCONT` 到来后再从原位置继续——停止不等于死。
+
+Shell 按下 Ctrl+Z 时最能说明这个问题。前台进程收到 `SIGTSTP`，应该暂停；用户之后执行 `fg`，进程从断点继续。StarryOS 的实现里 Ctrl+Z 会直接杀掉进程，作业控制整个语义因此垮掉。GDB 等调试器的暂停和恢复依赖的也是同一套机制。
+
+=== 核心结构
+
+要支持暂停，进程需要一个对外可见的"暂停中"状态，以及一个让线程真正挂住自己的地方。Moss 引入 `ProcessWaitStatus` 枚举，并在 `ProcessData` 上新增两个字段：
 
 #figure(
   [
     ```rust
     pub enum ProcessWaitStatus {
-        Stopped(Signo),   // 进程被某停止信号挂起，记录触发的信号
-        Continued(Signo), // 进程被某继续信号唤醒，记录触发的信号
+        Stopped(Signo),   // 被停止信号挂起，记录触发的信号编号
+        Continued(Signo), // 被继续信号唤醒，记录触发的信号编号
     }
-    ```
-  ],
-  caption: [进程等待状态],
-) <lst:wait-status-enum>
 
-该状态及其配套的事件通道一并挂载到进程的共享数据结构 `ProcessData` 上：
-
-#figure(
-  [
-    ```rust
     pub struct ProcessData {
-        ...
+        // ...
         // 父进程通过 waitid 可见的暂停/继续状态
         pub wait_status: SpinNoIrq<Option<ProcessWaitStatus>>,
-        // 被停止线程在此事件上挂起，等待 SIGCONT 或 SIGKILL 唤醒
+        // 被停止的线程在此事件上挂起，等 SIGCONT 或 SIGKILL 唤醒
         pub stop_event: Arc<PollSet>,
     }
     ```
   ],
-  caption: [`ProcessData` 上新增的字段],
-) <lst:wait-status-fields>
+  caption: [进程可暂停状态的核心结构],
+) <lst:wait-status-struct>
 
-`wait_status` 是父进程通过 `waitid` 系统调用可以读到的状态；`stop_event` 则承担线程挂起与唤醒的职责，被停止的线程在该事件上阻塞，直到收到 `SIGCONT` 或 `SIGKILL` 后被唤醒。
+`wait_status` 是对外暴露的状态，父进程通过 `waitid` 读到的就是这里；`stop_event` 是线程真正挂住自己的地方，停止后阻塞在这个事件上，等到被唤醒。
 
-凭借这一对结构，moss 将信号检查路径中原本空缺的停止与继续两条分支补齐。`check_signals` 内的停止与继续动作处理如下：
+=== 处理路径
+
+信号检查路径里，停止和继续两条分支现在变成了：
 
 #figure(
   [
     ```rust
     SignalOSAction::Stop => {
-        // 写入对外可见的停止状态，并记录触发的信号
-        *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Stopped(signo));
-        // 通知父进程的 waitid 调用可以返回
+        // 写入对外可见的停止状态
+        *thr.proc_data.wait_status.lock() =
+            Some(ProcessWaitStatus::Stopped(signo));
+        // 通知父进程可以从 waitid 取结果了
         wake_waiting_parent(&thr.proc_data);
-        // 当前线程在 stop_event 上挂起，直至被唤醒
+        // 线程在 stop_event 上挂起，等待被唤醒
         wait_for_continue(&thr.proc_data);
     }
     SignalOSAction::Continue => {
-        // 状态切回继续，父进程的 waitid 同样需要被通知
-        *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Continued(signo));
+        *thr.proc_data.wait_status.lock() =
+            Some(ProcessWaitStatus::Continued(signo));
         wake_waiting_parent(&thr.proc_data);
+        // stop_event 上的线程在信号发送路径里被唤醒
     }
     ```
   ],
-  caption: [停止与继续动作的处理],
-) <lst:stop-continue>
+  caption: [停止与继续信号的处理路径],
+) <lst:stop-continue-handler>
 
-进入停止分支后，当前线程在 `stop_event` 上挂起，直至状态翻转或进程被强制终止。信号发送路径上，识别到 `SIGCONT` 时将 `wait_status` 置为 `Continued`、唤醒 `stop_event` 上的线程并通知父进程；识别到 `SIGKILL` 时同样唤醒 `stop_event`，以确保被停止的进程能够走完退出流程。
+停止路径的顺序是：写状态、通知父进程、线程挂在 `stop_event` 上。继续路径：更新状态，通知父进程，同时唤醒 `stop_event`。`SIGKILL` 同样会唤醒 `stop_event`，确保被挂住的进程能走完退出流程，不会卡死在暂停状态里。
 
-该机制使进程首次具备真正意义上的可暂停状态。Shell 在按下 `Ctrl-Z` 后能够保留前台作业的完整执行现场，并在 `fg` 之后从原位置继续执行；GDB 等调试器所依赖的暂停与恢复语义也得以建立在此机制之上。
+@fig:process-state 展示了进程在运行、暂停和僵尸三种状态之间的完整流转——停止与继续在运行和暂停之间切换，退出后进入僵尸状态，父进程调用 `wait` 完成最终回收。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-2-进程状态机.svg", width: 55%)
+    ]
+  ],
+  caption: [进程状态机],
+) <fig:process-state>
+
+== 信号驱动的 wait 语义
+
+进程停止和恢复是信号引起的状态变化，但父进程能否观察到这些变化，取决于 `wait` 系列调用的配置。`waitpid` 和 `waitid` 默认只报告退出事件，要让父进程感知停止与继续，需要额外的选项：
+
+#figure(
+  table(
+    columns: (1.5fr, 4fr),
+    inset: 6pt,
+    stroke: 0.5pt + gray,
+    table.header([选项], [作用]),
+    [`WUNTRACED`], [允许报告子进程停止状态，否则停止事件对父进程不可见],
+    [`WCONTINUED`], [允许报告子进程继续运行状态],
+    [`WNOHANG`], [当前没有可报告状态时立即返回，不阻塞父进程],
+    [`WNOWAIT`], [读取状态但不消费，后续仍可再次查询],
+  ),
+  caption: [子进程等待的主要选项],
+) <tab:wait-options-signal>
+
+还是以 Shell 为例。Ctrl+Z 让前台进程组暂停，Shell 需要知道这些进程是"暂停等继续"还是"已经退出"——没有 `WUNTRACED`，Shell 区分不了这两种情况。`WCONTINUED` 处理对称的一侧：`fg` 发出 `SIGCONT` 后，这次状态变化同样需要 `WCONTINUED` 才能被父进程感知到。
+
+如 @fig:wait-timeline 所示，停止、继续和退出三类事件都可以成为一次 `wait` 的报告。前两者是状态变化通知，父进程读完后子进程仍然存在；退出才是最后一次报告，内核读完后才回收僵尸进程。
+
+#figure(
+  [
+    #align(center)[
+      #image("./pictrues/图-2-wait语义.svg", width: 92%)
+    ]
+  ],
+  caption: [子进程停止、继续、退出三类事件与父进程 wait 消费的时序],
+) <fig:wait-timeline>
+
+`waitid` 相比 `waitpid` 的好处是返回结构化的 `siginfo_t`，能直接区分正常退出、信号终止、停止和继续，不需要调用者手动解析整数状态。`waitid` 还支持通过 pidfd 选择目标——pidfd 是指向进程对象的文件描述符，不会随 PID 复用而改变指向，配合 `WNOWAIT` 可以先查看状态、之后再完成回收。父进程没有可报告状态时如何进入阻塞、状态变化后怎样被唤醒，见下一节。
+
+== 父进程如何感知状态变化
+
+=== 通知路径
+
+子进程状态变化发生在子进程自己的执行流里，父进程可能正阻塞在 `waitid` 上。这里需要一套机制：状态变化时，主动唤醒正在等待的父进程。
+
+StarryOS 已有一个 `child_exit_event`，但只在子进程退出时触发。停止和继续没有对应的唤醒动作，所以 `WSTOPPED`、`WCONTINUED` 的语义一直没法生效。
+
+Moss 没有新建通道，而是让停止和继续两条路径也触发同一个 `child_exit_event`，把它的语义扩展为"子进程任何状态变化都触发"：
+
+#figure(
+  [
+    ```rust
+    fn wake_waiting_parent(proc_data: &ProcessData) {
+        if let Some(parent) = proc_data.proc.parent()
+            && let Ok(parent_data) = get_process_data(parent.pid())
+        {
+            parent_data.child_exit_event.wake();
+        }
+    }
+    ```
+  ],
+  caption: [子进程状态变化时唤醒父进程],
+) <lst:wake-parent>
+
+停止路径和继续路径在写完 `wait_status` 之后都调用这个函数（见 @lst:stop-continue-handler）。父进程被唤醒后重新读 `wait_status`，就能拿到子进程的最新状态。
+
+=== 防止通知丢失
+
+父进程登记唤醒入口（Waker）和子进程状态变化之间有一个竞争窗口：父进程检查完 `wait_status`、还没把 Waker 挂上去，子进程的状态恰好先变了，这次通知就悄悄丢了，父进程会一直等下去。
+
+Moss 用登记后复查覆盖这个窗口：
+
+#figure(
+  [
+    ```rust
+    match check_children().transpose() {
+        Some(result) => Poll::Ready(result),
+        None => {
+            // 暂无结果，登记父进程的 Waker
+            child_exit_event.register(cx.waker());
+            // 登记完立刻再查一次，覆盖登记窗口里发生的状态变化
+            match check_children().transpose() {
+                Some(result) => Poll::Ready(result),
+                None => Poll::Pending,
+            }
+        }
+    }
+    ```
+  ],
+  caption: [父进程等待子进程状态，登记后复查防止通知丢失],
+) <lst:child-wait-register>
+
+第一次检查没结果，把 Waker 登记上去，然后立刻再查一次。如果第二次查到了结果，说明状态变化恰好落在那个窗口里，直接返回不需要等待。如果仍然没有，才放心地进入阻塞。这套双重检查的通用模式在第三章阻塞与唤醒机制里有更完整的说明。
 
 == 进程身份与信号权限校验
 
-POSIX 对信号发送的权限规定大致为：除 root 外，发送者只能向与自己 UID 或 SUID 匹配的目标发送信号；`SIGCONT` 例外，同一会话内可以跨 UID 发送，以支持 Shell 对换过身份的子进程进行作业控制。
+POSIX 规定，除 root 外，发送者只能向与自己 UID 或 SUID 匹配的目标发信号。`SIGCONT` 有个例外：同一会话内可以跨 UID 发，让 Shell 能对已切换身份的子进程发出恢复命令。
 
-StarryOS 的 `ProcessData` 中并未包含任何 Unix 身份相关字段，权限校验缺乏基础。moss 为 `ProcessData` 增补了完整的身份字段，包括真实、有效与保存的 UID 及 GID。在此基础上，moss 在信号发送路径上引入了统一的权限判断逻辑，其规则可概括为：
+StarryOS 的 `ProcessData` 里没有 UID 相关字段，检查根本没有基础。Moss 在进程与线程管理一章（@sec:uid-gid）引入了 real/effective/saved 三元凭据，信号权限校验直接使用这些字段：
 
 #figure(
   table(
@@ -120,47 +222,22 @@ StarryOS 的 `ProcessData` 中并未包含任何 Unix 身份相关字段，权�
   caption: [信号发送的权限规则],
 ) <tab:signal-perm>
 
-`sys_kill` 支持四种目标语义：指定进程、当前进程组、广播以及指定进程组。moss 为每种语义都包裹了一层带权限校验的发送过程。对于组发送和广播这类批量操作，校验结果需要进一步区分：只要存在至少一个有权限的目标，操作即视为成功；若找到了目标但全部因权限不足而失败，则返回 `EPERM`；若完全没有匹配的目标，则返回 `ESRCH`。
-
-身份字段就位后，moss 的信号发送行为符合 POSIX 权限模型，进程间的隔离得到保障。会话内 `SIGCONT` 例外规则使 Shell 能够对已通过 `setuid` 切换身份的子进程发出恢复命令，从而支持完整的作业控制流程。
-
-== 父进程对子进程状态的可见性
-
-POSIX 规定子进程的退出、停止与继续都应通知父进程，以便父进程通过 `wait` 系列接口获取状态。StarryOS 已经具备一个用于子进程退出通知的事件通道（`child_exit_event`），但仅在子进程退出时被触发，停止与继续两种事件没有相应的唤醒动作，导致 `waitid` 的 `WSTOPPED`、`WCONTINUED` 语义无法生效。
-
-moss 没有新建通知通道，而是在停止与继续两条状态变更路径上复用 `child_exit_event`，使其语义扩展为"子进程任何状态变化均触发"。具体而言，在前述停止与继续的处理过程中，moss 在更新 `wait_status` 之后统一调用一个辅助函数，由其负责唤醒父进程：
-
-#figure(
-  [
-    ```rust
-    fn wake_waiting_parent(proc_data: &ProcessData) {
-        // 子进程状态发生变化时，唤醒父进程在 waitid 中的等待
-        if let Some(parent) = proc_data.proc.parent()
-            && let Ok(parent_data) = get_process_data(parent.pid())
-        {
-            parent_data.child_exit_event.wake();
-        }
-    }
-    ```
-  ],
-  caption: [父进程唤醒],
-) <lst:wake-parent>
-
-父进程从 `waitid` 中返回时，通过查看 `wait_status` 字段即可区分子进程当前是处于退出、停止还是继续状态。该机制使 Shell 能够在后台作业被停止时立即提示用户，在作业恢复运行时即时更新提示符，避免依赖轮询。前述各项改动也由此真正在用户态可用。
+`sys_kill` 支持四种目标语义：指定进程、当前进程组、广播、指定进程组。批量操作的结果有三种情况：至少有一个目标有权限就算成功，全部因权限不足失败才返回 `EPERM`，完全没有匹配目标则返回 `ESRCH`。
 
 == 小结
 
-StarryOS 已经搭建起完整的信号发送、入队、屏蔽与用户处理函数递送链路，moss 在此基础上针对若干语义缺口进行了补充：
+StarryOS 已经完成了信号发送、入队、屏蔽与用户处理函数递送的完整链路。Moss 在此基础上补了三个环节：
 
 #figure(
   table(
     columns: (1fr, 1.6fr, 1.6fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
-    table.header([能力], [核心结构], [支撑的语义]),
-    [进程可暂停], [`ProcessWaitStatus`、`wait_status`、`stop_event`], [Shell 作业控制],
-    [信号权限], [`ProcessData` 上的 UID/EUID/SUID 等身份字段], [POSIX 信号权限模型],
-    [父进程可见性], [`child_exit_event` 在停止与继续路径上的复用], [`waitid` 的 `WSTOPPED`、`WCONTINUED` 语义],
+    table.header([补充内容], [核心结构], [支撑的使用场景]),
+    [进程可暂停], [`ProcessWaitStatus`、`stop_event`], [Shell 作业控制、GDB 调试暂停],
+    [信号驱动 wait 语义], [`WUNTRACED`、`WCONTINUED` 选项生效], [父进程按需感知子进程停止与恢复],
+    [状态变化通知], [`child_exit_event` 复用，登记后复查], [`waitid` 停止与继续事件正常到达父进程],
+    [信号权限], [UID/EUID/SUID 三元凭据校验], [POSIX 信号权限模型，跨 UID 隔离],
   ),
-  caption: [moss 对信号机制的补充],
+  caption: [Moss 对信号机制的补充],
 ) <tab:signal-deltas>

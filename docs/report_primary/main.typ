@@ -9,24 +9,6 @@
 // 校徽预留：找到图片后，将 none 改为 image("pictrues/校徽.png", width: 13cm)。
 #let school-logo = image("pictrues/loogoo.png", width: 13cm)
 
-#let metadata-row(label, value) = {
-  grid(
-    columns: (auto, 6.5cm),
-    column-gutter: 0.5cm,
-    align: (left, center),
-    [#label],
-    [
-      #block(
-        width: 100%,
-        inset: (bottom: 0.12em),
-        stroke: (bottom: 0.7pt + black),
-      )[
-        #align(center)[#value]
-      ]
-    ],
-  )
-}
-
 #let report-cover() = {
   set page(
     paper: "a4",
@@ -42,7 +24,6 @@
     #if school-logo != none {
       school-logo
     } else {
-      // 保持空白，供后续替换为校徽图片。
       block(width: 13cm, height: 3cm)[]
     }
   ]
@@ -60,11 +41,17 @@
   align(center)[
     #block(width: 10cm)[
       #set text(size: 14pt)
-      #metadata-row([参赛队名], team-name)
-      #v(1em)
-      #metadata-row([队伍成员], team-members)
-      #v(1em)
-      #metadata-row([指导老师], advisors)
+      #align(center)[
+        #grid(
+          columns: (auto, auto),
+          column-gutter: 0.6em,
+          row-gutter: 1em,
+          align: (right, left),
+          [参赛队名：], team-name,
+          [队伍成员：], team-members,
+          [指导老师：], advisors,
+        )
+      ]
     ]
   ]
 

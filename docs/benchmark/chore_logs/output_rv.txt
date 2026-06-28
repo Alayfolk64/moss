@@ -1,0 +1,121 @@
+
+OpenSBI v1.5.1
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name             : riscv-virtio,qemu
+Platform Features         : medeleg
+Platform HART Count       : 1
+Platform IPI Device       : aclint-mswi
+Platform Timer Device     : aclint-mtimer @ 10000000Hz
+Platform Console Device   : uart8250
+Platform HSM Device       : ---
+Platform PMU Device       : ---
+Platform Reboot Device    : syscon-reboot
+Platform Shutdown Device  : syscon-poweroff
+Platform Suspend Device   : ---
+Platform CPPC Device      : ---
+Firmware Base             : 0x80000000
+Firmware Size             : 327 KB
+Firmware RW Offset        : 0x40000
+Firmware RW Size          : 71 KB
+Firmware Heap Offset      : 0x49000
+Firmware Heap Size        : 35 KB (total), 2 KB (reserved), 11 KB (used), 21 KB (free)
+Firmware Scratch Size     : 4096 B (total), 416 B (used), 3680 B (free)
+Runtime SBI Version       : 2.0
+
+Domain0 Name              : root
+Domain0 Boot HART         : 0
+Domain0 HARTs             : 0*
+Domain0 Region00          : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region01          : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region02          : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region03          : 0x0000000080040000-0x000000008005ffff M: (R,W) S/U: ()
+Domain0 Region04          : 0x0000000080000000-0x000000008003ffff M: (R,X) S/U: ()
+Domain0 Region05          : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06          : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07          : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address      : 0x0000000080200000
+Domain0 Next Arg1         : 0x00000000bfe00000
+Domain0 Next Mode         : S-mode
+Domain0 SysReset          : yes
+Domain0 SysSuspend        : yes
+
+Boot HART ID              : 0
+Boot HART Domain          : root
+Boot HART Priv Version    : v1.12
+Boot HART Base ISA        : rv64imafdch
+Boot HART ISA Extensions  : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count       : 16
+Boot HART PMP Granularity : 2 bits
+Boot HART PMP Address Bits: 54
+Boot HART MHPM Info       : 16 (0x0007fff8)
+Boot HART Debug Triggers  : 2 triggers
+Boot HART MIDELEG         : 0x0000000000001666
+Boot HART MEDELEG         : 0x0000000000f0b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = false
+smp = 1
+
+Boot at 2026-06-27 15:23:21.001480600 UTC
+
+Entering interactive shell...
+starry:~# ls'[J
+[1;34mbin[m         [1;34metc[m         [1;34mlib[m         [1;34mlost+found[m  [1;34mproc[m        [1;34mtmp[m         [1;34mvar[m
+[1;34mdev[m         [1;34mglibc[m       [1;36mlib64[m       [1;34mmusl[m        [1;34msys[m         [1;34musr[m
+starry:~# p[Jcd mustarry:~# cd musl/[J
+starry:~# ls
+[1;32marithoh[m                 [1;32mfstime[m                  [1;32mlat_sig[m                 [1;32mnetserver[m
+[1;34mbasic[m                   [1;32mgetopt[m                  [1;32mlat_syscall[m             [1;32mpar_mem[m
+[1;32mbasic_testcode.sh[m       [1;32mgfx-x11[m                 [1;32mlat_tcp[m                 [1;32mpar_ops[m
+[1;32mbusy[m                    [1;32mhackbench[m               [1;32mlat_udp[m                 [1;32mpipe[m
+[1;32mbusybox[m                 [1;32mhanoi[m                   [1;32mlat_unix[m                [1;32mrandom.lua[m
+[1;32mbusybox_cmd.txt[m         [1;32mhello[m                   [1;32mlat_unix_connect[m        [1;32mregister[m
+[1;32mbusybox_testcode.sh[m     [1;32mindex.base[m              [1;32mlat_usleep[m              [1;32mremove.lua[m
+[1;32mbw_file_rd[m              [1;32mint[m                     [1;34mlib[m                     [1;32mrhttp[m
+[1;32mbw_mem[m                  [1;32miozone[m                  [1;32mlibc-bench[m              [1;32mround_num.lua[m
+[1;32mbw_mmap_rd[m              [1;32miozone_testcode.sh[m      [1;32mlibcbench_testcode.sh[m   [1;32mrun-dynamic.sh[m
+[1;32mbw_pipe[m                 [1;32miperf3[m                  [1;32mlibctest_testcode.sh[m    [1;32mrun-static.sh[m
+[1;32mbw_tcp[m                  [1;32miperf_testcode.sh[m       [1;32mline[m                    [1;32mruntest.exe[m
+[1;32mbw_unix[m                 [1;32mlat_cmd[m                 [1;32mlmbench[m                 [1;32mseek[m
+[1;32mcache[m                   [1;32mlat_connect[m             [1;32mlmbench_all[m             [1;32mshort[m
+[1;32mclock[m                   [1;32mlat_ctx[m                 [1;32mlmbench_testcode.sh[m     [1;32msin30.lua[m
+[1;32mcontext1[m                [1;32mlat_dram_page[m           [1;32mlmdd[m                    [1;32msort.lua[m
+[1;32mcyclictest[m              [1;32mlat_fcntl[m               [1;32mlmhttp[m                  [1;32mspawn[m
+[1;32mcyclictest_testcode.sh[m  [1;32mlat_fifo[m                [1;32mlong[m                    [1;32mstream[m
+[1;32mdate.lua[m                [1;32mlat_fs[m                  [1;32mloop_o[m                  [1;32mstrings.lua[m
+[1;32mdhry2[m                   [1;32mlat_http[m                [1;32mlooper[m                  [1;32msyscall[m
+[1;32mdhry2reg[m                [1;32mlat_mem_rd[m              [1;34mltp[m                     [1;32mtest.sh[m
+[1;32mdisk[m                    [1;32mlat_mmap[m                [1;32mltp_testcode.sh[m         [1;32mtiming_o[m
+[1;32mdlopen_dso.so[m           [1;32mlat_ops[m                 [1;32mlua[m                     [1;32mtlb[m
+[1;32mdouble[m                  [1;32mlat_pagefault[m           [1;32mlua_testcode.sh[m         [1;32mtls_get_new-dtv_dso.so[m
+[1;32menough[m                  [1;32mlat_pipe[m                [1;32mmax_min.lua[m             [1;32mtst.sh[m
+[1;32mentry-dynamic.exe[m       [1;32mlat_pmake[m               [1;32mmemsize[m                 [1;32munixbench.logo[m
+[1;32mentry-static.exe[m        [1;32mlat_proc[m                [1;32mmhz[m                     [1;32munixbench_testcode.sh[m
+[1;32mexecl[m                   [1;32mlat_rand[m                [1;32mmsleep[m                  [1;32mwhetstone-double[m
+[1;32mfile_io.lua[m             [1;32mlat_rpc[m                 [1;32mmulti.sh[m
+[1;32mfloat[m                   [1;32mlat_select[m              [1;32mnetperf[m
+[1;32mflushdisk[m               [1;32mlat_sem[m                 [1;32mnetperf_testcode.sh[m
+starry:~# pwd
+/musl
+starry:~# exit
