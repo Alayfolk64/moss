@@ -1,3 +1,16 @@
 * text eol=lf
 vendor/** -text
 *.fst binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.ppt binary
+*.pptx binary
+*.doc binary
+*.docx binary
+*.xls binary
+*.xlsx binary
+*.zip binary

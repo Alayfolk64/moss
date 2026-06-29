@@ -5,7 +5,7 @@
 
 = QEMU 虚拟硬件平台与设备驱动
 
-初赛阶段在两种 QEMU 虚拟机上运行：RISC-V64（`qemu-system-riscv64 -machine virt`）和 LoongArch64（`qemu-system-loongarch64`）。两种架构的页表格式、异常编码、中断控制器和设备总线完全不同。把这些差异直接暴露给上层，调度器、内存管理器和系统调用处理代码就会散布架构条件分支。本章说明 Moss 如何通过三层平台抽象将差异封死在平台实现层，VirtIO 则在两种架构上提供行为一致的设备接口。
+Moss 在 QEMU 虚拟机上支持 RISC-V 64 和 LoongArch64 两种架构。两者的页表格式、异常编码、中断控制器和设备总线完全不同。StarryOS 已通过三层平台抽象将这些差异封闭在底层实现中，避免调度器、内存管理器和系统调用处理代码散布架构条件分支，Moss 沿用了这套设计。本章说明该抽象机制的具体实现，以及 VirtIO 如何在两种架构上提供一致的设备接口。
 
 == 平台抽象层架构
 
@@ -17,7 +17,7 @@ Moss 将硬件差异分三层处理，每层只吸收它自己那一层的差异
 
 第二层是 `axplat`，用 Rust trait 定义平台接口：`IrqIf`（中断注册与分发）、`TimeIf`（时钟读取与单次定时器）、`MemIf`（物理内存区域描述）、`ConsoleIf`（串口输出）。`axplat-riscv64-qemu-virt` 和 `axplat-loongarch64-qemu-virt` 各自实现这些 trait，通过 `#[impl_plat_interface]` 宏完成编译期静态绑定。
 
-第三层是 `axhal`，把 `axplat` trait 调用包装成普通函数，供内核其余部分使用。调度器、内存管理器和驱动框架调用的是 `axhal::time::wall_time()`、`axhal::irq::register()` 这类接口，不直接触碰任何 ISA 特有寄存器。
+第三层是 `axhal`，把 `axplat` trait 调用包装成普通函数，供内核其余部分使用。调度器、内存管理器和驱动框架调用的是 `axhal::time::wall_time()`、`axhal::irq::register()` 这类接口，不直接触碰任何指令集特有寄存器。
 
 #figure(
   [

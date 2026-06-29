@@ -17,7 +17,9 @@ Moss 的整体结构见 @fig:overview-arch，从上到下分为五层。
 
 用户态程序通过系统服务接口层（syscall 入口）进入内核。内核主体按功能域分为八个子系统：任务与执行管理覆盖进程和线程的完整生命周期；地址空间与内存管理负责用户地址空间；文件与存储管理提供统一的文件接口；I/O 与事件通知处理异步 I/O 和多路复用；IPC 与同步机制处理进程间通信；网络通信子系统实现网络协议栈；系统资源管理管理进程凭据与资源约束；内核运行支撑提供基础运行时设施。
 
-内核主体之下是 StarryOS/ArceOS 的组件化基础，提供 `axtask`、`axmm`、`axfs`、`axnet`、`axhal`、`axsync`、`axruntime` 等组件，Moss 对其中部分做了定制，放在 `vendor/` 目录中。最底层是硬件，支持 RISC-V 64 和 LoongArch64 两种体系结构。
+内核主体之下是 ArceOS 的组件化基础设施。ArceOS 将内核功能拆解为独立的 crate：`axtask` 提供任务管理，`axmm` 处理内存分配，`axfs` 实现文件系统框架，`axnet` 封装网络协议栈，`axhal` 定义硬件抽象接口，`axsync` 提供同步原语，`axruntime` 负责运行时初始化，`axplat` 负责平台抽象层。Moss 从 StarryOS 继承而来，StarryOS 已在这些组件基础上构建了宏内核功能，Moss 沿用这套架构并在此之上进行了完善。
+
+其中硬件抽象分三层实现。最上层 `axhal` 向内核其余部分提供统一的硬件抽象接口。`axhal` 收到请求后调用平台抽象层 `axplat` 的函数，根据启动配置转发到具体架构的平台抽象层（`axplat-riscv64-qemu-virt` 对应 RISC-V 和 `axplat-loongarch64-qemu-virt` 对应 LoongArch64 ）进行进一步处理。最终调用最底层 `axcpu` 里的函数，使用汇编语言对 CPU 寄存器进行修改。
 
 #figure(
   [
@@ -62,10 +64,14 @@ Moss/
 ├── vendor/                  # 定制版 ArceOS 组件
 │   ├── axhal/               # 硬件抽象层
 │   ├── axfs/ axfs-ng-vfs/   # 文件系统框架
+│   ├── axplat-riscv64-qemu-virt/     # RISC-V 64 平台实现
+│   ├── axplat-loongarch64-qemu-virt/ # LoongArch64 平台实现
 │   ├── starry-process/      # 进程抽象
 │   ├── starry-signal/       # 信号库
 │   └── starry-smoltcp/      # 网络库
-├── third_party/             # 第三方库（lwext4_rust 等）
+├── third_party/             # 第三方开源库
+│   ├── lwext4_rust          # ext4 文件系统支持库
+│   └── syscalls             # 系统调用常量与类型定义
 ├── docs/                    # 设计文档
 └── Makefile                 # 构建入口
 ```

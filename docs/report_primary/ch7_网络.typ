@@ -11,9 +11,9 @@
 
 === 整体结构
 
-StarryOS 已经建立了可工作的网络栈框架。系统基于 smoltcp 协议栈，通过 axnet 模块封装 TCP/UDP socket，向上提供 `socket`、`bind`、`connect`、`send`、`recv` 等基础系统调用接口。在设备层，StarryOS 支持以太网设备和 loopback 设备，能够处理 IPv4 流量。
+StarryOS 基于开源协议栈 smoltcp 构建网络模块。smoltcp 是一个轻量级的 TCP/IP 实现，专为嵌入式和裸机环境设计，无需堆分配，代码量较小。StarryOS 通过 `axnet` 模块对 smoltcp 进行封装，向上层提供 `socket`、`bind`、`connect`、`send`、`recv` 等接口。设备层支持以太网和 loopback 设备，能够处理 IPv4 流量。
 
-收发路径的基本框架也已搭建完成。应用程序通过 socket 系统调用发送数据，数据经过协议栈封包后通过设备发送；接收路径通过轮询设备并推进协议栈状态。因此，网络栈面对的不是一片空白，而是主干结构已经成形，但在地址族支持、buffer 配置、loopback 路径优化等方面存在不足的实现。
+应用程序通过 socket 系统调用发送数据，数据经协议栈封包后由设备发出；接收路径通过轮询设备推进协议栈状态。StarryOS 已完成收发框架的搭建，但在地址族支持、buffer 配置、loopback 优化等方面仍有改进空间。
 
 === 现存问题
 

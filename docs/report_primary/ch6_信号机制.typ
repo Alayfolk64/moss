@@ -26,7 +26,7 @@ StarryOS 的信号机制由底层库 `starry-signal` 提供核心语义，内核
 
 调用用户处理函数时，内核在用户栈上构造信号栈帧，保存被中断时的寄存器状态和恢复所需的上下文，再把控制流转过去。函数执行完后，通过 `sigreturn` 系统调用回到内核，内核恢复栈帧继续原来的执行流。
 
-`kill`、`tkill`、`tgkill`、`sigaction`、`sigprocmask`、`sigsuspend`、`sigtimedwait` 等系统调用都建立在这条链路上，Moss 对此沿用。
+`kill`、`tkill`、`tgkill`、`sigaction`、`sigprocmask`、`sigsuspend`、`sigtimedwait` 等系统调用都建立在这条链路上，Moss 沿用了这些系统调用的实现。
 
 === 现存问题
 
@@ -36,7 +36,7 @@ StarryOS 的实现存在三个明显缺口：
 
 2. *信号发送没有权限校验*。普通用户理论上只能向同 UID 的进程发信号，这个检查在 StarryOS 里缺失。
 
-3. *父进程看不到子进程的停止与继续*。`waitid` 的 `WSTOPPED`、`WCONTINUED` 选项形同虚设。
+3. *父进程看不到子进程的停止与继续*。`waitid` 的 `WSTOPPED`、`WCONTINUED` 标记形同虚设。
 
 后面几节分别说明 Moss 如何处理这三个问题。
 
@@ -44,7 +44,7 @@ StarryOS 的实现存在三个明显缺口：
 
 === 问题所在
 
-StarryOS 里进程只有两条路：继续运行，或者退出。`SIGSTOP` 走的是退出路径，但 POSIX 规定停止信号应该让进程暂停、保留现场，等 `SIGCONT` 到来后再从原位置继续——停止不等于死。
+StarryOS 里进程只有两条路：继续运行，或者退出。`SIGSTOP` 走的是退出路径，但 POSIX 标准规定停止信号应该让进程暂停、保留现场，等 `SIGCONT` 到来后再从原位置继续——停止不等于死。
 
 Shell 按下 Ctrl+Z 时最能说明这个问题。前台进程收到 `SIGTSTP`，应该暂停；用户之后执行 `fg`，进程从断点继续。StarryOS 的实现里 Ctrl+Z 会直接杀掉进程，作业控制整个语义因此垮掉。GDB 等调试器的暂停和恢复依赖的也是同一套机制。
 
