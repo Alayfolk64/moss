@@ -19,7 +19,7 @@
   set text(font: ("Times New Roman", "Microsoft YaHei", "SimSun", "Songti SC"), size: 12pt)
 
   v(2.2cm)
-  v(2.3cm)
+  v(4.3cm)
   align(center)[
     #text(size: 30pt, weight: "bold", report-title)
   ]
@@ -28,7 +28,7 @@
     #text(size: 20pt, report-subtitle)
   ]
 
-  v(5.2cm)
+  v(9.2cm)
   align(center)[
     #block(width: 10cm)[
       #set text(size: 14pt)

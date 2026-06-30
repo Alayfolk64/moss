@@ -2,7 +2,7 @@
 
 MOSS 是一个基于 StarryOS/ArceOS 演进而来的 Rust 宏内核操作系统，面向 Linux 用户态兼容场景开发。当前比赛版本主要支持 RISC-V 64 与 LoongArch64，可运行 BusyBox、musl/glibc 用户程序、性能测试以及 LTP 系统调用测试。
 
-> 初赛阶段的汇报材料位于 [`preliminary-report`](./preliminary-report/) 文件夹
+> 初赛阶段的汇报材料位于百度网盘：`https://pan.baidu.com/s/1Ls1hawu1NluVZ0SAmK7Izg?pwd=moss`，提取码 `moss`
 
 ## 支持情况
 
@@ -163,6 +163,14 @@ access02 access02
 ```
 
 [`src/ltp_testcases.sh`](./src/ltp_testcases.sh) 中写入了用于测评的所有 LTP 测例，如有注释则可跳过被注释的测例。
+
+## AI 使用说明
+
+本项目代码由 AI 辅助生成实现，关键设计思路与技术决策由人机协同完成。
+
+在开发过程中，开发者负责提出需求、设计整体方案与约束条件，AI 负责代码生成与部分实现优化。
+
+最终代码由开发者审核、调整并整合。
 
 ## 许可证
 
