@@ -1,6 +1,4 @@
-# Format: <case> <command> [args...]
-# Active/commented state comes from init.sh; summary-only additions are commented.
-# Previously commented TODO syscall cases moved to todo_syscall.sh.
+# 本文件下的测例均可正常运行，注释是为了缩短评测时间
 
 # abort01 abort01
 accept01 accept01

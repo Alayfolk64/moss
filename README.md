@@ -2,7 +2,7 @@
 
 MOSS 是一个基于 StarryOS/ArceOS 演进而来的 Rust 宏内核操作系统，面向 Linux 用户态兼容场景开发。当前比赛版本主要支持 RISC-V 64 与 LoongArch64，可运行 BusyBox、musl/glibc 用户程序、性能测试以及 LTP 系统调用测试。
 
-> 初赛阶段的汇报材料位于百度网盘：`https://pan.baidu.com/s/1Ls1hawu1NluVZ0SAmK7Izg?pwd=moss`，提取码 `moss`
+> 初赛阶段的汇报材料位于百度网盘：`https://pan.baidu.com/s/1Ls1hawu1NluVZ0SAmK7Izg?pwd=moss`，提取码 `moss`(包括演示视频，汇报 PPT，初赛文档)
 
 ## 支持情况
 
@@ -10,8 +10,7 @@ MOSS 是一个基于 StarryOS/ArceOS 演进而来的 Rust 宏内核操作系统�
 | --- | --- | --- |
 | RISC-V 64 | 支持 | 比赛测评、交互演示、内核调试 |
 | LoongArch64 | 支持 | 比赛测评、交互演示、内核调试 |
-| AArch64 | 基础支持 | 上游构建与启动检查 |
-| x86_64 | 开发中 | 上游构建检查 |
+
 
 ## 运行环境
 
