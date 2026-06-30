@@ -7,7 +7,7 @@
 
 信号是进程间传递异步事件的基本手段。进程之间可以用信号通知对方，内核也借助信号把硬件异常、终端中断、子进程状态变化等事件交给进程处理。
 
-Moss 沿用 StarryOS 的信号框架，重点补了三块缺口：进程的可暂停状态、信号发送的权限校验，以及父进程对子进程停止与继续事件的感知。
+MossOS 沿用 StarryOS 的信号框架，重点补了三块缺口：进程的可暂停状态、信号发送的权限校验，以及父进程对子进程停止与继续事件的感知。
 
 == StarryOS 的信号机制
 
@@ -26,7 +26,7 @@ StarryOS 的信号机制由底层库 `starry-signal` 提供核心语义，内核
 
 调用用户处理函数时，内核在用户栈上构造信号栈帧，保存被中断时的寄存器状态和恢复所需的上下文，再把控制流转过去。函数执行完后，通过 `sigreturn` 系统调用回到内核，内核恢复栈帧继续原来的执行流。
 
-`kill`、`tkill`、`tgkill`、`sigaction`、`sigprocmask`、`sigsuspend`、`sigtimedwait` 等系统调用都建立在这条链路上，Moss 沿用了这些系统调用的实现。
+`kill`、`tkill`、`tgkill`、`sigaction`、`sigprocmask`、`sigsuspend`、`sigtimedwait` 等系统调用都建立在这条链路上，MossOS 沿用了这些系统调用的实现。
 
 === 现存问题
 
@@ -38,7 +38,7 @@ StarryOS 的实现存在三个明显缺口：
 
 3. *父进程看不到子进程的停止与继续*。`waitid` 的 `WSTOPPED`、`WCONTINUED` 标记形同虚设。
 
-后面几节分别说明 Moss 如何处理这三个问题。
+后面几节分别说明 MossOS 如何处理这三个问题。
 
 == 进程可暂停状态
 
@@ -50,7 +50,7 @@ Shell 按下 Ctrl+Z 时最能说明这个问题。前台进程收到 `SIGTSTP`�
 
 === 核心结构
 
-要支持暂停，进程需要一个对外可见的"暂停中"状态，以及一个让线程真正挂住自己的地方。Moss 引入 `ProcessWaitStatus` 枚举，并在 `ProcessData` 上新增两个字段：
+要支持暂停，进程需要一个对外可见的"暂停中"状态，以及一个让线程真正挂住自己的地方。MossOS 引入 `ProcessWaitStatus` 枚举，并在 `ProcessData` 上新增两个字段：
 
 #figure(
   [
@@ -155,7 +155,7 @@ Shell 按下 Ctrl+Z 时最能说明这个问题。前台进程收到 `SIGTSTP`�
 
 StarryOS 已有一个 `child_exit_event`，但只在子进程退出时触发。停止和继续没有对应的唤醒动作，所以 `WSTOPPED`、`WCONTINUED` 的语义一直没法生效。
 
-Moss 没有新建通道，而是让停止和继续两条路径也触发同一个 `child_exit_event`，把它的语义扩展为"子进程任何状态变化都触发"：
+MossOS 没有新建通道，而是让停止和继续两条路径也触发同一个 `child_exit_event`，把它的语义扩展为"子进程任何状态变化都触发"：
 
 #figure(
   [
@@ -178,7 +178,7 @@ Moss 没有新建通道，而是让停止和继续两条路径也触发同一个
 
 父进程登记唤醒入口（Waker）和子进程状态变化之间有一个竞争窗口：父进程检查完 `wait_status`、还没把 Waker 挂上去，子进程的状态恰好先变了，这次通知就悄悄丢了，父进程会一直等下去。
 
-Moss 用登记后复查覆盖这个窗口：
+MossOS 用登记后复查覆盖这个窗口：
 
 #figure(
   [
@@ -206,7 +206,7 @@ Moss 用登记后复查覆盖这个窗口：
 
 POSIX 规定，除 root 外，发送者只能向与自己 UID 或 SUID 匹配的目标发信号。`SIGCONT` 有个例外：同一会话内可以跨 UID 发，让 Shell 能对已切换身份的子进程发出恢复命令。
 
-StarryOS 的 `ProcessData` 里没有 UID 相关字段，检查根本没有基础。Moss 在进程与线程管理一章（@sec:uid-gid）引入了 real/effective/saved 三元凭据，信号权限校验直接使用这些字段：
+StarryOS 的 `ProcessData` 里没有 UID 相关字段，检查根本没有基础。MossOS 在进程与线程管理一章的 UID/GID 三元组一节引入了 real/effective/saved 三元凭据，信号权限校验直接使用这些字段：
 
 #figure(
   table(
@@ -226,7 +226,7 @@ StarryOS 的 `ProcessData` 里没有 UID 相关字段，检查根本没有基础
 
 == 小结
 
-StarryOS 已经完成了信号发送、入队、屏蔽与用户处理函数递送的完整链路。Moss 在此基础上补了三个环节：
+StarryOS 已经完成了信号发送、入队、屏蔽与用户处理函数递送的完整链路。MossOS 在此基础上补了三个环节：
 
 #figure(
   table(
@@ -239,5 +239,5 @@ StarryOS 已经完成了信号发送、入队、屏蔽与用户处理函数递�
     [状态变化通知], [`child_exit_event` 复用，登记后复查], [`waitid` 停止与继续事件正常到达父进程],
     [信号权限], [UID/EUID/SUID 三元凭据校验], [POSIX 信号权限模型，跨 UID 隔离],
   ),
-  caption: [Moss 对信号机制的补充],
+  caption: [MossOS 对信号机制的补充],
 ) <tab:signal-deltas>

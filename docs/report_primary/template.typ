@@ -1,13 +1,28 @@
+#let report-header-title = [MossOS 设计文档]
+
+#let report-header() = [
+  #align(center, text(font: ("Times New Roman", "SimSun", "Songti SC", "STSong"), size: 10pt, report-header-title))
+  #v(4pt)
+  #line(length: 100%, stroke: 0.75pt + black)
+]
+
+#let report-footer(numbering: "1") = context [
+  #align(center, text(font: ("Times New Roman", "SimSun", "Songti SC", "STSong"), size: 10pt, counter(page).display(numbering)))
+]
+
 #let report-style(body) = {
   set text(
-    font: ("Times New Roman", "SimSun"),
+    font: ("Times New Roman", "SimSun", "Songti SC", "STSong"),
     size: 11pt,
     lang: "zh",
   )
 
   set page(
     paper: "a4",
-    margin: (x: 2.5cm, y: 2.2cm),
+    margin: (top: 2.5cm, bottom: 2.2cm, x: 2.5cm),
+    header-ascent: 1.2em,
+    header: report-header(),
+    footer: report-footer(),
   )
 
   set par(
@@ -29,7 +44,7 @@
       align(
         left,
         text(
-          font: ("Consolas", "KaiTi"),
+          font: ("Consolas", "KaiTi", "Kaiti SC"),
           size: 10pt,
           it,
         ),

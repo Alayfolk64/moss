@@ -1,33 +1,24 @@
+#import "template.typ": report-footer, report-header
+
 // 封面信息：按需在这里替换即可。
-#let report-title = [Moss]
+#let report-title = [MossOS]
 #let report-subtitle = [设计文档]
 #let team-name = [每天睡满八小时]
 #let team-members = [吴勋、张可欣]
 #let advisors = [马彬、钟福金]
 #let report-date = [2026 年 6 月]
 
-// 校徽预留：找到图片后，将 none 改为 image("pictrues/校徽.png", width: 13cm)。
-#let school-logo = image("pictrues/loogoo.png", width: 13cm)
-
 #let report-cover() = {
   set page(
     paper: "a4",
     margin: (top: 0cm, bottom: 2.5cm, x: 2.5cm),
+    header: none,
+    footer: none,
   )
   set par(first-line-indent: 0em, justify: false)
   set text(font: ("Times New Roman", "Microsoft YaHei", "SimSun", "Songti SC"), size: 12pt)
 
-  // 页顶横线与校徽位置。
-  rect(width: 100%, height: 2pt, fill: rgb("#2d2d2d"))
   v(2.2cm)
-  align(center)[
-    #if school-logo != none {
-      school-logo
-    } else {
-      block(width: 13cm, height: 3cm)[]
-    }
-  ]
-
   v(2.3cm)
   align(center)[
     #text(size: 30pt, weight: "bold", report-title)
@@ -47,9 +38,9 @@
           column-gutter: 0.6em,
           row-gutter: 1em,
           align: (right, left),
-          [参赛队名：], team-name,
-          [队伍成员：], team-members,
-          [指导老师：], advisors,
+          [*参赛院校：*], [*重庆邮电大学*],
+          [*参赛队名：*], [*#team-name*],
+          [*队伍成员：*], [*#team-members*],
         )
       ]
     ]
@@ -57,15 +48,23 @@
 
   v(2.2cm)
   align(center)[
-    #text(size: 13pt, report-date)
+    #text(size: 13pt, weight: "bold", report-date)
   ]
 }
 
 #report-cover()
 #pagebreak()
+#counter(page).update(1)
+#set page(
+  paper: "a4",
+  margin: (top: 2.5cm, bottom: 2.2cm, x: 2.5cm),
+  header-ascent: 1.2em,
+  header: report-header(),
+  footer: report-footer(numbering: "I"),
+)
 
 // 各章节文件会自行应用 template.typ 中的公共格式。
-#show outline.entry: set text(font: "SimSun")
+#show outline.entry: set text(font: ("SimSun", "Songti SC"))
 #show outline.entry.where(level: 1): set text(font: "Microsoft YaHei")
 
 #align(center)[
@@ -79,6 +78,14 @@
 )
 
 #pagebreak()
+#counter(page).update(1)
+#set page(
+  paper: "a4",
+  margin: (top: 2.5cm, bottom: 2.2cm, x: 2.5cm),
+  header-ascent: 1.2em,
+  header: report-header(),
+  footer: report-footer(numbering: "1"),
+)
 
 // 章节顺序只在此文件维护，各章正文由对应作者独立编辑。
 #include "ch1_概述.typ"

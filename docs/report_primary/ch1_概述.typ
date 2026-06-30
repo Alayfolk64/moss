@@ -7,17 +7,17 @@
 
 == 项目简介
 
-MossOS 是用 Rust 语言实现的宏内核，基于 ArceOS 的组件化框架，从 StarryOS 演化而来。ArceOS 把内核功能拆成独立的 crate：硬件抽象层、调度器、内存分配器、文件系统框架和网络栈各自独立，按需组合。Moss 在这套底层之上实现进程管理、信号处理、文件描述符抽象和系统调用，构成完整的宏内核。
+MossOS 是用 Rust 语言实现的宏内核，基于 ArceOS 的组件化框架，从 StarryOS 演化而来。ArceOS 把内核功能拆成独立的 crate：硬件抽象层、调度器、内存分配器、文件系统框架和网络栈各自独立，按需组合。MossOS 在这套底层之上实现进程管理、信号处理、文件描述符抽象和系统调用，构成完整的宏内核。
 
-目前 Moss 支持 RISC-V 64 和 LoongArch64，两种架构共享同一套内核源码，硬件差异由 ArceOS 底层屏蔽。
+目前 MossOS 支持 RISC-V 64 和 LoongArch64，两种架构共享同一套内核源码，硬件差异由 ArceOS 底层屏蔽。
 
 == 系统架构
 
-Moss 的整体结构见 @fig:overview-arch，从上到下分为五层。
+MossOS 的整体结构见 @fig:overview-arch，从上到下分为五层。
 
 用户态程序通过系统服务接口层（syscall 入口）进入内核。内核主体按功能域分为八个子系统：任务与执行管理覆盖进程和线程的完整生命周期；地址空间与内存管理负责用户地址空间；文件与存储管理提供统一的文件接口；I/O 与事件通知处理异步 I/O 和多路复用；IPC 与同步机制处理进程间通信；网络通信子系统实现网络协议栈；系统资源管理管理进程凭据与资源约束；内核运行支撑提供基础运行时设施。
 
-内核主体之下是 ArceOS 的组件化基础设施。ArceOS 将内核功能拆解为独立的 crate：`axtask` 提供任务管理，`axmm` 处理内存分配，`axfs` 实现文件系统框架，`axnet` 封装网络协议栈，`axhal` 定义硬件抽象接口，`axsync` 提供同步原语，`axruntime` 负责运行时初始化，`axplat` 负责平台抽象层。Moss 从 StarryOS 继承而来，StarryOS 已在这些组件基础上构建了宏内核功能，Moss 沿用这套架构并在此之上进行了完善。
+内核主体之下是 ArceOS 的组件化基础设施。ArceOS 将内核功能拆解为独立的 crate：`axtask` 提供任务管理，`axmm` 处理内存分配，`axfs` 实现文件系统框架，`axnet` 封装网络协议栈，`axhal` 定义硬件抽象接口，`axsync` 提供同步原语，`axruntime` 负责运行时初始化，`axplat` 负责平台抽象层。MossOS 从 StarryOS 继承而来，StarryOS 已在这些组件基础上构建了宏内核功能，MossOS 沿用这套架构并在此之上进行了完善。
 
 其中硬件抽象分三层实现。最上层 `axhal` 向内核其余部分提供统一的硬件抽象接口。`axhal` 收到请求后调用平台抽象层 `axplat` 的函数，根据启动配置转发到具体架构的平台抽象层（`axplat-riscv64-qemu-virt` 对应 RISC-V 和 `axplat-loongarch64-qemu-virt` 对应 LoongArch64 ）进行进一步处理。最终调用最底层 `axcpu` 里的函数，使用汇编语言对 CPU 寄存器进行修改。
 
@@ -27,30 +27,28 @@ Moss 的整体结构见 @fig:overview-arch，从上到下分为五层。
       #image("./pictrues/架构图浅色.svg", width: 75%)
     ]
   ],
-  caption: [Moss 系统整体架构],
+  caption: [MossOS 系统整体架构],
 ) <fig:overview-arch>
 
 == 初赛成果
 
-截至 6 月 27 日 17:15 ，Moss（队名"每天睡满八小时"）在初赛排行榜上位列第 4，综合得分 2601.18。进程管理、内存管理、文件系统、信号、网络和设备驱动几个主要模块已具备主干功能，系统调用覆盖了 Linux ABI 的常用接口。在 QEMU 上可以运行 busybox shell、lua 和 libc 测试程序。
+截至 6 月 30 日 20:22 ，MossOS（队名"每天睡满八小时"）在初赛排行榜上位列第 3，综合得分 2601.18。进程管理、内存管理、文件系统、信号、网络和设备驱动几个主要模块已具备主干功能，系统调用覆盖了 Linux ABI 的常用接口。在 QEMU 上可以运行 busybox shell、lua 和 libc 测试程序。
 
 #figure(
   [
     #align(center)[
       #image("./pictrues/初赛排名1.png", width: 100%)
     ]
-    #v(0.4em)
-    #align(center)[
-      #image("./pictrues/初赛排名2.png", width: 100%)
-    ]
   ],
-  caption: [初赛排行榜（截至 2026 年 6 月 27 日）],
+  caption: [初赛排行榜（截至 2026 年 6 月 30 日）],
 ) <fig:rank>
 
 == 代码结构
 
+
+#block(breakable: false)[
 ```
-Moss/
+MossOS/
 ├── src/
 │   └── main.rs              # 内核入口，初始化运行时
 ├── kernel/
@@ -75,5 +73,6 @@ Moss/
 ├── docs/                    # 设计文档
 └── Makefile                 # 构建入口
 ```
+]
 
 `vendor/` 里是 ArceOS 上游组件的定制版，接口与上游保持兼容，按宏内核需要做了扩展。各模块的设计在后续各章展开。
