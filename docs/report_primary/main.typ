@@ -15,7 +15,7 @@
     margin: (top: 0cm, bottom: 2.5cm, x: 2.5cm),
   )
   set par(first-line-indent: 0em, justify: false)
-  set text(font: ("Times New Roman", "Microsoft YaHei", "SimSun"), size: 12pt)
+  set text(font: ("Times New Roman", "Microsoft YaHei", "SimSun", "Songti SC"), size: 12pt)
 
   // 页顶横线与校徽位置。
   rect(width: 100%, height: 2pt, fill: rgb("#2d2d2d"))
