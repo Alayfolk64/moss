@@ -125,8 +125,11 @@ pub struct Thread {
     /// The OOM score adjustment value.
     oom_score_adj: AtomicI32,
 
-    /// Ready to exit
+    /// Ready to exit 表示线程的退出清理已完成，用户循环可以结束
     pub exit: Arc<AtomicBool>,
+
+    ///This thread must exit because another thread in the same process is performing execve
+    exec_exit: AtomicBool,
 
     /// Indicates whether the thread is currently accessing user memory.
     accessing_user_memory: AtomicBool,
@@ -145,6 +148,7 @@ impl Thread {
             robust_list_head: AtomicUsize::new(0),
             time: AssumeSync(RefCell::new(TimeManager::new())),
             exit: Arc::new(AtomicBool::new(false)),
+            exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),
             accessing_user_memory: AtomicBool::new(false),
             exit_event: Arc::default(),
@@ -186,6 +190,18 @@ impl Thread {
     /// Check if the thread is ready to exit.
     pub fn pending_exit(&self) -> bool {
         self.exit.load(Ordering::Acquire)
+    }
+
+    ///Ask this thread to leave because anothor thread is executing execve.
+    /// 发出退出请求
+    pub fn request_exec_exit(&self) {
+        self.exec_exit.store(true, Ordering::Release);
+    }
+
+    ///Check whether this thread must leave for execve.
+    /// 检查退出请求
+    pub fn exec_exit_requested(&self) -> bool {
+        self.exec_exit.load(Ordering::Acquire)
     }
 
     /// Set the thread to exit.
@@ -248,6 +264,13 @@ pub struct ProcessData {
     /// The virtual memory address space.
     // TODO: scopify
     pub aspace: Arc<Mutex<AddrSpace>>,
+
+    /// 需增加一个小线程组变更锁
+    ///Serializes clone and execve changes to the thread group.
+    pub exec_lock: Mutex<()>,
+    ///True while this process is replacing its executable image.
+    exec_in_progress: AtomicBool,
+
     /// The resource scope
     pub scope: RwLock<Scope>,
     /// The user heap top
@@ -310,6 +333,8 @@ impl ProcessData {
             exe_path: RwLock::new(exe_path),
             cmdline: RwLock::new(cmdline),
             aspace,
+            exec_lock: Mutex::new(()),
+            exec_in_progress: AtomicBool::new(false),
             scope: RwLock::new(Scope::new()),
             heap_top: AtomicUsize::new(crate::config::USER_HEAP_BASE),
 
@@ -526,5 +551,15 @@ impl ProcessData {
 
     pub fn set_supplementary_groups(&self, groups: Vec<u32>) {
         *self.supplementary_groups.lock() = groups;
+    }
+
+    ///检查是否增在执行exec
+    pub fn exec_in_progress(&self) -> bool {
+        self.exec_in_progress.load(Ordering::Acquire)
+    }
+
+    /// Modify the status of exec
+    pub fn set_exec_in_progress(&self, value: bool) {
+        self.exec_in_progress.store(value, Ordering::Release);
     }
 }

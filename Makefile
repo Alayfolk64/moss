@@ -16,7 +16,8 @@ LOONGARCH_CC ?=
 export BLK := y
 export NET := n
 export VSOCK := n
-export MEM := 1G
+export MEM ?= 8G
+export SMP ?= 8
 export ICOUNT := n
 export BUS := mmio
 
