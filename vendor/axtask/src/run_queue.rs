@@ -79,6 +79,8 @@ pub struct SchedulerStats {
     pub wakeups: u64,
     /// Wakeups or affinity changes that moved a task to another CPU.
     pub migrations: u64,
+    /// IPIs sent to wake remote idle CPUs.
+    pub ipi_kicks: u64,
     /// Times the scheduler found no runnable task.
     pub idle_selections: u64,
 }
@@ -285,11 +287,13 @@ pub(crate) struct AxRunQueue {
     scheduler: SpinRaw<Scheduler>,
     ready_tasks: AtomicUsize,
     running_task: AtomicBool,
+    idle_kick_pending: AtomicBool,
     ticks: AtomicU64,
     busy_ticks: AtomicU64,
     context_switches: AtomicU64,
     wakeups: AtomicU64,
     migrations: AtomicU64,
+    ipi_kicks: AtomicU64,
     idle_selections: AtomicU64,
 }
 
@@ -558,11 +562,13 @@ impl AxRunQueue {
             scheduler: SpinRaw::new(scheduler),
             ready_tasks: AtomicUsize::new(1),
             running_task: AtomicBool::new(!crate::current().is_idle()),
+            idle_kick_pending: AtomicBool::new(false),
             ticks: AtomicU64::new(0),
             busy_ticks: AtomicU64::new(0),
             context_switches: AtomicU64::new(0),
             wakeups: AtomicU64::new(0),
             migrations: AtomicU64::new(0),
+            ipi_kicks: AtomicU64::new(0),
             idle_selections: AtomicU64::new(0),
         }
     }
@@ -576,6 +582,7 @@ impl AxRunQueue {
             context_switches: self.context_switches.load(Ordering::Relaxed),
             wakeups: self.wakeups.load(Ordering::Relaxed),
             migrations: self.migrations.load(Ordering::Relaxed),
+            ipi_kicks: self.ipi_kicks.load(Ordering::Relaxed),
             idle_selections: self.idle_selections.load(Ordering::Relaxed),
         }
     }
@@ -586,7 +593,14 @@ impl AxRunQueue {
 
     #[cfg(all(feature = "smp", feature = "ipi"))]
     fn kick_if_idle(&self) {
-        if self.cpu_id != this_cpu_id() && !self.running_task.load(Ordering::Acquire) {
+        if self.cpu_id != this_cpu_id()
+            && !self.running_task.load(Ordering::Acquire)
+            && self
+                .idle_kick_pending
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+        {
+            self.ipi_kicks.fetch_add(1, Ordering::Relaxed);
             axhal::irq::send_ipi(
                 axhal::irq::IPI_IRQ,
                 axhal::irq::IpiTarget::Other {
@@ -655,6 +669,11 @@ impl AxRunQueue {
     /// Core reschedule subroutine.
     /// Pick the next task to run and switch to it.
     fn resched(&mut self) {
+        // An IPI has done its job once this CPU reaches the scheduler. Clear
+        // the latch before checking the queue so a concurrent enqueue either
+        // becomes visible below or sends a fresh kick.
+        self.idle_kick_pending.store(false, Ordering::Release);
+
         let next = if let Some(next) = self.scheduler.lock().pick_next_task() {
             self.ready_tasks.fetch_sub(1, Ordering::Relaxed);
             next

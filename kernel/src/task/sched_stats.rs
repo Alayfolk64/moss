@@ -17,13 +17,14 @@ fn report(current: &[SchedulerStats], previous: &[SchedulerStats]) {
         let utilization = if ticks == 0 { 0 } else { busy * 100 / ticks };
 
         warn!(
-            "[sched] cpu={} busy={:3}% ready={} switch={} wake={} migrate={} idle={}",
+            "[sched] cpu={} busy={:3}% ready={} switch={} wake={} migrate={} ipi={} idle={}",
             stat.cpu_id,
             utilization,
             stat.ready_tasks,
             delta(stat.context_switches, old.context_switches),
             delta(stat.wakeups, old.wakeups),
             delta(stat.migrations, old.migrations),
+            delta(stat.ipi_kicks, old.ipi_kicks),
             delta(stat.idle_selections, old.idle_selections),
         );
     }

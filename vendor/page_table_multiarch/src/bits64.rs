@@ -318,7 +318,10 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
             return Err(PagingError::AlreadyMapped);
         }
         *entry = GenericPTE::new_page(target.align_down(page_size), flags, page_size.is_huge());
-        M::flush_tlb_local(Some(vaddr));
+        // Installing a previously absent mapping cannot invalidate a cached
+        // valid translation. Fault handlers must invalidate their local
+        // negative entry before retrying; remap, protect, and unmap continue
+        // to queue the required cross-CPU shootdown below.
         Ok(())
     }
 
