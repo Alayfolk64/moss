@@ -136,7 +136,7 @@ ifneq ($(DWARF), y)
 endif
 
 kernel-la: toolchain
-	$(MAKE) ARCH=loongarch64 BUS=pci MEM=1G SMP=8 build
+	$(MAKE) ARCH=loongarch64 BUS=pci MEM=8G SMP=8 build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
 endif

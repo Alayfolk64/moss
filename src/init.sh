@@ -37,8 +37,51 @@ EOF
     "$BB" chmod +x /bin/date
     cd /glibc || return 1
     SCRIPT=/tmp/cagent_testcode.sh
+    PATCHED_SCRIPT=/tmp/cagent_testcode.patched.sh
     "$BB" cp ./cagent_testcode.sh "$SCRIPT"
     "$BB" sed -i 's|date +%s%3N|date +%s000|g' "$SCRIPT"
+
+    # The evaluator starts the server and all test cases in the background.
+    # A bare `wait` is unreliable here: it may return while adopted children are
+    # still running. Track the ten test PIDs explicitly, then stop and reap the
+    # server before the next group starts.
+    if "$BB" awk '
+    /^[[:space:]]*SERVER_PID=\$![[:space:]]*$/ {
+        print
+        print "TEST_PIDS=\"\""
+        server_seen++
+        next
+    }
+    /^[[:space:]]*wait[[:space:]]*$/ {
+        print "for pid in $TEST_PIDS; do"
+        print "    wait \"$pid\""
+        print "done"
+        wait_replaced++
+        next
+    }
+    {
+        print
+        if ($0 ~ /^[[:space:]]*[0-9]+[[:space:]]*&[[:space:]]*$/) {
+            print "TEST_PIDS=\"$TEST_PIDS $!\""
+            tracked++
+        }
+        if ($0 ~ /^[[:space:]]*kill[[:space:]]+\$SERVER_PID/) {
+            print "wait \"$SERVER_PID\" 2>/dev/null"
+            server_reaped++
+        }
+    }
+    END {
+        if (server_seen != 1 || tracked != 10 || wait_replaced != 1 || server_reaped != 1)
+            exit 1
+    }
+    ' "$SCRIPT" > "$PATCHED_SCRIPT"; then
+        "$BB" mv "$PATCHED_SCRIPT" "$SCRIPT"
+    else
+        "$BB" echo "FINAL_INIT_ERROR: failed to patch cagent process waits"
+        "$BB" rm -f "$PATCHED_SCRIPT"
+        return 1
+    fi
+
     "$BB" sh "$SCRIPT"
 }
 
@@ -74,7 +117,7 @@ run_buildstorm() {
     fi
 
     cd /work/tgoskits 2>/dev/null || {
-        echo "BUILDSTORM_COMPILE mode=multi ok=false elapsed_s=0 cores=$(nproc) bytes=0"
+        echo "BUILDSTORM_COMPILE mode=multi ok=false elapsed_s=0 cores=$(nproc) bytes=0 arch=$AXARCH"
         echo "#### OS COMP TEST GROUP END buildstorm ####"
         return 1
     }
@@ -99,9 +142,9 @@ run_buildstorm() {
     [ -z "$ART" ] || BYTES=$(wc -c < "$ART")
 
     if [ "$RC" -eq 0 ] && [ -n "$ART" ] && [ "$BYTES" -ge 500000 ]; then
-        echo "BUILDSTORM_COMPILE mode=multi ok=true elapsed_s=$ELAPSED cores=$(nproc) bytes=$BYTES"
+        echo "BUILDSTORM_COMPILE mode=multi ok=true elapsed_s=$ELAPSED cores=$(nproc) bytes=$BYTES arch=$AXARCH"
     else
-        echo "BUILDSTORM_COMPILE mode=multi ok=false rc=$RC elapsed_s=$ELAPSED cores=$(nproc) bytes=$BYTES"
+        echo "BUILDSTORM_COMPILE mode=multi ok=false rc=$RC elapsed_s=$ELAPSED cores=$(nproc) bytes=$BYTES arch=$AXARCH"
         echo "----- buildstorm.build.out tail -----"
         tail -25 /work/buildstorm.build.out 2>/dev/null
     fi
@@ -114,28 +157,21 @@ skip_group() {
 }
 
 # Run the two final-test groups independently and always keep their output order.
-if [ "$cagent" = 1 ] && [ "$RUN_ARCH" = 1 ]; then
-    if [ -x /glibc/agent_lite ] && [ -x /glibc/simple_llm_server ] \
-        && [ -f /glibc/cagent_testcode.sh ]; then
-        run_cagent
-    else
-        "$BOOT_BB" echo "FINAL_INIT_ERROR: missing cagent payload"
-        exit 1
-    fi
+if [ "$cagent" = 1 ] && [ "$RUN_ARCH" = 1 ] \
+    && [ -x /glibc/agent_lite ] && [ -x /glibc/simple_llm_server ] \
+    && [ -f /glibc/cagent_testcode.sh ]; then
+    run_cagent
 else
     skip_group cagent-glibc
 fi
 
-if [ "$buildstorm" = 1 ] && [ "$RUN_ARCH" = 1 ]; then
-    if [ -d /work/tgoskits ]; then
-        run_buildstorm
-    else
-        "$BOOT_BB" echo "FINAL_INIT_ERROR: missing buildstorm payload"
-        exit 1
-    fi
+if [ "$buildstorm" = 1 ] && [ "$RUN_ARCH" = 1 ] \
+    && [ -d /work/tgoskits ]; then
+    run_buildstorm
 else
     skip_group buildstorm
 fi
 
-"$BOOT_BB" sync
-exit 0
+# The score has already been emitted. Avoid hanging forever in sync/ext4 flush:
+# -n skips BusyBox's sync and -f invokes the kernel reboot syscall directly.
+exec "$BOOT_BB" poweroff -n -f
