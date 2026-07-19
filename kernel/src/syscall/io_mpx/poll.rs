@@ -10,6 +10,7 @@ use axtask::{
 };
 use linux_raw_sys::general::{POLLNVAL, pollfd, timespec};
 use starry_signal::SignalSet;
+use starry_vm::{vm_load_any, vm_write_slice};
 
 use super::{FdPollSet, poll_network_once};
 use crate::{
@@ -90,6 +91,24 @@ fn do_poll(
     })
 }
 
+fn poll_user_fds(
+    user_fds: UserPtr<pollfd>,
+    nfds: usize,
+    timeout: Option<TimeValue>,
+    sigmask: Option<SignalSet>,
+) -> AxResult<isize> {
+    let user_fds = user_fds.address().as_mut_ptr_of::<pollfd>();
+
+    // pollfd contains only integer fields, so every bit pattern is valid.
+    let mut poll_fds = unsafe { vm_load_any(user_fds, nfds)? };
+    let result = do_poll(&mut poll_fds, timeout, sigmask);
+
+    if result.is_ok() {
+        vm_write_slice(user_fds, &poll_fds)?;
+    }
+    result
+}
+
 pub(super) fn wait_for_signal_or_timeout(
     uctx: &mut UserContext,
     timeout: Option<TimeValue>,
@@ -126,13 +145,12 @@ pub(super) fn wait_for_signal_or_timeout(
 
 #[cfg(target_arch = "x86_64")]
 pub fn sys_poll(fds: UserPtr<pollfd>, nfds: u32, timeout: i32) -> AxResult<isize> {
-    let fds = fds.get_as_mut_slice(nfds as usize)?;
     let timeout = if timeout < 0 {
         None
     } else {
         Some(TimeValue::from_millis(timeout as u64))
     };
-    do_poll(fds, timeout, None)
+    poll_user_fds(fds, nfds as usize, timeout, None)
 }
 
 pub fn sys_ppoll(
@@ -156,6 +174,6 @@ pub fn sys_ppoll(
     if nfds == 0 {
         wait_for_signal_or_timeout(uctx, timeout, sigmask)
     } else {
-        do_poll(fds.get_as_mut_slice(nfds)?, timeout, sigmask)
+        poll_user_fds(fds, nfds, timeout, sigmask)
     }
 }

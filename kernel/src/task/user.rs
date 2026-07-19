@@ -26,10 +26,11 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
             while !thr.pending_exit() {
                 ptrace_wait_if_stopped(thr);
                 let reason = uctx.run();
+                let interrupted = matches!(reason, ReturnReason::Interrupt);
 
                 set_timer_state(&curr, TimerState::Kernel);
 
-                //让目标线程真正完成退出清理
+                // 让目标线程真正完成退出清理
                 if thr.exec_exit_requested() {
                     do_exit(0, false);
                     break;
@@ -96,7 +97,28 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     }
                 }
 
-                if !unblock_next_signal() {
+                // do_exit() may have reclaimed the process address space.  Do not
+                // touch user memory (including the registered rseq area) afterwards.
+                if thr.pending_exit() {
+                    break;
+                }
+
+                // This is the task's migration-safe point: syscall/trap work
+                // is complete, no kernel lock is held, and the user context
+                // is fully saved. Rebalance before rseq publishes the CPU ID.
+                axtask::rebalance_current();
+
+                let check_signal = !unblock_next_signal();
+                let signal_pending =
+                    check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();
+                if let Err(err) = thr.prepare_rseq(&mut uctx, interrupted || signal_pending) {
+                    warn!("Invalid rseq state: {err:?}");
+                    thr.reset_rseq();
+                    raise_signal_fatal(SignalInfo::new_kernel(Signo::SIGSEGV))
+                        .expect("Failed to send rseq fault signal");
+                }
+
+                if check_signal {
                     while check_signals(thr, &mut uctx, None) {}
                 }
 

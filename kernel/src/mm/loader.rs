@@ -11,7 +11,9 @@ use axhal::{
     paging::{MappingFlags, PageSize},
 };
 use axsync::Mutex;
-use kernel_elf_parser::{AuxEntry, ELFHeaders, ELFHeadersBuilder, ELFParser, app_stack_region};
+use kernel_elf_parser::{
+    AuxEntry, AuxType, ELFHeaders, ELFHeadersBuilder, ELFParser, app_stack_region,
+};
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use ouroboros::self_referencing;
 use uluru::LRUCache;
@@ -281,9 +283,11 @@ impl ElfLoader {
             ldso.as_ref()
                 .map_or_else(|| elf.entry(), |ldso| ldso.entry()),
         );
-        let auxv = elf
+        let mut auxv = elf
             .aux_vector(PAGE_SIZE_4K, ldso.map(|elf| elf.base()))
             .collect::<Vec<_>>();
+        auxv.push(AuxEntry::new(AuxType::RSEQ_FEATURE_SIZE, 28));
+        auxv.push(AuxEntry::new(AuxType::RSEQ_ALIGN, 32));
 
         Ok(Ok((entry, auxv)))
     }

@@ -545,6 +545,32 @@ impl CachedFile {
         self.inner().flush_metadata_cache(false)
     }
 
+    fn read_fully_at(file: &FileNode, mut buf: &mut [u8], mut offset: u64) -> VfsResult<usize> {
+        let mut read = 0;
+        while !buf.is_empty() {
+            let count = file.read_at(buf, offset)?;
+            if count == 0 {
+                break;
+            }
+            read += count;
+            offset += count as u64;
+            buf = &mut buf[count..];
+        }
+        Ok(read)
+    }
+
+    fn write_fully_at(file: &FileNode, mut buf: &[u8], mut offset: u64) -> VfsResult<()> {
+        while !buf.is_empty() {
+            let written = file.write_at(buf, offset)?;
+            if written == 0 {
+                return Err(VfsError::Io);
+            }
+            offset += written as u64;
+            buf = &buf[written..];
+        }
+        Ok(())
+    }
+
     fn from_record(record: &Arc<CachedFileRecord>) -> Self {
         Self {
             inner: record.location.clone(),
@@ -587,7 +613,7 @@ impl CachedFile {
             let page_start = pn as u64 * PAGE_SIZE as u64;
             let len = file_len.saturating_sub(page_start).min(PAGE_SIZE as u64) as usize;
             if len > 0 {
-                file.write_at(&page.data()[..len], page_start)?;
+                Self::write_fully_at(file, &page.data()[..len], page_start)?;
             }
             page.dirty = false;
         }
@@ -597,8 +623,9 @@ impl CachedFile {
     fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
         self.notify_evict_listeners(pn, page);
         if page.dirty {
-            let file_len = self.commit_len()?;
+            let file_len = self.len()?;
             Self::writeback_page(file, file_len, pn, page)?;
+            self.commit_len()?;
         }
         Ok(())
     }
@@ -618,7 +645,10 @@ impl CachedFile {
         if cache.len() == cache.cap().get() {
             // Cache is full, remove the least recently used page
             if let Some((pn, mut page)) = cache.pop_lru() {
-                self.evict_cache(file, pn, &mut page)?;
+                if let Err(err) = self.evict_cache(file, pn, &mut page) {
+                    cache.put(pn, page);
+                    return Err(err);
+                }
                 evicted = Some((pn, page));
             }
         }
@@ -627,7 +657,7 @@ impl CachedFile {
         let mut page = PageCache::new()?;
         page.data().fill(0);
         if !self.in_memory() {
-            file.read_at(page.data(), pn as u64 * PAGE_SIZE as u64)?;
+            Self::read_fully_at(file, page.data(), pn as u64 * PAGE_SIZE as u64)?;
         }
         cache.put(pn, page);
         Ok((cache.get_mut(&pn).unwrap(), evicted))
@@ -645,7 +675,10 @@ impl CachedFile {
         let mut evicted = None;
         if cache.len() == cache.cap().get() {
             if let Some((pn, mut page)) = cache.pop_lru() {
-                self.evict_cache(file, pn, &mut page)?;
+                if let Err(err) = self.evict_cache(file, pn, &mut page) {
+                    cache.put(pn, page);
+                    return Err(err);
+                }
                 evicted = Some((pn, page));
             }
         }
@@ -956,7 +989,7 @@ impl CachedFile {
             }
         }
         if !buf.is_empty() {
-            file.write_at(&buf, start)?;
+            Self::write_fully_at(file, &buf, start)?;
         }
         for (_, page) in run.iter_mut() {
             page.dirty = false;
@@ -1002,7 +1035,7 @@ impl CachedFile {
         let _cache_guard = self.shared().cache_op.lock();
         let page_range = Self::page_range(range);
         let file = self.inner().entry().as_file()?;
-        let file_len = self.commit_len()?;
+        let file_len = self.len()?;
         let mut dirty_pages = {
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
@@ -1020,7 +1053,8 @@ impl CachedFile {
             }
             dirty_pages
         };
-        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
+        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages)
+            .and_then(|_| self.commit_len().map(|_| ()));
         let mut cache = self.shared().page_cache.lock();
         for (pn, page) in dirty_pages {
             cache.put(pn, page);
@@ -1132,7 +1166,7 @@ impl CachedFile {
         }
         let _cache_guard = self.shared().cache_op.lock();
         let file = self.inner().entry().as_file()?;
-        let file_len = self.commit_len()?;
+        let file_len = self.len()?;
         let mut dirty_pages = {
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
@@ -1148,7 +1182,8 @@ impl CachedFile {
             }
             dirty_pages
         };
-        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
+        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages)
+            .and_then(|_| self.commit_len().map(|_| ()));
         let mut cache = self.shared().page_cache.lock();
         for (pn, page) in dirty_pages {
             cache.put(pn, page);
@@ -1162,7 +1197,7 @@ impl CachedFile {
         }
         let _cache_guard = self.shared().cache_op.lock();
         let file = self.inner().entry().as_file()?;
-        let file_len = self.commit_len()?;
+        let file_len = self.len()?;
         let removed = {
             let mut cache = self.shared().page_cache.lock();
             let mut removed = Vec::new();
@@ -1181,7 +1216,8 @@ impl CachedFile {
             }
         }
 
-        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
+        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages)
+            .and_then(|_| self.commit_len().map(|_| ()));
         if result.is_err() {
             let mut cache = self.shared().page_cache.lock();
             for (pn, page) in dirty_pages {

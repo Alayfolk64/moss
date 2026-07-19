@@ -21,11 +21,22 @@ pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
     not(feature = "pre-init"),
     not(feature = "shell-init")
 ))]
-pub const INIT_SCRIPT: &str = include_str!("init.sh");
+pub const INIT_SCRIPT: &str = include_str!("init_final.sh");
 #[cfg(feature = "pre-init")]
 pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases.sh");
 
+#[cfg(any(
+    feature = "timerfd-debug-init",
+    feature = "pre-init",
+    feature = "shell-init"
+))]
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
+#[cfg(not(any(
+    feature = "timerfd-debug-init",
+    feature = "pre-init",
+    feature = "shell-init"
+)))]
+pub const CMDLINE: &[&str] = &["/bin/bash", "-c", INIT_SCRIPT];
 
 #[cfg(feature = "pre-init")]
 fn build_ltp_cases_env() -> alloc::string::String {

@@ -37,7 +37,7 @@ impl Drop for ExecStateGuard<'_> {
     }
 }
 
-//实现结束兄弟线程的辅助函数
+// 实现结束兄弟线程的辅助函数
 fn terminate_other_threads_for_exec(proc_data: &ProcessData, current_tid: Pid) {
     loop {
         let other_tids = proc_data
@@ -293,6 +293,7 @@ fn execve_common(
     // They can become dangling once the address space is replaced.
     curr.as_thread().set_clear_child_tid(0);
     curr.as_thread().set_robust_list_head(0);
+    curr.as_thread().reset_rseq();
 
     close_cloexec_files_for_current_process();
 

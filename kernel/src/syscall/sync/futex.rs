@@ -96,7 +96,13 @@ pub fn sys_futex(
                 };
                 count = futex.wq.wake(value as _, bitset);
             }
-            axtask::yield_now();
+            // A futex wake is commonly issued speculatively when a lock is
+            // released. On SMP, the waiter normally belongs to another run
+            // queue, so yielding this CPU only disturbs an unrelated task.
+            // Keep the immediate handoff only for single-CPU builds.
+            if count != 0 && axconfig::plat::CPU_NUM == 1 {
+                axtask::yield_now();
+            }
             Ok(count as _)
         }
         FUTEX_REQUEUE | FUTEX_CMP_REQUEUE => {

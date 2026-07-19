@@ -100,6 +100,10 @@ impl BackendOps for SharedBackend {
         Ok(())
     }
 
+    fn discard(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
+        self.unmap(range, pt)
+    }
+
     fn populate(
         &self,
         range: VirtAddrRange,

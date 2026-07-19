@@ -23,6 +23,9 @@ use slab::Slab;
 
 const SET_SIZE: usize = 64;
 const MIN_HEAP_SIZE: usize = 0x8000;
+const BUDDY_ORDERS: usize = usize::BITS as usize;
+
+pub(crate) type BuddyHeap = buddy_system_allocator::Heap<BUDDY_ORDERS>;
 
 enum HeapAllocator {
     Slab64Bytes,
@@ -45,7 +48,7 @@ pub struct Heap {
     slab_1024_bytes: Slab<1024>,
     slab_2048_bytes: Slab<2048>,
     slab_4096_bytes: Slab<4096>,
-    buddy_allocator: buddy_system_allocator::Heap<32>,
+    buddy_allocator: BuddyHeap,
 }
 
 impl Heap {
@@ -78,7 +81,7 @@ impl Heap {
             slab_2048_bytes: Slab::<2048>::new(0, 0),
             slab_4096_bytes: Slab::<4096>::new(0, 0),
             buddy_allocator: {
-                let mut buddy = buddy_system_allocator::Heap::<32>::new();
+                let mut buddy = BuddyHeap::new();
                 buddy.init(heap_start_addr, heap_size);
                 buddy
             },

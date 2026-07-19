@@ -318,7 +318,7 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
             return Err(PagingError::AlreadyMapped);
         }
         *entry = GenericPTE::new_page(target.align_down(page_size), flags, page_size.is_huge());
-        self.flush(vaddr);
+        M::flush_tlb_local(Some(vaddr));
         Ok(())
     }
 

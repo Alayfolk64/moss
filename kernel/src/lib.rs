@@ -18,6 +18,7 @@ pub mod entry;
 
 mod config;
 mod file;
+mod ipi;
 mod mm;
 mod pseudofs;
 mod syscall;

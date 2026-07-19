@@ -5,8 +5,6 @@ export DWARF := n
 export MODE := release
 export MEMTRACK := n
 export SHELL_INIT ?= n
-export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
-RUSTUP ?= rustup
 RUST_LLD ?= rust-lld
 RUST_OBJCOPY ?= rust-objcopy
 GDB ?= gdb-multiarch
@@ -43,7 +41,7 @@ ensure-cargo-config:
 	@cp -f $(CARGO_CONFIG_TEMPLATE) $(A)/.cargo/config.toml
 
 toolchain: ensure-cargo-config
-	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
+	@rustup show active-toolchain
 
 KERNEL_NAME := $(notdir $(A))
 SDCARD_RV_IMG := $(A)/sdcard-rv.img

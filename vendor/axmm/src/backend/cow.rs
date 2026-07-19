@@ -119,10 +119,11 @@ impl CowBackend {
         flags: MappingFlags,
         pt: &mut PageTableMut,
     ) -> AxResult {
-        let mut frame_table = FRAME_TABLE.lock();
-        let frame = frame_table.get_frame_ref(paddr).ok_or(AxError::BadAddress)?;
-        drop(frame_table);
-        let mut frame = frame.lock();
+        let frame_ref = FRAME_TABLE
+            .lock()
+            .get_frame_ref(paddr)
+            .ok_or(AxError::BadAddress)?;
+        let frame = frame_ref.lock();
         assert!(frame.0 > 0, "invalid frame reference count");
         match frame.0 {
             1 => {
@@ -141,7 +142,9 @@ impl CowBackend {
                     );
                 }
                 pt.remap(vaddr, new_frame, flags)?;
-                frame.drop_frame(paddr, self.size);
+                drop(frame);
+                pt.finish();
+                frame_ref.lock().drop_frame(paddr, self.size);
             }
         }
 
@@ -164,6 +167,7 @@ impl BackendOps for CowBackend {
         for addr in pages_in(range, self.size)? {
             if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
                 assert_eq!(page_size, self.size);
+                pt.finish();
                 let frame_ref = FRAME_TABLE.lock().get_frame_ref(frame).ok_or(AxError::BadAddress)?;
                 let mut frame_ref = frame_ref.lock();
                 frame_ref.drop_frame(frame, self.size);

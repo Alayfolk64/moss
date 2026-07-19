@@ -1,0 +1,10 @@
+[toolchain]
+channel = "nightly-2025-05-20"
+profile = "minimal"
+components = ["rust-src", "llvm-tools-preview"]
+targets = [
+    "riscv64gc-unknown-none-elf",
+    "riscv64imac-unknown-none-elf",
+    "loongarch64-unknown-none",
+    "loongarch64-unknown-none-softfloat",
+]

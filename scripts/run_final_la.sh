@@ -26,6 +26,7 @@ run_image() {
     output=$2
 
     qemu-system-loongarch64 \
+        -accel tcg,thread=multi,tb-size=512 \
         -kernel kernel-la \
         -m 8G \
         -nographic \

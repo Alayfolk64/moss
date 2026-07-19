@@ -275,6 +275,9 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     #[cfg(feature = "multitask")]
     axtask::init_scheduler();
 
+    #[cfg(feature = "ipi")]
+    axipi::init();
+
     #[cfg(any(feature = "fs", feature = "net", feature = "display"))]
     {
         #[allow(unused_variables)]
@@ -375,23 +378,18 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
 
 #[cfg(feature = "alloc")]
 fn init_allocator() {
-    use axhal::mem::{MemRegionFlags, memory_regions, phys_to_virt, virt_to_phys};
+    use axhal::mem::{MemRegionFlags, memory_regions, phys_to_virt};
 
     info!("Initialize global memory allocator...");
     info!("  use {} allocator.", axalloc::global_allocator().name());
 
     let free_regions = || memory_regions().filter(|r| r.flags.contains(MemRegionFlags::FREE));
 
-    unsafe extern "C" {
-        safe static _ekernel: [u8; 0];
-    }
-    let kernel_end_paddr = virt_to_phys(_ekernel.as_ptr().addr().into());
-
     let init_region = free_regions()
-        // First try to find a free memory region after the kernel image
-        .find(|r| r.paddr >= kernel_end_paddr)
-        // Otherwise just use the largest free memory region
-        .or_else(|| free_regions().max_by_key(|r| r.size))
+        // The page allocator can manage only its initial contiguous region.
+        // Use the largest one so that smaller, disjoint regions can safely be
+        // added to the byte allocator below.
+        .max_by_key(|r| r.size)
         .expect("no free memory region found!!");
 
     axalloc::global_init(phys_to_virt(init_region.paddr).as_usize(), init_region.size);

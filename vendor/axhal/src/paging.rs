@@ -5,6 +5,8 @@ use memory_addr::{PAGE_SIZE_4K, PhysAddr, VirtAddr};
 use page_table_multiarch::PagingHandler;
 #[doc(no_inline)]
 pub use page_table_multiarch::{MappingFlags, PageSize, PagingError, PagingResult};
+#[cfg(target_arch = "loongarch64")]
+pub use page_table_multiarch::loongarch64::register_tlb_flush_handler;
 
 use crate::mem::{phys_to_virt, virt_to_phys};
 

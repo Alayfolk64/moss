@@ -46,8 +46,6 @@ LOG ?= warn
 V ?=
 DWARF ?=
 LTO ?=
-export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
-RUSTUP ?= rustup
 TARGET_DIR ?= $(PWD)/target
 EXTRA_CONFIG ?=
 OUT_CONFIG ?= $(PWD)/.axconfig.toml
@@ -132,8 +130,6 @@ export AX_LOG=$(LOG)
 export AX_TARGET=$(TARGET)
 export AX_IP=$(IP)
 export AX_GW=$(GW)
-export RUSTUP_TOOLCHAIN
-
 ifneq ($(filter $(MAKECMDGOALS),unittest unittest_no_fail_fast clippy doc doc_check_missing),)
   # When running unit tests or other tests unrelated to a specific platform,
   # set `AX_CONFIG_PATH` to empty for dummy config
@@ -177,7 +173,7 @@ ensure_cargo_config:
 	@cp -f $(CARGO_CONFIG_TEMPLATE) $(WORKSPACE_DIR)/.cargo/config.toml
 
 ensure_toolchain: ensure_cargo_config
-	@$(RUSTUP) default $(RUSTUP_TOOLCHAIN)
+	@rustup show active-toolchain
 
 include utils.mk
 include build.mk

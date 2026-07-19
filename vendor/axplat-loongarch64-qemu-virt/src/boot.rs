@@ -1,7 +1,12 @@
 use axplat::mem::{Aligned4K, pa, va};
 use page_table_entry::{GenericPTE, MappingFlags, loongarch64::LA64PTE};
 
-use crate::config::plat::{BOOT_STACK_SIZE, PHYS_BOOT_OFFSET, PHYS_VIRT_OFFSET};
+use crate::config::plat::{
+    BOOT_STACK_SIZE, HIGH_MEMORY_BASE, LOW_MEMORY_SIZE, PHYS_BOOT_OFFSET, PHYS_MEMORY_SIZE,
+    PHYS_VIRT_OFFSET,
+};
+
+const L1_BLOCK_SIZE: usize = 1 << 30;
 
 #[unsafe(link_section = ".bss.stack")]
 static mut BOOT_STACK: [u8; BOOT_STACK_SIZE] = [0; BOOT_STACK_SIZE];
@@ -36,12 +41,17 @@ unsafe fn init_boot_page_table() {
                 true,
             );
         }
-        // 0x8000_0000..0xc000_0000, VPWXGD, 1G block
-        BOOT_PT_L1[0x2] = LA64PTE::new_page(
-            pa!(0x8000_0000),
-            MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE,
-            true,
-        );
+        // Map all high memory before the final kernel page table is ready.
+        let high_memory_size = PHYS_MEMORY_SIZE.saturating_sub(LOW_MEMORY_SIZE);
+        let first_block = HIGH_MEMORY_BASE / L1_BLOCK_SIZE;
+        let last_block = (HIGH_MEMORY_BASE + high_memory_size).div_ceil(L1_BLOCK_SIZE);
+        for block in first_block..last_block {
+            BOOT_PT_L1[block] = LA64PTE::new_page(
+                pa!(block * L1_BLOCK_SIZE),
+                MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE,
+                true,
+            );
+        }
     }
 }
 

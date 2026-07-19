@@ -20,6 +20,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("vsock"))'
 [dependencies]
 axfeat = { workspace = true, features = [
     "fp-simd",
+    "ipi",
     "irq",
     "uspace",
 
@@ -42,6 +43,7 @@ axdisplay.workspace = true
 axdriver.workspace = true
 axfs.workspace = true
 axhal.workspace = true
+axipi.workspace = true
 axinput = { workspace = true, optional = true }
 axlog.workspace = true
 axmm.workspace = true

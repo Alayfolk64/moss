@@ -65,6 +65,11 @@ pub trait BackendOps {
     /// Unmap a memory region.
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult;
 
+    /// Discard resident pages while retaining the virtual memory area.
+    fn discard(&self, _range: VirtAddrRange, _pt: &mut PageTableMut) -> AxResult {
+        Err(AxError::OperationNotSupported)
+    }
+
     /// Called before a memory region is protected.
     fn on_protect(
         &self,

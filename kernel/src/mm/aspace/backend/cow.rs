@@ -195,6 +195,7 @@ impl CowBackend {
         for vaddr in pages {
             match pt.unmap(vaddr) {
                 Ok((frame, _flags, page_size)) => {
+                    pt.finish();
                     if page_size != self.size {
                         warn!("rollback COW clone got unexpected page size: {page_size:?}");
                         continue;
@@ -219,12 +220,11 @@ impl CowBackend {
         flags: MappingFlags,
         pt: &mut PageTableMut,
     ) -> AxResult {
-        let mut frame_table = FRAME_TABLE.lock();
-        let frame = frame_table
+        let frame_ref = FRAME_TABLE
+            .lock()
             .get_frame_ref(paddr)
             .ok_or(AxError::BadAddress)?;
-        drop(frame_table);
-        let mut frame = frame.lock();
+        let frame = frame_ref.lock();
         assert!(frame.0 > 0, "invalid frame reference count");
         match frame.0 {
             1 => {
@@ -246,7 +246,9 @@ impl CowBackend {
                     self.drop_new_frame(new_frame);
                     return Err(err.into());
                 }
-                frame.drop_frame(paddr, self.size);
+                drop(frame);
+                pt.finish();
+                frame_ref.lock().drop_frame(paddr, self.size);
             }
         }
 
@@ -269,6 +271,7 @@ impl BackendOps for CowBackend {
         for addr in pages_in(range, self.size)? {
             if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
                 assert_eq!(page_size, self.size);
+                pt.finish();
                 let frame_ref = FRAME_TABLE
                     .lock()
                     .get_frame_ref(frame)
@@ -281,6 +284,10 @@ impl BackendOps for CowBackend {
             }
         }
         Ok(())
+    }
+
+    fn discard(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
+        self.unmap(range, pt)
     }
 
     fn populate(

@@ -28,11 +28,15 @@ impl InitIf for InitIfImpl {
         #[cfg(feature = "irq")]
         crate::irq::init();
         crate::time::init_percpu();
+        #[cfg(all(feature = "smp", feature = "irq"))]
+        axplat::irq::set_enable(crate::config::devices::IPI_IRQ, true);
     }
 
     /// Initializes the platform at the later stage for secondary cores.
     #[cfg(feature = "smp")]
     fn init_later_secondary(_cpu_id: usize) {
         crate::time::init_percpu();
+        #[cfg(feature = "irq")]
+        axplat::irq::set_enable(crate::config::devices::IPI_IRQ, true);
     }
 }

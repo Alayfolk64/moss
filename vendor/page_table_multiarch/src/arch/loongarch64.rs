@@ -1,6 +1,9 @@
 //! LoongArch64 specific page table structures.
 
-use core::arch::asm;
+use core::{
+    arch::asm,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use memory_addr::VirtAddr;
 use page_table_entry::loongarch64::LA64PTE;
@@ -10,6 +13,30 @@ use crate::{PageTable64, PageTable64Mut, PagingMetaData};
 /// Metadata of LoongArch64 page tables.
 #[derive(Copy, Clone, Debug)]
 pub struct LA64MetaData;
+
+/// Callback used to flush LoongArch TLBs on every active CPU.
+pub type TlbFlushHandler = fn(Option<VirtAddr>);
+
+static TLB_FLUSH_HANDLER: AtomicUsize = AtomicUsize::new(0);
+
+/// Installs the system-wide TLB flush handler.
+///
+/// Returns `false` if a handler was installed already.
+pub fn register_tlb_flush_handler(handler: TlbFlushHandler) -> bool {
+    TLB_FLUSH_HANDLER
+        .compare_exchange(0, handler as usize, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+fn flush_tlb_current(vaddr: Option<VirtAddr>) {
+    unsafe {
+        if let Some(vaddr) = vaddr {
+            asm!("dbar 0; invtlb 0x05, $r0, {reg}", reg = in(reg) vaddr.as_usize());
+        } else {
+            asm!("dbar 0; invtlb 0x00, $r0, $r0");
+        }
+    }
+}
 
 impl LA64MetaData {
     /// PWCL(Page Walk Controller for Lower Half Address Space) CSR flags
@@ -51,30 +78,19 @@ impl PagingMetaData for LA64MetaData {
 
     #[inline]
     fn flush_tlb(vaddr: Option<VirtAddr>) {
-        unsafe {
-            if let Some(vaddr) = vaddr {
-                // <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#_dbar>
-                //
-                // Only after all previous load/store access operations are completely
-                // executed, the DBAR 0 instruction can be executed; and only after the
-                // execution of DBAR 0 is completed, all subsequent load/store access
-                // operations can be executed.
-                //
-                // <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#_invtlb>
-                //
-                // formats: invtlb op, asid, addr
-                //
-                // op 0x5: Clear all page table entries with G=0 and ASID equal to the
-                // register specified ASID, and VA equal to the register specified VA.
-                //
-                // When the operation indicated by op does not require an ASID, the
-                // general register rj should be set to r0.
-                asm!("dbar 0; invtlb 0x05, $r0, {reg}", reg = in(reg) vaddr.as_usize());
-            } else {
-                // op 0x0: Clear all page table entries
-                asm!("dbar 0; invtlb 0x00, $r0, $r0");
-            }
+        let handler = TLB_FLUSH_HANDLER.load(Ordering::Acquire);
+        if handler == 0 {
+            flush_tlb_current(vaddr);
+        } else {
+            // SAFETY: only `register_tlb_flush_handler` writes this value.
+            let handler = unsafe { core::mem::transmute::<usize, TlbFlushHandler>(handler) };
+            handler(vaddr);
         }
+    }
+
+    #[inline]
+    fn flush_tlb_local(vaddr: Option<VirtAddr>) {
+        flush_tlb_current(vaddr);
     }
 }
 

@@ -28,6 +28,7 @@ axdisplay = { version = "=0.2.2-preview.1" }
 axdriver = { version = "=0.2.2-preview.1" }
 axfs = { version = "=0.2.2-preview.1" }
 axhal = { version = "=0.2.2-preview.4" }
+axipi = { version = "=0.2.2-preview.2" }
 axinput = { version = "=0.2.2-preview.1" }
 axlog = { version = "=0.2.2-preview.1" }
 axmm = { version = "=0.2.2-preview.1" }

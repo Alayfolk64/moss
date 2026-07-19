@@ -43,11 +43,14 @@ pub struct GeneralRegisters {
 }
 
 /// Floating-point registers of LoongArch64
-#[repr(C)]
+#[repr(C, align(16))]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FpuState {
-    /// Floating-point registers (f0-f31)
-    pub fp: [u64; 32],
+    /// Floating-point/LSX registers (f0-f31 / vr0-vr31).
+    ///
+    /// LSX shares its low 64 bits with the scalar floating-point register
+    /// file, so saving the full 128-bit vector state covers both interfaces.
+    pub regs: [u128; 32],
     /// Floating-point Condition Code register
     pub fcc: [u8; 8],
     /// Floating-point Control and Status register
@@ -269,10 +272,11 @@ impl TaskContext {
         }
         #[cfg(feature = "uspace")]
         {
-            if self.pgdl != next_ctx.pgdl {
-                unsafe { crate::asm::write_user_page_table(pa!(next_ctx.pgdl)) };
-                crate::asm::flush_tlb(None); // currently flush the entire TLB
-            }
+            // A page-table root can be reused after its previous address space
+            // is destroyed, so equality alone does not prove the cached TLB
+            // entries are still valid.
+            unsafe { crate::asm::write_user_page_table(pa!(next_ctx.pgdl)) };
+            crate::asm::flush_tlb(None);
         }
         #[cfg(feature = "fp-simd")]
         {

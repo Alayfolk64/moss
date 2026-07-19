@@ -151,6 +151,10 @@ impl BackendOps for FileBackend {
         Ok(())
     }
 
+    fn discard(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
+        self.unmap(range, pt)
+    }
+
     fn on_protect(
         &self,
         _range: VirtAddrRange,
