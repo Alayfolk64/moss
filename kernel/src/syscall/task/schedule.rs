@@ -1,6 +1,9 @@
 use axerrno::{AxError, AxResult, LinuxError};
 use axhal::time::TimeValue;
-use axtask::{AxCpuMask, current};
+use axtask::{
+    AxCpuMask, current,
+    future::{block_on, interruptible, sleep_until},
+};
 use linux_raw_sys::general::{
     __kernel_clockid_t, CLOCK_MONOTONIC, CLOCK_PROCESS_CPUTIME_ID, CLOCK_REALTIME,
     CLOCK_THREAD_CPUTIME_ID, PRIO_PGRP, PRIO_PROCESS, PRIO_USER, SCHED_BATCH, SCHED_DEADLINE,
@@ -27,20 +30,31 @@ fn has_unblocked_pending_signal() -> bool {
     !(pending & !blocked).is_empty()
 }
 
-fn sleep_impl(clock: impl Fn() -> TimeValue, dur: TimeValue) -> (TimeValue, bool) {
+fn sleep_impl(dur: TimeValue) -> (TimeValue, bool) {
     debug!("sleep_impl <= {dur:?}");
 
-    let start = clock();
-    let deadline = start.checked_add(dur).unwrap_or(TimeValue::MAX);
+    let start = axhal::time::monotonic_time();
+    let deadline = axhal::time::wall_time()
+        .checked_add(dur)
+        .unwrap_or(TimeValue::MAX);
 
-    while clock() < deadline {
+    loop {
         if has_unblocked_pending_signal() {
-            return (clock() - start, true);
+            let elapsed = axhal::time::monotonic_time().saturating_sub(start);
+            return (elapsed, true);
         }
-        axtask::yield_now();
+
+        if axhal::time::wall_time() >= deadline {
+            break;
+        }
+
+        // A timer wake blocks the task instead of repeatedly yielding through
+        // the scheduler. An interrupt without a deliverable signal is stale or
+        // spurious, so retry for the remaining interval.
+        let _ = block_on(interruptible(sleep_until(deadline)));
     }
 
-    (clock() - start, false)
+    (axhal::time::monotonic_time().saturating_sub(start), false)
 }
 
 /// Sleep some nanoseconds
@@ -49,7 +63,7 @@ pub fn sys_nanosleep(req: *const timespec, rem: *mut timespec) -> AxResult<isize
     let req = unsafe { req.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
     debug!("sys_nanosleep <= req: {req:?}");
 
-    let (actual, interrupted) = sleep_impl(axhal::time::monotonic_time, req);
+    let (actual, interrupted) = sleep_impl(req);
 
     if interrupted {
         let diff = req.checked_sub(actual).unwrap_or(TimeValue::from_nanos(0));
@@ -69,9 +83,13 @@ pub fn sys_clock_nanosleep(
     req: *const timespec,
     rem: *mut timespec,
 ) -> AxResult<isize> {
+    if flags & !TIMER_ABSTIME != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
     let clock_id = u32::try_from(clock_id).map_err(|_| AxError::InvalidInput)?;
     let clock = match clock_id {
-        CLOCK_REALTIME => axhal::time::wall_time,
+        CLOCK_REALTIME => axhal::time::realtime_time,
         CLOCK_MONOTONIC => axhal::time::monotonic_time,
         CLOCK_PROCESS_CPUTIME_ID | CLOCK_THREAD_CPUTIME_ID => {
             return Err(AxError::OperationNotSupported);
@@ -91,12 +109,14 @@ pub fn sys_clock_nanosleep(
         req
     };
 
-    let (actual, interrupted) = sleep_impl(clock, dur);
+    let (actual, interrupted) = sleep_impl(dur);
 
     if interrupted {
         let diff = dur.checked_sub(actual).unwrap_or(TimeValue::from_nanos(0));
         debug!("sys_clock_nanosleep => rem: {diff:?}");
-        if let Some(rem) = rem.nullable() {
+        if flags & TIMER_ABSTIME == 0
+            && let Some(rem) = rem.nullable()
+        {
             rem.vm_write(timespec::from_time_value(diff))?;
         }
         Err(AxError::Interrupted)
