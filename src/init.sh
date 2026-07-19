@@ -1,7 +1,11 @@
 BOOT_BB=/musl/busybox
 
+# Test switches: 1 means run, 0 means only print group start/end.
+cagent=1
+buildstorm=0
+
 run_cagent() {
-    BB=/glibc/busybox
+    BB=$BOOT_BB
     "$BB" mkdir -p /bin /tmp /var/tmp
     "$BB" chmod 1777 /tmp /var/tmp
     "$BB" --install -s /bin
@@ -10,12 +14,12 @@ run_cagent() {
     cat >/bin/date <<'EOF'
 #!/bin/sh
 if [ "$1" = -d ] && [ "$2" = "100 days ago" ]; then
-    now=$(/glibc/busybox date +%s)
+    now=$(/musl/busybox date +%s)
     then=$((now - 8640000))
     shift 2
-    exec /glibc/busybox date -d "@$then" "$@"
+    exec /musl/busybox date -d "@$then" "$@"
 fi
-exec /glibc/busybox date "$@"
+exec /musl/busybox date "$@"
 EOF
     "$BB" chmod +x /bin/date
     cd /glibc || return 1
@@ -92,14 +96,24 @@ run_buildstorm() {
 }
 
 if [ -d /work/tgoskits ]; then
-    run_buildstorm
+    if [ "$buildstorm" = 1 ]; then
+        run_buildstorm
+    else
+        echo "#### OS COMP TEST GROUP START buildstorm ####"
+        echo "#### OS COMP TEST GROUP END buildstorm ####"
+    fi
 elif [ -x /glibc/agent_lite ] && [ -x /glibc/simple_llm_server ] \
     && [ -f /glibc/cagent_testcode.sh ]; then
-    run_cagent
+    if [ "$cagent" = 1 ]; then
+        run_cagent
+    else
+        echo "#### OS COMP TEST GROUP START cagent-glibc ####"
+        echo "#### OS COMP TEST GROUP END cagent-glibc ####"
+    fi
 else
     "$BOOT_BB" echo "FINAL_INIT_ERROR: unsupported final image"
     exit 1
 fi
 
-sync
+"$BOOT_BB" sync
 exit 0

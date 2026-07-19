@@ -16,8 +16,8 @@ LOONGARCH_CC ?=
 export BLK := y
 export NET := n
 export VSOCK := n
-export MEM ?= 8G
-export SMP ?= 8
+export MEM := 1G
+export SMP ?= 1
 export ICOUNT := n
 export BUS := mmio
 
@@ -124,7 +124,7 @@ build run debug disasm: toolchain defconfig
 all: kernel-rv kernel-la
 
 kernel-rv: toolchain
-	$(MAKE) ARCH=riscv64 build
+	$(MAKE) ARCH=riscv64 MEM=1G SMP=1 build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 endif
@@ -136,7 +136,7 @@ ifneq ($(DWARF), y)
 endif
 
 kernel-la: toolchain
-	$(MAKE) ARCH=loongarch64 BUS=pci build
+	$(MAKE) ARCH=loongarch64 BUS=pci MEM=1G SMP=8 build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
 endif

@@ -23,7 +23,7 @@ axfeat = { workspace = true, features = [
     "irq",
     "uspace",
 
-    "page-alloc-64g",
+    "page-alloc-4g",
     "alloc-slab",
 
     "multitask",
