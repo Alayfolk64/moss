@@ -6,8 +6,23 @@ run_cagent() {
     "$BB" chmod 1777 /tmp /var/tmp
     "$BB" --install -s /bin
     export PATH=/bin
+    "$BB" rm -f /bin/date
+    cat >/bin/date <<'EOF'
+#!/bin/sh
+if [ "$1" = -d ] && [ "$2" = "100 days ago" ]; then
+    now=$(/glibc/busybox date +%s)
+    then=$((now - 8640000))
+    shift 2
+    exec /glibc/busybox date -d "@$then" "$@"
+fi
+exec /glibc/busybox date "$@"
+EOF
+    "$BB" chmod +x /bin/date
     cd /glibc || return 1
-    "$BB" sh ./cagent_testcode.sh
+    SCRIPT=/tmp/cagent_testcode.sh
+    "$BB" cp ./cagent_testcode.sh "$SCRIPT"
+    "$BB" sed -i 's|date +%s%3N|date +%s000|g' "$SCRIPT"
+    "$BB" sh "$SCRIPT"
 }
 
 run_buildstorm() {
