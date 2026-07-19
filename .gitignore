@@ -40,3 +40,4 @@ __pycache__/
 .tmp-edge-profile/
 /tmp/
 .agents/
+/final_image/

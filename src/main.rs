@@ -8,14 +8,26 @@ use alloc::{borrow::ToOwned, vec::Vec};
 
 #[cfg(feature = "timerfd-debug-init")]
 pub const INIT_SCRIPT: &str = include_str!("init_timerfd_debug.sh");
-#[cfg(all(not(feature = "timerfd-debug-init"), feature = "shell-init"))]
+#[cfg(all(not(feature = "timerfd-debug-init"), feature = "pre-init"))]
+pub const INIT_SCRIPT: &str = include_str!("init_pre.sh");
+#[cfg(all(
+    not(feature = "timerfd-debug-init"),
+    not(feature = "pre-init"),
+    feature = "shell-init"
+))]
 pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
-#[cfg(all(not(feature = "timerfd-debug-init"), not(feature = "shell-init")))]
+#[cfg(all(
+    not(feature = "timerfd-debug-init"),
+    not(feature = "pre-init"),
+    not(feature = "shell-init")
+))]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
+#[cfg(feature = "pre-init")]
 pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases.sh");
 
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
 
+#[cfg(feature = "pre-init")]
 fn build_ltp_cases_env() -> alloc::string::String {
     let mut env = alloc::string::String::from("LTP_CASES=");
     let mut first = true;
@@ -40,7 +52,11 @@ fn main() {
         .copied()
         .map(str::to_owned)
         .collect::<Vec<_>>();
+    #[cfg(any(feature = "pre-init", feature = "shell-init"))]
     let mut envs = Vec::new();
+    #[cfg(not(any(feature = "pre-init", feature = "shell-init")))]
+    let envs = Vec::new();
+    #[cfg(feature = "pre-init")]
     envs.push(build_ltp_cases_env());
     #[cfg(feature = "shell-init")]
     envs.push("STARRY_SHELL_MODE=1".to_owned());
