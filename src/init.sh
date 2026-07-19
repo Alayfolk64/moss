@@ -4,6 +4,19 @@ BOOT_BB=/musl/busybox
 cagent=1
 buildstorm=0
 
+# Architecture switches: 1 means run tests on this architecture, 0 means skip.
+RUN_RV=1
+RUN_LA=1
+
+case "$("$BOOT_BB" uname -m 2>/dev/null)" in
+    riscv64) RUN_ARCH=$RUN_RV ;;
+    loongarch64) RUN_ARCH=$RUN_LA ;;
+    *)
+        "$BOOT_BB" echo "FINAL_INIT_ERROR: unsupported architecture"
+        exit 1
+        ;;
+esac
+
 run_cagent() {
     BB=$BOOT_BB
     "$BB" mkdir -p /bin /tmp /var/tmp
@@ -95,24 +108,33 @@ run_buildstorm() {
     echo "#### OS COMP TEST GROUP END buildstorm ####"
 }
 
-if [ -d /work/tgoskits ]; then
-    if [ "$buildstorm" = 1 ]; then
-        run_buildstorm
-    else
-        echo "#### OS COMP TEST GROUP START buildstorm ####"
-        echo "#### OS COMP TEST GROUP END buildstorm ####"
-    fi
-elif [ -x /glibc/agent_lite ] && [ -x /glibc/simple_llm_server ] \
-    && [ -f /glibc/cagent_testcode.sh ]; then
-    if [ "$cagent" = 1 ]; then
+skip_group() {
+    echo "#### OS COMP TEST GROUP START $1 ####"
+    echo "#### OS COMP TEST GROUP END $1 ####"
+}
+
+# Run the two final-test groups independently and always keep their output order.
+if [ "$cagent" = 1 ] && [ "$RUN_ARCH" = 1 ]; then
+    if [ -x /glibc/agent_lite ] && [ -x /glibc/simple_llm_server ] \
+        && [ -f /glibc/cagent_testcode.sh ]; then
         run_cagent
     else
-        echo "#### OS COMP TEST GROUP START cagent-glibc ####"
-        echo "#### OS COMP TEST GROUP END cagent-glibc ####"
+        "$BOOT_BB" echo "FINAL_INIT_ERROR: missing cagent payload"
+        exit 1
     fi
 else
-    "$BOOT_BB" echo "FINAL_INIT_ERROR: unsupported final image"
-    exit 1
+    skip_group cagent-glibc
+fi
+
+if [ "$buildstorm" = 1 ] && [ "$RUN_ARCH" = 1 ]; then
+    if [ -d /work/tgoskits ]; then
+        run_buildstorm
+    else
+        "$BOOT_BB" echo "FINAL_INIT_ERROR: missing buildstorm payload"
+        exit 1
+    fi
+else
+    skip_group buildstorm
 fi
 
 "$BOOT_BB" sync
