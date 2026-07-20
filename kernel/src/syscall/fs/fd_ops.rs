@@ -14,8 +14,12 @@ use axfs_ng_vfs::{
     path::Path,
 };
 use axio::{Seek, SeekFrom};
-use axtask::{current, yield_now};
+use axtask::{
+    current,
+    future::{block_on, interruptible},
+};
 use bitflags::bitflags;
+use event_listener::{Event, listener};
 use kernel_guard::NoPreempt;
 use linux_raw_sys::general::*;
 use scope_local::ActiveScope;
@@ -763,6 +767,8 @@ static POSIX_LOCKS: RwLock<BTreeMap<PosixLockKey, Vec<PosixRecordLock>>> =
 static POSIX_WAIT_GRAPH: RwLock<BTreeMap<u32, Vec<u32>>> = RwLock::new(BTreeMap::new());
 static FILE_LEASES: RwLock<BTreeMap<PosixLockKey, FileLease>> = RwLock::new(BTreeMap::new());
 static BSD_FLOCKS: RwLock<BTreeMap<PosixLockKey, Vec<BsdFileLock>>> = RwLock::new(BTreeMap::new());
+static POSIX_LOCK_CHANGED: Event = Event::new();
+static BSD_FLOCK_CHANGED: Event = Event::new();
 
 fn has_unblocked_pending_signal() -> bool {
     let curr = current();
@@ -1113,6 +1119,8 @@ fn release_posix_locks_for_file_like(file_like: &Arc<dyn FileLike>) {
             map.remove(&key);
         }
     }
+    drop(map);
+    POSIX_LOCK_CHANGED.notify(usize::MAX);
 }
 
 fn release_file_lease_for_file_like(file_like: &Arc<dyn FileLike>) {
@@ -1144,6 +1152,8 @@ fn release_bsd_flocks_for_file_like(file_like: &Arc<dyn FileLike>) {
             map.remove(&key);
         }
     }
+    drop(map);
+    BSD_FLOCK_CHANGED.notify(usize::MAX);
 }
 
 fn release_bsd_flocks_for_file_like_if_last(file_like: &Arc<dyn FileLike>) {
@@ -1242,7 +1252,9 @@ pub fn release_posix_locks_for_pid(pid: u32) {
         locks.retain(|lock| lock.owner != pid);
         !locks.is_empty()
     });
+    drop(map);
     clear_wait_dependencies(pid);
+    POSIX_LOCK_CHANGED.notify(usize::MAX);
 }
 
 pub fn release_file_leases_for_pid(pid: u32) {
@@ -1296,6 +1308,7 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
     let owner = current().as_thread().proc_data.proc.pid();
 
     loop {
+        listener!(POSIX_LOCK_CHANGED => lock_changed);
         let mut map = POSIX_LOCKS.write();
         let mut should_remove_key = false;
         let mut conflict_owners = Vec::new();
@@ -1314,7 +1327,9 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
             if should_remove_key {
                 map.remove(&key);
             }
+            drop(map);
             clear_wait_dependencies(owner);
+            POSIX_LOCK_CHANGED.notify(usize::MAX);
             return Ok(0);
         }
 
@@ -1334,7 +1349,10 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
             clear_wait_dependencies(owner);
             return Err(AxError::Interrupted);
         }
-        yield_now();
+        if block_on(interruptible(lock_changed)).is_err() && has_unblocked_pending_signal() {
+            clear_wait_dependencies(owner);
+            return Err(AxError::Interrupted);
+        }
     }
 }
 
@@ -1589,17 +1607,22 @@ pub fn sys_flock(fd: c_int, operation: c_int) -> AxResult<isize> {
     }
 
     loop {
+        listener!(BSD_FLOCK_CHANGED => lock_changed);
         let mut map = BSD_FLOCKS.write();
         let locks = map.entry(key).or_default();
         if !bsd_flock_conflicts(locks, owner, exclusive) {
             locks.retain(|lock| lock.owner != owner);
             locks.push(BsdFileLock { owner, exclusive });
+            drop(map);
+            BSD_FLOCK_CHANGED.notify(usize::MAX);
             return Ok(0);
         }
         if nonblock {
             return Err(AxError::WouldBlock);
         }
         drop(map);
-        yield_now();
+        if block_on(interruptible(lock_changed)).is_err() && has_unblocked_pending_signal() {
+            return Err(AxError::Interrupted);
+        }
     }
 }
