@@ -1,5 +1,6 @@
 use axhal::uspace::{ExceptionKind, ReturnReason, UserContext};
 use axtask::TaskInner;
+use memory_addr::VirtAddr;
 use starry_process::Pid;
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
@@ -9,6 +10,32 @@ use super::{
     unblock_next_signal,
 };
 use crate::syscall::{handle_syscall, ptrace_wait_if_stopped};
+
+fn log_user_fault_mapping(aspace: &crate::mm::AddrSpace, label: &str, addr: VirtAddr) {
+    if let Some(area) = aspace.find_area(addr) {
+        warn!(
+            "user fault {label}={addr:#x} in VMA {:#x}-{:#x} {:?}",
+            area.start(),
+            area.end(),
+            area.flags(),
+        );
+        return;
+    }
+
+    let below = aspace
+        .areas()
+        .filter(|area| area.end() <= addr)
+        .max_by_key(|area| area.end());
+    let above = aspace
+        .areas()
+        .filter(|area| area.start() > addr)
+        .min_by_key(|area| area.start());
+    warn!(
+        "user fault {label}={addr:#x} in VMA gap, below={:?}, above={:?}",
+        below.map(|area| (area.start(), area.end(), area.flags())),
+        above.map(|area| (area.start(), area.end(), area.flags())),
+    );
+}
 
 /// Create a new user task.
 pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) -> TaskInner {
@@ -57,15 +84,42 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                             {
                                 None
                             } else if aspace.is_accessible_fault(addr, flags) {
+                                log_user_fault_mapping(&aspace, "address", addr);
+                                log_user_fault_mapping(
+                                    &aspace,
+                                    "instruction",
+                                    VirtAddr::from_usize(uctx.ip()),
+                                );
+                                log_user_fault_mapping(
+                                    &aspace,
+                                    "stack",
+                                    VirtAddr::from_usize(uctx.sp()),
+                                );
                                 Some(Signo::SIGBUS)
                             } else {
+                                log_user_fault_mapping(&aspace, "address", addr);
+                                log_user_fault_mapping(
+                                    &aspace,
+                                    "instruction",
+                                    VirtAddr::from_usize(uctx.ip()),
+                                );
+                                log_user_fault_mapping(
+                                    &aspace,
+                                    "stack",
+                                    VirtAddr::from_usize(uctx.sp()),
+                                );
                                 Some(Signo::SIGSEGV)
                             }
                         };
                         if let Some(signo) = fault_signal {
-                            info!(
-                                "{:?}: user fault {:?} at {:#x} {:?}",
-                                thr.proc_data.proc, signo, addr, flags
+                            warn!(
+                                "{:?}: user fault {:?} at {:#x} {:?}, ip={:#x}, sp={:#x}",
+                                thr.proc_data.proc,
+                                signo,
+                                addr,
+                                flags,
+                                uctx.ip(),
+                                uctx.sp(),
                             );
                             raise_signal_fatal(SignalInfo::new_kernel(signo))
                                 .expect("Failed to send fault signal");
@@ -74,6 +128,26 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     ReturnReason::Interrupt => {}
                     #[allow(unused_labels)]
                     ReturnReason::Exception(exc_info) => 'exc: {
+                        warn!(
+                            "{:?}: user exception {:?}, ip={:#x}, sp={:#x}",
+                            thr.proc_data.proc,
+                            exc_info,
+                            uctx.ip(),
+                            uctx.sp(),
+                        );
+                        {
+                            let aspace = thr.proc_data.aspace.lock();
+                            log_user_fault_mapping(
+                                &aspace,
+                                "instruction",
+                                VirtAddr::from_usize(uctx.ip()),
+                            );
+                            log_user_fault_mapping(
+                                &aspace,
+                                "stack",
+                                VirtAddr::from_usize(uctx.sp()),
+                            );
+                        }
                         // TODO: detailed handling
                         let signo = match exc_info.kind() {
                             ExceptionKind::Misaligned => {
