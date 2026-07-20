@@ -9,7 +9,7 @@ use axplat::{
     percpu::this_cpu_id,
 };
 use kspin::SpinNoIrq;
-use riscv::register::sie;
+use riscv::register::{sie, sip};
 use riscv_plic::Plic;
 use sbi_rt::HartMask;
 
@@ -194,6 +194,10 @@ impl IrqIf for IrqIfImpl {
             },
             @S_SOFT => {
                 trace!("IRQ: IPI");
+                // SBI raises an IPI by setting SSIP. Acknowledge it before
+                // running callbacks so the hart does not immediately trap
+                // again after returning from this handler.
+                unsafe { sip::clear_ssoft() };
                 let handler = IPI_HANDLER.load(Ordering::Acquire);
                 if !handler.is_null() {
                     // SAFETY: The handler is guaranteed to be a valid function pointer.

@@ -10,7 +10,6 @@ use alloc::{
 use kernel_guard::NoPreemptIrqSave;
 
 pub(crate) use crate::run_queue::{current_run_queue, select_run_queue};
-pub use crate::run_queue::SchedulerStats;
 
 #[doc(cfg(feature = "multitask"))]
 pub use crate::{
@@ -84,11 +83,6 @@ pub fn current_may_uninit() -> Option<CurrentTask> {
 /// Panics if the current task is not initialized.
 pub fn current() -> CurrentTask {
     CurrentTask::get()
-}
-
-/// Returns a snapshot of the scheduler counters for every active CPU.
-pub fn scheduler_stats() -> alloc::vec::Vec<SchedulerStats> {
-    crate::run_queue::scheduler_stats()
 }
 
 /// Initializes the task scheduler (for the primary CPU).

@@ -4,7 +4,6 @@ mod futex;
 mod ops;
 mod resources;
 mod rseq;
-mod sched_stats;
 mod signal;
 mod stat;
 mod timer;
@@ -29,9 +28,7 @@ use starry_signal::{
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 
-pub use self::{
-    futex::*, ops::*, resources::*, rseq::*, sched_stats::*, signal::*, stat::*, timer::*, user::*,
-};
+pub use self::{futex::*, ops::*, resources::*, rseq::*, signal::*, stat::*, timer::*, user::*};
 use crate::mm::AddrSpace;
 
 #[derive(Debug, Clone, Copy)]

@@ -2,7 +2,7 @@ use alloc::{collections::VecDeque, sync::Arc};
 use core::{
     future::poll_fn,
     mem::MaybeUninit,
-    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::{Context, Poll},
 };
 use futures_util::task::AtomicWaker;
@@ -61,44 +61,6 @@ static mut RUN_QUEUES: [MaybeUninit<&'static mut AxRunQueue>; axconfig::plat::CP
 const ARRAY_REPEAT_VALUE: MaybeUninit<&'static mut AxRunQueue> = MaybeUninit::uninit();
 static RUN_QUEUE_READY: [AtomicBool; axconfig::plat::CPU_NUM] =
     [const { AtomicBool::new(false) }; axconfig::plat::CPU_NUM];
-
-/// A point-in-time snapshot of one CPU's scheduler activity.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SchedulerStats {
-    /// CPU owning this run queue.
-    pub cpu_id: usize,
-    /// Tasks currently waiting in the ready queue.
-    pub ready_tasks: usize,
-    /// Timer ticks observed by this CPU.
-    pub ticks: u64,
-    /// Timer ticks during which this CPU ran a non-idle task.
-    pub busy_ticks: u64,
-    /// Actual context switches to a different task.
-    pub context_switches: u64,
-    /// Successful wakeups from the blocked state.
-    pub wakeups: u64,
-    /// Wakeups or affinity changes that moved a task to another CPU.
-    pub migrations: u64,
-    /// IPIs sent to wake remote idle CPUs.
-    pub ipi_kicks: u64,
-    /// Times the scheduler found no runnable task.
-    pub idle_selections: u64,
-}
-
-pub(crate) fn scheduler_stats() -> alloc::vec::Vec<SchedulerStats> {
-    (0..crate::api::active_cpu_num())
-        .map(|cpu_id| {
-            if RUN_QUEUE_READY[cpu_id].load(Ordering::Acquire) {
-                unsafe { RUN_QUEUES[cpu_id].assume_init_ref().stats() }
-            } else {
-                SchedulerStats {
-                    cpu_id,
-                    ..Default::default()
-                }
-            }
-        })
-        .collect()
-}
 
 /// Returns a reference to the current run queue in [`CurrentRunQueueRef`].
 ///
@@ -288,13 +250,6 @@ pub(crate) struct AxRunQueue {
     ready_tasks: AtomicUsize,
     running_task: AtomicBool,
     idle_kick_pending: AtomicBool,
-    ticks: AtomicU64,
-    busy_ticks: AtomicU64,
-    context_switches: AtomicU64,
-    wakeups: AtomicU64,
-    migrations: AtomicU64,
-    ipi_kicks: AtomicU64,
-    idle_selections: AtomicU64,
 }
 
 /// A reference to the run queue with specific guard.
@@ -389,10 +344,6 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
     #[cfg(feature = "irq")]
     pub fn scheduler_timer_tick(&mut self) {
         let curr = &self.current_task;
-        self.inner.ticks.fetch_add(1, Ordering::Relaxed);
-        if !curr.is_idle() {
-            self.inner.busy_ticks.fetch_add(1, Ordering::Relaxed);
-        }
         if !curr.is_idle() && self.inner.scheduler.lock().task_tick(curr) {
             #[cfg(feature = "preempt")]
             curr.set_preempt_pending(true);
@@ -563,27 +514,6 @@ impl AxRunQueue {
             ready_tasks: AtomicUsize::new(1),
             running_task: AtomicBool::new(!crate::current().is_idle()),
             idle_kick_pending: AtomicBool::new(false),
-            ticks: AtomicU64::new(0),
-            busy_ticks: AtomicU64::new(0),
-            context_switches: AtomicU64::new(0),
-            wakeups: AtomicU64::new(0),
-            migrations: AtomicU64::new(0),
-            ipi_kicks: AtomicU64::new(0),
-            idle_selections: AtomicU64::new(0),
-        }
-    }
-
-    fn stats(&self) -> SchedulerStats {
-        SchedulerStats {
-            cpu_id: self.cpu_id,
-            ready_tasks: self.ready_tasks.load(Ordering::Relaxed),
-            ticks: self.ticks.load(Ordering::Relaxed),
-            busy_ticks: self.busy_ticks.load(Ordering::Relaxed),
-            context_switches: self.context_switches.load(Ordering::Relaxed),
-            wakeups: self.wakeups.load(Ordering::Relaxed),
-            migrations: self.migrations.load(Ordering::Relaxed),
-            ipi_kicks: self.ipi_kicks.load(Ordering::Relaxed),
-            idle_selections: self.idle_selections.load(Ordering::Relaxed),
         }
     }
 
@@ -600,7 +530,6 @@ impl AxRunQueue {
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
                 .is_ok()
         {
-            self.ipi_kicks.fetch_add(1, Ordering::Relaxed);
             axhal::irq::send_ipi(
                 axhal::irq::IPI_IRQ,
                 axhal::irq::IpiTarget::Other {
@@ -623,9 +552,6 @@ impl AxRunQueue {
         current_state: TaskState,
         preempt: bool,
     ) -> bool {
-        #[cfg(feature = "smp")]
-        let previous_cpu = task.cpu_id() as usize;
-
         // If the task's state matches `current_state`, set its state to `Ready` and
         // put it back to the run queue (except idle task).
         if task.transition_state(current_state, TaskState::Ready) && !task.is_idle() {
@@ -653,13 +579,6 @@ impl AxRunQueue {
             task.set_cpu_id(self.cpu_id as _);
             self.scheduler.lock().put_prev_task(task, preempt);
             self.ready_tasks.fetch_add(1, Ordering::Relaxed);
-            if current_state == TaskState::Blocked {
-                self.wakeups.fetch_add(1, Ordering::Relaxed);
-                #[cfg(feature = "smp")]
-                if previous_cpu != self.cpu_id {
-                    self.migrations.fetch_add(1, Ordering::Relaxed);
-                }
-            }
             true
         } else {
             false
@@ -678,7 +597,6 @@ impl AxRunQueue {
             self.ready_tasks.fetch_sub(1, Ordering::Relaxed);
             next
         } else {
-            self.idle_selections.fetch_add(1, Ordering::Relaxed);
             unsafe {
                 // Safety: IRQs must be disabled at this time.
                 IDLE_TASK.current_ref_raw().get_unchecked().clone()
@@ -713,7 +631,6 @@ impl AxRunQueue {
         if prev_task.ptr_eq(&next_task) {
             return;
         }
-        self.context_switches.fetch_add(1, Ordering::Relaxed);
         next_task.record_schedule();
 
         // Claim the task as running, we do this before switching to it
@@ -795,7 +712,6 @@ fn poll_gc(cx: &mut Context<'_>) -> Poll<()> {
 /// then puts the task to the scheduler of target run queue.
 #[cfg(feature = "smp")]
 pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
-    let previous_cpu = migrated_task.cpu_id() as usize;
     let mut run_queue = select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task);
     migrated_task.set_cpu_id(run_queue.inner.cpu_id as _);
     run_queue
@@ -809,18 +725,11 @@ pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
         .fetch_add(1, Ordering::Relaxed);
     #[cfg(feature = "ipi")]
     run_queue.inner.kick_if_idle();
-    if previous_cpu != run_queue.inner.cpu_id {
-        run_queue
-            .inner
-            .migrations
-            .fetch_add(1, Ordering::Relaxed);
-    }
 }
 
 /// Inserts a voluntarily migrating task into a specific run queue.
 #[cfg(feature = "smp")]
 pub(crate) fn migrate_entry_to(migrated_task: AxTaskRef, target_cpu: usize) {
-    let previous_cpu = migrated_task.cpu_id() as usize;
     let cpumask = migrated_task.cpumask();
     assert!(
         target_cpu < axconfig::plat::CPU_NUM && cpumask.get(target_cpu),
@@ -845,12 +754,6 @@ pub(crate) fn migrate_entry_to(migrated_task: AxTaskRef, target_cpu: usize) {
         .fetch_add(1, Ordering::Relaxed);
     #[cfg(feature = "ipi")]
     run_queue.inner.kick_if_idle();
-    if previous_cpu != target_cpu {
-        run_queue
-            .inner
-            .migrations
-            .fetch_add(1, Ordering::Relaxed);
-    }
 }
 
 /// Clear the `on_cpu` field of previous task running on this CPU.

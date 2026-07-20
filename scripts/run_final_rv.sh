@@ -28,9 +28,9 @@ run_image() {
     qemu-system-riscv64 \
         -machine virt \
         -kernel kernel-rv \
-        -m 1G \
+        -m 8G \
         -nographic \
-        -smp 1 \
+        -smp 8 \
         -bios default \
         -drive "file=$image,if=none,format=raw,id=x0" \
         -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \

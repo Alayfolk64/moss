@@ -177,11 +177,6 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     break;
                 }
 
-                // This is the task's migration-safe point: syscall/trap work
-                // is complete, no kernel lock is held, and the user context
-                // is fully saved. Rebalance before rseq publishes the CPU ID.
-                axtask::rebalance_current();
-
                 let check_signal = !unblock_next_signal();
                 let signal_pending =
                     check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();

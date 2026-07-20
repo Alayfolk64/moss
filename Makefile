@@ -14,8 +14,8 @@ LOONGARCH_CC ?=
 export BLK := y
 export NET := n
 export VSOCK := n
-export MEM := 1G
-export SMP ?= 1
+export MEM := 8G
+export SMP ?= 8
 export ICOUNT := n
 export BUS := mmio
 
@@ -122,7 +122,7 @@ build run debug disasm: toolchain defconfig
 all: kernel-rv kernel-la
 
 kernel-rv: toolchain
-	$(MAKE) ARCH=riscv64 MEM=1G SMP=1 build
+	$(MAKE) ARCH=riscv64 MEM=$(MEM) SMP=$(SMP) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 endif
@@ -134,7 +134,7 @@ ifneq ($(DWARF), y)
 endif
 
 kernel-la: toolchain
-	$(MAKE) ARCH=loongarch64 BUS=pci MEM=8G SMP=8 build
+	$(MAKE) ARCH=loongarch64 BUS=pci MEM=$(MEM) SMP=$(SMP) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
 endif
@@ -175,7 +175,7 @@ debug-rv:
 	cp -f "$$img" "$$tmp_img"
 	@printf "    \033[36mDebug image\033[0m: kernel-rv.dbg.elf\n"
 	@printf "    \033[36mGDB\033[0m: $(GDB) kernel-rv.dbg.elf -ex 'target remote localhost:1234'\n"
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default \
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp $(SMP) -bios default \
 		-drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-no-reboot -device virtio-net-device,netdev=net \
@@ -192,7 +192,7 @@ debug-la:
 	cp -f "$$img" "$$tmp_img"
 	@printf "    \033[36mDebug image\033[0m: kernel-la.dbg.elf\n"
 	@printf "    \033[36mGDB\033[0m: $(GDB) kernel-la.dbg.elf -ex 'target remote localhost:1234'\n"
-	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 \
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp $(SMP) \
 		-drive file=tmp-la-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-pci,drive=x0 -no-reboot \
 		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
@@ -209,7 +209,7 @@ debug-rv-timerfd:
 	cp -f "$$img" "$$tmp_img"
 	@printf "    \033[36mDebug image\033[0m: kernel-rv.dbg.elf\n"
 	@printf "    \033[36mGDB\033[0m: $(GDB) kernel-rv.dbg.elf -ex 'target remote localhost:1234'\n"
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default \
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp $(SMP) -bios default \
 		-drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-no-reboot -device virtio-net-device,netdev=net \
@@ -226,7 +226,7 @@ debug-la-timerfd:
 	cp -f "$$img" "$$tmp_img"
 	@printf "    \033[36mDebug image\033[0m: kernel-la.dbg.elf\n"
 	@printf "    \033[36mGDB\033[0m: $(GDB) kernel-la.dbg.elf -ex 'target remote localhost:1234'\n"
-	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 \
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp $(SMP) \
 		-drive file=tmp-la-shell.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-pci,drive=x0 -no-reboot \
 		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
@@ -248,14 +248,14 @@ ci-test:
 	./scripts/ci-test.py $(ARCH)
 
 run_rv: kernel-rv prepare-sdcard-rv
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default \
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp $(SMP) -bios default \
 		-drive file=sdcard-rv.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-no-reboot -device virtio-net-device,netdev=net \
 		-netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
 
 run_la: kernel-la prepare-sdcard-la
-	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 \
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp $(SMP) \
 		-drive file=sdcard-la.img,if=none,format=raw,id=x0 \
 		-device virtio-blk-pci,drive=x0 -no-reboot \
 		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
@@ -276,7 +276,7 @@ shell_rv:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default -drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp $(SMP) -bios default -drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
 
 rv-shell: shell_rv
 
@@ -293,7 +293,7 @@ shell_la:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 -drive file=tmp-la-shell.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee $(OUTPUT_LA)
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp $(SMP) -drive file=tmp-la-shell.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee $(OUTPUT_LA)
 
 la-shell: shell_la
 

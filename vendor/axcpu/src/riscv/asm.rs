@@ -1,8 +1,15 @@
 //! Wrapper functions for assembly instructions.
 
+use core::sync::atomic::{AtomicUsize, Ordering};
+
 use memory_addr::{PhysAddr, VirtAddr};
 use riscv::asm;
 use riscv::register::{satp, sstatus, stvec};
+
+// RISC-V uses one SATP register for both kernel and user mappings. Keep the
+// kernel root separately so a kernel task created while a user task is current
+// does not inherit that user's address space.
+static KERNEL_PAGE_TABLE_ROOT: AtomicUsize = AtomicUsize::new(0);
 
 /// Allows the current CPU to respond to interrupts.
 #[inline]
@@ -50,13 +57,19 @@ pub fn read_user_page_table() -> PhysAddr {
 
 /// Reads the current page table root register for kernel space (`satp`).
 ///
-/// RISC-V does not have a separate page table root register for user and
-/// kernel space, so this operation is the same as [`read_user_page_table`].
+/// RISC-V does not have a separate hardware register for the kernel page table,
+/// so the root last installed by [`write_kernel_page_table`] is kept in
+/// software.
 ///
 /// Returns the physical address of the page table root.
 #[inline]
 pub fn read_kernel_page_table() -> PhysAddr {
-    read_user_page_table()
+    let root = KERNEL_PAGE_TABLE_ROOT.load(Ordering::Acquire);
+    if root == 0 {
+        read_user_page_table()
+    } else {
+        PhysAddr::from(root)
+    }
 }
 
 /// Writes the register to update the current page table root for user space
@@ -75,8 +88,7 @@ pub unsafe fn write_user_page_table(root_paddr: PhysAddr) {
     unsafe { satp::set(satp::Mode::Sv39, 0, root_paddr.as_usize() >> 12) };
 }
 
-/// Writes the register to update the current page table root for user space
-/// (`satp`).
+/// Records and installs the kernel page table root in `satp`.
 ///
 /// RISC-V does not have a separate page table root register for user
 /// and kernel space, so this operation is the same as [`write_user_page_table`].
@@ -88,6 +100,7 @@ pub unsafe fn write_user_page_table(root_paddr: PhysAddr) {
 /// This function is unsafe as it changes the virtual memory address space.
 #[inline]
 pub unsafe fn write_kernel_page_table(root_paddr: PhysAddr) {
+    KERNEL_PAGE_TABLE_ROOT.store(root_paddr.as_usize(), Ordering::Release);
     unsafe { write_user_page_table(root_paddr) };
 }
 

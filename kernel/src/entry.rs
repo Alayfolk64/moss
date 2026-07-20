@@ -15,10 +15,7 @@ use crate::{
     file::FD_TABLE,
     mm::{copy_from_kernel, load_user_app, new_user_aspace_empty},
     pseudofs::{self, dev::tty::N_TTY},
-    task::{
-        ProcessData, Thread, add_task_to_table, new_user_task, spawn_alarm_task,
-        spawn_scheduler_stats_task,
-    },
+    task::{ProcessData, Thread, add_task_to_table, new_user_task, spawn_alarm_task},
 };
 
 fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
@@ -83,7 +80,6 @@ pub fn init(args: &[String], envs: &[String]) {
 
     pseudofs::mount_all().expect("Failed to mount pseudofs");
     spawn_alarm_task();
-    spawn_scheduler_stats_task();
 
     let (args, path, name) = resolve_init_command(args);
 
