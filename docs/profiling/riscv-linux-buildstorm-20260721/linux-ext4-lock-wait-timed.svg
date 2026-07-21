@@ -1,6 +1,6 @@
 <?xml version="1.0" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg version="1.1" width="1800" height="390" onload="init(evt)" viewBox="0 0 1800 390" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg version="1.1" width="1800" height="486" onload="init(evt)" viewBox="0 0 1800 486" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
 <!-- NOTES:  -->
 <defs>
@@ -422,141 +422,185 @@
 	}
 ]]>
 </script>
-<rect x="0.0" y="0" width="1800.0" height="390.0" fill="url(#background)"  />
+<rect x="0.0" y="0" width="1800.0" height="486.0" fill="url(#background)"  />
 <text id="title" x="900.00" y="24" >Linux guest ext4 lock wait - timed</text>
-<text id="details" x="10.00" y="373" > </text>
+<text id="details" x="10.00" y="469" > </text>
 <text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
 <text id="search" x="1690.00" y="24" >Search</text>
 <text id="ignorecase" x="1774.00" y="24" >ic</text>
-<text id="matched" x="1690.00" y="373" > </text>
+<text id="matched" x="1690.00" y="469" > </text>
 <g id="frames">
 <g >
-<title>handle_page_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="245" width="1236.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
-<text  x="13.00" y="255.5" >handle_page_fault</text>
+<title>ret_from_fork_kernel (640 microseconds, 6.16%)</title><rect x="1680.4" y="357" width="109.6" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1683.40" y="367.5" >ret_from_fork..</text>
 </g>
 <g >
-<title>evict (178 microseconds, 30.53%)</title><rect x="1246.5" y="181" width="543.5" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
-<text  x="1249.54" y="191.5" >evict</text>
+<title>ext4_writepages (9,754 microseconds, 93.84%)</title><rect x="10.0" y="197" width="1670.4" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" >ext4_writepages</text>
 </g>
 <g >
-<title>iput (178 microseconds, 30.53%)</title><rect x="1246.5" y="213" width="543.5" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
-<text  x="1249.54" y="223.5" >iput</text>
+<title>wb_workfn (9,754 microseconds, 93.84%)</title><rect x="10.0" y="293" width="1670.4" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" >wb_workfn</text>
 </g>
 <g >
-<title>do_page_mkwrite (405 microseconds, 69.47%)</title><rect x="10.0" y="149" width="1236.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
-<text  x="13.00" y="159.5" >do_page_mkwrite</text>
+<title>task:kworker/u32:24 (640 microseconds, 6.16%)</title><rect x="1680.4" y="389" width="109.6" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1683.40" y="399.5" >task:kworker/..</text>
 </g>
 <g >
-<title>handle_mm_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="229" width="1236.5" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
-<text  x="13.00" y="239.5" >handle_mm_fault</text>
+<title>process_one_work (9,754 microseconds, 93.84%)</title><rect x="10.0" y="309" width="1670.4" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" >process_one_work</text>
 </g>
 <g >
-<title>do_trap_ecall_u (178 microseconds, 30.53%)</title><rect x="1246.5" y="261" width="543.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
-<text  x="1249.54" y="271.5" >do_trap_ecall_u</text>
+<title>arch_rethook_trampoline (640 microseconds, 6.16%)</title><rect x="1680.4" y="213" width="109.6" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1683.40" y="223.5" >arch_rethook_..</text>
 </g>
 <g >
-<title>rwsem_down_write_slowpath (405 microseconds, 69.47%)</title><rect x="10.0" y="53" width="1236.5" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
-<text  x="13.00" y="63.5" >rwsem_down_write_slowpath</text>
+<title>ext4_end_io_end (640 microseconds, 6.16%)</title><rect x="1680.4" y="277" width="109.6" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1683.40" y="287.5" >ext4_end_io_end</text>
 </g>
 <g >
-<title>ext4_orphan_del (178 microseconds, 30.53%)</title><rect x="1246.5" y="149" width="543.5" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
-<text  x="1249.54" y="159.5" >ext4_orphan_del</text>
+<title>ret_from_fork_kernel_asm (640 microseconds, 6.16%)</title><rect x="1680.4" y="373" width="109.6" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1683.40" y="383.5" >ret_from_fork..</text>
 </g>
 <g >
-<title>-- (405 microseconds, 69.47%)</title><rect x="10.0" y="37" width="1236.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<title>-- (640 microseconds, 6.16%)</title><rect x="1680.4" y="133" width="109.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1683.40" y="143.5" >--</text>
+</g>
+<g >
+<title>schedule (9,754 microseconds, 93.84%)</title><rect x="10.0" y="69" width="1670.4" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="13.00" y="79.5" >schedule</text>
+</g>
+<g >
+<title>schedule (640 microseconds, 6.16%)</title><rect x="1680.4" y="165" width="109.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1683.40" y="175.5" >schedule</text>
+</g>
+<g >
+<title>ext4_do_writepages (9,754 microseconds, 93.84%)</title><rect x="10.0" y="181" width="1670.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="13.00" y="191.5" >ext4_do_writepages</text>
+</g>
+<g >
+<title>worker_thread (640 microseconds, 6.16%)</title><rect x="1680.4" y="325" width="109.6" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1683.40" y="335.5" >worker_thread</text>
+</g>
+<g >
+<title>ext4_map_blocks (640 microseconds, 6.16%)</title><rect x="1680.4" y="229" width="109.6" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="1683.40" y="239.5" >ext4_map_blocks</text>
+</g>
+<g >
+<title>__writeback_single_inode (9,754 microseconds, 93.84%)</title><rect x="10.0" y="229" width="1670.4" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" >__writeback_single_inode</text>
+</g>
+<g >
+<title>writeback_sb_inodes (9,754 microseconds, 93.84%)</title><rect x="10.0" y="245" width="1670.4" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >writeback_sb_inodes</text>
+</g>
+<g >
+<title>ext4_convert_unwritten_extents (640 microseconds, 6.16%)</title><rect x="1680.4" y="245" width="109.6" height="15.0" fill="rgb(131,131,248)" rx="2" ry="2" />
+<text  x="1683.40" y="255.5" >ext4_convert_..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (640 microseconds, 6.16%)</title><rect x="1680.4" y="197" width="109.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1683.40" y="207.5" >rwsem_down_wr..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (9,754 microseconds, 93.84%)</title><rect x="10.0" y="101" width="1670.4" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="13.00" y="111.5" >rwsem_down_write_slowpath</text>
+</g>
+<g >
+<title>do_writepages (9,754 microseconds, 93.84%)</title><rect x="10.0" y="213" width="1670.4" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" >do_writepages</text>
+</g>
+<g >
+<title>schedule_preempt_disabled (640 microseconds, 6.16%)</title><rect x="1680.4" y="181" width="109.6" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1683.40" y="191.5" >schedule_pree..</text>
+</g>
+<g >
+<title>ret_from_fork_kernel (9,754 microseconds, 93.84%)</title><rect x="10.0" y="357" width="1670.4" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="13.00" y="367.5" >ret_from_fork_kernel</text>
+</g>
+<g >
+<title>kthread (9,754 microseconds, 93.84%)</title><rect x="10.0" y="341" width="1670.4" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="13.00" y="351.5" >kthread</text>
+</g>
+<g >
+<title>all (10,394 microseconds, 100%)</title><rect x="10.0" y="437" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.00" y="447.5" ></text>
+</g>
+<g >
+<title>linux-ext4-lock-wait (10,394 microseconds, 100.00%)</title><rect x="10.0" y="421" width="1780.0" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="13.00" y="431.5" >linux-ext4-lock-wait</text>
+</g>
+<g >
+<title>phase:timed (10,394 microseconds, 100.00%)</title><rect x="10.0" y="405" width="1780.0" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="13.00" y="415.5" >phase:timed</text>
+</g>
+<g >
+<title>schedule_preempt_disabled (9,754 microseconds, 93.84%)</title><rect x="10.0" y="85" width="1670.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="13.00" y="95.5" >schedule_preempt_disabled</text>
+</g>
+<g >
+<title>-- (9,754 microseconds, 93.84%)</title><rect x="10.0" y="37" width="1670.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
 <text  x="13.00" y="47.5" >--</text>
 </g>
 <g >
-<title>do_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="181" width="1236.5" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
-<text  x="13.00" y="191.5" >do_fault</text>
+<title>ext4_convert_unwritten_io_end_vec (640 microseconds, 6.16%)</title><rect x="1680.4" y="261" width="109.6" height="15.0" fill="rgb(127,127,244)" rx="2" ry="2" />
+<text  x="1683.40" y="271.5" >ext4_convert_..</text>
 </g>
 <g >
-<title>ext4_page_mkwrite (405 microseconds, 69.47%)</title><rect x="10.0" y="133" width="1236.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
-<text  x="13.00" y="143.5" >ext4_page_mkwrite</text>
+<title>mpage_map_one_extent (9,754 microseconds, 93.84%)</title><rect x="10.0" y="149" width="1670.4" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="13.00" y="159.5" >mpage_map_one_extent</text>
 </g>
 <g >
-<title>handle_pte_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="197" width="1236.5" height="15.0" fill="rgb(94,94,217)" rx="2" ry="2" />
-<text  x="13.00" y="207.5" >handle_pte_fault</text>
+<title>mpage_map_and_submit_extent (9,754 microseconds, 93.84%)</title><rect x="10.0" y="165" width="1670.4" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" >mpage_map_and_submit_extent</text>
 </g>
 <g >
-<title>-- (178 microseconds, 30.53%)</title><rect x="1246.5" y="117" width="543.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
-<text  x="1249.54" y="127.5" >--</text>
+<title>wb_writeback (9,754 microseconds, 93.84%)</title><rect x="10.0" y="277" width="1670.4" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" >wb_writeback</text>
 </g>
 <g >
-<title>task:rust-lld (405 microseconds, 69.47%)</title><rect x="10.0" y="293" width="1236.5" height="15.0" fill="rgb(88,88,212)" rx="2" ry="2" />
-<text  x="13.00" y="303.5" >task:rust-lld</text>
+<title>__writeback_inodes_wb (9,754 microseconds, 93.84%)</title><rect x="10.0" y="261" width="1670.4" height="15.0" fill="rgb(114,114,234)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >__writeback_inodes_wb</text>
 </g>
 <g >
-<title>__riscv_sys_unlinkat (178 microseconds, 30.53%)</title><rect x="1246.5" y="245" width="543.5" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
-<text  x="1249.54" y="255.5" >__riscv_sys_unlinkat</text>
+<title>task:kworker/u32:23 (9,754 microseconds, 93.84%)</title><rect x="10.0" y="389" width="1670.4" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="13.00" y="399.5" >task:kworker/u32:23</text>
 </g>
 <g >
-<title>do_page_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="261" width="1236.5" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
-<text  x="13.00" y="271.5" >do_page_fault</text>
+<title>process_one_work (640 microseconds, 6.16%)</title><rect x="1680.4" y="309" width="109.6" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1683.40" y="319.5" >process_one_w..</text>
 </g>
 <g >
-<title>linux-ext4-lock-wait (583 microseconds, 100.00%)</title><rect x="10.0" y="325" width="1780.0" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
-<text  x="13.00" y="335.5" >linux-ext4-lock-wait</text>
+<title>arch_rethook_trampoline (9,754 microseconds, 93.84%)</title><rect x="10.0" y="117" width="1670.4" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="13.00" y="127.5" >arch_rethook_trampoline</text>
 </g>
 <g >
-<title>ext4_evict_inode (178 microseconds, 30.53%)</title><rect x="1246.5" y="165" width="543.5" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
-<text  x="1249.54" y="175.5" >ext4_evict_inode</text>
+<title>ext4_end_io_rsv_work (640 microseconds, 6.16%)</title><rect x="1680.4" y="293" width="109.6" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1683.40" y="303.5" >ext4_end_io_r..</text>
 </g>
 <g >
-<title>__mutex_lock_slowpath (178 microseconds, 30.53%)</title><rect x="1246.5" y="133" width="543.5" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
-<text  x="1249.54" y="143.5" >__mutex_lock_slowpath</text>
+<title>__schedule (640 microseconds, 6.16%)</title><rect x="1680.4" y="149" width="109.6" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1683.40" y="159.5" >__schedule</text>
 </g>
 <g >
-<title>filename_unlinkat (178 microseconds, 30.53%)</title><rect x="1246.5" y="229" width="543.5" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
-<text  x="1249.54" y="239.5" >filename_unlinkat</text>
+<title>worker_thread (9,754 microseconds, 93.84%)</title><rect x="10.0" y="325" width="1670.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="13.00" y="335.5" >worker_thread</text>
 </g>
 <g >
-<title>iput_final (178 microseconds, 30.53%)</title><rect x="1246.5" y="197" width="543.5" height="15.0" fill="rgb(99,99,220)" rx="2" ry="2" />
-<text  x="1249.54" y="207.5" >iput_final</text>
+<title>__schedule (9,754 microseconds, 93.84%)</title><rect x="10.0" y="53" width="1670.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="13.00" y="63.5" >__schedule</text>
 </g>
 <g >
-<title>__irqentry_text_start (405 microseconds, 69.47%)</title><rect x="10.0" y="277" width="1236.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
-<text  x="13.00" y="287.5" >__irqentry_text_start</text>
+<title>ext4_map_blocks (9,754 microseconds, 93.84%)</title><rect x="10.0" y="133" width="1670.4" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="13.00" y="143.5" >ext4_map_blocks</text>
 </g>
 <g >
-<title>ext4_da_get_block_prep (405 microseconds, 69.47%)</title><rect x="10.0" y="85" width="1236.5" height="15.0" fill="rgb(124,124,241)" rx="2" ry="2" />
-<text  x="13.00" y="95.5" >ext4_da_get_block_prep</text>
+<title>ret_from_fork_kernel_asm (9,754 microseconds, 93.84%)</title><rect x="10.0" y="373" width="1670.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="13.00" y="383.5" >ret_from_fork_kernel_asm</text>
 </g>
 <g >
-<title>__irqentry_text_start (178 microseconds, 30.53%)</title><rect x="1246.5" y="277" width="543.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
-<text  x="1249.54" y="287.5" >__irqentry_text_start</text>
-</g>
-<g >
-<title>all (583 microseconds, 100%)</title><rect x="10.0" y="341" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
-<text  x="13.00" y="351.5" ></text>
-</g>
-<g >
-<title>block_page_mkwrite (405 microseconds, 69.47%)</title><rect x="10.0" y="117" width="1236.5" height="15.0" fill="rgb(84,84,209)" rx="2" ry="2" />
-<text  x="13.00" y="127.5" >block_page_mkwrite</text>
-</g>
-<g >
-<title>phase:timed (583 microseconds, 100.00%)</title><rect x="10.0" y="309" width="1780.0" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
-<text  x="13.00" y="319.5" >phase:timed</text>
-</g>
-<g >
-<title>__handle_mm_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="213" width="1236.5" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
-<text  x="13.00" y="223.5" >__handle_mm_fault</text>
-</g>
-<g >
-<title>task:rustc (178 microseconds, 30.53%)</title><rect x="1246.5" y="293" width="543.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
-<text  x="1249.54" y="303.5" >task:rustc</text>
-</g>
-<g >
-<title>do_shared_fault (405 microseconds, 69.47%)</title><rect x="10.0" y="165" width="1236.5" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
-<text  x="13.00" y="175.5" >do_shared_fault</text>
-</g>
-<g >
-<title>__block_write_begin_int (405 microseconds, 69.47%)</title><rect x="10.0" y="101" width="1236.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
-<text  x="13.00" y="111.5" >__block_write_begin_int</text>
-</g>
-<g >
-<title>ext4_da_map_blocks.constprop.0 (405 microseconds, 69.47%)</title><rect x="10.0" y="69" width="1236.5" height="15.0" fill="rgb(130,130,247)" rx="2" ry="2" />
-<text  x="13.00" y="79.5" >ext4_da_map_blocks.constprop.0</text>
+<title>kthread (640 microseconds, 6.16%)</title><rect x="1680.4" y="341" width="109.6" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1683.40" y="351.5" >kthread</text>
 </g>
 </g>
 </svg>

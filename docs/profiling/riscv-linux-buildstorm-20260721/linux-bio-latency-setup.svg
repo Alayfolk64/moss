@@ -1,0 +1,2074 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="550" onload="init(evt)" viewBox="0 0 1800 550" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#e0e0ff" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="550.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Linux guest bio latency - setup</text>
+<text id="details" x="10.00" y="533" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="533" > </text>
+<g id="frames">
+<g >
+<title>page_cache_ra_order (5,288 microseconds, 4.05%)</title><rect x="196.0" y="277" width="72.1" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="199.01" y="287.5" >page_cac..</text>
+</g>
+<g >
+<title>page_cache_ra_order (5,880 microseconds, 4.50%)</title><rect x="403.8" y="261" width="80.2" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="406.84" y="271.5" >page_cach..</text>
+</g>
+<g >
+<title>__ext4_get_inode_loc_noinmem (86,097 microseconds, 65.95%)</title><rect x="606.7" y="229" width="1173.9" height="15.0" fill="rgb(92,92,201)" rx="2" ry="2" />
+<text  x="609.68" y="239.5" >__ext4_get_inode_loc_noinmem</text>
+</g>
+<g >
+<title>task:opt 6cs685rsqnt (5,880 microseconds, 4.50%)</title><rect x="403.8" y="453" width="80.2" height="15.0" fill="rgb(108,108,216)" rx="2" ry="2" />
+<text  x="406.84" y="463.5" >task:opt ..</text>
+</g>
+<g >
+<title>vfs_statx (251 microseconds, 0.19%)</title><rect x="10.0" y="357" width="3.4" height="15.0" fill="rgb(124,124,231)" rx="2" ry="2" />
+<text  x="13.00" y="367.5" ></text>
+</g>
+<g >
+<title>__ext4_iget (86,097 microseconds, 65.95%)</title><rect x="606.7" y="245" width="1173.9" height="15.0" fill="rgb(90,90,200)" rx="2" ry="2" />
+<text  x="609.68" y="255.5" >__ext4_iget</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (5,880 microseconds, 4.50%)</title><rect x="403.8" y="309" width="80.2" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="406.84" y="319.5" >arch_reth..</text>
+</g>
+<g >
+<title>page_cache_ra_order (696 microseconds, 0.53%)</title><rect x="58.2" y="133" width="9.4" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="61.16" y="143.5" ></text>
+</g>
+<g >
+<title>exec_binprm (2,309 microseconds, 1.77%)</title><rect x="13.4" y="341" width="31.5" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="16.42" y="351.5" >ex..</text>
+</g>
+<g >
+<title>handle_page_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="405" width="3.9" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="70.65" y="415.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (555 microseconds, 0.43%)</title><rect x="484.0" y="309" width="7.6" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="487.01" y="319.5" ></text>
+</g>
+<g >
+<title>lookup_open.isra.0 (365 microseconds, 0.28%)</title><rect x="1780.6" y="293" width="4.9" height="15.0" fill="rgb(80,80,190)" rx="2" ry="2" />
+<text  x="1783.55" y="303.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (696 microseconds, 0.53%)</title><rect x="58.2" y="69" width="9.4" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="61.16" y="79.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (7,703 microseconds, 5.90%)</title><rect x="501.7" y="261" width="105.0" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="504.65" y="271.5" >page_cache_r..</text>
+</g>
+<g >
+<title>filemap_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="293" width="7.4" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="494.58" y="303.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (3,611 microseconds, 2.77%)</title><rect x="354.6" y="245" width="49.2" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="357.61" y="255.5" >do_p..</text>
+</g>
+<g >
+<title>__riscv_sys_newfstatat (583 microseconds, 0.45%)</title><rect x="44.9" y="405" width="8.0" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="47.90" y="415.5" ></text>
+</g>
+<g >
+<title>filemap_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="293" width="80.2" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="406.84" y="303.5" >filemap_f..</text>
+</g>
+<g >
+<title>ext4_bread_batch (365 microseconds, 0.28%)</title><rect x="1780.6" y="245" width="4.9" height="15.0" fill="rgb(84,84,193)" rx="2" ry="2" />
+<text  x="1783.55" y="255.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (678 microseconds, 0.52%)</title><rect x="177.0" y="261" width="9.2" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="179.98" y="271.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (5,880 microseconds, 4.50%)</title><rect x="403.8" y="277" width="80.2" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="406.84" y="287.5" >do_sync_m..</text>
+</g>
+<g >
+<title>__do_sys_newfstatat (251 microseconds, 0.19%)</title><rect x="10.0" y="389" width="3.4" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="13.00" y="399.5" ></text>
+</g>
+<g >
+<title>read_pages (328 microseconds, 0.25%)</title><rect x="1785.5" y="197" width="4.5" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="1788.53" y="207.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="405" width="7.6" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="487.01" y="415.5" ></text>
+</g>
+<g >
+<title>submit_bh_wbc (84,218 microseconds, 64.51%)</title><rect x="632.3" y="149" width="1148.3" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="635.30" y="159.5" >submit_bh_wbc</text>
+</g>
+<g >
+<title>filemap_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="293" width="105.0" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="504.65" y="303.5" >filemap_fault</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (3,929 microseconds, 3.01%)</title><rect x="99.0" y="309" width="53.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="101.98" y="319.5" >arch_..</text>
+</g>
+<g >
+<title>task:coordinator (283 microseconds, 0.22%)</title><rect x="67.6" y="453" width="3.9" height="15.0" fill="rgb(139,139,244)" rx="2" ry="2" />
+<text  x="70.65" y="463.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (718 microseconds, 0.55%)</title><rect x="186.2" y="261" width="9.8" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="189.22" y="271.5" ></text>
+</g>
+<g >
+<title>lookup_slow (191 microseconds, 0.15%)</title><rect x="499.0" y="293" width="2.7" height="15.0" fill="rgb(99,99,207)" rx="2" ry="2" />
+<text  x="502.05" y="303.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (696 microseconds, 0.53%)</title><rect x="58.2" y="37" width="9.4" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="61.16" y="47.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (191 microseconds, 0.15%)</title><rect x="499.0" y="421" width="2.7" height="15.0" fill="rgb(138,138,243)" rx="2" ry="2" />
+<text  x="502.05" y="431.5" ></text>
+</g>
+<g >
+<title>do_fault (5,944 microseconds, 4.55%)</title><rect x="71.5" y="341" width="81.0" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="74.50" y="351.5" >do_fault</text>
+</g>
+<g >
+<title>ext4_lookup (365 microseconds, 0.28%)</title><rect x="1780.6" y="277" width="4.9" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="1783.55" y="287.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (1,601 microseconds, 1.23%)</title><rect x="23.1" y="53" width="21.8" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="26.08" y="63.5" >e..</text>
+</g>
+<g >
+<title>page_cache_ra_order (283 microseconds, 0.22%)</title><rect x="67.6" y="261" width="3.9" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="70.65" y="271.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,684 microseconds, 5.12%)</title><rect x="177.0" y="373" width="91.1" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="179.98" y="383.5" >arch_retho..</text>
+</g>
+<g >
+<title>bprm_execve.part.0 (1,792 microseconds, 1.37%)</title><rect x="152.5" y="357" width="24.5" height="15.0" fill="rgb(107,107,215)" rx="2" ry="2" />
+<text  x="155.55" y="367.5" >b..</text>
+</g>
+<g >
+<title>handle_page_fault (5,944 microseconds, 4.55%)</title><rect x="71.5" y="405" width="81.0" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="74.50" y="415.5" >handle_pa..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (3,424 microseconds, 2.62%)</title><rect x="403.8" y="181" width="46.7" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="406.84" y="191.5" >ext4..</text>
+</g>
+<g >
+<title>handle_pte_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="357" width="49.2" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="357.61" y="367.5" >hand..</text>
+</g>
+<g >
+<title>do_page_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="421" width="105.0" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="504.65" y="431.5" >do_page_fault</text>
+</g>
+<g >
+<title>submit_bh_wbc (251 microseconds, 0.19%)</title><rect x="10.0" y="181" width="3.4" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="13.00" y="191.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="357" width="3.9" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="70.65" y="367.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (328 microseconds, 0.25%)</title><rect x="1785.5" y="277" width="4.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="1788.53" y="287.5" ></text>
+</g>
+<g >
+<title>submit_bh_wbc (191 microseconds, 0.15%)</title><rect x="499.0" y="165" width="2.7" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="502.05" y="175.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (555 microseconds, 0.43%)</title><rect x="484.0" y="261" width="7.6" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="487.01" y="271.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="405" width="49.2" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="357.61" y="415.5" >hand..</text>
+</g>
+<g >
+<title>__irqentry_text_start (548 microseconds, 0.42%)</title><rect x="491.6" y="437" width="7.4" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="494.58" y="447.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (84,218 microseconds, 64.51%)</title><rect x="632.3" y="181" width="1148.3" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="635.30" y="191.5" >ext4_read_bh_nowait</text>
+</g>
+<g >
+<title>ext4_read_bh_lock (365 microseconds, 0.28%)</title><rect x="1780.6" y="229" width="4.9" height="15.0" fill="rgb(131,131,237)" rx="2" ry="2" />
+<text  x="1783.55" y="239.5" ></text>
+</g>
+<g >
+<title>__ext4_find_entry (191 microseconds, 0.15%)</title><rect x="499.0" y="245" width="2.7" height="15.0" fill="rgb(99,99,208)" rx="2" ry="2" />
+<text  x="502.05" y="255.5" ></text>
+</g>
+<g >
+<title>do_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="197" width="21.8" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="26.08" y="207.5" >d..</text>
+</g>
+<g >
+<title>submit_bh_wbc (84 microseconds, 0.06%)</title><rect x="51.7" y="181" width="1.2" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="54.71" y="191.5" ></text>
+</g>
+<g >
+<title>submit_bh (84,218 microseconds, 64.51%)</title><rect x="632.3" y="165" width="1148.3" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="635.30" y="175.5" >submit_bh</text>
+</g>
+<g >
+<title>filemap_get_pages (389 microseconds, 0.30%)</title><rect x="52.9" y="245" width="5.3" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="55.85" y="255.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (696 microseconds, 0.53%)</title><rect x="58.2" y="149" width="9.4" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="61.16" y="159.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (1,601 microseconds, 1.23%)</title><rect x="23.1" y="293" width="21.8" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="26.08" y="303.5" >_..</text>
+</g>
+<g >
+<title>handle_page_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="405" width="86.5" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="271.11" y="415.5" >handle_pag..</text>
+</g>
+<g >
+<title>path_lookupat (191 microseconds, 0.15%)</title><rect x="499.0" y="325" width="2.7" height="15.0" fill="rgb(134,134,239)" rx="2" ry="2" />
+<text  x="502.05" y="335.5" ></text>
+</g>
+<g >
+<title>task:opt 5voqiivwtva (3,611 microseconds, 2.77%)</title><rect x="354.6" y="453" width="49.2" height="15.0" fill="rgb(139,139,244)" rx="2" ry="2" />
+<text  x="357.61" y="463.5" >task..</text>
+</g>
+<g >
+<title>filemap_readahead.isra.0 (678 microseconds, 0.52%)</title><rect x="177.0" y="293" width="9.2" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="179.98" y="303.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (7,703 microseconds, 5.90%)</title><rect x="501.7" y="181" width="105.0" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="504.65" y="191.5" >ext4_mpage_r..</text>
+</g>
+<g >
+<title>__ext4_find_entry (365 microseconds, 0.28%)</title><rect x="1780.6" y="261" width="4.9" height="15.0" fill="rgb(99,99,208)" rx="2" ry="2" />
+<text  x="1783.55" y="271.5" ></text>
+</g>
+<g >
+<title>ext4_lookup (86,097 microseconds, 65.95%)</title><rect x="606.7" y="261" width="1173.9" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="609.68" y="271.5" >ext4_lookup</text>
+</g>
+<g >
+<title>bprm_execve.part.0 (2,309 microseconds, 1.77%)</title><rect x="13.4" y="357" width="31.5" height="15.0" fill="rgb(107,107,215)" rx="2" ry="2" />
+<text  x="16.42" y="367.5" >bp..</text>
+</g>
+<g >
+<title>__clear_user (1,792 microseconds, 1.37%)</title><rect x="152.5" y="309" width="24.5" height="15.0" fill="rgb(112,112,219)" rx="2" ry="2" />
+<text  x="155.55" y="319.5" >_..</text>
+</g>
+<g >
+<title>__handle_mm_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="229" width="9.4" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="61.16" y="239.5" ></text>
+</g>
+<g >
+<title>page_cache_sync_ra (6,006 microseconds, 4.60%)</title><rect x="186.2" y="293" width="81.9" height="15.0" fill="rgb(118,118,225)" rx="2" ry="2" />
+<text  x="189.22" y="303.5" >page_cach..</text>
+</g>
+<g >
+<title>filename_lookup (251 microseconds, 0.19%)</title><rect x="10.0" y="341" width="3.4" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="13.00" y="351.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (389 microseconds, 0.30%)</title><rect x="52.9" y="277" width="5.3" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="55.85" y="287.5" ></text>
+</g>
+<g >
+<title>do_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="341" width="80.2" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="406.84" y="351.5" >do_fault</text>
+</g>
+<g >
+<title>handle_pte_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="357" width="7.6" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="487.01" y="367.5" ></text>
+</g>
+<g >
+<title>vfs_fstatat (251 microseconds, 0.19%)</title><rect x="10.0" y="373" width="3.4" height="15.0" fill="rgb(113,113,220)" rx="2" ry="2" />
+<text  x="13.00" y="383.5" ></text>
+</g>
+<g >
+<title>kernel_read (389 microseconds, 0.30%)</title><rect x="52.9" y="325" width="5.3" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="55.85" y="335.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (555 microseconds, 0.43%)</title><rect x="484.0" y="229" width="7.6" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="487.01" y="239.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (6,344 microseconds, 4.86%)</title><rect x="268.1" y="165" width="86.5" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="271.11" y="175.5" >submit_bio..</text>
+</g>
+<g >
+<title>ext4_readahead (5,288 microseconds, 4.05%)</title><rect x="196.0" y="245" width="72.1" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="199.01" y="255.5" >ext4_rea..</text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (2,015 microseconds, 1.54%)</title><rect x="71.5" y="293" width="27.5" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="74.50" y="303.5" >d..</text>
+</g>
+<g >
+<title>ext4_read_bh_lock (499 microseconds, 0.38%)</title><rect x="44.9" y="213" width="6.8" height="15.0" fill="rgb(131,131,237)" rx="2" ry="2" />
+<text  x="47.90" y="223.5" ></text>
+</g>
+<g >
+<title>bprm_execve (1,792 microseconds, 1.37%)</title><rect x="152.5" y="373" width="24.5" height="15.0" fill="rgb(96,96,204)" rx="2" ry="2" />
+<text  x="155.55" y="383.5" >b..</text>
+</g>
+<g >
+<title>do_execveat_common (86,790 microseconds, 66.48%)</title><rect x="606.7" y="389" width="1183.3" height="15.0" fill="rgb(98,98,206)" rx="2" ry="2" />
+<text  x="609.68" y="399.5" >do_execveat_common</text>
+</g>
+<g >
+<title>handle_mm_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="245" width="24.5" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="155.55" y="255.5" >h..</text>
+</g>
+<g >
+<title>read_pages (1,792 microseconds, 1.37%)</title><rect x="152.5" y="85" width="24.5" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="155.55" y="95.5" >r..</text>
+</g>
+<g >
+<title>submit_bio_noacct (283 microseconds, 0.22%)</title><rect x="67.6" y="197" width="3.9" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="70.65" y="207.5" ></text>
+</g>
+<g >
+<title>link_path_walk (499 microseconds, 0.38%)</title><rect x="44.9" y="309" width="6.8" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="47.90" y="319.5" ></text>
+</g>
+<g >
+<title>do_read_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="325" width="7.6" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="487.01" y="335.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (1,601 microseconds, 1.23%)</title><rect x="23.1" y="117" width="21.8" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="26.08" y="127.5" >d..</text>
+</g>
+<g >
+<title>submit_bio_noacct (191 microseconds, 0.15%)</title><rect x="499.0" y="149" width="2.7" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="502.05" y="159.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (548 microseconds, 0.42%)</title><rect x="491.6" y="245" width="7.4" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="494.58" y="255.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="405" width="105.0" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="504.65" y="415.5" >handle_page_..</text>
+</g>
+<g >
+<title>page_cache_async_ra (678 microseconds, 0.52%)</title><rect x="177.0" y="277" width="9.2" height="15.0" fill="rgb(86,86,195)" rx="2" ry="2" />
+<text  x="179.98" y="287.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (1,792 microseconds, 1.37%)</title><rect x="152.5" y="181" width="24.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="155.55" y="191.5" >a..</text>
+</g>
+<g >
+<title>do_execveat_common (2,309 microseconds, 1.77%)</title><rect x="13.4" y="389" width="31.5" height="15.0" fill="rgb(98,98,206)" rx="2" ry="2" />
+<text  x="16.42" y="399.5" >do..</text>
+</g>
+<g >
+<title>__handle_mm_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="373" width="7.4" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="494.58" y="383.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (2,015 microseconds, 1.54%)</title><rect x="71.5" y="277" width="27.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="74.50" y="287.5" >p..</text>
+</g>
+<g >
+<title>__riscv_sys_newfstatat (251 microseconds, 0.19%)</title><rect x="10.0" y="405" width="3.4" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="13.00" y="415.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (1,601 microseconds, 1.23%)</title><rect x="23.1" y="101" width="21.8" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="26.08" y="111.5" >p..</text>
+</g>
+<g >
+<title>bprm_execve (328 microseconds, 0.25%)</title><rect x="1785.5" y="373" width="4.5" height="15.0" fill="rgb(96,96,204)" rx="2" ry="2" />
+<text  x="1788.53" y="383.5" ></text>
+</g>
+<g >
+<title>task:bash (251 microseconds, 0.19%)</title><rect x="10.0" y="453" width="3.4" height="15.0" fill="rgb(139,139,244)" rx="2" ry="2" />
+<text  x="13.00" y="463.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (251 microseconds, 0.19%)</title><rect x="10.0" y="213" width="3.4" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (708 microseconds, 0.54%)</title><rect x="13.4" y="181" width="9.7" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="16.42" y="191.5" ></text>
+</g>
+<g >
+<title>__clear_user (1,601 microseconds, 1.23%)</title><rect x="23.1" y="309" width="21.8" height="15.0" fill="rgb(112,112,219)" rx="2" ry="2" />
+<text  x="26.08" y="319.5" >_..</text>
+</g>
+<g >
+<title>ext4_sb_breadahead_unmovable (84,218 microseconds, 64.51%)</title><rect x="632.3" y="197" width="1148.3" height="15.0" fill="rgb(81,81,191)" rx="2" ry="2" />
+<text  x="635.30" y="207.5" >ext4_sb_breadahead_unmovable</text>
+</g>
+<g >
+<title>submit_bh (499 microseconds, 0.38%)</title><rect x="44.9" y="181" width="6.8" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="47.90" y="191.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (499 microseconds, 0.38%)</title><rect x="44.9" y="149" width="6.8" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="47.90" y="159.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (499 microseconds, 0.38%)</title><rect x="44.9" y="197" width="6.8" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="47.90" y="207.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (3,424 microseconds, 2.62%)</title><rect x="403.8" y="165" width="46.7" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="406.84" y="175.5" >subm..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (718 microseconds, 0.55%)</title><rect x="186.2" y="213" width="9.8" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="189.22" y="223.5" ></text>
+</g>
+<g >
+<title>__lookup_slow (499 microseconds, 0.38%)</title><rect x="44.9" y="277" width="6.8" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="47.90" y="287.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="213" width="21.8" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="26.08" y="223.5" >h..</text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (2,015 microseconds, 1.54%)</title><rect x="71.5" y="245" width="27.5" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="74.50" y="255.5" >p..</text>
+</g>
+<g >
+<title>filemap_read (6,684 microseconds, 5.12%)</title><rect x="177.0" y="325" width="91.1" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="179.98" y="335.5" >filemap_read</text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (555 microseconds, 0.43%)</title><rect x="484.0" y="277" width="7.6" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="487.01" y="287.5" ></text>
+</g>
+<g >
+<title>filemap_read (708 microseconds, 0.54%)</title><rect x="13.4" y="261" width="9.7" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="16.42" y="271.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (8,476 microseconds, 6.49%)</title><rect x="152.5" y="421" width="115.6" height="15.0" fill="rgb(138,138,243)" rx="2" ry="2" />
+<text  x="155.55" y="431.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>__ext4_find_entry (84 microseconds, 0.06%)</title><rect x="51.7" y="261" width="1.2" height="15.0" fill="rgb(99,99,208)" rx="2" ry="2" />
+<text  x="54.71" y="271.5" ></text>
+</g>
+<g >
+<title>filemap_read (328 microseconds, 0.25%)</title><rect x="1785.5" y="261" width="4.5" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="1788.53" y="271.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (328 microseconds, 0.25%)</title><rect x="1785.5" y="309" width="4.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="1788.53" y="319.5" ></text>
+</g>
+<g >
+<title>do_page_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="421" width="49.2" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="357.61" y="431.5" >do_p..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (708 microseconds, 0.54%)</title><rect x="13.4" y="277" width="9.7" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="16.42" y="287.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (555 microseconds, 0.43%)</title><rect x="484.0" y="437" width="7.6" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="487.01" y="447.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (7,703 microseconds, 5.90%)</title><rect x="501.7" y="197" width="105.0" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="504.65" y="207.5" >ext4_readahead</text>
+</g>
+<g >
+<title>__irqentry_text_start (1,085 microseconds, 0.83%)</title><rect x="52.9" y="437" width="14.7" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="55.85" y="447.5" ></text>
+</g>
+<g >
+<title>ext4_lookup (499 microseconds, 0.38%)</title><rect x="44.9" y="261" width="6.8" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="47.90" y="271.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (2,015 microseconds, 1.54%)</title><rect x="71.5" y="213" width="27.5" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="74.50" y="223.5" >e..</text>
+</g>
+<g >
+<title>handle_page_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="405" width="7.4" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="494.58" y="415.5" ></text>
+</g>
+<g >
+<title>vfs_statx (583 microseconds, 0.45%)</title><rect x="44.9" y="357" width="8.0" height="15.0" fill="rgb(124,124,231)" rx="2" ry="2" />
+<text  x="47.90" y="367.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (3,929 microseconds, 3.01%)</title><rect x="99.0" y="197" width="53.5" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="101.98" y="207.5" >ext4_..</text>
+</g>
+<g >
+<title>task:ld (14,420 microseconds, 11.05%)</title><rect x="71.5" y="453" width="196.6" height="15.0" fill="rgb(116,116,223)" rx="2" ry="2" />
+<text  x="74.50" y="463.5" >task:ld</text>
+</g>
+<g >
+<title>read_pages (3,611 microseconds, 2.77%)</title><rect x="354.6" y="213" width="49.2" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="357.61" y="223.5" >read..</text>
+</g>
+<g >
+<title>filemap_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="165" width="9.4" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="61.16" y="175.5" ></text>
+</g>
+<g >
+<title>load_elf_binary (1,792 microseconds, 1.37%)</title><rect x="152.5" y="325" width="24.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="155.55" y="335.5" >l..</text>
+</g>
+<g >
+<title>filemap_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="293" width="86.5" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="271.11" y="303.5" >filemap_fa..</text>
+</g>
+<g >
+<title>kernel_read (708 microseconds, 0.54%)</title><rect x="13.4" y="325" width="9.7" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="16.42" y="335.5" ></text>
+</g>
+<g >
+<title>__do_sys_newfstatat (583 microseconds, 0.45%)</title><rect x="44.9" y="389" width="8.0" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="47.90" y="399.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (1,601 microseconds, 1.23%)</title><rect x="23.1" y="37" width="21.8" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="26.08" y="47.5" >s..</text>
+</g>
+<g >
+<title>do_page_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="421" width="86.5" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="271.11" y="431.5" >do_page_fa..</text>
+</g>
+<g >
+<title>__handle_mm_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="373" width="49.2" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="357.61" y="383.5" >__ha..</text>
+</g>
+<g >
+<title>phase:setup (130,553 microseconds, 100.00%)</title><rect x="10.0" y="469" width="1780.0" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="13.00" y="479.5" >phase:setup</text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (548 microseconds, 0.42%)</title><rect x="491.6" y="229" width="7.4" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="494.58" y="239.5" ></text>
+</g>
+<g >
+<title>open_last_lookups (365 microseconds, 0.28%)</title><rect x="1780.6" y="309" width="4.9" height="15.0" fill="rgb(99,99,207)" rx="2" ry="2" />
+<text  x="1783.55" y="319.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (3,424 microseconds, 2.62%)</title><rect x="403.8" y="229" width="46.7" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="406.84" y="239.5" >page..</text>
+</g>
+<g >
+<title>handle_mm_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="389" width="7.6" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="487.01" y="399.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (3,611 microseconds, 2.77%)</title><rect x="354.6" y="309" width="49.2" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="357.61" y="319.5" >arch..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (7,703 microseconds, 5.90%)</title><rect x="501.7" y="309" width="105.0" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="504.65" y="319.5" >arch_rethook..</text>
+</g>
+<g >
+<title>filemap_get_pages (708 microseconds, 0.54%)</title><rect x="13.4" y="245" width="9.7" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="16.42" y="255.5" ></text>
+</g>
+<g >
+<title>submit_bh_wbc (1,879 microseconds, 1.44%)</title><rect x="606.7" y="165" width="25.6" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="609.68" y="175.5" >s..</text>
+</g>
+<g >
+<title>do_page_fault (5,944 microseconds, 4.55%)</title><rect x="71.5" y="421" width="81.0" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="74.50" y="431.5" >do_page_f..</text>
+</g>
+<g >
+<title>read_pages (6,344 microseconds, 4.86%)</title><rect x="268.1" y="213" width="86.5" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="271.11" y="223.5" >read_pages</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (2,456 microseconds, 1.88%)</title><rect x="450.5" y="213" width="33.5" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="453.52" y="223.5" >ex..</text>
+</g>
+<g >
+<title>do_page_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="277" width="9.4" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="61.16" y="287.5" ></text>
+</g>
+<g >
+<title>read_pages (3,929 microseconds, 3.01%)</title><rect x="99.0" y="213" width="53.5" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="101.98" y="223.5" >read_..</text>
+</g>
+<g >
+<title>do_read_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="325" width="3.9" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="70.65" y="335.5" ></text>
+</g>
+<g >
+<title>task:collect2 (1,085 microseconds, 0.83%)</title><rect x="52.9" y="453" width="14.7" height="15.0" fill="rgb(89,89,198)" rx="2" ry="2" />
+<text  x="55.85" y="463.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (94,493 microseconds, 72.38%)</title><rect x="501.7" y="437" width="1288.3" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="504.65" y="447.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>filemap_fault (3,929 microseconds, 3.01%)</title><rect x="99.0" y="293" width="53.5" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="101.98" y="303.5" >filem..</text>
+</g>
+<g >
+<title>__ext4_find_entry (499 microseconds, 0.38%)</title><rect x="44.9" y="245" width="6.8" height="15.0" fill="rgb(99,99,208)" rx="2" ry="2" />
+<text  x="47.90" y="255.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (1,792 microseconds, 1.37%)</title><rect x="152.5" y="117" width="24.5" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="155.55" y="127.5" >d..</text>
+</g>
+<g >
+<title>__irqentry_text_start (3,611 microseconds, 2.77%)</title><rect x="354.6" y="437" width="49.2" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="357.61" y="447.5" >__ir..</text>
+</g>
+<g >
+<title>ext4_readahead (1,601 microseconds, 1.23%)</title><rect x="23.1" y="69" width="21.8" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="26.08" y="79.5" >e..</text>
+</g>
+<g >
+<title>read_pages (2,015 microseconds, 1.54%)</title><rect x="71.5" y="229" width="27.5" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="74.50" y="239.5" >r..</text>
+</g>
+<g >
+<title>handle_page_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="261" width="21.8" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="26.08" y="271.5" >h..</text>
+</g>
+<g >
+<title>task:cc (2,892 microseconds, 2.22%)</title><rect x="13.4" y="453" width="39.5" height="15.0" fill="rgb(133,133,239)" rx="2" ry="2" />
+<text  x="16.42" y="463.5" >tas..</text>
+</g>
+<g >
+<title>bprm_execve.part.0 (328 microseconds, 0.25%)</title><rect x="1785.5" y="357" width="4.5" height="15.0" fill="rgb(107,107,215)" rx="2" ry="2" />
+<text  x="1788.53" y="367.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="261" width="24.5" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="155.55" y="271.5" >h..</text>
+</g>
+<g >
+<title>handle_page_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="261" width="9.4" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="61.16" y="271.5" ></text>
+</g>
+<g >
+<title>do_read_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="325" width="49.2" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="357.61" y="335.5" >do_r..</text>
+</g>
+<g >
+<title>vfs_fstatat (191 microseconds, 0.15%)</title><rect x="499.0" y="373" width="2.7" height="15.0" fill="rgb(113,113,220)" rx="2" ry="2" />
+<text  x="502.05" y="383.5" ></text>
+</g>
+<g >
+<title>do_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="341" width="86.5" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="271.11" y="351.5" >do_fault</text>
+</g>
+<g >
+<title>ext4_readahead (3,611 microseconds, 2.77%)</title><rect x="354.6" y="197" width="49.2" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="357.61" y="207.5" >ext4..</text>
+</g>
+<g >
+<title>__irqentry_text_start (1,792 microseconds, 1.37%)</title><rect x="152.5" y="293" width="24.5" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="155.55" y="303.5" >_..</text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (3,929 microseconds, 3.01%)</title><rect x="99.0" y="277" width="53.5" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="101.98" y="287.5" >do_sy..</text>
+</g>
+<g >
+<title>do_page_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="421" width="80.2" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="406.84" y="431.5" >do_page_f..</text>
+</g>
+<g >
+<title>kernel_read (328 microseconds, 0.25%)</title><rect x="1785.5" y="325" width="4.5" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="1788.53" y="335.5" ></text>
+</g>
+<g >
+<title>submit_bh (191 microseconds, 0.15%)</title><rect x="499.0" y="181" width="2.7" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="502.05" y="191.5" ></text>
+</g>
+<g >
+<title>all (130,553 microseconds, 100%)</title><rect x="10.0" y="501" width="1780.0" height="15.0" fill="rgb(90,90,199)" rx="2" ry="2" />
+<text  x="13.00" y="511.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (1,879 microseconds, 1.44%)</title><rect x="606.7" y="197" width="25.6" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="609.68" y="207.5" >e..</text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (6,344 microseconds, 4.86%)</title><rect x="268.1" y="229" width="86.5" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="271.11" y="239.5" >page_cache..</text>
+</g>
+<g >
+<title>handle_mm_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="389" width="7.4" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="494.58" y="399.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (548 microseconds, 0.42%)</title><rect x="491.6" y="165" width="7.4" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="494.58" y="175.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (3,929 microseconds, 3.01%)</title><rect x="99.0" y="165" width="53.5" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="101.98" y="175.5" >submi..</text>
+</g>
+<g >
+<title>do_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="197" width="24.5" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="155.55" y="207.5" >d..</text>
+</g>
+<g >
+<title>ext4_readahead (6,344 microseconds, 4.86%)</title><rect x="268.1" y="197" width="86.5" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="271.11" y="207.5" >ext4_reada..</text>
+</g>
+<g >
+<title>do_page_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="421" width="7.4" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="494.58" y="431.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="357" width="86.5" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="271.11" y="367.5" >handle_pte..</text>
+</g>
+<g >
+<title>page_cache_sync_ra (389 microseconds, 0.30%)</title><rect x="52.9" y="229" width="5.3" height="15.0" fill="rgb(118,118,225)" rx="2" ry="2" />
+<text  x="55.85" y="239.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_execve (1,085 microseconds, 0.83%)</title><rect x="52.9" y="405" width="14.7" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="55.85" y="415.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (696 microseconds, 0.53%)</title><rect x="58.2" y="117" width="9.4" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="61.16" y="127.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (2,456 microseconds, 1.88%)</title><rect x="450.5" y="197" width="33.5" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="453.52" y="207.5" >su..</text>
+</g>
+<g >
+<title>read_pages (718 microseconds, 0.55%)</title><rect x="186.2" y="245" width="9.8" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="189.22" y="255.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (3,929 microseconds, 3.01%)</title><rect x="99.0" y="181" width="53.5" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="101.98" y="191.5" >ext4_..</text>
+</g>
+<g >
+<title>exec_binprm (1,085 microseconds, 0.83%)</title><rect x="52.9" y="341" width="14.7" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="55.85" y="351.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (5,880 microseconds, 4.50%)</title><rect x="403.8" y="437" width="80.2" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="406.84" y="447.5" >__irqentr..</text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (1,792 microseconds, 1.37%)</title><rect x="152.5" y="101" width="24.5" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="155.55" y="111.5" >p..</text>
+</g>
+<g >
+<title>do_trap_ecall_u (251 microseconds, 0.19%)</title><rect x="10.0" y="421" width="3.4" height="15.0" fill="rgb(138,138,243)" rx="2" ry="2" />
+<text  x="13.00" y="431.5" ></text>
+</g>
+<g >
+<title>read_pages (678 microseconds, 0.52%)</title><rect x="177.0" y="245" width="9.2" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="179.98" y="255.5" ></text>
+</g>
+<g >
+<title>read_pages (708 microseconds, 0.54%)</title><rect x="13.4" y="197" width="9.7" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="16.42" y="207.5" ></text>
+</g>
+<g >
+<title>ext4_file_read_iter (6,684 microseconds, 5.12%)</title><rect x="177.0" y="357" width="91.1" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="179.98" y="367.5" >ext4_file_..</text>
+</g>
+<g >
+<title>submit_bio_noacct (708 microseconds, 0.54%)</title><rect x="13.4" y="149" width="9.7" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="16.42" y="159.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (328 microseconds, 0.25%)</title><rect x="1785.5" y="213" width="4.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="1788.53" y="223.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (3,424 microseconds, 2.62%)</title><rect x="403.8" y="197" width="46.7" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="406.84" y="207.5" >ext4..</text>
+</g>
+<g >
+<title>do_read_fault (3,929 microseconds, 3.01%)</title><rect x="99.0" y="325" width="53.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="101.98" y="335.5" >do_re..</text>
+</g>
+<g >
+<title>load_elf_binary (696 microseconds, 0.53%)</title><rect x="58.2" y="325" width="9.4" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="61.16" y="335.5" ></text>
+</g>
+<g >
+<title>vfs_fstatat (583 microseconds, 0.45%)</title><rect x="44.9" y="373" width="8.0" height="15.0" fill="rgb(113,113,220)" rx="2" ry="2" />
+<text  x="47.90" y="383.5" ></text>
+</g>
+<g >
+<title>task:opt 6ln53uo5eie (555 microseconds, 0.43%)</title><rect x="484.0" y="453" width="7.6" height="15.0" fill="rgb(139,139,244)" rx="2" ry="2" />
+<text  x="487.01" y="463.5" ></text>
+</g>
+<g >
+<title>read_pages (389 microseconds, 0.30%)</title><rect x="52.9" y="197" width="5.3" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="55.85" y="207.5" ></text>
+</g>
+<g >
+<title>read_pages (555 microseconds, 0.43%)</title><rect x="484.0" y="213" width="7.6" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="487.01" y="223.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (3,611 microseconds, 2.77%)</title><rect x="354.6" y="261" width="49.2" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="357.61" y="271.5" >page..</text>
+</g>
+<g >
+<title>filemap_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="293" width="3.9" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="70.65" y="303.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (251 microseconds, 0.19%)</title><rect x="10.0" y="165" width="3.4" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (389 microseconds, 0.30%)</title><rect x="52.9" y="165" width="5.3" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="55.85" y="175.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,344 microseconds, 4.86%)</title><rect x="268.1" y="309" width="86.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="271.11" y="319.5" >arch_retho..</text>
+</g>
+<g >
+<title>load_elf_binary (1,601 microseconds, 1.23%)</title><rect x="23.1" y="325" width="21.8" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="26.08" y="335.5" >l..</text>
+</g>
+<g >
+<title>submit_bh (1,879 microseconds, 1.44%)</title><rect x="606.7" y="181" width="25.6" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="609.68" y="191.5" >s..</text>
+</g>
+<g >
+<title>filemap_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="293" width="49.2" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="357.61" y="303.5" >file..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (1,601 microseconds, 1.23%)</title><rect x="23.1" y="181" width="21.8" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="26.08" y="191.5" >a..</text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (3,611 microseconds, 2.77%)</title><rect x="354.6" y="229" width="49.2" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="357.61" y="239.5" >page..</text>
+</g>
+<g >
+<title>__handle_mm_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="373" width="80.2" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="406.84" y="383.5" >__handle_..</text>
+</g>
+<g >
+<title>filemap_get_pages (328 microseconds, 0.25%)</title><rect x="1785.5" y="245" width="4.5" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="1788.53" y="255.5" ></text>
+</g>
+<g >
+<title>do_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="341" width="105.0" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="504.65" y="351.5" >do_fault</text>
+</g>
+<g >
+<title>do_page_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="421" width="3.9" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="70.65" y="431.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (365 microseconds, 0.28%)</title><rect x="1780.6" y="213" width="4.9" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="1783.55" y="223.5" ></text>
+</g>
+<g >
+<title>filename_lookup (583 microseconds, 0.45%)</title><rect x="44.9" y="341" width="8.0" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="47.90" y="351.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_lock (191 microseconds, 0.15%)</title><rect x="499.0" y="213" width="2.7" height="15.0" fill="rgb(131,131,237)" rx="2" ry="2" />
+<text  x="502.05" y="223.5" ></text>
+</g>
+<g >
+<title>submit_bh_wbc (365 microseconds, 0.28%)</title><rect x="1780.6" y="181" width="4.9" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="1783.55" y="191.5" ></text>
+</g>
+<g >
+<title>ext4_bread_batch (191 microseconds, 0.15%)</title><rect x="499.0" y="229" width="2.7" height="15.0" fill="rgb(84,84,193)" rx="2" ry="2" />
+<text  x="502.05" y="239.5" ></text>
+</g>
+<g >
+<title>__lookup_slow (86,097 microseconds, 65.95%)</title><rect x="606.7" y="277" width="1173.9" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="609.68" y="287.5" >__lookup_slow</text>
+</g>
+<g >
+<title>do_page_cache_ra (718 microseconds, 0.55%)</title><rect x="186.2" y="277" width="9.8" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="189.22" y="287.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (3,611 microseconds, 2.77%)</title><rect x="354.6" y="277" width="49.2" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="357.61" y="287.5" >do_s..</text>
+</g>
+<g >
+<title>read_pages (7,703 microseconds, 5.90%)</title><rect x="501.7" y="213" width="105.0" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="504.65" y="223.5" >read_pages</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,684 microseconds, 5.12%)</title><rect x="177.0" y="341" width="91.1" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="179.98" y="351.5" >arch_retho..</text>
+</g>
+<g >
+<title>lookup_slow (86,097 microseconds, 65.95%)</title><rect x="606.7" y="293" width="1173.9" height="15.0" fill="rgb(99,99,207)" rx="2" ry="2" />
+<text  x="609.68" y="303.5" >lookup_slow</text>
+</g>
+<g >
+<title>submit_bio_noacct (555 microseconds, 0.43%)</title><rect x="484.0" y="165" width="7.6" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="487.01" y="175.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (7,703 microseconds, 5.90%)</title><rect x="501.7" y="277" width="105.0" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="504.65" y="287.5" >do_sync_mmap..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (283 microseconds, 0.22%)</title><rect x="67.6" y="309" width="3.9" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="70.65" y="319.5" ></text>
+</g>
+<g >
+<title>__ext4_get_inode_loc (86,097 microseconds, 65.95%)</title><rect x="606.7" y="213" width="1173.9" height="15.0" fill="rgb(81,81,191)" rx="2" ry="2" />
+<text  x="609.68" y="223.5" >__ext4_get_inode_loc</text>
+</g>
+<g >
+<title>page_cache_ra_order (6,344 microseconds, 4.86%)</title><rect x="268.1" y="261" width="86.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="271.11" y="271.5" >page_cache..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (696 microseconds, 0.53%)</title><rect x="58.2" y="181" width="9.4" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="61.16" y="191.5" ></text>
+</g>
+<g >
+<title>filename_lookup (191 microseconds, 0.15%)</title><rect x="499.0" y="341" width="2.7" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="502.05" y="351.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (3,611 microseconds, 2.77%)</title><rect x="354.6" y="181" width="49.2" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="357.61" y="191.5" >ext4..</text>
+</g>
+<g >
+<title>read_pages (696 microseconds, 0.53%)</title><rect x="58.2" y="85" width="9.4" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="61.16" y="95.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (1,601 microseconds, 1.23%)</title><rect x="23.1" y="133" width="21.8" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="26.08" y="143.5" >p..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (2,015 microseconds, 1.54%)</title><rect x="71.5" y="325" width="27.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="74.50" y="335.5" >a..</text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (7,703 microseconds, 5.90%)</title><rect x="501.7" y="229" width="105.0" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="504.65" y="239.5" >page_cache_r..</text>
+</g>
+<g >
+<title>read_pages (2,456 microseconds, 1.88%)</title><rect x="450.5" y="245" width="33.5" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="453.52" y="255.5" >re..</text>
+</g>
+<g >
+<title>__irqentry_text_start (2,892 microseconds, 2.22%)</title><rect x="13.4" y="437" width="39.5" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="16.42" y="447.5" >__i..</text>
+</g>
+<g >
+<title>ext4_readahead (1,792 microseconds, 1.37%)</title><rect x="152.5" y="69" width="24.5" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="155.55" y="79.5" >e..</text>
+</g>
+<g >
+<title>exec_binprm (328 microseconds, 0.25%)</title><rect x="1785.5" y="341" width="4.5" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="1788.53" y="351.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (5,944 microseconds, 4.55%)</title><rect x="71.5" y="357" width="81.0" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="74.50" y="367.5" >handle_pt..</text>
+</g>
+<g >
+<title>submit_bh (365 microseconds, 0.28%)</title><rect x="1780.6" y="197" width="4.9" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="1783.55" y="207.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="389" width="3.9" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="70.65" y="399.5" ></text>
+</g>
+<g >
+<title>task:rm (191 microseconds, 0.15%)</title><rect x="499.0" y="453" width="2.7" height="15.0" fill="rgb(119,119,226)" rx="2" ry="2" />
+<text  x="502.05" y="463.5" ></text>
+</g>
+<g >
+<title>filemap_read (389 microseconds, 0.30%)</title><rect x="52.9" y="261" width="5.3" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="55.85" y="271.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_lock (251 microseconds, 0.19%)</title><rect x="10.0" y="229" width="3.4" height="15.0" fill="rgb(131,131,237)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" ></text>
+</g>
+<g >
+<title>bprm_execve (1,085 microseconds, 0.83%)</title><rect x="52.9" y="373" width="14.7" height="15.0" fill="rgb(96,96,204)" rx="2" ry="2" />
+<text  x="55.85" y="383.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (708 microseconds, 0.54%)</title><rect x="13.4" y="213" width="9.7" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="16.42" y="223.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (1,601 microseconds, 1.23%)</title><rect x="23.1" y="149" width="21.8" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="26.08" y="159.5" >d..</text>
+</g>
+<g >
+<title>__handle_mm_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="373" width="7.6" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="487.01" y="383.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (708 microseconds, 0.54%)</title><rect x="13.4" y="165" width="9.7" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="16.42" y="175.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (86,790 microseconds, 66.48%)</title><rect x="606.7" y="421" width="1183.3" height="15.0" fill="rgb(138,138,243)" rx="2" ry="2" />
+<text  x="609.68" y="431.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>__handle_mm_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="373" width="86.5" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="271.11" y="383.5" >__handle_m..</text>
+</g>
+<g >
+<title>page_cache_sync_ra (328 microseconds, 0.25%)</title><rect x="1785.5" y="229" width="4.5" height="15.0" fill="rgb(118,118,225)" rx="2" ry="2" />
+<text  x="1788.53" y="239.5" ></text>
+</g>
+<g >
+<title>read_pages (548 microseconds, 0.42%)</title><rect x="491.6" y="213" width="7.4" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="494.58" y="223.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (1,792 microseconds, 1.37%)</title><rect x="152.5" y="149" width="24.5" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="155.55" y="159.5" >d..</text>
+</g>
+<g >
+<title>task:opt 9ci5trlrapv (548 microseconds, 0.42%)</title><rect x="491.6" y="453" width="7.4" height="15.0" fill="rgb(99,99,208)" rx="2" ry="2" />
+<text  x="494.58" y="463.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="405" width="80.2" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="406.84" y="415.5" >handle_pa..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (696 microseconds, 0.53%)</title><rect x="58.2" y="53" width="9.4" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="61.16" y="63.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="357" width="7.4" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="494.58" y="367.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (7,703 microseconds, 5.90%)</title><rect x="501.7" y="165" width="105.0" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="504.65" y="175.5" >submit_bio_n..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (2,015 microseconds, 1.54%)</title><rect x="71.5" y="197" width="27.5" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="74.50" y="207.5" >e..</text>
+</g>
+<g >
+<title>link_path_walk (86,097 microseconds, 65.95%)</title><rect x="606.7" y="309" width="1173.9" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="609.68" y="319.5" >link_path_walk</text>
+</g>
+<g >
+<title>__handle_mm_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="229" width="24.5" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="155.55" y="239.5" >_..</text>
+</g>
+<g >
+<title>submit_bh (251 microseconds, 0.19%)</title><rect x="10.0" y="197" width="3.4" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (2,456 microseconds, 1.88%)</title><rect x="450.5" y="229" width="33.5" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="453.52" y="239.5" >ex..</text>
+</g>
+<g >
+<title>read_pages (5,288 microseconds, 4.05%)</title><rect x="196.0" y="261" width="72.1" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="199.01" y="271.5" >read_pages</text>
+</g>
+<g >
+<title>submit_bh (84 microseconds, 0.06%)</title><rect x="51.7" y="197" width="1.2" height="15.0" fill="rgb(111,111,219)" rx="2" ry="2" />
+<text  x="54.71" y="207.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (548 microseconds, 0.42%)</title><rect x="491.6" y="309" width="7.4" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="494.58" y="319.5" ></text>
+</g>
+<g >
+<title>do_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="341" width="3.9" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="70.65" y="351.5" ></text>
+</g>
+<g >
+<title>ext4_lookup (191 microseconds, 0.15%)</title><rect x="499.0" y="261" width="2.7" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="502.05" y="271.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (6,344 microseconds, 4.86%)</title><rect x="268.1" y="181" width="86.5" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="271.11" y="191.5" >ext4_mpage..</text>
+</g>
+<g >
+<title>do_read_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="325" width="86.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="271.11" y="335.5" >do_read_fa..</text>
+</g>
+<g >
+<title>__irqentry_text_start (283 microseconds, 0.22%)</title><rect x="67.6" y="437" width="3.9" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="70.65" y="447.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (2,015 microseconds, 1.54%)</title><rect x="71.5" y="181" width="27.5" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="74.50" y="191.5" >s..</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (708 microseconds, 0.54%)</title><rect x="13.4" y="309" width="9.7" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="16.42" y="319.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_lock (84 microseconds, 0.06%)</title><rect x="51.7" y="229" width="1.2" height="15.0" fill="rgb(131,131,237)" rx="2" ry="2" />
+<text  x="54.71" y="239.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (5,288 microseconds, 4.05%)</title><rect x="196.0" y="229" width="72.1" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="199.01" y="239.5" >ext4_mpa..</text>
+</g>
+<g >
+<title>submit_bh_wbc (499 microseconds, 0.38%)</title><rect x="44.9" y="165" width="6.8" height="15.0" fill="rgb(105,105,213)" rx="2" ry="2" />
+<text  x="47.90" y="175.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (328 microseconds, 0.25%)</title><rect x="1785.5" y="181" width="4.5" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="1788.53" y="191.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (84 microseconds, 0.06%)</title><rect x="51.7" y="213" width="1.2" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="54.71" y="223.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (283 microseconds, 0.22%)</title><rect x="67.6" y="213" width="3.9" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="70.65" y="223.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (555 microseconds, 0.43%)</title><rect x="484.0" y="181" width="7.6" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="487.01" y="191.5" ></text>
+</g>
+<g >
+<title>filemap_get_pages (6,684 microseconds, 5.12%)</title><rect x="177.0" y="309" width="91.1" height="15.0" fill="rgb(93,93,202)" rx="2" ry="2" />
+<text  x="179.98" y="319.5" >filemap_ge..</text>
+</g>
+<g >
+<title>__irqentry_text_start (696 microseconds, 0.53%)</title><rect x="58.2" y="293" width="9.4" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="61.16" y="303.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (555 microseconds, 0.43%)</title><rect x="484.0" y="197" width="7.6" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="487.01" y="207.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (2,892 microseconds, 2.22%)</title><rect x="13.4" y="421" width="39.5" height="15.0" fill="rgb(138,138,243)" rx="2" ry="2" />
+<text  x="16.42" y="431.5" >do_..</text>
+</g>
+<g >
+<title>__handle_mm_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="373" width="105.0" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="504.65" y="383.5" >__handle_mm_..</text>
+</g>
+<g >
+<title>__irqentry_text_start (191 microseconds, 0.15%)</title><rect x="499.0" y="437" width="2.7" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="502.05" y="447.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (555 microseconds, 0.43%)</title><rect x="484.0" y="245" width="7.6" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="487.01" y="255.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (1,879 microseconds, 1.44%)</title><rect x="606.7" y="149" width="25.6" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="609.68" y="159.5" >s..</text>
+</g>
+<g >
+<title>do_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="197" width="9.4" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="61.16" y="207.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="389" width="80.2" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="406.84" y="399.5" >handle_mm..</text>
+</g>
+<g >
+<title>do_page_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="277" width="21.8" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="26.08" y="287.5" >d..</text>
+</g>
+<g >
+<title>handle_pte_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="357" width="105.0" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="504.65" y="367.5" >handle_pte_f..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (678 microseconds, 0.52%)</title><rect x="177.0" y="213" width="9.2" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="179.98" y="223.5" ></text>
+</g>
+<g >
+<title>read_pages (1,601 microseconds, 1.23%)</title><rect x="23.1" y="85" width="21.8" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="26.08" y="95.5" >r..</text>
+</g>
+<g >
+<title>do_page_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="421" width="7.6" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="487.01" y="431.5" ></text>
+</g>
+<g >
+<title>alloc_bprm (86,462 microseconds, 66.23%)</title><rect x="606.7" y="373" width="1178.8" height="15.0" fill="rgb(103,103,211)" rx="2" ry="2" />
+<text  x="609.68" y="383.5" >alloc_bprm</text>
+</g>
+<g >
+<title>do_page_cache_ra (3,929 microseconds, 3.01%)</title><rect x="99.0" y="245" width="53.5" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="101.98" y="255.5" >do_pa..</text>
+</g>
+<g >
+<title>page_cache_ra_order (1,792 microseconds, 1.37%)</title><rect x="152.5" y="133" width="24.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="155.55" y="143.5" >p..</text>
+</g>
+<g >
+<title>__ext4_find_entry (251 microseconds, 0.19%)</title><rect x="10.0" y="261" width="3.4" height="15.0" fill="rgb(99,99,208)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" ></text>
+</g>
+<g >
+<title>linux-bio-latency (130,553 microseconds, 100.00%)</title><rect x="10.0" y="485" width="1780.0" height="15.0" fill="rgb(108,108,215)" rx="2" ry="2" />
+<text  x="13.00" y="495.5" >linux-bio-latency</text>
+</g>
+<g >
+<title>path_openat (86,462 microseconds, 66.23%)</title><rect x="606.7" y="325" width="1178.8" height="15.0" fill="rgb(132,132,238)" rx="2" ry="2" />
+<text  x="609.68" y="335.5" >path_openat</text>
+</g>
+<g >
+<title>do_execveat_common (1,792 microseconds, 1.37%)</title><rect x="152.5" y="389" width="24.5" height="15.0" fill="rgb(98,98,206)" rx="2" ry="2" />
+<text  x="155.55" y="399.5" >d..</text>
+</g>
+<g >
+<title>bprm_execve (2,309 microseconds, 1.77%)</title><rect x="13.4" y="373" width="31.5" height="15.0" fill="rgb(96,96,204)" rx="2" ry="2" />
+<text  x="16.42" y="383.5" >bp..</text>
+</g>
+<g >
+<title>__clear_user (696 microseconds, 0.53%)</title><rect x="58.2" y="309" width="9.4" height="15.0" fill="rgb(112,112,219)" rx="2" ry="2" />
+<text  x="61.16" y="319.5" ></text>
+</g>
+<g >
+<title>__lookup_slow (84 microseconds, 0.06%)</title><rect x="51.7" y="293" width="1.2" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="54.71" y="303.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (548 microseconds, 0.42%)</title><rect x="491.6" y="261" width="7.4" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="494.58" y="271.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (3,929 microseconds, 3.01%)</title><rect x="99.0" y="229" width="53.5" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="101.98" y="239.5" >page_..</text>
+</g>
+<g >
+<title>__irqentry_text_start (6,344 microseconds, 4.86%)</title><rect x="268.1" y="437" width="86.5" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="271.11" y="447.5" >__irqentry..</text>
+</g>
+<g >
+<title>handle_mm_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="389" width="49.2" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="357.61" y="399.5" >hand..</text>
+</g>
+<g >
+<title>submit_bio_noacct (5,288 microseconds, 4.05%)</title><rect x="196.0" y="213" width="72.1" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="199.01" y="223.5" >submit_b..</text>
+</g>
+<g >
+<title>submit_bio_noacct (84 microseconds, 0.06%)</title><rect x="51.7" y="165" width="1.2" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="54.71" y="175.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (3,611 microseconds, 2.77%)</title><rect x="354.6" y="165" width="49.2" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="357.61" y="175.5" >subm..</text>
+</g>
+<g >
+<title>handle_pte_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="213" width="24.5" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="155.55" y="223.5" >h..</text>
+</g>
+<g >
+<title>page_cache_sync_ra (708 microseconds, 0.54%)</title><rect x="13.4" y="229" width="9.7" height="15.0" fill="rgb(118,118,225)" rx="2" ry="2" />
+<text  x="16.42" y="239.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (5,944 microseconds, 4.55%)</title><rect x="71.5" y="373" width="81.0" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="74.50" y="383.5" >__handle_..</text>
+</g>
+<g >
+<title>ext4_readahead (283 microseconds, 0.22%)</title><rect x="67.6" y="229" width="3.9" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="70.65" y="239.5" ></text>
+</g>
+<g >
+<title>ext4_file_read_iter (708 microseconds, 0.54%)</title><rect x="13.4" y="293" width="9.7" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="16.42" y="303.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (251 microseconds, 0.19%)</title><rect x="10.0" y="437" width="3.4" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="13.00" y="447.5" ></text>
+</g>
+<g >
+<title>__do_sys_newfstatat (191 microseconds, 0.15%)</title><rect x="499.0" y="389" width="2.7" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="502.05" y="399.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_order (389 microseconds, 0.30%)</title><rect x="52.9" y="213" width="5.3" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="55.85" y="223.5" ></text>
+</g>
+<g >
+<title>path_lookupat (583 microseconds, 0.45%)</title><rect x="44.9" y="325" width="8.0" height="15.0" fill="rgb(134,134,239)" rx="2" ry="2" />
+<text  x="47.90" y="335.5" ></text>
+</g>
+<g >
+<title>do_fault (3,611 microseconds, 2.77%)</title><rect x="354.6" y="341" width="49.2" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="357.61" y="351.5" >do_f..</text>
+</g>
+<g >
+<title>filemap_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="165" width="24.5" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="155.55" y="175.5" >f..</text>
+</g>
+<g >
+<title>exec_binprm (1,792 microseconds, 1.37%)</title><rect x="152.5" y="341" width="24.5" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="155.55" y="351.5" >e..</text>
+</g>
+<g >
+<title>handle_mm_fault (6,344 microseconds, 4.86%)</title><rect x="268.1" y="389" width="86.5" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="271.11" y="399.5" >handle_mm_..</text>
+</g>
+<g >
+<title>ext4_readahead (678 microseconds, 0.52%)</title><rect x="177.0" y="229" width="9.2" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="179.98" y="239.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_execve (2,309 microseconds, 1.77%)</title><rect x="13.4" y="405" width="31.5" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="16.42" y="415.5" >__..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (548 microseconds, 0.42%)</title><rect x="491.6" y="181" width="7.4" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="494.58" y="191.5" ></text>
+</g>
+<g >
+<title>ext4_lookup (251 microseconds, 0.19%)</title><rect x="10.0" y="277" width="3.4" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" ></text>
+</g>
+<g >
+<title>do_execveat_common (1,085 microseconds, 0.83%)</title><rect x="52.9" y="389" width="14.7" height="15.0" fill="rgb(98,98,206)" rx="2" ry="2" />
+<text  x="55.85" y="399.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (2,015 microseconds, 1.54%)</title><rect x="71.5" y="261" width="27.5" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="74.50" y="271.5" >d..</text>
+</g>
+<g >
+<title>page_cache_ra_order (3,929 microseconds, 3.01%)</title><rect x="99.0" y="261" width="53.5" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="101.98" y="271.5" >page_..</text>
+</g>
+<g >
+<title>ext4_readahead (548 microseconds, 0.42%)</title><rect x="491.6" y="197" width="7.4" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="494.58" y="207.5" ></text>
+</g>
+<g >
+<title>lookup_slow (251 microseconds, 0.19%)</title><rect x="10.0" y="309" width="3.4" height="15.0" fill="rgb(99,99,207)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" ></text>
+</g>
+<g >
+<title>filemap_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="293" width="7.6" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="487.01" y="303.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_execve (86,790 microseconds, 66.48%)</title><rect x="606.7" y="405" width="1183.3" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="609.68" y="415.5" >__riscv_sys_execve</text>
+</g>
+<g >
+<title>ext4_readahead (389 microseconds, 0.30%)</title><rect x="52.9" y="181" width="5.3" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="55.85" y="191.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (6,344 microseconds, 4.86%)</title><rect x="268.1" y="277" width="86.5" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="271.11" y="287.5" >do_sync_mm..</text>
+</g>
+<g >
+<title>do_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="341" width="7.4" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="494.58" y="351.5" ></text>
+</g>
+<g >
+<title>ext4_lookup (84 microseconds, 0.06%)</title><rect x="51.7" y="277" width="1.2" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="54.71" y="287.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (283 microseconds, 0.22%)</title><rect x="67.6" y="373" width="3.9" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="70.65" y="383.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="245" width="9.4" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="61.16" y="255.5" ></text>
+</g>
+<g >
+<title>read_pages (3,424 microseconds, 2.62%)</title><rect x="403.8" y="213" width="46.7" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="406.84" y="223.5" >read..</text>
+</g>
+<g >
+<title>bprm_execve.part.0 (1,085 microseconds, 0.83%)</title><rect x="52.9" y="357" width="14.7" height="15.0" fill="rgb(107,107,215)" rx="2" ry="2" />
+<text  x="55.85" y="367.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (718 microseconds, 0.55%)</title><rect x="186.2" y="197" width="9.8" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="189.22" y="207.5" ></text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (1,792 microseconds, 1.37%)</title><rect x="152.5" y="53" width="24.5" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="155.55" y="63.5" >e..</text>
+</g>
+<g >
+<title>__irqentry_text_start (14,420 microseconds, 11.05%)</title><rect x="71.5" y="437" width="196.6" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="74.50" y="447.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>lookup_slow (84 microseconds, 0.06%)</title><rect x="51.7" y="309" width="1.2" height="15.0" fill="rgb(99,99,207)" rx="2" ry="2" />
+<text  x="54.71" y="319.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (328 microseconds, 0.25%)</title><rect x="1785.5" y="149" width="4.5" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="1788.53" y="159.5" ></text>
+</g>
+<g >
+<title>__lookup_slow (191 microseconds, 0.15%)</title><rect x="499.0" y="277" width="2.7" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="502.05" y="287.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="229" width="21.8" height="15.0" fill="rgb(82,82,192)" rx="2" ry="2" />
+<text  x="26.08" y="239.5" >_..</text>
+</g>
+<g >
+<title>ext4_mpage_readpages.isra.0 (328 microseconds, 0.25%)</title><rect x="1785.5" y="165" width="4.5" height="15.0" fill="rgb(122,122,228)" rx="2" ry="2" />
+<text  x="1788.53" y="175.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (365 microseconds, 0.28%)</title><rect x="1780.6" y="165" width="4.9" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="1783.55" y="175.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_read (6,684 microseconds, 5.12%)</title><rect x="177.0" y="405" width="91.1" height="15.0" fill="rgb(98,98,207)" rx="2" ry="2" />
+<text  x="179.98" y="415.5" >__riscv_sy..</text>
+</g>
+<g >
+<title>do_read_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="325" width="105.0" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="504.65" y="335.5" >do_read_fault</text>
+</g>
+<g >
+<title>handle_pte_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="357" width="80.2" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="406.84" y="367.5" >handle_pt..</text>
+</g>
+<g >
+<title>ext4_file_read_iter (328 microseconds, 0.25%)</title><rect x="1785.5" y="293" width="4.5" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="1788.53" y="303.5" ></text>
+</g>
+<g >
+<title>vfs_statx (191 microseconds, 0.15%)</title><rect x="499.0" y="357" width="2.7" height="15.0" fill="rgb(124,124,231)" rx="2" ry="2" />
+<text  x="502.05" y="367.5" ></text>
+</g>
+<g >
+<title>do_page_fault (1,792 microseconds, 1.37%)</title><rect x="152.5" y="277" width="24.5" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="155.55" y="287.5" >d..</text>
+</g>
+<g >
+<title>link_path_walk (191 microseconds, 0.15%)</title><rect x="499.0" y="309" width="2.7" height="15.0" fill="rgb(137,137,242)" rx="2" ry="2" />
+<text  x="502.05" y="319.5" ></text>
+</g>
+<g >
+<title>do_read_fault (5,880 microseconds, 4.50%)</title><rect x="403.8" y="325" width="80.2" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="406.84" y="335.5" >do_read_f..</text>
+</g>
+<g >
+<title>submit_bio_noacct (84,218 microseconds, 64.51%)</title><rect x="632.3" y="133" width="1148.3" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="635.30" y="143.5" >submit_bio_noacct</text>
+</g>
+<g >
+<title>lookup_slow (499 microseconds, 0.38%)</title><rect x="44.9" y="293" width="6.8" height="15.0" fill="rgb(99,99,207)" rx="2" ry="2" />
+<text  x="47.90" y="303.5" ></text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (283 microseconds, 0.22%)</title><rect x="67.6" y="277" width="3.9" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="70.65" y="287.5" ></text>
+</g>
+<g >
+<title>do_read_fault (548 microseconds, 0.42%)</title><rect x="491.6" y="325" width="7.4" height="15.0" fill="rgb(101,101,210)" rx="2" ry="2" />
+<text  x="494.58" y="335.5" ></text>
+</g>
+<g >
+<title>page_cache_ra_unbounded (696 microseconds, 0.53%)</title><rect x="58.2" y="101" width="9.4" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="61.16" y="111.5" ></text>
+</g>
+<g >
+<title>path_lookupat (251 microseconds, 0.19%)</title><rect x="10.0" y="325" width="3.4" height="15.0" fill="rgb(134,134,239)" rx="2" ry="2" />
+<text  x="13.00" y="335.5" ></text>
+</g>
+<g >
+<title>ext4_file_read_iter (389 microseconds, 0.30%)</title><rect x="52.9" y="293" width="5.3" height="15.0" fill="rgb(127,127,233)" rx="2" ry="2" />
+<text  x="55.85" y="303.5" ></text>
+</g>
+<g >
+<title>do_file_open (86,462 microseconds, 66.23%)</title><rect x="606.7" y="341" width="1178.8" height="15.0" fill="rgb(112,112,219)" rx="2" ry="2" />
+<text  x="609.68" y="351.5" >do_file_open</text>
+</g>
+<g >
+<title>do_sync_mmap_readahead (548 microseconds, 0.42%)</title><rect x="491.6" y="277" width="7.4" height="15.0" fill="rgb(123,123,230)" rx="2" ry="2" />
+<text  x="494.58" y="287.5" ></text>
+</g>
+<g >
+<title>task:opt 5gwller9b1p (6,344 microseconds, 4.86%)</title><rect x="268.1" y="453" width="86.5" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="271.11" y="463.5" >task:opt 5..</text>
+</g>
+<g >
+<title>handle_mm_fault (7,703 microseconds, 5.90%)</title><rect x="501.7" y="389" width="105.0" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="504.65" y="399.5" >handle_mm_fa..</text>
+</g>
+<g >
+<title>do_page_cache_ra (3,424 microseconds, 2.62%)</title><rect x="403.8" y="245" width="46.7" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="406.84" y="255.5" >do_p..</text>
+</g>
+<g >
+<title>ext4_bread_batch (499 microseconds, 0.38%)</title><rect x="44.9" y="229" width="6.8" height="15.0" fill="rgb(84,84,193)" rx="2" ry="2" />
+<text  x="47.90" y="239.5" ></text>
+</g>
+<g >
+<title>ext4_bread_batch (251 microseconds, 0.19%)</title><rect x="10.0" y="245" width="3.4" height="15.0" fill="rgb(84,84,193)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" ></text>
+</g>
+<g >
+<title>ext4_readahead (718 microseconds, 0.55%)</title><rect x="186.2" y="229" width="9.8" height="15.0" fill="rgb(136,136,241)" rx="2" ry="2" />
+<text  x="189.22" y="239.5" ></text>
+</g>
+<g >
+<title>do_page_cache_ra (7,703 microseconds, 5.90%)</title><rect x="501.7" y="245" width="105.0" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="504.65" y="255.5" >do_page_cach..</text>
+</g>
+<g >
+<title>__riscv_sys_execve (1,792 microseconds, 1.37%)</title><rect x="152.5" y="405" width="24.5" height="15.0" fill="rgb(131,131,236)" rx="2" ry="2" />
+<text  x="155.55" y="415.5" >_..</text>
+</g>
+<g >
+<title>do_fault (555 microseconds, 0.43%)</title><rect x="484.0" y="341" width="7.6" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="487.01" y="351.5" ></text>
+</g>
+<g >
+<title>__lookup_slow (251 microseconds, 0.19%)</title><rect x="10.0" y="293" width="3.4" height="15.0" fill="rgb(126,126,232)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (1,085 microseconds, 0.83%)</title><rect x="52.9" y="421" width="14.7" height="15.0" fill="rgb(138,138,243)" rx="2" ry="2" />
+<text  x="55.85" y="431.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (389 microseconds, 0.30%)</title><rect x="52.9" y="309" width="5.3" height="15.0" fill="rgb(110,110,217)" rx="2" ry="2" />
+<text  x="55.85" y="319.5" ></text>
+</g>
+<g >
+<title>filemap_fault (2,015 microseconds, 1.54%)</title><rect x="71.5" y="309" width="27.5" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="74.50" y="319.5" >f..</text>
+</g>
+<g >
+<title>do_page_cache_ra (6,344 microseconds, 4.86%)</title><rect x="268.1" y="245" width="86.5" height="15.0" fill="rgb(132,132,237)" rx="2" ry="2" />
+<text  x="271.11" y="255.5" >do_page_ca..</text>
+</g>
+<g >
+<title>submit_bio_noacct (678 microseconds, 0.52%)</title><rect x="177.0" y="197" width="9.2" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="179.98" y="207.5" ></text>
+</g>
+<g >
+<title>ksys_read (6,684 microseconds, 5.12%)</title><rect x="177.0" y="389" width="91.1" height="15.0" fill="rgb(109,109,217)" rx="2" ry="2" />
+<text  x="179.98" y="399.5" >ksys_read</text>
+</g>
+<g >
+<title>handle_mm_fault (5,944 microseconds, 4.55%)</title><rect x="71.5" y="389" width="81.0" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="74.50" y="399.5" >handle_mm..</text>
+</g>
+<g >
+<title>task:rustc (94,493 microseconds, 72.38%)</title><rect x="501.7" y="453" width="1288.3" height="15.0" fill="rgb(139,139,244)" rx="2" ry="2" />
+<text  x="504.65" y="463.5" >task:rustc</text>
+</g>
+<g >
+<title>do_open_execat (86,462 microseconds, 66.23%)</title><rect x="606.7" y="357" width="1178.8" height="15.0" fill="rgb(102,102,210)" rx="2" ry="2" />
+<text  x="609.68" y="367.5" >do_open_execat</text>
+</g>
+<g >
+<title>handle_mm_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="245" width="21.8" height="15.0" fill="rgb(115,115,222)" rx="2" ry="2" />
+<text  x="26.08" y="255.5" >h..</text>
+</g>
+<g >
+<title>read_pages (283 microseconds, 0.22%)</title><rect x="67.6" y="245" width="3.9" height="15.0" fill="rgb(107,107,214)" rx="2" ry="2" />
+<text  x="70.65" y="255.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_newfstatat (191 microseconds, 0.15%)</title><rect x="499.0" y="405" width="2.7" height="15.0" fill="rgb(130,130,236)" rx="2" ry="2" />
+<text  x="502.05" y="415.5" ></text>
+</g>
+<g >
+<title>ext4_read_bh_nowait (191 microseconds, 0.15%)</title><rect x="499.0" y="197" width="2.7" height="15.0" fill="rgb(125,125,231)" rx="2" ry="2" />
+<text  x="502.05" y="207.5" ></text>
+</g>
+<g >
+<title>submit_bio_noacct (1,792 microseconds, 1.37%)</title><rect x="152.5" y="37" width="24.5" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="155.55" y="47.5" >s..</text>
+</g>
+<g >
+<title>submit_bio_noacct (389 microseconds, 0.30%)</title><rect x="52.9" y="149" width="5.3" height="15.0" fill="rgb(87,87,197)" rx="2" ry="2" />
+<text  x="55.85" y="159.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (696 microseconds, 0.53%)</title><rect x="58.2" y="213" width="9.4" height="15.0" fill="rgb(94,94,203)" rx="2" ry="2" />
+<text  x="61.16" y="223.5" ></text>
+</g>
+<g >
+<title>filemap_fault (1,601 microseconds, 1.23%)</title><rect x="23.1" y="165" width="21.8" height="15.0" fill="rgb(97,97,206)" rx="2" ry="2" />
+<text  x="26.08" y="175.5" >f..</text>
+</g>
+<g >
+<title>ext4_bread_batch (84 microseconds, 0.06%)</title><rect x="51.7" y="245" width="1.2" height="15.0" fill="rgb(84,84,193)" rx="2" ry="2" />
+<text  x="54.71" y="255.5" ></text>
+</g>
+</g>
+</svg>

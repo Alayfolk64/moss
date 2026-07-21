@@ -19,7 +19,7 @@ bpftrace --version
 bpftrace --info
 
 for probe in \
-    'profile:hz:19' \
+    'profile:hz:10' \
     'tracepoint:sched:sched_switch' \
     'kprobe:__mutex_lock_slowpath' \
     'kprobe:rwsem_down_read_slowpath' \
@@ -27,6 +27,8 @@ for probe in \
     'kprobe:filemap_fault' \
     'kprobe:filemap_read' \
     'kprobe:ext4_file_read_iter' \
+    'kprobe:ext4_buffered_write_iter' \
+    'kprobe:io_schedule' \
     'kprobe:submit_bio_noacct' \
     'kprobe:bio_endio'; do
     if bpftrace -l "$probe" | grep -q .; then

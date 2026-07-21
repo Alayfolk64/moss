@@ -20,8 +20,18 @@ DURATION_MAPS = {
     "rwsem",
     "pagecache",
     "ext4",
-    "block_read",
-    "block_write",
+    "block_sync",
+    "bio_read",
+    "bio_write",
+}
+
+SAMPLE_POLICY = {
+    "cpu_hz": 10,
+    "ext4_sample_rate": 16,
+    "page_cache_sample_rate": 32,
+    "offcpu_sample_rate": 8,
+    "lock_sample_rate": 1,
+    "block_sync_sample_rate": 1,
 }
 
 
@@ -59,24 +69,36 @@ def parse_key(name: str, key: str) -> tuple[str, int | None, tuple[str, ...]]:
 
 def parse_raw(path: Path, phase: str) -> list[dict]:
     text = path.read_text(errors="replace")
-    if "Attaching 20 probes..." not in text:
+    if not re.search(r"^Attaching \d+ probes\.\.\.$", text, re.MULTILINE):
         raise ValueError(f"profile never attached: {path}")
-    rows = []
+    records: dict[tuple, dict] = {}
     for match in ENTRY_RE.finditer(text):
         name, key, value_text = match.groups()
+        metric = "value"
+        for suffix in ("_count", "_max"):
+            if name.endswith(suffix):
+                name = name.removesuffix(suffix)
+                metric = suffix[1:]
+                break
         if name not in DURATION_MAPS | {"cpu"}:
             continue
         comm, state, frames = parse_key(name, key)
-        rows.append(
+        identity = (name, comm, state, frames)
+        row = records.setdefault(
+            identity,
             {
                 "phase": phase,
                 "event": name,
                 "comm": comm,
                 "state": state,
                 "frames": frames,
-                "value": int(value_text),
-            }
+                "value": 0,
+                "count": 0,
+                "max": 0,
+            },
         )
+        row[metric] = int(value_text)
+    rows = [row for row in records.values() if row["value"] != 0]
     if not any(row["event"] == "cpu" for row in rows):
         raise ValueError(f"profile contains no CPU samples: {path}")
     return rows
@@ -210,7 +232,14 @@ def main() -> None:
         phase: parse_raw(args.raw_dir / f"{phase}.raw", phase) for phase in PHASES
     }
     times = parse_times(args.raw_dir / "profile-times.txt")
-    summary: dict[str, object] = {"times": times, "cpu": {}, "wait": {}, "event_totals": {}}
+    summary: dict[str, object] = {
+        "method": "moss-equivalent-v2",
+        "sample_policy": SAMPLE_POLICY,
+        "times": times,
+        "cpu": {},
+        "wait": {},
+        "event_totals": {},
+    }
 
     for suffix in ("all", *PHASES):
         rows = [row for phase in PHASES for row in phase_rows[phase]] if suffix == "all" else phase_rows[suffix]
@@ -248,10 +277,17 @@ def main() -> None:
                 [
                     row
                     for row in rows
-                    if row["event"] in {"pagecache", "ext4", "block_read", "block_write"}
+                    if row["event"] in {"pagecache", "ext4", "block_sync"}
                 ],
                 True,
                 "linux-fs-io-latency",
+                "microseconds",
+                "io",
+            ),
+            "bio-latency": (
+                [row for row in rows if row["event"] in {"bio_read", "bio_write"}],
+                True,
+                "linux-bio-latency",
                 "microseconds",
                 "io",
             ),
@@ -285,6 +321,13 @@ def main() -> None:
                 "total": sum(values),
                 "unit": "samples" if event == "cpu" else "nanoseconds",
                 "entries": len(values),
+                "sampled_count": sum(
+                    row["count"] for row in phase_rows[phase] if row["event"] == event
+                ),
+                "max_sample_ns": max(
+                    (row["max"] for row in phase_rows[phase] if row["event"] == event),
+                    default=0,
+                ),
             }
 
     by_task: dict[str, dict[str, dict[str, int]]] = defaultdict(

@@ -1,70 +1,125 @@
-profile:hz:19
+/*
+ * Linux counterpart of the Moss guest profiler.
+ *
+ * Keep the primary event boundaries and sampling policy aligned with
+ * kernel/src/profiler.rs:
+ *   CPU                 10 Hz
+ *   ext4 inclusive      1 / 16, scaled on aggregation
+ *   page-cache inclusive 1 / 32, scaled on aggregation
+ *   blocked off-CPU     1 / 8, scaled on aggregation
+ *   lock and synchronous-I/O waits: every completed interval
+ *
+ * bio submit-to-completion latency is retained as a supplemental device
+ * metric.  It is deliberately kept separate from the Moss-equivalent
+ * foreground synchronous-I/O wait measured at io_schedule().
+ */
+
+profile:hz:10
 {
     @cpu[comm, kstack] = count();
 }
 
-tracepoint:sched:sched_switch /args.prev_pid != 0 && args.prev_state != 0/
-{
-    @off_start[args.prev_pid] = nsecs;
-    @off_stack[args.prev_pid] = kstack;
-    @off_comm[args.prev_pid] = args.prev_comm;
-    @off_state[args.prev_pid] = args.prev_state;
-}
-
-tracepoint:sched:sched_switch /@off_start[args.next_pid]/
-{
-    @offcpu[@off_comm[args.next_pid], @off_state[args.next_pid], @off_stack[args.next_pid]] =
-        sum(nsecs - @off_start[args.next_pid]);
-    delete(@off_start[args.next_pid]);
-    delete(@off_stack[args.next_pid]);
-    delete(@off_comm[args.next_pid]);
-    delete(@off_state[args.next_pid]);
-}
-
+/* Track whether a task is inside a blocking lock slow path.  The duration
+ * recorded below is only the time for which sched_switch actually removes
+ * that task from a CPU, matching Moss MutexWait around blocked_resched(). */
 kprobe:__mutex_lock_slowpath
 {
-    @mutex_start[tid] = nsecs;
-    @mutex_stack[tid] = kstack;
-    @mutex_comm[tid] = comm;
+    @mutex_active[tid] = 1;
 }
 
-kretprobe:__mutex_lock_slowpath /@mutex_start[tid]/
+kretprobe:__mutex_lock_slowpath
 {
-    @mutex[@mutex_comm[tid], @mutex_stack[tid]] = sum(nsecs - @mutex_start[tid]);
-    delete(@mutex_start[tid]);
-    delete(@mutex_stack[tid]);
-    delete(@mutex_comm[tid]);
+    delete(@mutex_active[tid]);
 }
 
 kprobe:rwsem_down_read_slowpath,
 kprobe:rwsem_down_write_slowpath
 {
-    @rwsem_start[tid] = nsecs;
-    @rwsem_stack[tid] = kstack;
-    @rwsem_comm[tid] = comm;
+    @rwsem_active[tid] = 1;
 }
 
 kretprobe:rwsem_down_read_slowpath,
-kretprobe:rwsem_down_write_slowpath /@rwsem_start[tid]/
+kretprobe:rwsem_down_write_slowpath
 {
-    @rwsem[@rwsem_comm[tid], @rwsem_stack[tid]] = sum(nsecs - @rwsem_start[tid]);
-    delete(@rwsem_start[tid]);
-    delete(@rwsem_stack[tid]);
-    delete(@rwsem_comm[tid]);
+    delete(@rwsem_active[tid]);
+}
+
+tracepoint:sched:sched_switch /args.prev_pid != 0 && args.prev_state != 0/
+{
+    @offcpu_tick[cpu] = @offcpu_tick[cpu] + 1;
+    if ((@offcpu_tick[cpu] % 8) == 1) {
+        @off_start[args.prev_pid] = nsecs;
+        @off_stack[args.prev_pid] = kstack;
+        @off_comm[args.prev_pid] = args.prev_comm;
+        @off_state[args.prev_pid] = args.prev_state;
+    }
+
+    if (@mutex_active[args.prev_pid]) {
+        @mutex_start[args.prev_pid] = nsecs;
+        @mutex_stack[args.prev_pid] = kstack;
+        @mutex_comm[args.prev_pid] = args.prev_comm;
+    }
+    if (@rwsem_active[args.prev_pid]) {
+        @rwsem_start[args.prev_pid] = nsecs;
+        @rwsem_stack[args.prev_pid] = kstack;
+        @rwsem_comm[args.prev_pid] = args.prev_comm;
+    }
+}
+
+tracepoint:sched:sched_switch
+{
+    if (@off_start[args.next_pid]) {
+        $elapsed = nsecs - @off_start[args.next_pid];
+        @offcpu[@off_comm[args.next_pid], @off_state[args.next_pid],
+                @off_stack[args.next_pid]] = sum($elapsed * 8);
+        @offcpu_count[@off_comm[args.next_pid], @off_state[args.next_pid],
+                      @off_stack[args.next_pid]] = count();
+        @offcpu_max[@off_comm[args.next_pid], @off_state[args.next_pid],
+                    @off_stack[args.next_pid]] = max($elapsed);
+        delete(@off_start[args.next_pid]);
+        delete(@off_stack[args.next_pid]);
+        delete(@off_comm[args.next_pid]);
+        delete(@off_state[args.next_pid]);
+    }
+
+    if (@mutex_start[args.next_pid]) {
+        $elapsed = nsecs - @mutex_start[args.next_pid];
+        @mutex[@mutex_comm[args.next_pid], @mutex_stack[args.next_pid]] = sum($elapsed);
+        @mutex_count[@mutex_comm[args.next_pid], @mutex_stack[args.next_pid]] = count();
+        @mutex_max[@mutex_comm[args.next_pid], @mutex_stack[args.next_pid]] = max($elapsed);
+        delete(@mutex_start[args.next_pid]);
+        delete(@mutex_stack[args.next_pid]);
+        delete(@mutex_comm[args.next_pid]);
+    }
+    if (@rwsem_start[args.next_pid]) {
+        $elapsed = nsecs - @rwsem_start[args.next_pid];
+        @rwsem[@rwsem_comm[args.next_pid], @rwsem_stack[args.next_pid]] = sum($elapsed);
+        @rwsem_count[@rwsem_comm[args.next_pid], @rwsem_stack[args.next_pid]] = count();
+        @rwsem_max[@rwsem_comm[args.next_pid], @rwsem_stack[args.next_pid]] = max($elapsed);
+        delete(@rwsem_start[args.next_pid]);
+        delete(@rwsem_stack[args.next_pid]);
+        delete(@rwsem_comm[args.next_pid]);
+    }
 }
 
 kprobe:filemap_fault,
 kprobe:filemap_read
 {
-    @page_start[tid] = nsecs;
-    @page_stack[tid] = kstack;
-    @page_comm[tid] = comm;
+    @page_tick[cpu] = @page_tick[cpu] + 1;
+    if ((@page_tick[cpu] % 32) == 1) {
+        @page_start[tid] = nsecs;
+        @page_stack[tid] = kstack;
+        @page_comm[tid] = comm;
+    }
 }
 
 kretprobe:filemap_fault,
 kretprobe:filemap_read /@page_start[tid]/
 {
-    @pagecache[@page_comm[tid], @page_stack[tid]] = sum(nsecs - @page_start[tid]);
+    $elapsed = nsecs - @page_start[tid];
+    @pagecache[@page_comm[tid], @page_stack[tid]] = sum($elapsed * 32);
+    @pagecache_count[@page_comm[tid], @page_stack[tid]] = count();
+    @pagecache_max[@page_comm[tid], @page_stack[tid]] = max($elapsed);
     delete(@page_start[tid]);
     delete(@page_stack[tid]);
     delete(@page_comm[tid]);
@@ -73,20 +128,49 @@ kretprobe:filemap_read /@page_start[tid]/
 kprobe:ext4_file_read_iter,
 kprobe:ext4_buffered_write_iter
 {
-    @ext4_start[tid] = nsecs;
-    @ext4_stack[tid] = kstack;
-    @ext4_comm[tid] = comm;
+    @ext4_tick[cpu] = @ext4_tick[cpu] + 1;
+    if ((@ext4_tick[cpu] % 16) == 1) {
+        @ext4_start[tid] = nsecs;
+        @ext4_stack[tid] = kstack;
+        @ext4_comm[tid] = comm;
+    }
 }
 
 kretprobe:ext4_file_read_iter,
 kretprobe:ext4_buffered_write_iter /@ext4_start[tid]/
 {
-    @ext4[@ext4_comm[tid], @ext4_stack[tid]] = sum(nsecs - @ext4_start[tid]);
+    $elapsed = nsecs - @ext4_start[tid];
+    @ext4[@ext4_comm[tid], @ext4_stack[tid]] = sum($elapsed * 16);
+    @ext4_count[@ext4_comm[tid], @ext4_stack[tid]] = count();
+    @ext4_max[@ext4_comm[tid], @ext4_stack[tid]] = max($elapsed);
     delete(@ext4_start[tid]);
     delete(@ext4_stack[tid]);
     delete(@ext4_comm[tid]);
 }
 
+/* Linux buffered I/O is asynchronous below filemap.  io_schedule() measures
+ * the foreground task's actual synchronous I/O sleep and is the primary
+ * counterpart of Moss BlockRead/BlockWrite scopes. */
+kprobe:io_schedule
+{
+    @block_sync_start[tid] = nsecs;
+    @block_sync_stack[tid] = kstack;
+    @block_sync_comm[tid] = comm;
+}
+
+kretprobe:io_schedule /@block_sync_start[tid]/
+{
+    $elapsed = nsecs - @block_sync_start[tid];
+    @block_sync[@block_sync_comm[tid], @block_sync_stack[tid]] = sum($elapsed);
+    @block_sync_count[@block_sync_comm[tid], @block_sync_stack[tid]] = count();
+    @block_sync_max[@block_sync_comm[tid], @block_sync_stack[tid]] = max($elapsed);
+    delete(@block_sync_start[tid]);
+    delete(@block_sync_stack[tid]);
+    delete(@block_sync_comm[tid]);
+}
+
+/* Supplemental request latency; not included in the Moss-equivalent
+ * synchronous-I/O totals. */
 kprobe:submit_bio_noacct
 {
     $bio = (struct bio *)arg0;
@@ -99,10 +183,15 @@ kprobe:submit_bio_noacct
 kprobe:bio_endio /@bio_start[(struct bio *)arg0]/
 {
     $bio = (struct bio *)arg0;
+    $elapsed = nsecs - @bio_start[$bio];
     if (@bio_op[$bio] == 0) {
-        @block_read[@bio_comm[$bio], @bio_stack[$bio]] = sum(nsecs - @bio_start[$bio]);
+        @bio_read[@bio_comm[$bio], @bio_stack[$bio]] = sum($elapsed);
+        @bio_read_count[@bio_comm[$bio], @bio_stack[$bio]] = count();
+        @bio_read_max[@bio_comm[$bio], @bio_stack[$bio]] = max($elapsed);
     } else if (@bio_op[$bio] == 1) {
-        @block_write[@bio_comm[$bio], @bio_stack[$bio]] = sum(nsecs - @bio_start[$bio]);
+        @bio_write[@bio_comm[$bio], @bio_stack[$bio]] = sum($elapsed);
+        @bio_write_count[@bio_comm[$bio], @bio_stack[$bio]] = count();
+        @bio_write_max[@bio_comm[$bio], @bio_stack[$bio]] = max($elapsed);
     }
     delete(@bio_start[$bio]);
     delete(@bio_stack[$bio]);
@@ -112,6 +201,11 @@ kprobe:bio_endio /@bio_start[(struct bio *)arg0]/
 
 END
 {
+    clear(@offcpu_tick);
+    clear(@page_tick);
+    clear(@ext4_tick);
+    clear(@mutex_active);
+    clear(@rwsem_active);
     clear(@off_start);
     clear(@off_stack);
     clear(@off_comm);
@@ -128,6 +222,9 @@ END
     clear(@ext4_start);
     clear(@ext4_stack);
     clear(@ext4_comm);
+    clear(@block_sync_start);
+    clear(@block_sync_stack);
+    clear(@block_sync_comm);
     clear(@bio_start);
     clear(@bio_stack);
     clear(@bio_comm);

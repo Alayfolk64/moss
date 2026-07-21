@@ -1,203 +1,143 @@
-# Linux RISC-V BuildStorm 全流程性能报告
+# Linux RISC-V BuildStorm 等价口径性能报告
 
 ## 结论
 
-这次 Linux 基线使用与 Moss 相同的 RISC-V QEMU、8 vCPU、8 GiB、`sdcard-rv.img` 和 `/glibc/buildstorm_testcode.sh`，完整覆盖 setup、446-crate 预构建和正式 BuildStorm。磁盘以 `-snapshot` 启动，基础镜像未被写入。
+本轮重新运行了完整 BuildStorm，而不是复用旧 raw 数据。Linux guest 使用与 Moss profiler 相同的事件模型、begin/end 区间、采样频率和缩放规则：CPU 10 Hz，ext4 1/16，page-cache 1/32，off-CPU 1/8，锁等待和同步 I/O 全量记录。三个阶段都由独立 profiler 实例覆盖，探针 attach 和聚合表导出不计入阶段时间。
 
-Linux 的 446-crate 预构建耗时 **15 分 33.60 秒**，正式阶段耗时 **7 分 31.93 秒**，两段合计 **23 分 05.53 秒**；正式构建结果成功，产物为 1,681,000 字节。对应的 Moss 数据是 76 分 28.19 秒和 42 分 04.89 秒。相同工作负载下，Linux 分别快 **4.91 倍**和 **5.59 倍**，两段合计快 **5.13 倍**。这证明 50 分钟限制并非 Cargo 依赖图或 RISC-V TCG 本身必然导致，当前主要差距仍然在 Moss 的内核实现。
+结果成功完成：446-crate 预构建耗时 **919.05 秒（15:19.05）**，正式阶段耗时 **454.22 秒（07:34.22）**，两段合计 **1,373.27 秒（22:53.27）**。QEMU 端到端墙钟为 1,417.728 秒（23:37.728），包含启动、三次 attach/导出和关机。正式产物为 1,681,000 字节，`status=0`。
 
-CPU 与等待数据给出了直接原因：Linux 在预构建和正式阶段分别维持 **6.06 核**、**5.54 核**的活跃核等价值，而 Moss 只有 3.68 核、2.36 核。Linux 的内核 mutex+rwsem 慢路径累计等待仅为 **1.53 task-s**、**1.42 task-s**，热点主要是 `mmap_lock`；ext4 内部关联的锁竞争只有 **12.10 ms**、**0.583 ms**。Moss 对应的内核 mutex 等待是 11,166.94 task-s、8,172.23 task-s，其中 ext4 全局锁本身就有 981.46 task-s、218.92 task-s。
+相同工作负载下，Moss 的预构建和正式阶段分别为 4,588.19 秒和 2,524.89 秒；Linux 新基线分别快 **4.99 倍**和 **5.56 倍**，两段合计快 **5.18 倍**。Linux 的活跃核等价值为 6.20/5.48 核，Moss 为 3.68/2.36 核。
 
-Linux 仍有约 24.23% 和 30.71% 的 idle CPU 样本，说明依赖 DAG、LTO 和链接长尾确实限制了完美的 8 核利用率；但它们只能解释 Linux 剩余的空闲，不能解释 Moss 与 Linux 之间约 5 倍的差距。
+等价口径进一步确认首要瓶颈仍在 Moss 文件缺页链：
 
-## 可直接查看的火焰图
+- Linux 实际睡眠的 mutex+rwsem 等待只有 1.503/1.251 task-s；Moss 是 11,166.94/8,172.23 task-s，相差约 7,430/6,535 倍。
+- Linux page-cache inclusive 为 53.57/22.00 task-s；Moss 为 15,042.35/9,343.23 task-s，相差约 281/425 倍。
+- Linux 前台同步 I/O 等待为 6.386/2.673 task-s；Moss 同步块读写为 456.66/187.39 task-s，相差约 71.5/70.1 倍。
+- Linux ext4 read/write inclusive 为 70.05/22.49 task-s；Moss 为 2,222.89/682.54 task-s，相差约 31.7/30.3 倍。
 
-整套流程：
+因此，先拆掉 Moss 的 `AddrSpace -> CowBackend -> page-cache -> ext4 -> block` 跨层大临界区，仍然是有数据支持的第一优先级。
 
-- [全流程 CPU](./linux-cpu-all.svg)
-- [全流程 workload off-CPU](./linux-offcpu-workload-all.svg)
-- [全流程 mutex/rwsem 等待](./linux-offcpu-lock-all.svg)
-- [全流程 ext4 内部锁等待](./linux-ext4-lock-wait-all.svg)
-- [全流程 ext4、页缓存和块 I/O](./linux-fs-io-latency-all.svg)
+## 火焰图
 
-预构建：
+| 指标 | 全流程 | setup | 预构建 | 正式阶段 |
+|---|---|---|---|---|
+| CPU | [all](./linux-cpu-all.svg) | [setup](./linux-cpu-setup.svg) | [prebuild](./linux-cpu-prebuild.svg) | [timed](./linux-cpu-timed.svg) |
+| 全部 off-CPU | [all](./linux-offcpu-all.svg) | [setup](./linux-offcpu-setup.svg) | [prebuild](./linux-offcpu-prebuild.svg) | [timed](./linux-offcpu-timed.svg) |
+| 工作负载 off-CPU | [all](./linux-offcpu-workload-all.svg) | [setup](./linux-offcpu-workload-setup.svg) | [prebuild](./linux-offcpu-workload-prebuild.svg) | [timed](./linux-offcpu-workload-timed.svg) |
+| 实际睡眠锁等待 | [all](./linux-offcpu-lock-all.svg) | [setup](./linux-offcpu-lock-setup.svg) | [prebuild](./linux-offcpu-lock-prebuild.svg) | [timed](./linux-offcpu-lock-timed.svg) |
+| ext4 内部锁等待 | [all](./linux-ext4-lock-wait-all.svg) | [setup](./linux-ext4-lock-wait-setup.svg) | [prebuild](./linux-ext4-lock-wait-prebuild.svg) | [timed](./linux-ext4-lock-wait-timed.svg) |
+| ext4/page-cache/同步 I/O | [all](./linux-fs-io-latency-all.svg) | [setup](./linux-fs-io-latency-setup.svg) | [prebuild](./linux-fs-io-latency-prebuild.svg) | [timed](./linux-fs-io-latency-timed.svg) |
+| 补充 bio 请求延迟 | [all](./linux-bio-latency-all.svg) | [setup](./linux-bio-latency-setup.svg) | [prebuild](./linux-bio-latency-prebuild.svg) | [timed](./linux-bio-latency-timed.svg) |
 
-- [预构建 CPU](./linux-cpu-prebuild.svg)
-- [预构建 workload off-CPU](./linux-offcpu-workload-prebuild.svg)
-- [预构建 mutex/rwsem 等待](./linux-offcpu-lock-prebuild.svg)
-- [预构建 ext4 内部锁等待](./linux-ext4-lock-wait-prebuild.svg)
-- [预构建 ext4、页缓存和块 I/O](./linux-fs-io-latency-prebuild.svg)
+前六组 24 张图是 Moss 对齐的主结果；最后四张 bio 图用于观察 Linux 异步块请求，不进入 Moss 同步块 I/O 的直接倍数比较。
 
-正式任务：
+## 等价采样方法
 
-- [正式任务 CPU](./linux-cpu-timed.svg)
-- [正式任务 workload off-CPU](./linux-offcpu-workload-timed.svg)
-- [正式任务 mutex/rwsem 等待](./linux-offcpu-lock-timed.svg)
-- [正式任务 ext4 内部锁等待](./linux-ext4-lock-wait-timed.svg)
-- [正式任务 ext4、页缓存和块 I/O](./linux-fs-io-latency-timed.svg)
+### 事件定义
 
-`linux-offcpu-*.svg` 保留所有已完成睡眠，包括内核后台线程；分析时优先看排除了 `bpftrace`、`kthreadd`、kworker、RCU、jbd2 等后台任务的 `linux-offcpu-workload-*.svg`。setup 的同名 SVG 也已生成，便于检查工具链探测和 minibuild。
+| 事件 | Moss 边界 | Linux 边界 | 采样 |
+|---|---|---|---:|
+| CPU | Guest profile timer 捕获当前内核/用户栈 | `profile:hz:10` | 10 Hz/CPU |
+| off-CPU | `blocked_resched()` 前到任务恢复 | 阻塞态 `sched_switch` 切出到再次切入 | 1/8，时间乘 8 |
+| mutex wait | `Mutex::lock()` 真正阻塞前到恢复 | mutex/rwsem slowpath 活跃期间真正切出的睡眠区间 | 全量 |
+| page-cache | `with_page_or_insert_impl()` begin/end | `filemap_fault/filemap_read` begin/end | 1/32，时间乘 32 |
+| ext4 inclusive | 获取 ext4 guard 前到 guard drop | `ext4_file_read_iter/ext4_buffered_write_iter` begin/end | 1/16，时间乘 16 |
+| 同步 I/O | Moss 同步块驱动调用 begin/end | 前台 `io_schedule()` begin/end | 全量 |
+| bio 延迟 | 无直接等价事件 | `submit_bio_noacct` 到 `bio_endio` | 全量、补充 |
 
-## 测量范围与完整性
+旧 Linux 锁图用 slowpath 函数入口到返回，包含仍在 CPU 上运行的自旋和调度开销；本轮在 slowpath 活跃期间只累计真实阻塞的 `sched_switch` 区间，与 Moss `MutexWait` 的含义一致。
 
-运行环境如下：
+Linux 的 buffered I/O 在 page-cache 以下是异步的，不存在与 Moss 同构的同步块驱动 API。因此主图使用当前任务在 `io_schedule()` 中实际等待 I/O 的时间；bio 提交到完成独立绘图，不能与 Moss `BlockRead/BlockWrite` 相加或直接比较。
 
-| 项目 | 配置 |
-|---|---|
-| 虚拟机 | `qemu-system-riscv64 -machine virt -smp 8 -m 8G` |
-| 内核 | Ubuntu `7.0.0-27-generic`, RISC-V 64 |
-| 根文件系统 | 与 Moss 相同的 `sdcard-rv.img`，`-snapshot` |
-| 工作负载 | `/glibc/buildstorm_testcode.sh` |
-| Rust | `nightly-2026-05-28`, rustc/cargo 1.98 nightly |
-| 采样工具 | bpftrace 0.23.2，guest 内运行 |
-| CPU 采样 | 每个 vCPU 19 Hz，包含 idle |
-| 事件追踪 | sched switch、mutex/rwsem 慢路径、filemap、ext4、bio 提交到完成 |
+### 阶段和完整性
 
-三个阶段分别启动独立的 BPF 程序，探针完全 attach 后才开始计时；停止计时后才导出聚合表。因此探针编译、attach 和 profile 文本导出不计入各阶段耗时。CPU 实际样本覆盖率为预构建 **99.77%**、正式阶段 **99.72%**，没有 QEMU 周期 tick 大量丢失的问题。
-
-| 阶段 | Guest 单调时钟耗时 | 工作结果 |
+| 阶段 | Guest 单调时钟 | 工作结果 |
 |---|---:|---|
-| setup | 5.58 s | 工具链与 minibuild 成功 |
-| 446-crate 预构建 | 933.60 s（15:33.60） | Cargo 自报 15:32，完成 |
-| 正式任务 | 451.93 s（07:31.93） | `ok=true`, Cargo 自报 07:19 |
+| setup | 5.50 s | toolchain、minibuild 成功 |
+| 446-crate 预构建 | 919.05 s | Cargo 自报 15:17，完成 |
+| 正式任务 | 454.22 s | `ok=true`，Cargo 自报 7:22 |
 
-QEMU 主机总墙钟为 1,422.157 秒（23:42.157），包含 Linux 启动、三次探针 attach/导出和关机。即使用这个更保守的端到端数字，距离 50 分钟仍有约 26 分钟余量。
+CPU 理论样本覆盖率为预构建 **98.77%**、正式阶段 **98.64%**。三份 profile 全部成功 attach 22 个探针并完整导出。bpftrace 在高并发首次创建聚合键时出现 3 次 `map_update_elem: EEXIST`：预构建 rwsem 1 次，正式阶段 rwsem 和同步 I/O 各 1 次；相对于 886/1,341 个 rwsem 睡眠区间和 9,781/4,087 个同步 I/O 区间，不改变结论，但原始数据不是数学意义上的零损失。
 
-追踪有三个边界需要明确：
-
-1. CPU 图记录内核栈；在用户态执行的 rustc/LLVM 按线程名归类为 `[user-space]`，不会给出 rustc 内部函数符号。锁、文件系统和 off-CPU 图有完整内核热点路径。
-2. 当前 Ubuntu 内核未启用 `CONFIG_LOCK_STAT`，所以锁图通过 `__mutex_lock_slowpath` 和 `rwsem_down_*_slowpath` 记录已发生的睡眠等待，不能覆盖纯自旋锁竞争，也不显示锁对象地址。
-3. bpftrace 在高并发首次创建聚合键时报告了 8 次 `map_update_elem: EEXIST`（预构建 off-CPU 3 次、正式 ext4 5 次）。相对于数千个聚合栈影响可以忽略，但原始数据并非数学意义上的零损失。
-
-所有等待值都是累计 task-time：多个线程并行睡眠会同时累计，数值可以大于墙钟；ext4、filemap 和 bio 路径还会嵌套，不能直接相加。
-
-## 与 Moss 的时间对照
-
-| 阶段 | Linux | Moss | Linux 加速比 |
-|---|---:|---:|---:|
-| setup | 5.58 s | 29.86 s | 5.35x |
-| 446-crate 预构建 | 933.60 s | 4,588.19 s | 4.91x |
-| 正式任务 | 451.93 s | 2,524.89 s | 5.59x |
-| 预构建 + 正式任务 | 1,385.53 s | 7,113.08 s | 5.13x |
-
-正式日志中的 `SMP=1` 是正在构建的 ArceOS 目标配置，不是 Cargo 的 job 数，也不是 Linux guest 的 CPU 数。guest 中 `nproc=8`，CPU 样本和宿主侧约 6–7 核的 QEMU 占用都证明并行编译已实际生效。
+所有等待值都是累计 task-time。多个任务同时睡眠时会同时累计，因此可以大于墙钟；ext4、page-cache 和同步 I/O 还可能嵌套，不能把三者相加当作总耗时。
 
 ## CPU 并行度
 
-| 阶段 | CPU 样本 | idle | 非 idle | 非 idle 占比 | 活跃核等价值 | Moss 活跃核等价值 |
+| 阶段 | CPU 样本 | idle | 非 idle | 非 idle 占比 | 活跃核等价值 | Moss |
 |---|---:|---:|---:|---:|---:|---:|
-| 预构建 | 141,575 | 34,304 | 107,271 | 75.77% | 6.06 核 | 3.68 核 |
-| 正式任务 | 68,498 | 21,038 | 47,460 | 69.29% | 5.54 核 | 2.36 核 |
+| 预构建 | 72,619 | 16,298 | 56,321 | 77.56% | **6.20 核** | 3.68 核 |
+| 正式阶段 | 35,843 | 11,272 | 24,571 | 68.55% | **5.48 核** | 2.36 核 |
 
-预构建的非 idle 样本中，rustc 占 54.76%，LLVM `opt` 占 35.26%，C/汇编工具链占 6.34%，链接器占 2.65%。正式阶段中 rustc 占 52.52%，LLVM `opt`/LTO 占 43.28%，链接器占 2.35%。bpftrace 自身只占全部 CPU 样本的 0.03% 和 0.02%，观测开销在 CPU 图中可以忽略。
+预构建非 idle 样本中，rustc 占 54.95%，LLVM opt/LTO 占 35.54%，C/汇编工具链占 6.10%，链接器占 2.24%。正式阶段分别为 51.45%、44.12%、0.07% 和 1.97%。
 
-Linux 并不是始终同时完成八个 crate。依赖图末端仍依次收敛到 `ostool -> axbuild -> tg-xtask`，正式阶段也有标准库、LTO 和链接的串行长尾。但前中段可以持续让 6 个左右的 vCPU 工作，已经足以在 50 分钟内完成整套任务。
+这说明 Linux 并非每时每刻完成八个 crate，但前中段能持续维持 5.5～6.2 个 vCPU 做有效工作。末端仍然存在 `ostool -> axbuild -> tg-xtask` 以及标准库/LTO/链接串行长尾。
 
-## off-CPU 等待
+## off-CPU
 
-排除长期内核后台线程后，Linux 的 workload off-CPU 累计为预构建 30,499.86 task-s、正式阶段 16,576.10 task-s：
+为了与 Moss 一致，Linux off-CPU 同样采用每 CPU 的确定性 1/8 抽样，并将完成区间乘 8。排除 kworker、jbd2、RCU 等长期内核后台线程后：
 
-| 已完成睡眠原因 | 预构建 | 正式任务 |
+| 原因 | 预构建 | 正式阶段 |
 |---|---:|---:|
-| futex | 66.35% | 70.86% |
-| poll/epoll | 17.75% | 15.45% |
-| pipe read | 12.30% | 12.83% |
-| waitpid | 2.20% | 0.79% |
-| nanosleep | 1.33% | 0% |
-| 同步 I/O 等待 | 0.01% | 0.01% |
-| 内核锁睡眠 | <0.01% | 0.01% |
+| futex | 62.55% | 69.50% |
+| poll/epoll | 15.94% | 13.23% |
+| pipe read | 18.96% | 16.55% |
+| waitpid | 1.38% | 0.64% |
+| nanosleep | 1.13% | 0% |
+| 同步 I/O | 0.0087% | 0.0090% |
+| 内核锁睡眠 | 0.0037% | 0.0064% |
 
-最大的栈是：
+1/8 抽样命中长生命周期 futex/poll 时会放大方差，所以 off-CPU 总 task-time 不适合与旧全量 Linux 结果混用；本表的价值是与同样采用 1/8 的 Moss 做同口径结构分析。关键事实不变：Linux 协调线程睡眠时，仍有约 5.5～6.2 个核心执行编译；真正归入内核锁和同步 I/O 的比例极低。
 
-```text
-rustc -> futex_wait -> schedule
-cargo -> ppoll -> schedule
-rustc/tee/cargo -> anon_pipe_read -> schedule
-```
+## 锁等待
 
-大量 futex、poll 和 pipe task-time 主要来自 rustc worker、Cargo jobserver、ctrl-c/coordinator 线程以及依赖等待。它表示线程睡着的累计时间，不表示 Linux futex 实现很慢。关键区别是：这些协调线程睡眠的同时，Linux 仍保持 5.5–6.1 个核心执行有效编译；真正归入内核锁和同步 I/O 的 off-CPU 比例都只有约 0.01%。
-
-## 内核锁热点
-
-| 慢路径累计等待 | 预构建 | 正式任务 |
+| 实际睡眠锁等待 | 预构建 | 正式阶段 |
 |---|---:|---:|
-| mutex | 0.0086 s | 0.0125 s |
-| rwsem | 1.5171 s | 1.4064 s |
-| 合计 | **1.5257 s** | **1.4189 s** |
-| 其中 ext4 内部路径 | **0.01210 s** | **0.000583 s** |
+| mutex | 0.01055 s | 0.00121 s |
+| rwsem | 1.49245 s | 1.24942 s |
+| 合计 | **1.50300 s** | **1.25063 s** |
+| 确认属于 ext4 内部 | 0 s | **0.01040 s** |
 
-Linux 最大的锁热点不是 ext4，而是进程地址空间的 `mmap_lock`：
+主要热点仍是 `mmap_lock`：
 
 ```text
 handle_page_fault -> lock_mm_and_find_vma -> rwsem_down_read_slowpath
-mprotect -> rwsem_down_write_slowpath
-mmap/munmap -> rwsem_down_write_slowpath
+mmap/munmap/mprotect -> rwsem_down_write_slowpath
 ```
 
-预构建最大单栈是 Cargo 页错误进入 `lock_mm_and_find_vma`，占全部 mutex/rwsem 图的 28.94%；正式阶段同一路径占 17.60%。即便如此，全部地址空间和其他内核锁竞争合计只消耗约 1.5 task-s，不足以成为分钟级瓶颈。
+预构建最大的单栈是 Cargo fault 等待 `mmap_lock`，占锁等待图 35.34%。正式阶段存在约 10.40 ms 的真实 ext4 writeback rwsem 等待。
 
-ext4 锁图只保留慢路径探针与 ext4/jbd2 之间未跨越嵌套异常入口的栈，避免把 `ext4_readdir -> copy_to_user` 中发生的用户页错误误标成 ext4 锁。预构建的 12.10 ms 主要来自后台 writeback 的 `ext4_map_blocks -> rwsem_down_write_slowpath`；正式阶段只有 `ext4_page_mkwrite` 的 0.405 ms 和 `ext4_orphan_del` mutex 的 0.178 ms。
+有一类栈表面同时出现 ext4 和 `mmap_lock`：`ext4_readdir -> copy_to_user -> user page fault -> mmap_lock`。它等待的是嵌套用户缺页的地址空间锁，不是 ext4 锁，报告按 slowpath 附近的实际锁路径将其排除。因此预构建的 ext4 内部锁值为 0，而不是把 12.92 ms 的嵌套 fault 错算为 ext4 竞争。
 
-这与 Moss 的 `Ext4Filesystem::inner: Mutex<LwExt4Filesystem>` 有本质差别：Linux 使用页缓存、inode、extent、journal 等更细粒度机制，前台读路径没有被单个文件系统全局 mutex 包住。
-
-## ext4、页缓存与块 I/O
+## page-cache、ext4 与同步 I/O
 
 | inclusive task-time | Linux 预构建 | Moss 预构建 | Linux 正式 | Moss 正式 |
 |---|---:|---:|---:|---:|
-| ext4 read/write 路径 | 66.69 s | 2,222.89 s | 23.91 s | 682.54 s |
-| page cache/filemap | 34.64 s | 15,042.35 s | 15.08 s | 9,343.23 s |
-| 块读取 bio 延迟 | 6.06 s | 393.08 s | 2.17 s | 175.67 s |
-| 块写入 bio 延迟 | 92.45 s | 63.58 s | 31.08 s | 11.72 s |
+| ext4 read/write | 70.05 s | 2,222.89 s | 22.49 s | 682.54 s |
+| page-cache/filemap | 53.57 s | 15,042.35 s | 22.00 s | 9,343.23 s |
+| 前台同步 I/O 等待 | 6.386 s | 456.66 s | 2.673 s | 187.39 s |
 
-两套内核的探针位置和页缓存实现不同，因此不能把比值当成严格微基准；数量级仍然有明确意义。Linux 的 ext4 inclusive 时间约低 29–33 倍，filemap 时间低 434–619 倍，块读取累计延迟低 65–81 倍。Linux 页错误不会在一个进程级地址空间 mutex 下继续持有 Moss 的文件级 page-cache mutex 和 ext4 全局 mutex。
+Linux 预构建 page-cache 的主要使用者是 `ld` 44.82%、rustc 37.16%、cc1 9.41%；正式阶段是 rustc 48.24%、`ld` 45.38%。ext4 inclusive 预构建由 `ld` 占 56.65%、rustc 19.88%，正式阶段 `ld` 占 72.69%、rustc 21.35%。这些主要是实际文件处理，不是锁等待。
 
-Linux 的块写入累计 bio 延迟反而比 Moss 高，但它几乎全在 `jbd2/vda-8` 和 `kworker/u32:*`：预构建占 98.8%，正式阶段接近 100%。这是 delayed allocation、journal 和异步 writeback 在后台并发工作的结果，不代表前台 rustc 同步等待了 92 秒。对应的用户任务 off-CPU 同步 I/O 只有 4.32 task-s 和 1.85 task-s。
+同步 I/O 的前台部分为预构建 4.994 task-s、正式阶段 2.167 task-s；剩余 1.392/0.506 task-s 属于 jbd2/kworker。即便将后台也计入，仍远低于 Moss 在缺页和前台文件操作中同步等待块设备的时间。
 
-Linux ext4 图的前台最大使用者是链接器 `ld`，占预构建 ext4 时间 60.5%、正式阶段 72.4%；pagecache 则主要由 `ld` 与 rustc 构成。它们是实际数据处理，不是锁等待。正式阶段仍有 30.71% idle 的主要原因更接近标准库依赖链、LTO codegen 和链接长尾，而不是文件系统把并行任务串行化。
+## 补充 bio 图
 
-## 对 Moss 的优化结论
+bio submit-to-completion 延迟为：
 
-### P0：把缺页和 page-cache miss 的 I/O 移出大锁
+| 请求 | 预构建 | 正式阶段 |
+|---|---:|---:|
+| read | 4.503 s | 2.368 s |
+| write | 102.713 s | 19.456 s |
 
-Linux 基线进一步验证了 Moss 报告中的首要结论。Moss 的：
+预构建 bio 总延迟的 95.04%、正式阶段的 89.12% 由 jbd2/kworker 提交。它证明 Linux 把大部分写盘工作移到了后台，而不是证明前台同步等待了同样长的时间。主对照必须看 `io_schedule()` 前台等待图，不能再把异步 bio 数值直接与 Moss 同步驱动调用比较。
 
-```text
-handle_page_fault
-  -> AddrSpace::handle_page_fault
-  -> BackendOps::populate
-  -> CowBackend::alloc_new_at
-  -> CachedFile/ext4 同步读取
-```
+## 对 Moss 第一阶段修复的约束
 
-不能继续完整处在 `AddrSpace`、page-cache 和 ext4 大锁的覆盖范围内。应使用“锁内验证并登记、锁外分配/读取、锁内校验并提交”的两阶段 fault；page cache 按 inode+page 维护 in-flight 状态，同页合并、不同页并行。
+本轮使用相同 profiler 方法后，优化顺序没有改变：
 
-### P0：将写回从前台临界区分离
+1. 为文件缺页增加 prepare/execute/commit 两阶段协议，让 frame 分配、page-cache miss 和 ext4 读取离开 `AddrSpace` mutex。
+2. page-cache 使用稳定 page slot：同页 miss 合并，不同页 fill 并行，索引锁外完成 I/O。
+3. 把 dirty eviction/writeback 从 fault 和前台 syscall 临界区移走。
+4. 重新用同一组事件和采样率 A/B：文件 fault 相关 mutex wait 至少下降 80%，活跃核至少接近 Linux 的 5.5～6.2 核，同时 active core-s 不应上升。
 
-Linux 的写 bio 主要由 jbd2/kworker 承担，说明较高的物理写入累计延迟并不必然拖慢编译。Moss 应把脏页 writeback、淘汰和 journal/元数据落盘移出 page-cache 全局锁及前台 syscall/fault 临界区；不能在 `with_page_or_insert_impl` 持锁时同步回写。
-
-### P1：消除 ext4 全局 mutex
-
-Linux ext4 内部慢锁只出现毫秒级等待，而 Moss 的单个 lwext4 全局 mutex 是数百 task-s。先通过 page-cache miss 合并减少调用次数，再把只读数据、目录/元数据和 journal 修改分成可控的细粒度并发域。直接删除锁不安全，但维持全文件系统唯一 mutex 也无法接近 Linux 基线。
-
-### P1：用相同 profile 做验收
-
-下一轮 Moss 优化的直接验收目标应是：
-
-1. 预构建活跃核等价值从 3.68 提升到至少 5.5，正式阶段从 2.36 提升到至少 5.0。
-2. COW/文件缺页相关 mutex wait 下降至少 90%。
-3. ext4 全局锁等待从数百 task-s 降到个位 task-s，再逐步逼近 Linux 的细粒度锁水平。
-4. 预构建先降到 20 分钟以内、正式阶段降到 10 分钟以内，使总流程稳定小于 50 分钟。
-
-### P2：最后处理 Cargo/LTO 长尾与缓存
-
-Linux 也无法让依赖 DAG 末端保持 8 核满载，所以在内核并发问题解决后，预置与源码、Cargo.lock、toolchain hash 匹配的 host 工具缓存仍然有价值。它属于消除固有串行长尾的第二阶段优化，不能替代缺页、页缓存和 ext4 锁修复。
-
-## 数据与复现入口
-
-- [机器可读摘要](./summary.json)
-- 采样脚本：`scripts/linux_rv_profile.bt`
-- guest 驱动：`scripts/linux_rv_profile_buildstorm.sh`
-- SVG 渲染器：`scripts/render_linux_profile.py`
-- 启动入口：`scripts/run_linux_rv.sh profile`
-
-本目录保留本机原始 `setup/prebuild/timed.raw`、console 和 benchmark 日志，但由 `.gitignore` 排除；仓库只需要提交报告、机器摘要和 24 张最终 SVG。原始文件可以用上述渲染器重新生成相同图表。
+在上述路径拆分前，单独增加调度迁移、扩大 readahead 或取消 snapshot 都没有证据能消除当前数量级差距。
