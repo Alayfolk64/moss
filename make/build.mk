@@ -37,6 +37,9 @@ else ifneq ($(filter $(or $(MAKECMDGOALS), $(.DEFAULT_GOAL)), all build run just
   ifeq ($(DWARF), y)
     RUSTFLAGS += -C force-frame-pointers -C debuginfo=2 -C strip=none
   endif
+  ifeq ($(PROFILE), y)
+    RUSTFLAGS += -C force-frame-pointers -C debuginfo=1 -C strip=none
+  endif
   $(if $(V), $(info RUSTFLAGS: "$(RUSTFLAGS)"))
   export RUSTFLAGS
   ifeq ($(LTO), y)
@@ -50,7 +53,7 @@ _cargo_build: oldconfig
 ifeq ($(APP_TYPE), rust)
 	$(call cargo_build,$(APP),$(AX_FEAT) $(LIB_FEAT) $(APP_FEAT))
 	@cp $(rust_elf) $(OUT_ELF)
-ifneq ($(DWARF), y)
+ifeq ($(filter y,$(DWARF) $(PROFILE)),)
 	$(call run_cmd,$(OBJCOPY),$(OUT_ELF) --strip-debug $(OUT_ELF))
 endif
 else ifeq ($(APP_TYPE), c)

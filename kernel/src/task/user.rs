@@ -67,7 +67,8 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     ReturnReason::Syscall => handle_syscall(&mut uctx),
                     ReturnReason::PageFault(addr, flags) => {
                         let fault_signal = {
-                            let mut aspace = thr.proc_data.aspace.lock();
+                            let aspace_ref = thr.proc_data.aspace();
+                            let mut aspace = aspace_ref.lock();
                             if crate::syscall::is_mmap_sigbus_fault(
                                 thr.proc_data.proc.pid(),
                                 addr,
@@ -136,7 +137,8 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                             uctx.sp(),
                         );
                         {
-                            let aspace = thr.proc_data.aspace.lock();
+                            let aspace_ref = thr.proc_data.aspace();
+                            let aspace = aspace_ref.lock();
                             log_user_fault_mapping(
                                 &aspace,
                                 "instruction",
@@ -180,7 +182,13 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 let check_signal = !unblock_next_signal();
                 let signal_pending =
                     check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();
-                if let Err(err) = thr.prepare_rseq(&mut uctx, interrupted || signal_pending) {
+                // Blocking syscalls keep a task on its previous run queue. Rebalance at
+                // the user-return boundary, where no syscall lock or CPU-local kernel
+                // state is held, so a busy CPU cannot retain all frequently-woken tasks.
+                let migrated = axtask::rebalance_current();
+                if let Err(err) =
+                    thr.prepare_rseq(&mut uctx, interrupted || signal_pending || migrated)
+                {
                     warn!("Invalid rseq state: {err:?}");
                     thr.reset_rseq();
                     raise_signal_fatal(SignalInfo::new_kernel(Signo::SIGSEGV))

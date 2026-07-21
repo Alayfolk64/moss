@@ -51,6 +51,8 @@ preempt = [
     "percpu?/preempt",
     "kernel_guard/preempt",
 ]
+profile = ["multitask", "profile-task-name"]
+profile-task-name = []
 sched-cfs = [
     "multitask",
     "preempt",

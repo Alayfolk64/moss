@@ -5,11 +5,11 @@ use core::{
 };
 
 use hashbrown::HashMap;
+use spin::{RwLock, RwLockWriteGuard};
 
 use super::{DirEntry, invalidate_inode_metadata_cache};
 use crate::{
-    MetadataUpdate, Mountpoint, Mutex, MutexGuard, NodeOps, NodePermission, NodeType, VfsError,
-    VfsResult,
+    MetadataUpdate, Mountpoint, Mutex, NodeOps, NodePermission, NodeType, VfsError, VfsResult,
     path::{DOT, DOTDOT, MAX_NAME_LEN, verify_entry_name},
 };
 
@@ -116,7 +116,7 @@ impl Default for OpenOptions {
 
 pub struct DirNode {
     ops: Arc<dyn DirNodeOps>,
-    cache: Mutex<DirChildren>,
+    cache: RwLock<DirChildren>,
     pub(crate) mountpoint: Mutex<Option<Arc<Mountpoint>>>,
 }
 
@@ -138,7 +138,7 @@ impl DirNode {
     pub fn new(ops: Arc<dyn DirNodeOps>) -> Self {
         Self {
             ops,
-            cache: Mutex::default(),
+            cache: RwLock::default(),
             mountpoint: Mutex::default(),
         }
     }
@@ -201,7 +201,10 @@ impl DirNode {
         }
         // Fast path
         if self.ops.is_cacheable() {
-            self.lookup_locked(name, &mut self.cache.lock())
+            if let Some(entry) = self.cache.read().get(name).cloned() {
+                return Ok(entry);
+            }
+            self.lookup_locked(name, &mut self.cache.write())
         } else {
             self.ops.lookup(name)
         }
@@ -212,13 +215,13 @@ impl DirNode {
         if name.len() > MAX_NAME_LEN {
             return Err(VfsError::NameTooLong);
         }
-        self.lookup_fresh_locked(name, &mut self.cache.lock())
+        self.lookup_fresh_locked(name, &mut self.cache.write())
     }
 
     /// Looks up a directory entry by name in cache.
     pub fn lookup_cache(&self, name: &str) -> Option<DirEntry> {
         if self.ops.is_cacheable() {
-            self.cache.lock().get(name).cloned()
+            self.cache.read().get(name).cloned()
         } else {
             None
         }
@@ -227,7 +230,7 @@ impl DirNode {
     /// Inserts a directory entry into the cache.
     pub fn insert_cache(&self, name: String, entry: DirEntry) -> Option<DirEntry> {
         if self.ops.is_cacheable() {
-            self.cache.lock().insert(name, entry)
+            self.cache.write().insert(name, entry)
         } else {
             None
         }
@@ -242,7 +245,7 @@ impl DirNode {
         verify_entry_name(name)?;
 
         self.ops.link(name, node).inspect(|entry| {
-            self.cache.lock().insert(name.to_owned(), entry.clone());
+            self.cache.write().insert(name.to_owned(), entry.clone());
             invalidate_inode_metadata_cache(node.filesystem(), node.inode());
         })
     }
@@ -251,7 +254,7 @@ impl DirNode {
     pub fn unlink(&self, name: &str, is_dir: bool) -> VfsResult<()> {
         verify_entry_name(name)?;
 
-        let mut children = self.cache.lock();
+        let mut children = self.cache.write();
         let entry = self.lookup_fresh_locked(name, &mut children)?;
         match (entry.is_dir(), is_dir) {
             (true, false) => return Err(VfsError::IsADirectory),
@@ -309,23 +312,27 @@ impl DirNode {
         permission: NodePermission,
     ) -> VfsResult<DirEntry> {
         verify_entry_name(name)?;
-        self.create_locked(name, node_type, permission, &mut self.cache.lock())
+        self.create_locked(name, node_type, permission, &mut self.cache.write())
     }
 
     fn lock_both_cache<'a>(
         &'a self,
         other: &'a Self,
     ) -> (
-        MutexGuard<'a, DirChildren>,
-        Option<MutexGuard<'a, DirChildren>>,
+        RwLockWriteGuard<'a, DirChildren>,
+        Option<RwLockWriteGuard<'a, DirChildren>>,
     ) {
-        let src_children = self.cache.lock();
-        let dst_children = if core::ptr::eq(self, other) {
-            None
+        if core::ptr::eq(self, other) {
+            (self.cache.write(), None)
+        } else if (self as *const Self as usize) < (other as *const Self as usize) {
+            let src_children = self.cache.write();
+            let dst_children = other.cache.write();
+            (src_children, Some(dst_children))
         } else {
-            Some(other.cache.lock())
-        };
-        (src_children, dst_children)
+            let dst_children = other.cache.write();
+            let src_children = self.cache.write();
+            (src_children, Some(dst_children))
+        }
     }
 
     /// Renames a directory entry.
@@ -377,7 +384,7 @@ impl DirNode {
     pub fn open_file(&self, name: &str, options: &OpenOptions) -> VfsResult<DirEntry> {
         verify_entry_name(name)?;
 
-        let mut children = self.cache.lock();
+        let mut children = self.cache.write();
         let lookup_result = if options.create_new {
             self.lookup_fresh_locked(name, &mut children)
         } else {
@@ -415,7 +422,7 @@ impl DirNode {
     /// Clears the cache of directory entries & user data, allowing them to be
     /// released.
     pub(crate) fn forget(&self) {
-        for (_, child) in mem::take(self.cache.lock().deref_mut()) {
+        for (_, child) in mem::take(self.cache.write().deref_mut()) {
             if let Ok(dir) = child.as_dir() {
                 dir.forget();
             }

@@ -7,7 +7,7 @@ use core::{
     fmt,
     future::poll_fn,
     mem::ManuallyDrop,
-    ops::Deref,
+    ops::{Deref, Range},
     ptr::NonNull,
     sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, AtomicU64, Ordering},
     task::{Context, Poll},
@@ -33,12 +33,12 @@ pub enum TaskState {
     /// Task is running on some CPU.
     Running = 1,
     /// Task is ready to run on some scheduler's ready queue.
-    Ready = 2,
+    Ready   = 2,
     /// Task is blocked (in the wait queue or timer list),
     /// and it has finished its scheduling process, it can be wake up by `notify()` on any run queue safely.
     Blocked = 3,
     /// Task is exited and waiting for being dropped.
-    Exited = 4,
+    Exited  = 4,
 }
 
 /// User-defined task extended data.
@@ -161,6 +161,19 @@ impl TaskInner {
         self.name.lock().clone()
     }
 
+    /// Copies the task name into a caller-provided fixed buffer without
+    /// allocating or waiting for the name lock. Returns the number of bytes
+    /// copied, or zero if the name is being changed concurrently.
+    #[cfg(feature = "profile-task-name")]
+    pub fn copy_name(&self, output: &mut [u8]) -> usize {
+        let Some(name) = self.name.try_lock() else {
+            return 0;
+        };
+        let len = output.len().min(name.len());
+        output[..len].copy_from_slice(&name.as_bytes()[..len]);
+        len
+    }
+
     /// Set the name of the task.
     pub fn set_name(&self, name: &str) {
         *self.name.lock() = String::from(name);
@@ -209,6 +222,15 @@ impl TaskInner {
             Some(s) => Some(s.top()),
             None => None,
         }
+    }
+
+    /// Returns the allocated address range of this task's kernel stack.
+    #[inline]
+    pub fn kernel_stack_range(&self) -> Option<Range<usize>> {
+        self.kstack.as_ref().map(|stack| {
+            let start = stack.ptr.as_ptr() as usize;
+            start..start + stack.layout.size()
+        })
     }
 
     /// Returns the CPU ID where the task is running or will run.

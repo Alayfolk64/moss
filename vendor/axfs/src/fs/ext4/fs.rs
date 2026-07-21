@@ -1,11 +1,14 @@
 use alloc::sync::Arc;
-use core::cell::OnceCell;
+use core::{
+    cell::OnceCell,
+    ops::{Deref, DerefMut},
+};
 
 use axdriver::AxBlockDevice;
 use axfs_ng_vfs::{
     DirEntry, DirNode, Filesystem, FilesystemOps, Reference, StatFs, VfsResult, path::MAX_NAME_LEN,
 };
-use kspin::{SpinNoPreempt as Mutex, SpinNoPreemptGuard as MutexGuard};
+use axsync::{Mutex, MutexGuard};
 use lwext4_rust::{FsConfig, ffi::EXT4_ROOT_INO};
 
 use super::{
@@ -13,7 +16,27 @@ use super::{
     util::{LwExt4Filesystem, into_vfs_err},
 };
 
-const EXT4_CONFIG: FsConfig = FsConfig { bcache_size: 256 };
+const EXT4_CONFIG: FsConfig = FsConfig { bcache_size: 4096 };
+
+pub(crate) struct Ext4Guard<'a> {
+    inner: MutexGuard<'a, LwExt4Filesystem>,
+    #[cfg(feature = "profile")]
+    _profile: axsync::ProfileScope,
+}
+
+impl Deref for Ext4Guard<'_> {
+    type Target = LwExt4Filesystem;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Ext4Guard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
 
 pub struct Ext4Filesystem {
     inner: Mutex<LwExt4Filesystem>,
@@ -44,8 +67,31 @@ impl Ext4Filesystem {
         Ok(Filesystem::new(fs))
     }
 
-    pub(crate) fn lock(&self) -> MutexGuard<'_, LwExt4Filesystem> {
-        self.inner.lock()
+    pub(crate) fn lock(&self) -> Ext4Guard<'_> {
+        #[cfg(feature = "profile")]
+        let profile =
+            axsync::ProfileScope::new(axsync::ProfileEvent::Ext4, self as *const Self as usize);
+
+        #[cfg(feature = "profile")]
+        let inner = if let Some(inner) = self.inner.try_lock() {
+            inner
+        } else {
+            let wait = axsync::ProfileScope::new(
+                axsync::ProfileEvent::Ext4LockWait,
+                &self.inner as *const Mutex<LwExt4Filesystem> as usize,
+            );
+            let inner = self.inner.lock();
+            drop(wait);
+            inner
+        };
+        #[cfg(not(feature = "profile"))]
+        let inner = self.inner.lock();
+
+        Ext4Guard {
+            inner,
+            #[cfg(feature = "profile")]
+            _profile: profile,
+        }
     }
 }
 
@@ -82,6 +128,6 @@ impl FilesystemOps for Ext4Filesystem {
     }
 
     fn flush(&self) -> VfsResult<()> {
-        self.inner.lock().flush().map_err(into_vfs_err)
+        self.lock().flush().map_err(into_vfs_err)
     }
 }

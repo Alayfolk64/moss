@@ -307,7 +307,7 @@ impl Default for OpenOptions {
 
 const PAGE_SIZE: usize = 4096;
 const DEFAULT_LOCAL_FILE_CACHE_PAGES: usize = 256;
-const MAX_RETAINED_FILE_CACHE_RECORDS: usize = 64;
+const MAX_RETAINED_FILE_CACHE_RECORDS: usize = 256;
 const MAX_READAHEAD_BYTES: usize = DEFAULT_LOCAL_FILE_CACHE_PAGES * PAGE_SIZE;
 const DEFERRED_FILE_LEN_THRESHOLD: u64 = 64 * 1024;
 const WRITEBACK_BATCH_PAGES: usize = 16;
@@ -708,6 +708,11 @@ impl CachedFile {
         zeroed: bool,
         f: impl FnOnce(&mut PageCache, Option<(u32, PageCache)>) -> VfsResult<R>,
     ) -> VfsResult<R> {
+        #[cfg(feature = "profile")]
+        let _profile = axsync::ProfileScope::new(
+            axsync::ProfileEvent::PageCache,
+            self.shared() as *const CachedFileShared as usize,
+        );
         let _cache_guard = self.shared().cache_op.lock();
         let mut guard = self.shared().page_cache.lock();
         let file = self.inner().entry().as_file()?;
@@ -1105,23 +1110,6 @@ impl CachedFile {
         }
     }
 
-    fn remove_unused_global_record(&self, discard_metadata: bool) {
-        let mut caches = FILE_CACHES.write();
-        if Arc::strong_count(&self.record) == 2
-            && caches
-                .get(&self.record.key)
-                .is_some_and(|record| Arc::ptr_eq(record, &self.record))
-        {
-            caches.remove(&self.record.key);
-            self.inner.user_data().remove::<FileUserData>();
-            if discard_metadata {
-                self.inner.discard_metadata_cache();
-            } else {
-                self.inner.invalidate_metadata_cache();
-            }
-        }
-    }
-
     fn prune_inactive_file_caches(retain_key: FileCacheKey) {
         let inactive = FILE_CACHES
             .read()
@@ -1251,17 +1239,6 @@ impl Drop for CachedFile {
         if self.in_memory() || Arc::strong_count(&self.record) != 2 {
             return;
         }
-
-        if let Err(err) = self.writeback_dirty_pages_in_cache().and_then(|_| self.commit_atime()) {
-            if err.canonicalize() == VfsError::StorageFull {
-                self.discard_cached_pages();
-                self.remove_unused_global_record(true);
-                return;
-            }
-            warn!("Failed to write back unused file cache: {err:?}");
-            return;
-        }
-
         Self::prune_inactive_file_caches(self.record.key);
     }
 }

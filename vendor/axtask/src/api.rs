@@ -76,6 +76,20 @@ pub fn current_may_uninit() -> Option<CurrentTask> {
     CurrentTask::try_get()
 }
 
+/// Replaces the page-table root saved for the current task and activates it
+/// immediately. This is used by execve after it has built a new address space.
+///
+/// The caller must keep the old address space alive until this function
+/// returns.
+pub fn replace_current_page_table(root: memory_addr::PhysAddr) {
+    let curr = current();
+    unsafe {
+        (*curr.ctx_mut_ptr()).set_page_table_root(root);
+        axhal::asm::write_user_page_table(root);
+    }
+    axhal::asm::flush_tlb(None);
+}
+
 /// Gets the current task.
 ///
 /// # Panics

@@ -106,6 +106,8 @@ SECTIONS {
     linkm2_IRQ : { KEEP(*(linkm2_IRQ)) }
     linkme_PAGE_FAULT : { KEEP(*(linkme_PAGE_FAULT)) }
     linkm2_PAGE_FAULT : { KEEP(*(linkm2_PAGE_FAULT)) }
+    linkme_PROFILE_SAMPLE : { KEEP(*(linkme_PROFILE_SAMPLE)) }
+    linkm2_PROFILE_SAMPLE : { KEEP(*(linkm2_PROFILE_SAMPLE)) }
     scope_local : { KEEP(*(scope_local)) }
 }
 INSERT AFTER .tbss;

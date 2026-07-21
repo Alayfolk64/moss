@@ -1,0 +1,8 @@
+# Large local captures and reproducible intermediate files.
+*.qcow2
+*.log
+*.bin
+*.elf
+*.folded
+*-host-time.txt
+host-time.txt

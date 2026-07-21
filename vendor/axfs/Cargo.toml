@@ -30,6 +30,7 @@ resolver = "2"
 default = []
 ext4 = ["dep:lwext4_rust"]
 fat = ["dep:fatfs"]
+profile = ["axsync/profile"]
 std = ["lwext4_rust?/std"]
 times = []
 use-ramdisk = []

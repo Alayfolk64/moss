@@ -48,7 +48,11 @@ fn riscv_trap_handler(tf: &mut TrapFrame) {
                 handle_page_fault(tf, PageFaultFlags::EXECUTE)
             }
             Trap::Exception(E::Breakpoint) => handle_breakpoint(&mut tf.sepc),
-            Trap::Interrupt(_) => {
+            Trap::Interrupt(interrupt) => {
+                #[cfg(feature = "profile")]
+                if interrupt == I::SupervisorTimer {
+                    crate::trap::profile_sample(tf);
+                }
                 handle_trap!(IRQ, scause.bits());
             }
             _ => {

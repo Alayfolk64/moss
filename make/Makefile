@@ -45,6 +45,7 @@ MODE ?= release
 LOG ?= warn
 V ?=
 DWARF ?=
+PROFILE ?=
 LTO ?=
 TARGET_DIR ?= $(PWD)/target
 EXTRA_CONFIG ?=

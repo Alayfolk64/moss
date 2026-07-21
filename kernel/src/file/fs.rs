@@ -309,7 +309,6 @@ impl File {
 impl Drop for File {
     fn drop(&mut self) {
         if let Some(id) = self.write_mount_id {
-            let _ = self.inner.sync(false);
             note_mount_write_close(id);
         }
     }

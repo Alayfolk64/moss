@@ -9,6 +9,7 @@ use axhal::{
 };
 use axsync::Mutex;
 use enum_dispatch::enum_dispatch;
+use kspin::SpinNoIrq;
 use memory_addr::{DynPageIter, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 use memory_set::MappingBackend;
 
@@ -20,6 +21,46 @@ mod shared;
 pub use self::shared::SharedPages;
 use super::AddrSpace;
 
+const LOCAL_FRAME_CACHE_CAPACITY: usize = 32;
+
+struct LocalFrameCache {
+    frames: [usize; LOCAL_FRAME_CACHE_CAPACITY],
+    len: usize,
+}
+
+impl LocalFrameCache {
+    const fn new() -> Self {
+        Self {
+            frames: [0; LOCAL_FRAME_CACHE_CAPACITY],
+            len: 0,
+        }
+    }
+
+    fn pop(&mut self) -> Option<PhysAddr> {
+        if self.len == 0 {
+            return None;
+        }
+        self.len -= 1;
+        Some(PhysAddr::from_usize(self.frames[self.len]))
+    }
+
+    fn push(&mut self, frame: PhysAddr) -> bool {
+        if self.len == LOCAL_FRAME_CACHE_CAPACITY {
+            return false;
+        }
+        self.frames[self.len] = frame.as_usize();
+        self.len += 1;
+        true
+    }
+}
+
+static LOCAL_FRAME_CACHES: [SpinNoIrq<LocalFrameCache>; axconfig::plat::CPU_NUM] =
+    [const { SpinNoIrq::new(LocalFrameCache::new()) }; axconfig::plat::CPU_NUM];
+
+fn local_frame_cache() -> &'static SpinNoIrq<LocalFrameCache> {
+    &LOCAL_FRAME_CACHES[axhal::percpu::this_cpu_id()]
+}
+
 fn divide_page(size: usize, page_size: PageSize) -> usize {
     assert!(page_size.is_aligned(size), "unaligned");
     size >> (page_size as usize).trailing_zeros()
@@ -28,20 +69,57 @@ fn divide_page(size: usize, page_size: PageSize) -> usize {
 fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     let page_size = size as usize;
     let num_pages = page_size / PAGE_SIZE_4K;
-    let vaddr = VirtAddr::from(
-        global_allocator()
-            .alloc_pages(num_pages, page_size, UsageKind::VirtMem)
-            .map_err(|_| AxError::NoMemory)?,
-    );
+    let frame = if size == PageSize::Size4K {
+        if let Some(frame) = local_frame_cache().lock().pop() {
+            frame
+        } else {
+            let batch = match global_allocator().alloc_pages(
+                LOCAL_FRAME_CACHE_CAPACITY,
+                PAGE_SIZE_4K,
+                UsageKind::VirtMem,
+            ) {
+                Ok(batch) => batch,
+                Err(_) => {
+                    let vaddr = global_allocator()
+                        .alloc_pages(1, PAGE_SIZE_4K, UsageKind::VirtMem)
+                        .map_err(|_| AxError::NoMemory)?;
+                    let frame = virt_to_phys(VirtAddr::from(vaddr));
+                    if zeroed {
+                        unsafe {
+                            core::ptr::write_bytes(
+                                phys_to_virt(frame).as_mut_ptr(),
+                                0,
+                                PAGE_SIZE_4K,
+                            )
+                        };
+                    }
+                    return Ok(frame);
+                }
+            };
+            let mut cache = local_frame_cache().lock();
+            for index in 1..LOCAL_FRAME_CACHE_CAPACITY {
+                cache.push(virt_to_phys(VirtAddr::from(batch + index * PAGE_SIZE_4K)));
+            }
+            virt_to_phys(VirtAddr::from(batch))
+        }
+    } else {
+        let vaddr = VirtAddr::from(
+            global_allocator()
+                .alloc_pages(num_pages, page_size, UsageKind::VirtMem)
+                .map_err(|_| AxError::NoMemory)?,
+        );
+        virt_to_phys(vaddr)
+    };
     if zeroed {
-        unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, page_size) };
+        unsafe { core::ptr::write_bytes(phys_to_virt(frame).as_mut_ptr(), 0, page_size) };
     }
-    let paddr = virt_to_phys(vaddr);
-
-    Ok(paddr)
+    Ok(frame)
 }
 
 fn dealloc_frame(frame: PhysAddr, align: PageSize) {
+    if align == PageSize::Size4K && local_frame_cache().lock().push(frame) {
+        return;
+    }
     let vaddr = phys_to_virt(frame);
     let page_size: usize = align.into();
     let num_pages = page_size / PAGE_SIZE_4K;

@@ -15,6 +15,23 @@ pub static IRQ: [fn(usize) -> bool];
 #[def_trap_handler]
 pub static PAGE_FAULT: [fn(VirtAddr, PageFaultFlags) -> bool];
 
+/// Guest profiling callbacks invoked with the interrupted CPU context.
+#[cfg(feature = "profile")]
+#[def_trap_handler]
+pub static PROFILE_SAMPLE: [fn(&TrapFrame)];
+
+/// Invokes the registered guest profiling callback.
+#[cfg(feature = "profile")]
+pub(crate) fn profile_sample(tf: &TrapFrame) {
+    let mut iter = PROFILE_SAMPLE.iter();
+    if let Some(func) = iter.next() {
+        if iter.next().is_some() {
+            warn!("Multiple guest profiling callbacks are not supported");
+        }
+        func(tf);
+    }
+}
+
 #[allow(unused_macros)]
 macro_rules! handle_trap {
     ($trap:ident, $($args:tt)*) => {{

@@ -2,7 +2,7 @@
 
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use axtask::{current, future::block_on, yield_now};
+use axtask::{current, future::block_on};
 use event_listener::{Event, listener};
 
 /// A [`lock_api::RawMutex`] implementation.
@@ -39,16 +39,12 @@ struct Spin(u32);
 impl Spin {
     #[inline]
     fn spin(&mut self) -> bool {
-        if self.0 >= 10 {
+        if self.0 >= 3 {
             return false;
         }
         self.0 += 1;
-        if self.0 <= 3 {
-            for _ in 0..(1 << self.0) {
-                core::hint::spin_loop();
-            }
-        } else {
-            yield_now();
+        for _ in 0..(1 << self.0) {
+            core::hint::spin_loop();
         }
         true
     }
@@ -106,7 +102,14 @@ unsafe impl lock_api::RawMutex for RawMutex {
                 continue;
             }
 
+            #[cfg(feature = "profile")]
+            let profile_token = crate::profile_wait_begin(
+                crate::ProfileEvent::MutexWait,
+                self as *const Self as usize,
+            );
             block_on(listener);
+            #[cfg(feature = "profile")]
+            crate::profile_wait_end(profile_token);
             self.waiters.fetch_sub(1, Ordering::SeqCst);
             owner_id = self.owner_id.load(Ordering::Acquire);
         }

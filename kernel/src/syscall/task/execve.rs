@@ -18,7 +18,10 @@ use super::ptrace_on_exec;
 use crate::{
     config::USER_HEAP_BASE,
     file::{FD_TABLE, File, resolve_at},
-    mm::{load_user_app, load_user_app_from_location, vm_load_string},
+    mm::{
+        copy_from_kernel, load_user_app, load_user_app_from_location, new_user_aspace_empty,
+        vm_load_string,
+    },
     syscall::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
@@ -261,22 +264,30 @@ fn execve_common(
     check_fanotify_open_permission_path(&fanotify_exec_path)?;
     check_fanotify_open_exec_permission_path(&fanotify_exec_path)?;
 
-    let mut aspace = proc_data.aspace.lock();
-    let (entry_point, user_stack_base) = if let Some(load_loc) = load_loc {
-        load_user_app_from_location(&mut aspace, load_loc, path.as_str(), &args, &envs)?
-    } else {
-        load_user_app(&mut aspace, Some(path.as_str()), &args, &envs)?
-    };
-    drop(aspace);
-
     let loc = if let Some(exec_loc) = exec_loc {
         exec_loc
     } else {
         FS_CONTEXT.lock().resolve(&path)?
     };
+    let exec_path = loc.absolute_path()?.to_string();
+
+    // Build the replacement image off to the side. This preserves the old
+    // image when loading fails and lets a vfork child stop sharing its parent's
+    // address space without cloning it first.
+    let mut new_aspace = new_user_aspace_empty()?;
+    copy_from_kernel(&mut new_aspace)?;
+    let (entry_point, user_stack_base) = if let Some(load_loc) = load_loc {
+        load_user_app_from_location(&mut new_aspace, load_loc, path.as_str(), &args, &envs)?
+    } else {
+        load_user_app(&mut new_aspace, Some(path.as_str()), &args, &envs)?
+    };
+    let page_table_root = new_aspace.page_table_root();
+    let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
+    axtask::replace_current_page_table(page_table_root);
+    drop(old_aspace);
+
     curr.set_name(loc.name());
 
-    let exec_path = loc.absolute_path()?.to_string();
     notify_fanotify_open_exec_path(&exec_path);
     *proc_data.exe_path.write() = exec_path;
     *proc_data.cmdline.write() = Arc::new(args);
@@ -297,5 +308,6 @@ fn execve_common(
 
     uctx.set_ip(entry_point.as_usize());
     uctx.set_sp(user_stack_base.as_usize());
+    proc_data.complete_vfork();
     Ok(0)
 }

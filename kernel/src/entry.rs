@@ -5,7 +5,7 @@ use alloc::{
     vec::Vec,
 };
 
-use axfs::FS_CONTEXT;
+use axfs::{FS_CONTEXT, sync_global_file_caches};
 use axhal::uspace::UserContext;
 use axsync::Mutex;
 use axtask::{AxTaskExt, spawn_task};
@@ -78,6 +78,9 @@ pub fn init(args: &[String], envs: &[String]) {
     #[cfg(target_arch = "loongarch64")]
     crate::mm::init_tlb_shootdown();
 
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    crate::profiler::init();
+
     pseudofs::mount_all().expect("Failed to mount pseudofs");
     spawn_alarm_task();
 
@@ -128,6 +131,7 @@ pub fn init(args: &[String], envs: &[String]) {
     let exit_code = task.join();
     info!("Init process exited with code: {exit_code:?}");
 
+    sync_global_file_caches().expect("Failed to sync file caches");
     let cx = FS_CONTEXT.lock();
     cx.root_dir()
         .unmount_all()

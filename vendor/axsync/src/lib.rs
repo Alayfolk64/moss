@@ -16,6 +16,14 @@
 
 pub use kspin as spin;
 
+#[cfg(feature = "profile")]
+mod profile;
+
+#[cfg(feature = "profile")]
+pub use self::profile::{
+    ProfileEvent, ProfileScope, profile_wait_begin, profile_wait_end, register_profile_hooks,
+};
+
 #[cfg(feature = "multitask")]
 mod mutex;
 

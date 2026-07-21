@@ -2,6 +2,7 @@
 export ARCH := riscv64
 export LOG := warn
 export DWARF := n
+export PROFILE ?= n
 export MODE := release
 export MEMTRACK := n
 export SHELL_INIT ?= n
@@ -32,6 +33,10 @@ endif
 
 ifeq ($(SHELL_INIT), y)
 	APP_FEATURES += shell-init
+endif
+
+ifeq ($(PROFILE), y)
+	APP_FEATURES += guest-profile
 endif
 
 default: build
@@ -73,6 +78,7 @@ makeclean:
 	@$(MAKE) -C make makeclean
 	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin \
 		$(A)/kernel-rv.dbg.elf $(A)/kernel-la.dbg.elf \
+		$(A)/kernel-rv.profile.elf $(A)/kernel-la.profile.elf \
 		$(A)/kernel-rv.bin.o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S \
 		$(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin \
 		$(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin
@@ -126,10 +132,13 @@ kernel-rv: toolchain
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 endif
+ifeq ($(PROFILE), y)
+	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.profile.elf
+endif
 	$(RUST_OBJCOPY) -I binary -O elf64-littleriscv -B riscv --rename-section .data=.text,alloc,load,readonly,code $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin $(A)/kernel-rv.bin.o
 	$(RUST_LLD) -flavor gnu -m elf64lriscv -T $(A)/make/kernel-rv-wrap.ld -o $(A)/kernel-rv $(A)/kernel-rv.bin.o
 	rm -f $(A)/kernel-rv.bin.o $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin
-ifneq ($(DWARF), y)
+ifeq ($(filter y,$(DWARF) $(PROFILE)),)
 	rm -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf
 endif
 
@@ -137,6 +146,9 @@ kernel-la: toolchain
 	$(MAKE) ARCH=loongarch64 BUS=pci MEM=$(MEM) SMP=$(SMP) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
+endif
+ifeq ($(PROFILE), y)
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.profile.elf
 endif
 	@LOONGARCH_CC_BIN="$(LOONGARCH_CC)"; \
 	if [ -z "$$LOONGARCH_CC_BIN" ]; then \
@@ -160,7 +172,7 @@ endif
 	"$$LOONGARCH_CC_BIN" -c -o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S
 	$(RUST_LLD) -flavor gnu -m elf64loongarch -T $(A)/make/kernel-la-wrap.ld -o $(A)/kernel-la $(A)/kernel-la.bin.o
 	rm -f $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin
-ifneq ($(DWARF), y)
+ifeq ($(filter y,$(DWARF) $(PROFILE)),)
 	rm -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf
 endif
 

@@ -20,6 +20,8 @@ mod config;
 mod file;
 mod ipi;
 mod mm;
+#[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+mod profiler;
 mod pseudofs;
 mod syscall;
 mod task;

@@ -18,7 +18,7 @@ use core::{
 
 use axpoll::PollSet;
 use axsync::{Mutex, spin::SpinNoIrq};
-use axtask::{TaskExt, TaskInner};
+use axtask::{TaskExt, TaskInner, WaitQueue};
 use extern_trait::extern_trait;
 use scope_local::{ActiveScope, Scope};
 use spin::RwLock;
@@ -35,6 +35,31 @@ use crate::mm::AddrSpace;
 pub enum ProcessWaitStatus {
     Stopped(Signo),
     Continued(Signo),
+}
+
+pub struct VforkCompletion {
+    done: AtomicBool,
+    wait_queue: WaitQueue,
+}
+
+impl VforkCompletion {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            done: AtomicBool::new(false),
+            wait_queue: WaitQueue::new(),
+        })
+    }
+
+    pub fn wait(&self) {
+        self.wait_queue
+            .wait_until(|| self.done.load(Ordering::Acquire));
+    }
+
+    fn complete(&self) {
+        if !self.done.swap(true, Ordering::AcqRel) {
+            self.wait_queue.notify_all(false);
+        }
+    }
 }
 
 const INIT_PID_NS_INODE: u64 = 0x0f00_0001;
@@ -268,7 +293,11 @@ pub struct ProcessData {
     pub cmdline: RwLock<Arc<Vec<String>>>,
     /// The virtual memory address space.
     // TODO: scopify
-    pub aspace: Arc<Mutex<AddrSpace>>,
+    aspace: RwLock<Arc<Mutex<AddrSpace>>>,
+
+    /// Present only while this process is a vfork child. The parent sleeps on
+    /// it until execve installs a private address space or the child exits.
+    vfork_completion: SpinNoIrq<Option<Arc<VforkCompletion>>>,
 
     /// 需增加一个小线程组变更锁
     /// Serializes clone and execve changes to the thread group.
@@ -338,7 +367,8 @@ impl ProcessData {
             proc,
             exe_path: RwLock::new(exe_path),
             cmdline: RwLock::new(cmdline),
-            aspace,
+            aspace: RwLock::new(aspace),
+            vfork_completion: SpinNoIrq::new(None),
             exec_lock: Mutex::new(()),
             exec_in_progress: AtomicBool::new(false),
             scope: RwLock::new(Scope::new()),
@@ -384,6 +414,24 @@ impl ProcessData {
         self.heap_top.load(Ordering::Acquire)
     }
 
+    pub fn aspace(&self) -> Arc<Mutex<AddrSpace>> {
+        self.aspace.read().clone()
+    }
+
+    pub fn replace_aspace(&self, new_aspace: Arc<Mutex<AddrSpace>>) -> Arc<Mutex<AddrSpace>> {
+        core::mem::replace(&mut *self.aspace.write(), new_aspace)
+    }
+
+    pub fn set_vfork_completion(&self, completion: Arc<VforkCompletion>) {
+        *self.vfork_completion.lock() = Some(completion);
+    }
+
+    pub fn complete_vfork(&self) {
+        if let Some(completion) = self.vfork_completion.lock().take() {
+            completion.complete();
+        }
+    }
+
     /// Set the top address of the user heap.
     pub fn set_heap_top(&self, top: usize) {
         self.heap_top.store(top, Ordering::Release)
@@ -396,7 +444,7 @@ impl ProcessData {
     }
 
     pub fn current_rss_kb(&self) -> usize {
-        self.aspace.lock().resident_set_size() / 1024
+        self.aspace().lock().resident_set_size() / 1024
     }
 
     pub fn child_maxrss_kb(&self) -> usize {

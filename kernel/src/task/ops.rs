@@ -103,14 +103,15 @@ fn is_live_process_peer(proc_data: &ProcessData, other: &ProcessData) -> bool {
 }
 
 fn address_space_shared_with_live_process(proc_data: &ProcessData) -> bool {
+    let aspace = proc_data.aspace();
     processes().iter().any(|other| {
-        is_live_process_peer(proc_data, other) && Arc::ptr_eq(&other.aspace, &proc_data.aspace)
+        is_live_process_peer(proc_data, other) && Arc::ptr_eq(&other.aspace(), &aspace)
     })
 }
 
 fn reclaim_process_address_space(proc_data: &ProcessData) {
     if !address_space_shared_with_live_process(proc_data) {
-        proc_data.aspace.lock().clear();
+        proc_data.aspace().lock().clear();
     }
 }
 
@@ -278,6 +279,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         crate::syscall::release_process_fanotify_resources(process.pid());
         crate::syscall::close_all_files_for_current_process();
         reclaim_process_address_space(&thr.proc_data);
+        thr.proc_data.complete_vfork();
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());

@@ -1,7 +1,8 @@
 //! Future support.
 
 use alloc::{sync::Arc, task::Wake};
-use axerrno::AxError;
+#[cfg(feature = "profile")]
+use core::sync::atomic::{AtomicUsize, Ordering};
 use core::{
     fmt,
     future::poll_fn,
@@ -9,8 +10,9 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
+use axerrno::AxError;
+use kernel_guard::NoPreemptIrqSave;
 use kspin::SpinNoIrq;
-use kernel_guard::{NoPreemptIrqSave};
 
 use crate::{AxTaskRef, WeakAxTaskRef, current, current_run_queue, select_run_queue};
 
@@ -19,6 +21,51 @@ pub use poll::*;
 
 mod time;
 pub use time::*;
+
+#[cfg(feature = "profile")]
+type ProfileBeginHook = fn() -> u64;
+#[cfg(feature = "profile")]
+type ProfileEndHook = fn(u64);
+
+#[cfg(feature = "profile")]
+static PROFILE_BEGIN_HOOK: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "profile")]
+static PROFILE_END_HOOK: AtomicUsize = AtomicUsize::new(0);
+
+/// Installs callbacks around every scheduling interval in which a task is
+/// genuinely blocked off-CPU.
+#[cfg(feature = "profile")]
+pub fn register_block_profile_hooks(begin: ProfileBeginHook, end: ProfileEndHook) {
+    PROFILE_BEGIN_HOOK.store(begin as usize, Ordering::Release);
+    PROFILE_END_HOOK.store(end as usize, Ordering::Release);
+}
+
+#[cfg(feature = "profile")]
+#[inline]
+fn profile_block_begin() -> u64 {
+    let hook = PROFILE_BEGIN_HOOK.load(Ordering::Acquire);
+    if hook == 0 {
+        return 0;
+    }
+    // SAFETY: `register_block_profile_hooks` stores this exact function type.
+    let hook: ProfileBeginHook = unsafe { core::mem::transmute(hook) };
+    hook()
+}
+
+#[cfg(feature = "profile")]
+#[inline]
+fn profile_block_end(token: u64) {
+    if token == 0 {
+        return;
+    }
+    let hook = PROFILE_END_HOOK.load(Ordering::Acquire);
+    if hook == 0 {
+        return;
+    }
+    // SAFETY: `register_block_profile_hooks` stores this exact function type.
+    let hook: ProfileEndHook = unsafe { core::mem::transmute(hook) };
+    hook(token);
+}
 
 struct AxWaker {
     task: WeakAxTaskRef,
@@ -69,7 +116,11 @@ pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
                 let mut rq = current_run_queue::<NoPreemptIrqSave>();
                 let mut woke = axwaker.woke.lock();
                 if !*woke {
+                    #[cfg(feature = "profile")]
+                    let profile_token = profile_block_begin();
                     rq.blocked_resched(woke);
+                    #[cfg(feature = "profile")]
+                    profile_block_end(profile_token);
                 } else {
                     // The future woke itself while it was being polled. Clear
                     // the edge-triggered flag and poll it again immediately;

@@ -9,6 +9,7 @@ use axfs_ng_vfs::Location;
 use axhal::{
     mem::virt_to_phys,
     paging::{MappingFlags, PageSize},
+    percpu::this_cpu_id,
 };
 use axsync::Mutex;
 use kernel_elf_parser::{
@@ -342,13 +343,24 @@ impl ElfLoader {
     }
 }
 
-static ELF_LOADER: Mutex<ElfLoader> = Mutex::new(ElfLoader::new());
+// Loading an image performs filesystem I/O and rewrites an address space. A
+// single global loader serialized unrelated execve calls on every CPU. Each
+// CPU can only execute one loader at a time, so a per-CPU parser cache removes
+// that cross-CPU bottleneck without adding duplicate work on the same CPU.
+static ELF_LOADERS: [Mutex<ElfLoader>; axconfig::plat::CPU_NUM] =
+    [const { Mutex::new(ElfLoader::new()) }; axconfig::plat::CPU_NUM];
+
+fn elf_loader() -> &'static Mutex<ElfLoader> {
+    &ELF_LOADERS[this_cpu_id()]
+}
 
 /// Clear the ELF cache.
 ///
 /// Useful for removing noises during memory leak detect.
 pub fn clear_elf_cache() {
-    ELF_LOADER.lock().0.clear();
+    for loader in &ELF_LOADERS {
+        loader.lock().0.clear();
+    }
 }
 
 /// Load the user app to the user address space.
@@ -393,9 +405,9 @@ fn load_user_app_from_source(
         .ok_or(AxError::InvalidInput)?;
 
     let load_result = if let Some(loc) = loc {
-        ELF_LOADER.lock().load_location(uspace, loc)?
+        elf_loader().lock().load_location(uspace, loc)?
     } else {
-        ELF_LOADER.lock().load(uspace, path)?
+        elf_loader().lock().load(uspace, path)?
     };
 
     let (entry, auxv) = match load_result {

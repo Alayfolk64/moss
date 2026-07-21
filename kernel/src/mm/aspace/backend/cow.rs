@@ -31,7 +31,7 @@ impl FrameRefCnt {
             // physical frame before we remove the table entry. This function assumes
             // the caller is not holding the FRAME_TABLE lock, so it is safe to lock
             // FRAME_TABLE here and perform the removal.
-            FRAME_TABLE.lock().remove_frame(paddr);
+            frame_table(paddr).lock().remove_frame(paddr);
             dealloc_frame(paddr, page_size);
         }
     }
@@ -74,7 +74,15 @@ impl FrameTableRefCount {
     }
 }
 
-static FRAME_TABLE: SpinNoIrq<FrameTableRefCount> = SpinNoIrq::new(FrameTableRefCount::new());
+const FRAME_TABLE_SHARDS: usize = 64;
+
+static FRAME_TABLE: [SpinNoIrq<FrameTableRefCount>; FRAME_TABLE_SHARDS] =
+    [const { SpinNoIrq::new(FrameTableRefCount::new()) }; FRAME_TABLE_SHARDS];
+
+fn frame_table(paddr: PhysAddr) -> &'static SpinNoIrq<FrameTableRefCount> {
+    let index = (paddr.as_usize() / memory_addr::PAGE_SIZE_4K) % FRAME_TABLE_SHARDS;
+    &FRAME_TABLE[index]
+}
 
 /// Copy-on-write mapping backend.
 ///
@@ -115,12 +123,12 @@ impl CowBackend {
 
     fn alloc_new_frame(&self, zeroed: bool) -> AxResult<PhysAddr> {
         let frame = alloc_frame(zeroed, self.size)?;
-        FRAME_TABLE.lock().init_frame(frame);
+        frame_table(frame).lock().init_frame(frame);
         Ok(frame)
     }
 
     fn drop_new_frame(&self, frame: PhysAddr) {
-        let frame_ref = FRAME_TABLE
+        let frame_ref = frame_table(frame)
             .lock()
             .get_frame_ref(frame)
             .expect("new frame must be referenced");
@@ -171,7 +179,7 @@ impl CowBackend {
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
     ) -> AxResult {
-        let frame = FRAME_TABLE
+        let frame = frame_table(paddr)
             .lock()
             .get_frame_ref(paddr)
             .ok_or(AxError::BadAddress)?;
@@ -201,7 +209,7 @@ impl CowBackend {
                         continue;
                     }
 
-                    let Some(frame_ref) = FRAME_TABLE.lock().get_frame_ref(frame) else {
+                    let Some(frame_ref) = frame_table(frame).lock().get_frame_ref(frame) else {
                         warn!("rollback COW clone found unreferenced frame: {frame:?}");
                         continue;
                     };
@@ -220,7 +228,7 @@ impl CowBackend {
         flags: MappingFlags,
         pt: &mut PageTableMut,
     ) -> AxResult {
-        let frame_ref = FRAME_TABLE
+        let frame_ref = frame_table(paddr)
             .lock()
             .get_frame_ref(paddr)
             .ok_or(AxError::BadAddress)?;
@@ -272,7 +280,7 @@ impl BackendOps for CowBackend {
             if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
                 assert_eq!(page_size, self.size);
                 pt.finish();
-                let frame_ref = FRAME_TABLE
+                let frame_ref = frame_table(frame)
                     .lock()
                     .get_frame_ref(frame)
                     .ok_or(AxError::BadAddress)?;

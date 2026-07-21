@@ -27,6 +27,11 @@ impl Ext4Disk {
 
 impl BlockDevice for Ext4Disk {
     fn read_blocks(&mut self, block_id: u64, buf: &mut [u8]) -> Ext4Result<usize> {
+        #[cfg(feature = "profile")]
+        let _profile = axsync::ProfileScope::new(
+            axsync::ProfileEvent::BlockRead,
+            self as *mut Self as usize,
+        );
         match self {
             Self::Runtime(dev) => dev.read_block(block_id, buf),
             Self::Driver(dev) => dev.read_block(block_id, buf),
@@ -36,6 +41,11 @@ impl BlockDevice for Ext4Disk {
     }
 
     fn write_blocks(&mut self, block_id: u64, buf: &[u8]) -> Ext4Result<usize> {
+        #[cfg(feature = "profile")]
+        let _profile = axsync::ProfileScope::new(
+            axsync::ProfileEvent::BlockWrite,
+            self as *mut Self as usize,
+        );
         match self {
             Self::Runtime(dev) => dev.write_block(block_id, buf),
             Self::Driver(dev) => dev.write_block(block_id, buf),

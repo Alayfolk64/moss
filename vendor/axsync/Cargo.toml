@@ -31,6 +31,8 @@ resolver = "2"
 [features]
 default = []
 multitask = ["axtask/multitask"]
+profile = ["profile-ext4-lock"]
+profile-ext4-lock = []
 
 [lib]
 name = "axsync"

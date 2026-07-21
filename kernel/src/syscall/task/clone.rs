@@ -14,7 +14,7 @@ use starry_vm::VmMutPtr;
 use crate::{
     file::{FD_TABLE, FileLike, PidFd, close_file_like},
     mm::copy_from_kernel,
-    task::{AsThread, ProcessData, Thread, add_task_to_table, new_user_task},
+    task::{AsThread, ProcessData, Thread, VforkCompletion, add_task_to_table, new_user_task},
 };
 
 const THREAD_GROUP_BACKPRESSURE_THRESHOLD: usize = 1024;
@@ -139,7 +139,7 @@ impl CloneArgs {
         self.validate()?;
 
         let Self {
-            mut flags,
+            flags,
             exit_signal,
             stack,
             tls,
@@ -148,10 +148,7 @@ impl CloneArgs {
             pidfd,
         } = self;
 
-        if flags.contains(CloneFlags::VFORK) {
-            debug!("do_clone: CLONE_VFORK slow path");
-            flags.remove(CloneFlags::VM);
-        }
+        let vfork_completion = flags.contains(CloneFlags::VFORK).then(VforkCompletion::new);
 
         debug!(
             "do_clone <= flags: {:?}, exit_signal: {}, stack: {:#x}, tls: {:#x}",
@@ -200,7 +197,7 @@ impl CloneArgs {
         let new_proc_data = if flags.contains(CloneFlags::THREAD) {
             new_task
                 .ctx_mut()
-                .set_page_table_root(old_proc_data.aspace.lock().page_table_root());
+                .set_page_table_root(old_proc_data.aspace().lock().page_table_root());
             old_proc_data.clone()
         } else {
             let proc = if flags.contains(CloneFlags::PARENT) {
@@ -211,9 +208,10 @@ impl CloneArgs {
             .fork(tid);
 
             let aspace = if flags.contains(CloneFlags::VM) {
-                old_proc_data.aspace.clone()
+                old_proc_data.aspace()
             } else {
-                let mut aspace = old_proc_data.aspace.lock();
+                let old_aspace = old_proc_data.aspace();
+                let mut aspace = old_aspace.lock();
                 let aspace = aspace.try_clone()?;
                 {
                     let mut child_aspace = aspace.lock();
@@ -297,6 +295,10 @@ impl CloneArgs {
             proc_data
         };
 
+        if let Some(completion) = &vfork_completion {
+            new_proc_data.set_vfork_completion(completion.clone());
+        }
+
         new_proc_data.proc.add_thread(tid);
 
         let thr = Thread::new(tid, new_proc_data.clone());
@@ -342,6 +344,10 @@ impl CloneArgs {
             && new_proc_data.proc.threads().len() > THREAD_GROUP_BACKPRESSURE_THRESHOLD
         {
             yield_now();
+        }
+
+        if let Some(completion) = vfork_completion {
+            completion.wait();
         }
 
         Ok(tid as _)
