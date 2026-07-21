@@ -1,0 +1,5 @@
+kernel=7.0.0-27-generic
+cpus=8
+start_uptime=2.30
+end_uptime=1420.68
+status=0

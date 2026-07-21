@@ -1,0 +1,1570 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="374" onload="init(evt)" viewBox="0 0 1800 374" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#e0e0ff" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="374.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Linux guest offcpu workload - setup</text>
+<text id="details" x="10.00" y="357" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="357" > </text>
+<g id="frames">
+<g >
+<title>schedule (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="149" width="3.8" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1761.16" y="159.5" ></text>
+</g>
+<g >
+<title>task:collect2 (754,215 microseconds, 1.89%)</title><rect x="866.8" y="277" width="33.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="869.76" y="287.5" >ta..</text>
+</g>
+<g >
+<title>schedule_timeout (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="133" width="0.5" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1544.22" y="143.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_futex (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="229" width="136.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="923.64" y="239.5" >__riscv_sys_futex</text>
+</g>
+<g >
+<title>schedule (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="133" width="170.4" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="664.87" y="143.5" >schedule</text>
+</g>
+<g >
+<title>schedule_hrtimeout_range_clock (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="165" width="3.8" height="15.0" fill="rgb(101,101,222)" rx="2" ry="2" />
+<text  x="1761.16" y="175.5" ></text>
+</g>
+<g >
+<title>-- (6,286 microseconds, 0.02%)</title><rect x="402.6" y="101" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="405.60" y="111.5" ></text>
+</g>
+<g >
+<title>do_page_fault (10,053 microseconds, 0.03%)</title><rect x="1196.3" y="245" width="0.5" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1199.33" y="255.5" ></text>
+</g>
+<g >
+<title>__futex_wait (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="181" width="296.9" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="1211.46" y="191.5" >__futex_wait</text>
+</g>
+<g >
+<title>do_futex (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="213" width="296.9" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1211.46" y="223.5" >do_futex</text>
+</g>
+<g >
+<title>anon_pipe_read (9,182 microseconds, 0.02%)</title><rect x="10.0" y="181" width="0.4" height="15.0" fill="rgb(112,112,232)" rx="2" ry="2" />
+<text  x="13.03" y="191.5" ></text>
+</g>
+<g >
+<title>task:tee (4,843,866 microseconds, 12.12%)</title><rect x="1542.4" y="277" width="215.7" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1545.38" y="287.5" >task:tee</text>
+</g>
+<g >
+<title>__schedule (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="149" width="391.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="13.44" y="159.5" >__schedule</text>
+</g>
+<g >
+<title>phase:setup (39,977,219 microseconds, 100.00%)</title><rect x="10.0" y="293" width="1780.0" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" >phase:setup</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="181" width="0.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1199.01" y="191.5" ></text>
+</g>
+<g >
+<title>do_futex (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="213" width="137.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1060.06" y="223.5" >do_futex</text>
+</g>
+<g >
+<title>__riscv_sys_futex (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="229" width="0.4" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1198.58" y="239.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (199,590 microseconds, 0.50%)</title><rect x="1199.4" y="229" width="8.8" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1202.35" y="239.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (17,842 microseconds, 0.04%)</title><rect x="1196.3" y="261" width="0.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1199.33" y="271.5" ></text>
+</g>
+<g >
+<title>do_fault (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="165" width="1.2" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1200.53" y="175.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="133" width="0.2" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1197.87" y="143.5" ></text>
+</g>
+<g >
+<title>task:tokio-runtime-w (717,514 microseconds, 1.79%)</title><rect x="1758.1" y="277" width="31.9" height="15.0" fill="rgb(120,120,238)" rx="2" ry="2" />
+<text  x="1761.05" y="287.5" >ta..</text>
+</g>
+<g >
+<title>do_read_fault (19,285 microseconds, 0.05%)</title><rect x="401.7" y="149" width="0.9" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="404.70" y="159.5" ></text>
+</g>
+<g >
+<title>io_schedule (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="85" width="0.2" height="15.0" fill="rgb(129,129,245)" rx="2" ry="2" />
+<text  x="1197.87" y="95.5" ></text>
+</g>
+<g >
+<title>__unix_dgram_recvmsg (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="165" width="0.5" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1544.22" y="175.5" ></text>
+</g>
+<g >
+<title>-- (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="101" width="170.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="664.87" y="111.5" >--</text>
+</g>
+<g >
+<title>-- (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="37" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1199.33" y="47.5" ></text>
+</g>
+<g >
+<title>task:opt 6cs685rsqnt (17,842 microseconds, 0.04%)</title><rect x="1196.3" y="277" width="0.8" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="1199.33" y="287.5" ></text>
+</g>
+<g >
+<title>do_futex (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="213" width="258.7" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="406.13" y="223.5" >do_futex</text>
+</g>
+<g >
+<title>-- (19,285 microseconds, 0.05%)</title><rect x="401.7" y="37" width="0.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="404.70" y="47.5" ></text>
+</g>
+<g >
+<title>task:cc (768,600 microseconds, 1.92%)</title><rect x="832.5" y="277" width="34.3" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="835.54" y="287.5" >ta..</text>
+</g>
+<g >
+<title>-- (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="133" width="215.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1545.38" y="143.5" >--</text>
+</g>
+<g >
+<title>vfs_read (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="197" width="215.6" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1545.38" y="207.5" >vfs_read</text>
+</g>
+<g >
+<title>do_trap_ecall_u (754,215 microseconds, 1.89%)</title><rect x="866.8" y="245" width="33.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="869.76" y="255.5" >do..</text>
+</g>
+<g >
+<title>__do_sys_wait4 (765,864 microseconds, 1.92%)</title><rect x="832.7" y="213" width="34.1" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="835.66" y="223.5" >__..</text>
+</g>
+<g >
+<title>__schedule (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="133" width="258.7" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="406.13" y="143.5" >__schedule</text>
+</g>
+<g >
+<title>do_trap_ecall_u (455,895 microseconds, 1.14%)</title><rect x="900.3" y="245" width="20.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="903.34" y="255.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (9,676,339 microseconds, 24.20%)</title><rect x="401.7" y="261" width="430.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="404.70" y="271.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>__irqentry_text_start (9,375 microseconds, 0.02%)</title><rect x="1194.4" y="261" width="0.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1197.45" y="271.5" ></text>
+</g>
+<g >
+<title>futex_do_wait (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="165" width="27.6" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1765.05" y="175.5" >f..</text>
+</g>
+<g >
+<title>schedule_hrtimeout_range (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="165" width="170.4" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="664.87" y="175.5" >schedule_hrtimeout_range</text>
+</g>
+<g >
+<title>__skb_wait_for_more_packets (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="149" width="0.5" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1544.22" y="159.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (5,705 microseconds, 0.01%)</title><rect x="1199.0" y="261" width="0.3" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1202.04" y="271.5" ></text>
+</g>
+<g >
+<title>__schedule (455,895 microseconds, 1.14%)</title><rect x="900.3" y="133" width="20.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="903.34" y="143.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="197" width="0.3" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1199.01" y="207.5" ></text>
+</g>
+<g >
+<title>folio_wait_bit_common (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="101" width="0.2" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="1197.87" y="111.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (8,797,193 microseconds, 22.01%)</title><rect x="10.0" y="261" width="391.7" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>schedule_preempt_disabled (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="165" width="0.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1201.73" y="175.5" ></text>
+</g>
+<g >
+<title>schedule_hrtimeout_range_clock (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="149" width="35.6" height="15.0" fill="rgb(101,101,222)" rx="2" ry="2" />
+<text  x="1508.58" y="159.5" >sch..</text>
+</g>
+<g >
+<title>__irqentry_text_start (754,215 microseconds, 1.89%)</title><rect x="866.8" y="261" width="33.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="869.76" y="271.5" >__..</text>
+</g>
+<g >
+<title>__handle_mm_fault (19,285 microseconds, 0.05%)</title><rect x="401.7" y="197" width="0.9" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="404.70" y="207.5" ></text>
+</g>
+<g >
+<title>ksys_read (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="213" width="215.6" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="1545.38" y="223.5" >ksys_read</text>
+</g>
+<g >
+<title>task:opt 5gwller9b1p (12,120 microseconds, 0.03%)</title><rect x="1194.9" y="277" width="0.5" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1197.87" y="287.5" ></text>
+</g>
+<g >
+<title>__futex_wait (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="181" width="258.7" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="406.13" y="191.5" >__futex_wait</text>
+</g>
+<g >
+<title>futex_do_wait (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="165" width="258.7" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="406.13" y="175.5" >futex_do_wait</text>
+</g>
+<g >
+<title>schedule (194,629 microseconds, 0.49%)</title><rect x="1199.6" y="69" width="8.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1202.57" y="79.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_futex (455,895 microseconds, 1.14%)</title><rect x="900.3" y="229" width="20.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="903.34" y="239.5" ></text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="213" width="0.3" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1199.81" y="223.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (7,789 microseconds, 0.02%)</title><rect x="1196.8" y="245" width="0.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1199.77" y="255.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (20,264 microseconds, 0.05%)</title><rect x="401.7" y="229" width="0.9" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="404.70" y="239.5" ></text>
+</g>
+<g >
+<title>schedule (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="149" width="136.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="923.64" y="159.5" >schedule</text>
+</g>
+<g >
+<title>handle_pte_fault (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="181" width="0.5" height="15.0" fill="rgb(94,94,217)" rx="2" ry="2" />
+<text  x="1199.33" y="191.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="197" width="0.2" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1197.87" y="207.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (6,873 microseconds, 0.02%)</title><rect x="1198.7" y="245" width="0.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1201.73" y="255.5" ></text>
+</g>
+<g >
+<title>do_poll.constprop.0 (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="197" width="170.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="664.87" y="207.5" >do_poll.constprop.0</text>
+</g>
+<g >
+<title>futex_wait (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="197" width="296.9" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1211.46" y="207.5" >futex_wait</text>
+</g>
+<g >
+<title>handle_mm_fault (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="213" width="0.5" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1199.33" y="223.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="133" width="1.2" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1200.53" y="143.5" ></text>
+</g>
+<g >
+<title>do_page_fault (199,590 microseconds, 0.50%)</title><rect x="1199.4" y="245" width="8.8" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1202.35" y="255.5" ></text>
+</g>
+<g >
+<title>__schedule (6,286 microseconds, 0.02%)</title><rect x="402.6" y="117" width="0.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="405.60" y="127.5" ></text>
+</g>
+<g >
+<title>__futex_wait (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="181" width="137.3" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="1060.06" y="191.5" >__futex_wait</text>
+</g>
+<g >
+<title>task:opt 80puj1xkd3s (33,899 microseconds, 0.08%)</title><rect x="1197.5" y="277" width="1.5" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1200.53" y="287.5" ></text>
+</g>
+<g >
+<title>-- (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="117" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1199.01" y="127.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (12,120 microseconds, 0.03%)</title><rect x="1194.9" y="261" width="0.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1197.87" y="271.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (6,698 microseconds, 0.02%)</title><rect x="1194.9" y="229" width="0.3" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1197.87" y="239.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_ppoll (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="229" width="35.6" height="15.0" fill="rgb(101,101,222)" rx="2" ry="2" />
+<text  x="1508.58" y="239.5" >__r..</text>
+</g>
+<g >
+<title>__irqentry_text_start (455,895 microseconds, 1.14%)</title><rect x="900.3" y="261" width="20.3" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="903.34" y="271.5" ></text>
+</g>
+<g >
+<title>do_fault (19,285 microseconds, 0.05%)</title><rect x="401.7" y="165" width="0.9" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="404.70" y="175.5" ></text>
+</g>
+<g >
+<title>do_wait (765,864 microseconds, 1.92%)</title><rect x="832.7" y="181" width="34.1" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="835.66" y="191.5" >do..</text>
+</g>
+<g >
+<title>filemap_fault (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="117" width="0.2" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1197.87" y="127.5" ></text>
+</g>
+<g >
+<title>schedule_hrtimeout_range (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="165" width="35.6" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1508.58" y="175.5" >sch..</text>
+</g>
+<g >
+<title>__riscv_sys_wait4 (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="229" width="391.3" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="13.44" y="239.5" >__riscv_sys_wait4</text>
+</g>
+<g >
+<title>kernel_wait4 (765,864 microseconds, 1.92%)</title><rect x="832.7" y="197" width="34.1" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="835.66" y="207.5" >ke..</text>
+</g>
+<g >
+<title>-- (751,580 microseconds, 1.88%)</title><rect x="866.9" y="133" width="33.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="869.88" y="143.5" >--</text>
+</g>
+<g >
+<title>anon_pipe_read (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="181" width="215.6" height="15.0" fill="rgb(112,112,232)" rx="2" ry="2" />
+<text  x="1545.38" y="191.5" >anon_pipe_read</text>
+</g>
+<g >
+<title>do_wait (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="181" width="391.3" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.44" y="191.5" >do_wait</text>
+</g>
+<g >
+<title>-- (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="101" width="35.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1508.58" y="111.5" >--</text>
+</g>
+<g >
+<title>schedule (9,182 microseconds, 0.02%)</title><rect x="10.0" y="165" width="0.4" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="13.03" y="175.5" ></text>
+</g>
+<g >
+<title>do_futex (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="213" width="27.6" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1765.05" y="223.5" >d..</text>
+</g>
+<g >
+<title>handle_pte_fault (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="181" width="1.2" height="15.0" fill="rgb(94,94,217)" rx="2" ry="2" />
+<text  x="1200.53" y="191.5" ></text>
+</g>
+<g >
+<title>__schedule (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="149" width="215.6" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1545.38" y="159.5" >__schedule</text>
+</g>
+<g >
+<title>-- (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="117" width="296.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1211.46" y="127.5" >--</text>
+</g>
+<g >
+<title>futex_wait (455,895 microseconds, 1.14%)</title><rect x="900.3" y="197" width="20.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="903.34" y="207.5" ></text>
+</g>
+<g >
+<title>folio_wait_bit_common (194,629 microseconds, 0.49%)</title><rect x="1199.6" y="101" width="8.6" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="1202.57" y="111.5" ></text>
+</g>
+<g >
+<title>kernel_clone (6,286 microseconds, 0.02%)</title><rect x="402.6" y="197" width="0.3" height="15.0" fill="rgb(124,124,241)" rx="2" ry="2" />
+<text  x="405.60" y="207.5" ></text>
+</g>
+<g >
+<title>futex_wait (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="197" width="137.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1060.06" y="207.5" >futex_wait</text>
+</g>
+<g >
+<title>do_trap_ecall_u (8,797,193 microseconds, 22.01%)</title><rect x="10.0" y="245" width="391.7" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="213" width="0.3" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1201.73" y="223.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="197" width="0.3" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1199.81" y="207.5" ></text>
+</g>
+<g >
+<title>futex_wait (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="197" width="136.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="923.64" y="207.5" >futex_wait</text>
+</g>
+<g >
+<title>handle_pte_fault (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="181" width="0.2" height="15.0" fill="rgb(94,94,217)" rx="2" ry="2" />
+<text  x="1197.87" y="191.5" ></text>
+</g>
+<g >
+<title>-- (194,629 microseconds, 0.49%)</title><rect x="1199.6" y="37" width="8.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1202.57" y="47.5" ></text>
+</g>
+<g >
+<title>do_fault (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="165" width="0.2" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1197.87" y="175.5" ></text>
+</g>
+<g >
+<title>-- (765,864 microseconds, 1.92%)</title><rect x="832.7" y="133" width="34.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="835.66" y="143.5" >--</text>
+</g>
+<g >
+<title>task:rustfmt (11,143 microseconds, 0.03%)</title><rect x="1541.9" y="277" width="0.5" height="15.0" fill="rgb(112,112,231)" rx="2" ry="2" />
+<text  x="1544.88" y="287.5" ></text>
+</g>
+<g >
+<title>poll_schedule_timeout.constprop.0 (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="181" width="35.6" height="15.0" fill="rgb(99,99,220)" rx="2" ry="2" />
+<text  x="1508.58" y="191.5" >pol..</text>
+</g>
+<g >
+<title>__schedule (19,285 microseconds, 0.05%)</title><rect x="401.7" y="53" width="0.9" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="404.70" y="63.5" ></text>
+</g>
+<g >
+<title>schedule_hrtimeout_range (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="181" width="3.8" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1761.16" y="191.5" ></text>
+</g>
+<g >
+<title>schedule_timeout (6,286 microseconds, 0.02%)</title><rect x="402.6" y="149" width="0.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="405.60" y="159.5" ></text>
+</g>
+<g >
+<title>task:rustc (7,692,929 microseconds, 19.24%)</title><rect x="1199.4" y="277" width="342.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1202.35" y="287.5" >task:rustc</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="213" width="0.3" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1199.01" y="223.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_wait4 (751,580 microseconds, 1.88%)</title><rect x="866.9" y="229" width="33.4" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="869.88" y="239.5" >__..</text>
+</g>
+<g >
+<title>__futex_wait (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="181" width="136.5" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="923.64" y="191.5" >__futex_wait</text>
+</g>
+<g >
+<title>-- (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="37" width="1.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1200.53" y="47.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_epoll_pwait (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="229" width="3.8" height="15.0" fill="rgb(114,114,233)" rx="2" ry="2" />
+<text  x="1761.16" y="239.5" ></text>
+</g>
+<g >
+<title>futex_wait (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="197" width="0.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1198.58" y="207.5" ></text>
+</g>
+<g >
+<title>do_page_fault (27,026 microseconds, 0.07%)</title><rect x="1197.5" y="245" width="1.2" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1200.53" y="255.5" ></text>
+</g>
+<g >
+<title>unix_seqpacket_recvmsg (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="181" width="0.5" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="1544.22" y="191.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (16,663 microseconds, 0.04%)</title><rect x="1195.6" y="245" width="0.7" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1198.58" y="255.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_wait4 (765,864 microseconds, 1.92%)</title><rect x="832.7" y="229" width="34.1" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="835.66" y="239.5" >__..</text>
+</g>
+<g >
+<title>do_fault (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="165" width="0.5" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1199.33" y="175.5" ></text>
+</g>
+<g >
+<title>io_schedule (19,285 microseconds, 0.05%)</title><rect x="401.7" y="85" width="0.9" height="15.0" fill="rgb(129,129,245)" rx="2" ry="2" />
+<text  x="404.70" y="95.5" ></text>
+</g>
+<g >
+<title>__schedule (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="117" width="35.6" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1508.58" y="127.5" >__s..</text>
+</g>
+<g >
+<title>__futex_wait (455,895 microseconds, 1.14%)</title><rect x="900.3" y="181" width="20.3" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="903.34" y="191.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="197" width="1.2" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1200.53" y="207.5" ></text>
+</g>
+<g >
+<title>-- (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="117" width="137.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1060.06" y="127.5" >--</text>
+</g>
+<g >
+<title>__schedule (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="101" width="0.5" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1544.22" y="111.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="229" width="0.3" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1201.73" y="239.5" ></text>
+</g>
+<g >
+<title>do_read_fault (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="149" width="0.5" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="1199.33" y="159.5" ></text>
+</g>
+<g >
+<title>schedule_preempt_disabled (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="165" width="0.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1199.81" y="175.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (27,026 microseconds, 0.07%)</title><rect x="1197.5" y="229" width="1.2" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1200.53" y="239.5" ></text>
+</g>
+<g >
+<title>schedule (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="165" width="391.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="13.44" y="175.5" >schedule</text>
+</g>
+<g >
+<title>__schedule (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="133" width="0.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1198.58" y="143.5" ></text>
+</g>
+<g >
+<title>ep_poll (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="197" width="3.8" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1761.16" y="207.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_futex (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="229" width="258.7" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="406.13" y="239.5" >__riscv_sys_futex</text>
+</g>
+<g >
+<title>__schedule (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="133" width="0.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1201.73" y="143.5" ></text>
+</g>
+<g >
+<title>futex_do_wait (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="165" width="296.9" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1211.46" y="175.5" >futex_do_wait</text>
+</g>
+<g >
+<title>futex_do_wait (455,895 microseconds, 1.14%)</title><rect x="900.3" y="165" width="20.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="903.34" y="175.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="213" width="1.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1200.53" y="223.5" ></text>
+</g>
+<g >
+<title>__futex_wait (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="181" width="0.4" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="1198.58" y="191.5" ></text>
+</g>
+<g >
+<title>schedule (455,895 microseconds, 1.14%)</title><rect x="900.3" y="149" width="20.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="903.34" y="159.5" ></text>
+</g>
+<g >
+<title>-- (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="133" width="391.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="13.44" y="143.5" >--</text>
+</g>
+<g >
+<title>do_futex (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="213" width="136.5" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="923.64" y="223.5" >do_futex</text>
+</g>
+<g >
+<title>task:opt 6ln53uo5eie (9,139 microseconds, 0.02%)</title><rect x="1197.1" y="277" width="0.4" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1200.12" y="287.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="181" width="0.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1199.81" y="191.5" ></text>
+</g>
+<g >
+<title>do_sys_poll (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="213" width="35.6" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1508.58" y="223.5" >do_..</text>
+</g>
+<g >
+<title>__schedule (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="133" width="3.8" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1761.16" y="143.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (8,750 microseconds, 0.02%)</title><rect x="1542.0" y="245" width="0.4" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1544.99" y="255.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (199,590 microseconds, 0.50%)</title><rect x="1199.4" y="197" width="8.8" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1202.35" y="207.5" ></text>
+</g>
+<g >
+<title>poll_schedule_timeout.constprop.0 (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="181" width="170.4" height="15.0" fill="rgb(99,99,220)" rx="2" ry="2" />
+<text  x="664.87" y="191.5" >poll_schedule_timeout...</text>
+</g>
+<g >
+<title>task:opt 9ci5trlrapv (5,705 microseconds, 0.01%)</title><rect x="1199.0" y="277" width="0.3" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1202.04" y="287.5" ></text>
+</g>
+<g >
+<title>__handle_mm_fault (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="197" width="0.5" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1199.33" y="207.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="133" width="0.5" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1199.33" y="143.5" ></text>
+</g>
+<g >
+<title>do_page_fault (6,698 microseconds, 0.02%)</title><rect x="1194.9" y="245" width="0.3" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1197.87" y="255.5" ></text>
+</g>
+<g >
+<title>task:ld (9,375 microseconds, 0.02%)</title><rect x="1194.4" y="277" width="0.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1197.45" y="287.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="261" width="137.3" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1060.06" y="271.5" >__irqentry_text_s..</text>
+</g>
+<g >
+<title>-- (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="117" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1198.58" y="127.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_futex (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="229" width="27.6" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1765.05" y="239.5" >_..</text>
+</g>
+<g >
+<title>__irqentry_text_start (11,143 microseconds, 0.03%)</title><rect x="1541.9" y="261" width="0.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1544.88" y="271.5" ></text>
+</g>
+<g >
+<title>__schedule (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="53" width="0.5" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1199.33" y="63.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_ppoll (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="229" width="170.4" height="15.0" fill="rgb(101,101,222)" rx="2" ry="2" />
+<text  x="664.87" y="239.5" >__riscv_sys_ppoll</text>
+</g>
+<g >
+<title>schedule (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="149" width="0.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1201.73" y="159.5" ></text>
+</g>
+<g >
+<title>schedule (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="69" width="1.2" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1200.53" y="79.5" ></text>
+</g>
+<g >
+<title>__futex_wait (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="181" width="27.6" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="1765.05" y="191.5" >_..</text>
+</g>
+<g >
+<title>do_futex (455,895 microseconds, 1.14%)</title><rect x="900.3" y="213" width="20.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="903.34" y="223.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="261" width="136.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="923.64" y="271.5" >__irqentry_text_s..</text>
+</g>
+<g >
+<title>linux-offcpu-workload (39,977,219 microseconds, 100.00%)</title><rect x="10.0" y="309" width="1780.0" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" >linux-offcpu-workload</text>
+</g>
+<g >
+<title>__schedule (751,580 microseconds, 1.88%)</title><rect x="866.9" y="149" width="33.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="869.88" y="159.5" >__..</text>
+</g>
+<g >
+<title>task:cargo (9,676,339 microseconds, 24.20%)</title><rect x="401.7" y="277" width="430.8" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="404.70" y="287.5" >task:cargo</text>
+</g>
+<g >
+<title>filemap_fault (194,741 microseconds, 0.49%)</title><rect x="1199.6" y="117" width="8.6" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1202.56" y="127.5" ></text>
+</g>
+<g >
+<title>schedule (751,580 microseconds, 1.88%)</title><rect x="866.9" y="165" width="33.4" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="869.88" y="175.5" >sc..</text>
+</g>
+<g >
+<title>do_wait (751,580 microseconds, 1.88%)</title><rect x="866.9" y="181" width="33.4" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="869.88" y="191.5" >do..</text>
+</g>
+<g >
+<title>__irqentry_text_start (7,692,929 microseconds, 19.24%)</title><rect x="1199.4" y="261" width="342.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1202.35" y="271.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>__irqentry_text_start (20,642 microseconds, 0.05%)</title><rect x="1195.4" y="261" width="0.9" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1198.41" y="271.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_read (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="229" width="215.6" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1545.38" y="239.5" >__riscv_sys_read</text>
+</g>
+<g >
+<title>do_trap_ecall_u (7,368 microseconds, 0.02%)</title><rect x="1194.5" y="245" width="0.4" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1197.54" y="255.5" ></text>
+</g>
+<g >
+<title>do_read_fault (194,741 microseconds, 0.49%)</title><rect x="1199.6" y="149" width="8.6" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="1202.56" y="159.5" ></text>
+</g>
+<g >
+<title>futex_do_wait (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="165" width="137.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1060.06" y="175.5" >futex_do_wait</text>
+</g>
+<g >
+<title>__riscv_sys_recvfrom (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="229" width="0.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1544.22" y="239.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (10,053 microseconds, 0.03%)</title><rect x="1196.3" y="229" width="0.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1199.33" y="239.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="245" width="136.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="923.64" y="255.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>__do_sys_wait4 (751,580 microseconds, 1.88%)</title><rect x="866.9" y="213" width="33.4" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="869.88" y="223.5" >__..</text>
+</g>
+<g >
+<title>schedule (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="149" width="0.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1199.01" y="159.5" ></text>
+</g>
+<g >
+<title>sock_recvmsg (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="197" width="0.5" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="1544.22" y="207.5" ></text>
+</g>
+<g >
+<title>-- (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="117" width="3.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1761.16" y="127.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (199,590 microseconds, 0.50%)</title><rect x="1199.4" y="181" width="8.8" height="15.0" fill="rgb(94,94,217)" rx="2" ry="2" />
+<text  x="1202.35" y="191.5" ></text>
+</g>
+<g >
+<title>-- (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="117" width="136.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="923.64" y="127.5" >--</text>
+</g>
+<g >
+<title>do_futex (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="213" width="0.4" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1198.58" y="223.5" ></text>
+</g>
+<g >
+<title>schedule (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="133" width="35.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1508.58" y="143.5" >sch..</text>
+</g>
+<g >
+<title>schedule (19,285 microseconds, 0.05%)</title><rect x="401.7" y="69" width="0.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="404.70" y="79.5" ></text>
+</g>
+<g >
+<title>__schedule (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="133" width="296.9" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1211.46" y="143.5" >__schedule</text>
+</g>
+<g >
+<title>__schedule (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="133" width="137.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1060.06" y="143.5" >__schedule</text>
+</g>
+<g >
+<title>__schedule (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="133" width="136.5" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="923.64" y="143.5" >__schedule</text>
+</g>
+<g >
+<title>folio_wait_bit_common (19,285 microseconds, 0.05%)</title><rect x="401.7" y="101" width="0.9" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="404.70" y="111.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (199,590 microseconds, 0.50%)</title><rect x="1199.4" y="213" width="8.8" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1202.35" y="223.5" ></text>
+</g>
+<g >
+<title>task:ctrl-c (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="277" width="136.5" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="923.64" y="287.5" >task:ctrl-c</text>
+</g>
+<g >
+<title>__schedule (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="133" width="27.6" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1765.05" y="143.5" >_..</text>
+</g>
+<g >
+<title>__schedule (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="117" width="170.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="664.87" y="127.5" >__schedule</text>
+</g>
+<g >
+<title>schedule (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="149" width="258.7" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="406.13" y="159.5" >schedule</text>
+</g>
+<g >
+<title>-- (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="117" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1201.73" y="127.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (4,843,866 microseconds, 12.12%)</title><rect x="1542.4" y="261" width="215.7" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1545.38" y="271.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>do_read_fault (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="149" width="0.2" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="1197.87" y="159.5" ></text>
+</g>
+<g >
+<title>schedule (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="149" width="0.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1199.81" y="159.5" ></text>
+</g>
+<g >
+<title>all (39,977,219 microseconds, 100%)</title><rect x="10.0" y="325" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.00" y="335.5" ></text>
+</g>
+<g >
+<title>do_sys_poll (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="213" width="170.4" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="664.87" y="223.5" >do_sys_poll</text>
+</g>
+<g >
+<title>io_schedule (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="85" width="1.2" height="15.0" fill="rgb(129,129,245)" rx="2" ry="2" />
+<text  x="1200.53" y="95.5" ></text>
+</g>
+<g >
+<title>ksys_read (9,182 microseconds, 0.02%)</title><rect x="10.0" y="213" width="0.4" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="13.03" y="223.5" ></text>
+</g>
+<g >
+<title>-- (9,182 microseconds, 0.02%)</title><rect x="10.0" y="133" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="13.03" y="143.5" ></text>
+</g>
+<g >
+<title>__schedule (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="53" width="1.2" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1200.53" y="63.5" ></text>
+</g>
+<g >
+<title>-- (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="85" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1544.22" y="95.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="213" width="0.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1197.87" y="223.5" ></text>
+</g>
+<g >
+<title>-- (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="117" width="27.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1765.05" y="127.5" >--</text>
+</g>
+<g >
+<title>do_page_fault (20,264 microseconds, 0.05%)</title><rect x="401.7" y="245" width="0.9" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="404.70" y="255.5" ></text>
+</g>
+<g >
+<title>__wait_for_common (6,286 microseconds, 0.02%)</title><rect x="402.6" y="165" width="0.3" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="405.60" y="175.5" ></text>
+</g>
+<g >
+<title>__do_sys_clone3 (6,286 microseconds, 0.02%)</title><rect x="402.6" y="213" width="0.3" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="405.60" y="223.5" ></text>
+</g>
+<g >
+<title>do_poll.constprop.0 (799,647 microseconds, 2.00%)</title><rect x="1505.6" y="197" width="35.6" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1508.58" y="207.5" >do_..</text>
+</g>
+<g >
+<title>do_epoll_wait (87,332 microseconds, 0.22%)</title><rect x="1758.2" y="213" width="3.8" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="1761.16" y="223.5" ></text>
+</g>
+<g >
+<title>__sys_recvfrom (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="213" width="0.5" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="1544.22" y="223.5" ></text>
+</g>
+<g >
+<title>filemap_fault (19,285 microseconds, 0.05%)</title><rect x="401.7" y="117" width="0.9" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="404.70" y="127.5" ></text>
+</g>
+<g >
+<title>schedule (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="149" width="137.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1060.06" y="159.5" >schedule</text>
+</g>
+<g >
+<title>do_read_fault (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="149" width="1.2" height="15.0" fill="rgb(101,101,223)" rx="2" ry="2" />
+<text  x="1200.53" y="159.5" ></text>
+</g>
+<g >
+<title>__schedule (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="133" width="0.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1199.81" y="143.5" ></text>
+</g>
+<g >
+<title>schedule (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="69" width="0.2" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1197.87" y="79.5" ></text>
+</g>
+<g >
+<title>handle_pte_fault (19,285 microseconds, 0.05%)</title><rect x="401.7" y="181" width="0.9" height="15.0" fill="rgb(94,94,217)" rx="2" ry="2" />
+<text  x="404.70" y="191.5" ></text>
+</g>
+<g >
+<title>task:futures-timer (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="277" width="137.3" height="15.0" fill="rgb(93,93,215)" rx="2" ry="2" />
+<text  x="1060.06" y="287.5" >task:futures-timer</text>
+</g>
+<g >
+<title>__irqentry_text_start (33,899 microseconds, 0.08%)</title><rect x="1197.5" y="261" width="1.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1200.53" y="271.5" ></text>
+</g>
+<g >
+<title>io_schedule (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="85" width="0.5" height="15.0" fill="rgb(129,129,245)" rx="2" ry="2" />
+<text  x="1199.33" y="95.5" ></text>
+</g>
+<g >
+<title>__schedule (765,864 microseconds, 1.92%)</title><rect x="832.7" y="149" width="34.1" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="835.66" y="159.5" >__..</text>
+</g>
+<g >
+<title>folio_wait_bit_common (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="101" width="0.5" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="1199.33" y="111.5" ></text>
+</g>
+<g >
+<title>futex_do_wait (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="165" width="0.4" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1198.58" y="175.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (4,843,866 microseconds, 12.12%)</title><rect x="1542.4" y="245" width="215.7" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1545.38" y="255.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>futex_do_wait (3,063,800 microseconds, 7.66%)</title><rect x="920.6" y="165" width="136.5" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="923.64" y="175.5" >futex_do_wait</text>
+</g>
+<g >
+<title>schedule (10,525 microseconds, 0.03%)</title><rect x="1541.2" y="117" width="0.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1544.22" y="127.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (194,741 microseconds, 0.49%)</title><rect x="1199.6" y="133" width="8.6" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1202.56" y="143.5" ></text>
+</g>
+<g >
+<title>-- (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="37" width="0.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1197.87" y="47.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (715,112 microseconds, 1.79%)</title><rect x="1758.2" y="245" width="31.8" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1761.16" y="255.5" >do..</text>
+</g>
+<g >
+<title>__riscv_sys_read (9,182 microseconds, 0.02%)</title><rect x="10.0" y="229" width="0.4" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="13.03" y="239.5" ></text>
+</g>
+<g >
+<title>schedule (4,842,661 microseconds, 12.11%)</title><rect x="1542.4" y="165" width="215.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1545.38" y="175.5" >schedule</text>
+</g>
+<g >
+<title>kernel_wait4 (751,580 microseconds, 1.88%)</title><rect x="866.9" y="197" width="33.4" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="869.88" y="207.5" >ke..</text>
+</g>
+<g >
+<title>__irqentry_text_start (9,139 microseconds, 0.02%)</title><rect x="1197.1" y="261" width="0.4" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1200.12" y="271.5" ></text>
+</g>
+<g >
+<title>folio_wait_bit_common (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="101" width="1.2" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="1200.53" y="111.5" ></text>
+</g>
+<g >
+<title>io_schedule (194,629 microseconds, 0.49%)</title><rect x="1199.6" y="85" width="8.6" height="15.0" fill="rgb(129,129,245)" rx="2" ry="2" />
+<text  x="1202.57" y="95.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="229" width="0.3" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1199.01" y="239.5" ></text>
+</g>
+<g >
+<title>filemap_fault (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="117" width="0.5" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1199.33" y="127.5" ></text>
+</g>
+<g >
+<title>__schedule (194,629 microseconds, 0.49%)</title><rect x="1199.6" y="53" width="8.6" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1202.57" y="63.5" ></text>
+</g>
+<g >
+<title>__schedule (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="133" width="0.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1199.01" y="143.5" ></text>
+</g>
+<g >
+<title>-- (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="117" width="258.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="406.13" y="127.5" >--</text>
+</g>
+<g >
+<title>__irqentry_text_start (717,514 microseconds, 1.79%)</title><rect x="1758.1" y="261" width="31.9" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1761.05" y="271.5" >__..</text>
+</g>
+<g >
+<title>do_trap_ecall_u (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="245" width="137.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1060.06" y="255.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>__riscv_sys_futex (3,085,643 microseconds, 7.72%)</title><rect x="1057.1" y="229" width="137.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1060.06" y="239.5" >__riscv_sys_futex</text>
+</g>
+<g >
+<title>futex_wait (5,810,285 microseconds, 14.53%)</title><rect x="403.1" y="197" width="258.7" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="406.13" y="207.5" >futex_wait</text>
+</g>
+<g >
+<title>kernel_wait4 (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="197" width="391.3" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="13.44" y="207.5" >kernel_wait4</text>
+</g>
+<g >
+<title>futex_wait (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="197" width="27.6" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1765.05" y="207.5" >f..</text>
+</g>
+<g >
+<title>do_trap_ecall_u (9,656,075 microseconds, 24.15%)</title><rect x="402.6" y="245" width="429.9" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="405.60" y="255.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>do_trap_ecall_u (7,493,339 microseconds, 18.74%)</title><rect x="1208.2" y="245" width="333.7" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1211.24" y="255.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>schedule (618,964 microseconds, 1.55%)</title><rect x="1762.0" y="149" width="27.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1765.05" y="159.5" >s..</text>
+</g>
+<g >
+<title>-- (455,895 microseconds, 1.14%)</title><rect x="900.3" y="117" width="20.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="903.34" y="127.5" ></text>
+</g>
+<g >
+<title>schedule_hrtimeout_range_clock (3,827,953 microseconds, 9.58%)</title><rect x="661.9" y="149" width="170.4" height="15.0" fill="rgb(101,101,222)" rx="2" ry="2" />
+<text  x="664.87" y="159.5" >schedule_hrtimeout_ran..</text>
+</g>
+<g >
+<title>__irqentry_text_start (768,600 microseconds, 1.92%)</title><rect x="832.5" y="261" width="34.3" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="835.54" y="271.5" >__..</text>
+</g>
+<g >
+<title>__schedule (6,262 microseconds, 0.02%)</title><rect x="1194.9" y="53" width="0.2" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1197.87" y="63.5" ></text>
+</g>
+<g >
+<title>-- (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="117" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1199.81" y="127.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (768,600 microseconds, 1.92%)</title><rect x="832.5" y="245" width="34.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="835.54" y="255.5" >do..</text>
+</g>
+<g >
+<title>__do_sys_wait4 (8,786,781 microseconds, 21.98%)</title><rect x="10.4" y="213" width="391.3" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="13.44" y="223.5" >__do_sys_wait4</text>
+</g>
+<g >
+<title>arch_rethook_trampoline (19,285 microseconds, 0.05%)</title><rect x="401.7" y="133" width="0.9" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="404.70" y="143.5" ></text>
+</g>
+<g >
+<title>vfs_read (9,182 microseconds, 0.02%)</title><rect x="10.0" y="197" width="0.4" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="13.03" y="207.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_futex (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="229" width="296.9" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1211.46" y="239.5" >__riscv_sys_futex</text>
+</g>
+<g >
+<title>__riscv_sys_clone3 (6,286 microseconds, 0.02%)</title><rect x="402.6" y="229" width="0.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="405.60" y="239.5" ></text>
+</g>
+<g >
+<title>schedule_preempt_disabled (6,580 microseconds, 0.02%)</title><rect x="1196.0" y="165" width="0.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1199.01" y="175.5" ></text>
+</g>
+<g >
+<title>task:opt 5voqiivwtva (20,642 microseconds, 0.05%)</title><rect x="1195.4" y="277" width="0.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1198.41" y="287.5" ></text>
+</g>
+<g >
+<title>do_fault (199,590 microseconds, 0.50%)</title><rect x="1199.4" y="165" width="8.8" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1202.35" y="175.5" ></text>
+</g>
+<g >
+<title>filemap_fault (26,952 microseconds, 0.07%)</title><rect x="1197.5" y="117" width="1.2" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1200.53" y="127.5" ></text>
+</g>
+<g >
+<title>schedule (6,286 microseconds, 0.02%)</title><rect x="402.6" y="133" width="0.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="405.60" y="143.5" ></text>
+</g>
+<g >
+<title>schedule (9,066 microseconds, 0.02%)</title><rect x="1195.6" y="149" width="0.4" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1198.58" y="159.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="181" width="0.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1201.73" y="191.5" ></text>
+</g>
+<g >
+<title>schedule (9,843 microseconds, 0.02%)</title><rect x="1196.3" y="69" width="0.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1199.33" y="79.5" ></text>
+</g>
+<g >
+<title>task:coordinator (455,895 microseconds, 1.14%)</title><rect x="900.3" y="277" width="20.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="903.34" y="287.5" ></text>
+</g>
+<g >
+<title>arch_rethook_trampoline (6,794 microseconds, 0.02%)</title><rect x="1198.7" y="197" width="0.3" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="1201.73" y="207.5" ></text>
+</g>
+<g >
+<title>task:bash (8,797,193 microseconds, 22.01%)</title><rect x="10.0" y="277" width="391.7" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" >task:bash</text>
+</g>
+<g >
+<title>wait_for_completion_state (6,286 microseconds, 0.02%)</title><rect x="402.6" y="181" width="0.3" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="405.60" y="191.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (6,888 microseconds, 0.02%)</title><rect x="1196.8" y="229" width="0.3" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1199.81" y="239.5" ></text>
+</g>
+<g >
+<title>schedule (765,864 microseconds, 1.92%)</title><rect x="832.7" y="165" width="34.1" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="835.66" y="175.5" >sc..</text>
+</g>
+<g >
+<title>__schedule (9,182 microseconds, 0.02%)</title><rect x="10.0" y="149" width="0.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="13.03" y="159.5" ></text>
+</g>
+<g >
+<title>handle_mm_fault (19,285 microseconds, 0.05%)</title><rect x="401.7" y="213" width="0.9" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="404.70" y="223.5" ></text>
+</g>
+<g >
+<title>schedule (6,669,062 microseconds, 16.68%)</title><rect x="1208.5" y="149" width="296.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1211.46" y="159.5" >schedule</text>
+</g>
+</g>
+</svg>

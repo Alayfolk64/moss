@@ -1,0 +1,5 @@
+# Local captures and reproducible intermediate files.
+*.raw
+*.log
+*.folded
+qemu-time.txt

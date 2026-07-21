@@ -8,8 +8,10 @@ benchmark=${1:-cagent}
 case "$benchmark" in
     cagent) benchmark_script=scripts/linux_rv_benchmark.sh ;;
     buildstorm) benchmark_script=scripts/linux_rv_buildstorm.sh ;;
+    profile-probe) benchmark_script=scripts/linux_rv_profile_probe.sh ;;
+    profile) benchmark_script=scripts/linux_rv_profile_buildstorm.sh ;;
     *)
-        echo "usage: $0 [cagent|buildstorm]" >&2
+        echo "usage: $0 [cagent|buildstorm|profile-probe|profile]" >&2
         exit 2
         ;;
 esac
@@ -44,6 +46,11 @@ zstd -dc "$module_root/fs/9p/9p.ko.zst" >"$build_dir/modules/9p.ko"
 
 cp "$benchmark_script" "$log_dir/benchmark.sh"
 chmod +x "$log_dir/benchmark.sh"
+
+if [[ "$benchmark" == profile* ]]; then
+    cp -a tmp/linux-rv-apt/debs "$log_dir/"
+    cp scripts/linux_rv_profile.bt "$log_dir/"
+fi
 
 (
     cd "$build_dir"

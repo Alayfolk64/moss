@@ -1,0 +1,1266 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="294" onload="init(evt)" viewBox="0 0 1800 294" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#e0e0ff" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="294.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Linux guest offcpu lock - setup</text>
+<text id="details" x="10.00" y="277" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="277" > </text>
+<g id="frames">
+<g >
+<title>__vm_munmap (895 microseconds, 1.26%)</title><rect x="254.7" y="133" width="22.5" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="257.70" y="143.5" >_..</text>
+</g>
+<g >
+<title>do_page_fault (535 microseconds, 0.75%)</title><rect x="110.4" y="165" width="13.4" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="113.37" y="175.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (3,668 microseconds, 5.17%)</title><rect x="739.6" y="165" width="92.0" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="742.57" y="175.5" >do_trap_ec..</text>
+</g>
+<g >
+<title>get_signal (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="117" width="57.0" height="15.0" fill="rgb(87,87,211)" rx="2" ry="2" />
+<text  x="1736.03" y="127.5" >get_si..</text>
+</g>
+<g >
+<title>do_trap_ecall_u (8,339 microseconds, 11.75%)</title><rect x="528.6" y="165" width="209.2" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="531.63" y="175.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (589 microseconds, 0.83%)</title><rect x="816.8" y="69" width="14.8" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="819.81" y="79.5" ></text>
+</g>
+<g >
+<title>-- (424 microseconds, 0.60%)</title><rect x="518.0" y="101" width="10.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="520.99" y="111.5" ></text>
+</g>
+<g >
+<title>-- (158 microseconds, 0.22%)</title><rect x="1254.4" y="101" width="3.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1257.36" y="111.5" ></text>
+</g>
+<g >
+<title>-- (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="37" width="57.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1736.03" y="47.5" >--</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (7,916 microseconds, 11.16%)</title><rect x="298.7" y="117" width="198.5" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="301.66" y="127.5" >rwsem_down_write_slowpath</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (34 microseconds, 0.05%)</title><rect x="835.9" y="101" width="0.9" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="838.93" y="111.5" ></text>
+</g>
+<g >
+<title>-- (8,075 microseconds, 11.38%)</title><rect x="535.3" y="101" width="202.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="538.25" y="111.5" >--</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (5,527 microseconds, 7.79%)</title><rect x="1498.1" y="117" width="138.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1501.08" y="127.5" >rwsem_down_write_..</text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (1,695 microseconds, 2.39%)</title><rect x="10.0" y="117" width="42.5" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="13.00" y="127.5" >rwse..</text>
+</g>
+<g >
+<title>do_trap_ecall_u (62 microseconds, 0.09%)</title><rect x="108.8" y="165" width="1.6" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="111.82" y="175.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (3,806 microseconds, 5.36%)</title><rect x="1032.2" y="181" width="95.5" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1035.24" y="191.5" >__irqentry_..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (4,726 microseconds, 6.66%)</title><rect x="136.1" y="117" width="118.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="139.14" y="127.5" >rwsem_down_wri..</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (424 microseconds, 0.60%)</title><rect x="518.0" y="133" width="10.6" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="520.99" y="143.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (4,298 microseconds, 6.06%)</title><rect x="1127.7" y="165" width="107.8" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1130.72" y="175.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (6,461 microseconds, 9.11%)</title><rect x="1336.0" y="133" width="162.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1338.99" y="143.5" >ksys_mmap_pgoff</text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (1,065 microseconds, 1.50%)</title><rect x="1056.0" y="149" width="26.7" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1059.02" y="159.5" >_..</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (69 microseconds, 0.10%)</title><rect x="737.8" y="133" width="1.8" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="740.84" y="143.5" ></text>
+</g>
+<g >
+<title>task:opt 80puj1xkd3s (7,998 microseconds, 11.27%)</title><rect x="831.6" y="197" width="200.6" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="834.59" y="207.5" >task:opt 80puj1xkd3s</text>
+</g>
+<g >
+<title>-- (589 microseconds, 0.83%)</title><rect x="816.8" y="53" width="14.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="819.81" y="63.5" ></text>
+</g>
+<g >
+<title>-- (3,898 microseconds, 5.49%)</title><rect x="1137.8" y="101" width="97.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1140.75" y="111.5" >--</text>
+</g>
+<g >
+<title>task:opt 5gwller9b1p (6,648 microseconds, 9.37%)</title><rect x="110.4" y="197" width="166.8" height="15.0" fill="rgb(110,110,230)" rx="2" ry="2" />
+<text  x="113.37" y="207.5" >task:opt 5gwller9b1p</text>
+</g>
+<g >
+<title>__irqentry_text_start (908 microseconds, 1.28%)</title><rect x="1235.5" y="181" width="22.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1238.54" y="191.5" >_..</text>
+</g>
+<g >
+<title>-- (3,096 microseconds, 4.36%)</title><rect x="1258.3" y="101" width="77.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1261.32" y="111.5" >--</text>
+</g>
+<g >
+<title>path_openat (589 microseconds, 0.83%)</title><rect x="816.8" y="101" width="14.8" height="15.0" fill="rgb(132,132,249)" rx="2" ry="2" />
+<text  x="819.81" y="111.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (681 microseconds, 0.96%)</title><rect x="281.6" y="117" width="17.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="284.57" y="127.5" ></text>
+</g>
+<g >
+<title>exit_to_user_mode_loop (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="149" width="57.0" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1736.03" y="159.5" >exit_t..</text>
+</g>
+<g >
+<title>handle_page_fault (170 microseconds, 0.24%)</title><rect x="1235.5" y="149" width="4.3" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1238.54" y="159.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="133" width="57.0" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1736.03" y="143.5" >arch_d..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (1,793 microseconds, 2.53%)</title><rect x="1082.7" y="117" width="45.0" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1085.74" y="127.5" >rwse..</text>
+</g>
+<g >
+<title>__riscv_sys_munmap (827 microseconds, 1.17%)</title><rect x="497.2" y="149" width="20.8" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="500.25" y="159.5" ></text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (1,601 microseconds, 2.26%)</title><rect x="68.7" y="133" width="40.1" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="71.65" y="143.5" >do_..</text>
+</g>
+<g >
+<title>task:opt 6cs685rsqnt (8,763 microseconds, 12.35%)</title><rect x="518.0" y="197" width="219.8" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="520.99" y="207.5" >task:opt 6cs685rsqnt</text>
+</g>
+<g >
+<title>do_trap_ecall_u (7,825 microseconds, 11.03%)</title><rect x="835.9" y="165" width="196.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="838.93" y="175.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>do_trap_ecall_u (2,244 microseconds, 3.16%)</title><rect x="52.5" y="165" width="56.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="55.52" y="175.5" >do_tr..</text>
+</g>
+<g >
+<title>__riscv_sys_mmap (264 microseconds, 0.37%)</title><rect x="528.6" y="149" width="6.7" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="531.63" y="159.5" ></text>
+</g>
+<g >
+<title>-- (7,713 microseconds, 10.87%)</title><rect x="836.8" y="101" width="193.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="839.78" y="111.5" >--</text>
+</g>
+<g >
+<title>do_page_fault (176 microseconds, 0.25%)</title><rect x="277.2" y="165" width="4.4" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="280.16" y="175.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (69 microseconds, 0.10%)</title><rect x="737.8" y="149" width="1.8" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="740.84" y="159.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (9,424 microseconds, 13.28%)</title><rect x="281.6" y="165" width="236.4" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="284.57" y="175.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>task:rustfmt (908 microseconds, 1.28%)</title><rect x="1235.5" y="197" width="22.8" height="15.0" fill="rgb(112,112,231)" rx="2" ry="2" />
+<text  x="1238.54" y="207.5" >t..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (3,838 microseconds, 5.41%)</title><rect x="1636.7" y="117" width="96.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1639.74" y="127.5" >rwsem_down_..</text>
+</g>
+<g >
+<title>__vm_munmap (78 microseconds, 0.11%)</title><rect x="1030.3" y="133" width="1.9" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="1033.28" y="143.5" ></text>
+</g>
+<g >
+<title>-- (492 microseconds, 0.69%)</title><rect x="123.8" y="85" width="12.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="126.80" y="95.5" ></text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (492 microseconds, 0.69%)</title><rect x="123.8" y="133" width="12.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="126.80" y="143.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_munmap (895 microseconds, 1.26%)</title><rect x="254.7" y="149" width="22.5" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="257.70" y="159.5" >_..</text>
+</g>
+<g >
+<title>-- (681 microseconds, 0.96%)</title><rect x="281.6" y="85" width="17.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="284.57" y="95.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (6,648 microseconds, 9.37%)</title><rect x="110.4" y="181" width="166.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="113.37" y="191.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (681 microseconds, 0.96%)</title><rect x="281.6" y="133" width="17.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="284.57" y="143.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_munmap (1,793 microseconds, 2.53%)</title><rect x="1082.7" y="149" width="45.0" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1085.74" y="159.5" >__ri..</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (948 microseconds, 1.34%)</title><rect x="1032.2" y="133" width="23.8" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1035.24" y="143.5" >k..</text>
+</g>
+<g >
+<title>__irqentry_text_start (3,737 microseconds, 5.27%)</title><rect x="737.8" y="181" width="93.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="740.84" y="191.5" >__irqentry_..</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (1,065 microseconds, 1.50%)</title><rect x="1056.0" y="133" width="26.7" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1059.02" y="143.5" >d..</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (3,096 microseconds, 4.36%)</title><rect x="1258.3" y="133" width="77.7" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1261.32" y="143.5" >lock_mm_..</text>
+</g>
+<g >
+<title>-- (62 microseconds, 0.09%)</title><rect x="108.8" y="37" width="1.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="111.82" y="47.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (3,096 microseconds, 4.36%)</title><rect x="1258.3" y="149" width="77.7" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1261.32" y="159.5" >handle_p..</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (5,527 microseconds, 7.79%)</title><rect x="1498.1" y="133" width="138.6" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1501.08" y="143.5" >do_mprotect_pkey...</text>
+</g>
+<g >
+<title>-- (1,601 microseconds, 2.26%)</title><rect x="68.7" y="101" width="40.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="71.65" y="111.5" >--</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (92 microseconds, 0.13%)</title><rect x="739.6" y="133" width="2.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="742.57" y="143.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (264 microseconds, 0.37%)</title><rect x="528.6" y="101" width="6.7" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="531.63" y="111.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (158 microseconds, 0.22%)</title><rect x="1254.4" y="117" width="3.9" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1257.36" y="127.5" ></text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (1,695 microseconds, 2.39%)</title><rect x="10.0" y="133" width="42.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="13.00" y="143.5" >lock..</text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (69 microseconds, 0.10%)</title><rect x="737.8" y="117" width="1.8" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="740.84" y="127.5" ></text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (176 microseconds, 0.25%)</title><rect x="277.2" y="117" width="4.4" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="280.16" y="127.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (492 microseconds, 0.69%)</title><rect x="123.8" y="149" width="12.3" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="126.80" y="159.5" ></text>
+</g>
+<g >
+<title>open_last_lookups (589 microseconds, 0.83%)</title><rect x="816.8" y="85" width="14.8" height="15.0" fill="rgb(99,99,220)" rx="2" ry="2" />
+<text  x="819.81" y="95.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (492 microseconds, 0.69%)</title><rect x="123.8" y="117" width="12.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="126.80" y="127.5" ></text>
+</g>
+<g >
+<title>-- (78 microseconds, 0.11%)</title><rect x="1030.3" y="101" width="1.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1033.28" y="111.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (738 microseconds, 1.04%)</title><rect x="1239.8" y="165" width="18.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1242.81" y="175.5" ></text>
+</g>
+<g >
+<title>-- (264 microseconds, 0.37%)</title><rect x="528.6" y="85" width="6.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="531.63" y="95.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (895 microseconds, 1.26%)</title><rect x="254.7" y="117" width="22.5" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="257.70" y="127.5" >r..</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (535 microseconds, 0.75%)</title><rect x="110.4" y="133" width="13.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="113.37" y="143.5" ></text>
+</g>
+<g >
+<title>task:cargo (3,939 microseconds, 5.55%)</title><rect x="10.0" y="197" width="98.8" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" >task:cargo</text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (5,527 microseconds, 7.79%)</title><rect x="1498.1" y="149" width="138.6" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1501.08" y="159.5" >__riscv_sys_mprot..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (1,065 microseconds, 1.50%)</title><rect x="1056.0" y="117" width="26.7" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1059.02" y="127.5" >r..</text>
+</g>
+<g >
+<title>sched_mm_cid_exit (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="69" width="57.0" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1736.03" y="79.5" >sched_..</text>
+</g>
+<g >
+<title>-- (895 microseconds, 1.26%)</title><rect x="254.7" y="101" width="22.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="257.70" y="111.5" >--</text>
+</g>
+<g >
+<title>-- (176 microseconds, 0.25%)</title><rect x="277.2" y="101" width="4.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="280.16" y="111.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (34 microseconds, 0.05%)</title><rect x="835.9" y="149" width="0.9" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="838.93" y="159.5" ></text>
+</g>
+<g >
+<title>task:tokio-runtime-w (21,193 microseconds, 29.87%)</title><rect x="1258.3" y="197" width="531.7" height="15.0" fill="rgb(120,120,238)" rx="2" ry="2" />
+<text  x="1261.32" y="207.5" >task:tokio-runtime-w</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (643 microseconds, 0.91%)</title><rect x="52.5" y="133" width="16.2" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="55.52" y="143.5" ></text>
+</g>
+<g >
+<title>-- (535 microseconds, 0.75%)</title><rect x="110.4" y="101" width="13.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="113.37" y="111.5" ></text>
+</g>
+<g >
+<title>do_page_fault (170 microseconds, 0.24%)</title><rect x="1235.5" y="165" width="4.3" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1238.54" y="175.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (34 microseconds, 0.05%)</title><rect x="835.9" y="117" width="0.9" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="838.93" y="127.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (492 microseconds, 0.69%)</title><rect x="123.8" y="101" width="12.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="126.80" y="111.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (643 microseconds, 0.91%)</title><rect x="52.5" y="149" width="16.2" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="55.52" y="159.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (400 microseconds, 0.56%)</title><rect x="1127.7" y="149" width="10.1" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1130.72" y="159.5" ></text>
+</g>
+<g >
+<title>sched_mm_cid_exit (62 microseconds, 0.09%)</title><rect x="108.8" y="69" width="1.6" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="111.82" y="79.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (7,998 microseconds, 11.27%)</title><rect x="831.6" y="181" width="200.6" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="834.59" y="191.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (170 microseconds, 0.24%)</title><rect x="1235.5" y="133" width="4.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1238.54" y="143.5" ></text>
+</g>
+<g >
+<title>do_page_fault (69 microseconds, 0.10%)</title><rect x="737.8" y="165" width="1.8" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="740.84" y="175.5" ></text>
+</g>
+<g >
+<title>__mutex_lock_slowpath (62 microseconds, 0.09%)</title><rect x="108.8" y="53" width="1.6" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="111.82" y="63.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (7,713 microseconds, 10.87%)</title><rect x="836.8" y="117" width="193.5" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="839.78" y="127.5" >rwsem_down_write_slowpath</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (34 microseconds, 0.05%)</title><rect x="835.9" y="133" width="0.9" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="838.93" y="143.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (1,695 microseconds, 2.39%)</title><rect x="10.0" y="149" width="42.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="13.00" y="159.5" >hand..</text>
+</g>
+<g >
+<title>linux-lock-wait (70,952 microseconds, 100.00%)</title><rect x="10.0" y="229" width="1780.0" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" >linux-lock-wait</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (173 microseconds, 0.24%)</title><rect x="831.6" y="133" width="4.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="834.59" y="143.5" ></text>
+</g>
+<g >
+<title>do_group_exit (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="101" width="57.0" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1736.03" y="111.5" >do_gro..</text>
+</g>
+<g >
+<title>do_exit (62 microseconds, 0.09%)</title><rect x="108.8" y="85" width="1.6" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="111.82" y="95.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (62 microseconds, 0.09%)</title><rect x="108.8" y="133" width="1.6" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="111.82" y="143.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (6,461 microseconds, 9.11%)</title><rect x="1336.0" y="149" width="162.1" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1338.99" y="159.5" >__riscv_sys_mmap</text>
+</g>
+<g >
+<title>-- (400 microseconds, 0.56%)</title><rect x="1127.7" y="101" width="10.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1130.72" y="111.5" ></text>
+</g>
+<g >
+<title>-- (5,527 microseconds, 7.79%)</title><rect x="1498.1" y="101" width="138.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1501.08" y="111.5" >--</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (158 microseconds, 0.22%)</title><rect x="1254.4" y="133" width="3.9" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1257.36" y="143.5" ></text>
+</g>
+<g >
+<title>__vm_munmap (3,838 microseconds, 5.41%)</title><rect x="1636.7" y="133" width="96.3" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="1639.74" y="143.5" >__vm_munmap</text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (158 microseconds, 0.22%)</title><rect x="1254.4" y="149" width="3.9" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1257.36" y="159.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (948 microseconds, 1.34%)</title><rect x="1032.2" y="149" width="23.8" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1035.24" y="159.5" >_..</text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (173 microseconds, 0.24%)</title><rect x="831.6" y="117" width="4.3" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="834.59" y="127.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (7,713 microseconds, 10.87%)</title><rect x="836.8" y="149" width="193.5" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="839.78" y="159.5" >__riscv_sys_mprotect</text>
+</g>
+<g >
+<title>-- (1,695 microseconds, 2.39%)</title><rect x="10.0" y="101" width="42.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="13.00" y="111.5" >--</text>
+</g>
+<g >
+<title>__vm_munmap (1,793 microseconds, 2.53%)</title><rect x="1082.7" y="133" width="45.0" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="1085.74" y="143.5" >__vm..</text>
+</g>
+<g >
+<title>-- (170 microseconds, 0.24%)</title><rect x="1235.5" y="101" width="4.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1238.54" y="111.5" ></text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (8,075 microseconds, 11.38%)</title><rect x="535.3" y="133" width="202.5" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="538.25" y="143.5" >do_mprotect_pkey.constprop.0</text>
+</g>
+<g >
+<title>__riscv_sys_munmap (3,898 microseconds, 5.49%)</title><rect x="1137.8" y="149" width="97.7" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1140.75" y="159.5" >__riscv_sys..</text>
+</g>
+<g >
+<title>do_page_fault (1,695 microseconds, 2.39%)</title><rect x="10.0" y="165" width="42.5" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" >do_p..</text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (1,601 microseconds, 2.26%)</title><rect x="68.7" y="149" width="40.1" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="71.65" y="159.5" >__r..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (948 microseconds, 1.34%)</title><rect x="1032.2" y="101" width="23.8" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1035.24" y="111.5" >r..</text>
+</g>
+<g >
+<title>task:rustc (4,298 microseconds, 6.06%)</title><rect x="1127.7" y="197" width="107.8" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1130.72" y="207.5" >task:rustc</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (6,461 microseconds, 9.11%)</title><rect x="1336.0" y="101" width="162.1" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1338.99" y="111.5" >rwsem_down_write_slo..</text>
+</g>
+<g >
+<title>do_exit (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="85" width="57.0" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="1736.03" y="95.5" >do_exit</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (78 microseconds, 0.11%)</title><rect x="1030.3" y="117" width="1.9" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1033.28" y="127.5" ></text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (4,726 microseconds, 6.66%)</title><rect x="136.1" y="133" width="118.6" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="139.14" y="143.5" >do_mprotect_pk..</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (2,987 microseconds, 4.21%)</title><rect x="741.9" y="133" width="74.9" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="744.87" y="143.5" >do_mprot..</text>
+</g>
+<g >
+<title>task:opt 5voqiivwtva (9,600 microseconds, 13.53%)</title><rect x="277.2" y="197" width="240.8" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="280.16" y="207.5" >task:opt 5voqiivwtva</text>
+</g>
+<g >
+<title>__riscv_sys_mmap (681 microseconds, 0.96%)</title><rect x="281.6" y="149" width="17.1" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="284.57" y="159.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (8,763 microseconds, 12.35%)</title><rect x="518.0" y="181" width="219.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="520.99" y="191.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (424 microseconds, 0.60%)</title><rect x="518.0" y="117" width="10.6" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="520.99" y="127.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (4,726 microseconds, 6.66%)</title><rect x="136.1" y="149" width="118.6" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="139.14" y="159.5" >__riscv_sys_mp..</text>
+</g>
+<g >
+<title>lock_mm_and_find_vma (176 microseconds, 0.25%)</title><rect x="277.2" y="133" width="4.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="280.16" y="143.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (1,601 microseconds, 2.26%)</title><rect x="68.7" y="117" width="40.1" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="71.65" y="127.5" >rws..</text>
+</g>
+<g >
+<title>__riscv_sys_openat (589 microseconds, 0.83%)</title><rect x="816.8" y="149" width="14.8" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="819.81" y="159.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (8,075 microseconds, 11.38%)</title><rect x="535.3" y="117" width="202.5" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="538.25" y="127.5" >rwsem_down_write_slowpath</text>
+</g>
+<g >
+<title>vm_mmap_pgoff (948 microseconds, 1.34%)</title><rect x="1032.2" y="117" width="23.8" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1035.24" y="127.5" >v..</text>
+</g>
+<g >
+<title>-- (1,065 microseconds, 1.50%)</title><rect x="1056.0" y="101" width="26.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1059.02" y="111.5" >--</text>
+</g>
+<g >
+<title>-- (3,838 microseconds, 5.41%)</title><rect x="1636.7" y="101" width="96.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1639.74" y="111.5" >--</text>
+</g>
+<g >
+<title>-- (948 microseconds, 1.34%)</title><rect x="1032.2" y="85" width="23.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1035.24" y="95.5" >--</text>
+</g>
+<g >
+<title>do_trap_ecall_u (3,806 microseconds, 5.36%)</title><rect x="1032.2" y="165" width="95.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1035.24" y="175.5" >do_trap_eca..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (2,987 microseconds, 4.21%)</title><rect x="741.9" y="117" width="74.9" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="744.87" y="127.5" >rwsem_do..</text>
+</g>
+<g >
+<title>handle_page_fault (176 microseconds, 0.25%)</title><rect x="277.2" y="149" width="4.4" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="280.16" y="159.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_start (62 microseconds, 0.09%)</title><rect x="108.8" y="181" width="1.6" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="111.82" y="191.5" ></text>
+</g>
+<g >
+<title>all (70,952 microseconds, 100%)</title><rect x="10.0" y="245" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (18,097 microseconds, 25.51%)</title><rect x="1336.0" y="165" width="454.0" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1338.99" y="175.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (7,916 microseconds, 11.16%)</title><rect x="298.7" y="133" width="198.5" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="301.66" y="143.5" >do_mprotect_pkey.constprop.0</text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (3,096 microseconds, 4.36%)</title><rect x="1258.3" y="117" width="77.7" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="1261.32" y="127.5" >rwsem_do..</text>
+</g>
+<g >
+<title>__irqentry_text_start (3,939 microseconds, 5.55%)</title><rect x="10.0" y="181" width="98.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="13.00" y="191.5" >__irqentry_..</text>
+</g>
+<g >
+<title>handle_page_fault (424 microseconds, 0.60%)</title><rect x="518.0" y="149" width="10.6" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="520.99" y="159.5" ></text>
+</g>
+<g >
+<title>exit_to_user_mode_loop (62 microseconds, 0.09%)</title><rect x="108.8" y="149" width="1.6" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="111.82" y="159.5" ></text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (170 microseconds, 0.24%)</title><rect x="1235.5" y="117" width="4.3" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="1238.54" y="127.5" ></text>
+</g>
+<g >
+<title>rwsem_down_read_slowpath (535 microseconds, 0.75%)</title><rect x="110.4" y="117" width="13.4" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="113.37" y="127.5" ></text>
+</g>
+<g >
+<title>phase:setup (70,952 microseconds, 100.00%)</title><rect x="10.0" y="213" width="1780.0" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" >phase:setup</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (400 microseconds, 0.56%)</title><rect x="1127.7" y="133" width="10.1" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1130.72" y="143.5" ></text>
+</g>
+<g >
+<title>do_group_exit (62 microseconds, 0.09%)</title><rect x="108.8" y="101" width="1.6" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="111.82" y="111.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (6,461 microseconds, 9.11%)</title><rect x="1336.0" y="117" width="162.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1338.99" y="127.5" >vm_mmap_pgoff</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (681 microseconds, 0.96%)</title><rect x="281.6" y="101" width="17.1" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="284.57" y="111.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_munmap (78 microseconds, 0.11%)</title><rect x="1030.3" y="149" width="1.9" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1033.28" y="159.5" ></text>
+</g>
+<g >
+<title>do_page_fault (173 microseconds, 0.24%)</title><rect x="831.6" y="165" width="4.3" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="834.59" y="175.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (92 microseconds, 0.13%)</title><rect x="739.6" y="149" width="2.3" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="742.57" y="159.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (92 microseconds, 0.13%)</title><rect x="739.6" y="117" width="2.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="742.57" y="127.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (264 microseconds, 0.37%)</title><rect x="528.6" y="117" width="6.7" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="531.63" y="127.5" ></text>
+</g>
+<g >
+<title>-- (643 microseconds, 0.91%)</title><rect x="52.5" y="85" width="16.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="55.52" y="95.5" ></text>
+</g>
+<g >
+<title>__mutex_lock_slowpath (2,271 microseconds, 3.20%)</title><rect x="1733.0" y="53" width="57.0" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="1736.03" y="63.5" >__mute..</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (827 microseconds, 1.17%)</title><rect x="497.2" y="117" width="20.8" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="500.25" y="127.5" ></text>
+</g>
+<g >
+<title>-- (580 microseconds, 0.82%)</title><rect x="1239.8" y="85" width="14.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1242.81" y="95.5" ></text>
+</g>
+<g >
+<title>do_trap_ecall_u (6,113 microseconds, 8.62%)</title><rect x="123.8" y="165" width="153.4" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="126.80" y="175.5" >do_trap_ecall_u</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (580 microseconds, 0.82%)</title><rect x="1239.8" y="101" width="14.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1242.81" y="111.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_munmap (3,838 microseconds, 5.41%)</title><rect x="1636.7" y="149" width="96.3" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1639.74" y="159.5" >__riscv_sys..</text>
+</g>
+<g >
+<title>do_mprotect_pkey.constprop.0 (7,713 microseconds, 10.87%)</title><rect x="836.8" y="133" width="193.5" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="839.78" y="143.5" >do_mprotect_pkey.constpro..</text>
+</g>
+<g >
+<title>-- (2,987 microseconds, 4.21%)</title><rect x="741.9" y="101" width="74.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="744.87" y="111.5" >--</text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (400 microseconds, 0.56%)</title><rect x="1127.7" y="117" width="10.1" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1130.72" y="127.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (643 microseconds, 0.91%)</title><rect x="52.5" y="101" width="16.2" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="55.52" y="111.5" ></text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (264 microseconds, 0.37%)</title><rect x="528.6" y="133" width="6.7" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="531.63" y="143.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (643 microseconds, 0.91%)</title><rect x="52.5" y="117" width="16.2" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="55.52" y="127.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (535 microseconds, 0.75%)</title><rect x="110.4" y="149" width="13.4" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="113.37" y="159.5" ></text>
+</g>
+<g >
+<title>vm_mmap_pgoff (580 microseconds, 0.82%)</title><rect x="1239.8" y="117" width="14.6" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1242.81" y="127.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (92 microseconds, 0.13%)</title><rect x="739.6" y="101" width="2.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="742.57" y="111.5" ></text>
+</g>
+<g >
+<title>get_signal (62 microseconds, 0.09%)</title><rect x="108.8" y="117" width="1.6" height="15.0" fill="rgb(87,87,211)" rx="2" ry="2" />
+<text  x="111.82" y="127.5" ></text>
+</g>
+<g >
+<title>task:ctrl-c (62 microseconds, 0.09%)</title><rect x="108.8" y="197" width="1.6" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="111.82" y="207.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (2,987 microseconds, 4.21%)</title><rect x="741.9" y="149" width="74.9" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="744.87" y="159.5" >__riscv_..</text>
+</g>
+<g >
+<title>-- (69 microseconds, 0.10%)</title><rect x="737.8" y="101" width="1.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="740.84" y="111.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mmap (580 microseconds, 0.82%)</title><rect x="1239.8" y="149" width="14.6" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1242.81" y="159.5" ></text>
+</g>
+<g >
+<title>rwsem_down_write_slowpath (3,898 microseconds, 5.49%)</title><rect x="1137.8" y="117" width="97.7" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1140.75" y="127.5" >rwsem_down_..</text>
+</g>
+<g >
+<title>-- (92 microseconds, 0.13%)</title><rect x="739.6" y="85" width="2.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="742.57" y="95.5" ></text>
+</g>
+<g >
+<title>-- (827 microseconds, 1.17%)</title><rect x="497.2" y="101" width="20.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="500.25" y="111.5" ></text>
+</g>
+<g >
+<title>handle_page_fault (173 microseconds, 0.24%)</title><rect x="831.6" y="149" width="4.3" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="834.59" y="159.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (7,916 microseconds, 11.16%)</title><rect x="298.7" y="149" width="198.5" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="301.66" y="159.5" >__riscv_sys_mprotect</text>
+</g>
+<g >
+<title>do_sys_openat2 (589 microseconds, 0.83%)</title><rect x="816.8" y="133" width="14.8" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="819.81" y="143.5" ></text>
+</g>
+<g >
+<title>-- (7,916 microseconds, 11.16%)</title><rect x="298.7" y="101" width="198.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="301.66" y="111.5" >--</text>
+</g>
+<g >
+<title>-- (4,726 microseconds, 6.66%)</title><rect x="136.1" y="101" width="118.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="139.14" y="111.5" >--</text>
+</g>
+<g >
+<title>__irqentry_text_start (4,298 microseconds, 6.06%)</title><rect x="1127.7" y="181" width="107.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1130.72" y="191.5" >__irqentry_te..</text>
+</g>
+<g >
+<title>task:opt 9ci5trlrapv (3,806 microseconds, 5.36%)</title><rect x="1032.2" y="197" width="95.5" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1035.24" y="207.5" >task:opt 9c..</text>
+</g>
+<g >
+<title>-- (34 microseconds, 0.05%)</title><rect x="835.9" y="85" width="0.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="838.93" y="95.5" ></text>
+</g>
+<g >
+<title>-- (173 microseconds, 0.24%)</title><rect x="831.6" y="101" width="4.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="834.59" y="111.5" ></text>
+</g>
+<g >
+<title>do_page_fault (424 microseconds, 0.60%)</title><rect x="518.0" y="165" width="10.6" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="520.99" y="175.5" ></text>
+</g>
+<g >
+<title>task:opt 6ln53uo5eie (3,737 microseconds, 5.27%)</title><rect x="737.8" y="197" width="93.8" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="740.84" y="207.5" >task:opt 6l..</text>
+</g>
+<g >
+<title>do_page_fault (3,096 microseconds, 4.36%)</title><rect x="1258.3" y="165" width="77.7" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1261.32" y="175.5" >do_page_..</text>
+</g>
+<g >
+<title>-- (6,461 microseconds, 9.11%)</title><rect x="1336.0" y="85" width="162.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1338.99" y="95.5" >--</text>
+</g>
+<g >
+<title>ksys_mmap_pgoff (580 microseconds, 0.82%)</title><rect x="1239.8" y="133" width="14.6" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1242.81" y="143.5" ></text>
+</g>
+<g >
+<title>__riscv_sys_mprotect (8,075 microseconds, 11.38%)</title><rect x="535.3" y="149" width="202.5" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="538.25" y="159.5" >__riscv_sys_mprotect</text>
+</g>
+<g >
+<title>__irqentry_text_start (21,193 microseconds, 29.87%)</title><rect x="1258.3" y="181" width="531.7" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="1261.32" y="191.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>do_file_open (589 microseconds, 0.83%)</title><rect x="816.8" y="117" width="14.8" height="15.0" fill="rgb(112,112,232)" rx="2" ry="2" />
+<text  x="819.81" y="127.5" ></text>
+</g>
+<g >
+<title>-- (1,793 microseconds, 2.53%)</title><rect x="1082.7" y="101" width="45.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1085.74" y="111.5" >--</text>
+</g>
+<g >
+<title>__irqentry_text_start (9,600 microseconds, 13.53%)</title><rect x="277.2" y="181" width="240.8" height="15.0" fill="rgb(137,137,252)" rx="2" ry="2" />
+<text  x="280.16" y="191.5" >__irqentry_text_start</text>
+</g>
+<g >
+<title>__vm_munmap (827 microseconds, 1.17%)</title><rect x="497.2" y="133" width="20.8" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="500.25" y="143.5" ></text>
+</g>
+<g >
+<title>__vm_munmap (3,898 microseconds, 5.49%)</title><rect x="1137.8" y="133" width="97.7" height="15.0" fill="rgb(111,111,231)" rx="2" ry="2" />
+<text  x="1140.75" y="143.5" >__vm_munmap</text>
+</g>
+</g>
+</svg>
