@@ -2,10 +2,9 @@ use alloc::sync::Arc;
 
 use axerrno::AxResult;
 use axhal::paging::{MappingFlags, PageSize, PageTableMut};
-use axsync::Mutex;
 use memory_addr::{PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 
-use super::{AddrSpace, Backend, BackendOps};
+use super::{AddrSpaceLock, Backend, BackendOps};
 
 /// Linear mapping backend.
 ///
@@ -48,7 +47,7 @@ impl BackendOps for LinearBackend {
         _flags: MappingFlags,
         _old_pt: &mut PageTableMut,
         _new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<Mutex<AddrSpace>>,
+        _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
         Ok(Backend::Linear(self.clone()))
     }

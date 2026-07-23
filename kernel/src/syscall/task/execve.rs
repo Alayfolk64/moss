@@ -25,6 +25,7 @@ use crate::{
     syscall::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
+        unshare_current_fd_table,
     },
     task::{AsThread, ProcessData, get_task, processes},
 };
@@ -282,7 +283,7 @@ fn execve_common(
         load_user_app(&mut new_aspace, Some(path.as_str()), &args, &envs)?
     };
     let page_table_root = new_aspace.page_table_root();
-    let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
+    let old_aspace = proc_data.replace_aspace(Arc::new(crate::mm::AddrSpaceLock::new(new_aspace)));
     axtask::replace_current_page_table(page_table_root);
     drop(old_aspace);
 
@@ -302,6 +303,9 @@ fn execve_common(
     curr.as_thread().set_robust_list_head(0);
     curr.as_thread().reset_rseq();
 
+    // A successful exec undoes CLONE_FILES. Detach before applying
+    // close-on-exec so another process sharing the old table is unaffected.
+    unshare_current_fd_table();
     close_cloexec_files_for_current_process();
 
     ptrace_on_exec(proc_data.proc.pid());

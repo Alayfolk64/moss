@@ -68,48 +68,46 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     ReturnReason::PageFault(addr, flags) => {
                         let fault_signal = {
                             let aspace_ref = thr.proc_data.aspace();
-                            let mut aspace = aspace_ref.lock();
                             if crate::syscall::is_mmap_sigbus_fault(
                                 thr.proc_data.proc.pid(),
                                 addr,
                                 flags,
                             ) {
                                 Some(Signo::SIGBUS)
-                            } else if aspace.handle_page_fault(addr, flags)
-                                || crate::syscall::try_growdown_fault(
+                            } else if crate::mm::AddrSpace::handle_page_fault_concurrent(
+                                &aspace_ref,
+                                addr,
+                                flags,
+                            ) {
+                                None
+                            } else {
+                                let mut aspace = aspace_ref.lock();
+                                if crate::syscall::try_growdown_fault(
                                     thr.proc_data.proc.pid(),
                                     &mut aspace,
                                     addr,
                                     flags,
-                                )
-                            {
-                                None
-                            } else if aspace.is_accessible_fault(addr, flags) {
-                                log_user_fault_mapping(&aspace, "address", addr);
-                                log_user_fault_mapping(
-                                    &aspace,
-                                    "instruction",
-                                    VirtAddr::from_usize(uctx.ip()),
-                                );
-                                log_user_fault_mapping(
-                                    &aspace,
-                                    "stack",
-                                    VirtAddr::from_usize(uctx.sp()),
-                                );
-                                Some(Signo::SIGBUS)
-                            } else {
-                                log_user_fault_mapping(&aspace, "address", addr);
-                                log_user_fault_mapping(
-                                    &aspace,
-                                    "instruction",
-                                    VirtAddr::from_usize(uctx.ip()),
-                                );
-                                log_user_fault_mapping(
-                                    &aspace,
-                                    "stack",
-                                    VirtAddr::from_usize(uctx.sp()),
-                                );
-                                Some(Signo::SIGSEGV)
+                                ) {
+                                    None
+                                } else {
+                                    let signo = if aspace.is_accessible_fault(addr, flags) {
+                                        Signo::SIGBUS
+                                    } else {
+                                        Signo::SIGSEGV
+                                    };
+                                    log_user_fault_mapping(&aspace, "address", addr);
+                                    log_user_fault_mapping(
+                                        &aspace,
+                                        "instruction",
+                                        VirtAddr::from_usize(uctx.ip()),
+                                    );
+                                    log_user_fault_mapping(
+                                        &aspace,
+                                        "stack",
+                                        VirtAddr::from_usize(uctx.sp()),
+                                    );
+                                    Some(signo)
+                                }
                             }
                         };
                         if let Some(signo) = fault_signal {
@@ -138,7 +136,7 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                         );
                         {
                             let aspace_ref = thr.proc_data.aspace();
-                            let aspace = aspace_ref.lock();
+                            let aspace = aspace_ref.read();
                             log_user_fault_mapping(
                                 &aspace,
                                 "instruction",

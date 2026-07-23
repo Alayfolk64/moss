@@ -1,4 +1,8 @@
-use core::{marker::PhantomData, ops::Deref};
+use core::{
+    marker::PhantomData,
+    ops::Deref,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use arrayvec::ArrayVec;
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PhysAddr};
@@ -97,6 +101,16 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         unsafe { core::slice::from_raw_parts(ptr, ENTRY_COUNT) }
     }
 
+    fn atomic_entry(&self, table: PhysAddr, index: usize) -> &AtomicUsize {
+        debug_assert!(index < ENTRY_COUNT);
+        let ptr = H::phys_to_virt(table).as_ptr() as *const AtomicUsize;
+        unsafe { &*ptr.add(index) }
+    }
+
+    fn load_entry(&self, table: PhysAddr, index: usize) -> PTE {
+        PTE::from_bits(self.atomic_entry(table, index).load(Ordering::Acquire))
+    }
+
     fn next_table<'a>(&self, entry: &PTE) -> PagingResult<&'a [PTE]> {
         if entry.paddr().as_usize() == 0 {
             Err(PagingError::NotMapped)
@@ -107,31 +121,146 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         }
     }
 
-    fn get_entry(&self, vaddr: M::VirtAddr) -> PagingResult<(&PTE, PageSize)> {
+    fn next_table_paddr(&self, entry: PTE) -> PagingResult<PhysAddr> {
+        if entry.paddr().as_usize() == 0 {
+            Err(PagingError::NotMapped)
+        } else if entry.is_huge() {
+            Err(PagingError::MappedToHugePage)
+        } else {
+            Ok(entry.paddr())
+        }
+    }
+
+    fn get_entry(&self, vaddr: M::VirtAddr) -> PagingResult<(PTE, PageSize)> {
         let vaddr: usize = vaddr.into();
         let p3 = if M::LEVELS == 3 {
-            self.table_of(self.root_paddr())
+            self.root_paddr()
         } else if M::LEVELS == 4 {
-            let p4 = self.table_of(self.root_paddr());
-            let p4e = &p4[p4_index(vaddr)];
-            self.next_table(p4e)?
+            let p4e = self.load_entry(self.root_paddr(), p4_index(vaddr));
+            self.next_table_paddr(p4e)?
         } else {
             unreachable!()
         };
-        let p3e = &p3[p3_index(vaddr)];
+        let p3e = self.load_entry(p3, p3_index(vaddr));
         if p3e.is_huge() {
             return Ok((p3e, PageSize::Size1G));
         }
 
-        let p2 = self.next_table(p3e)?;
-        let p2e = &p2[p2_index(vaddr)];
+        let p2 = self.next_table_paddr(p3e)?;
+        let p2e = self.load_entry(p2, p2_index(vaddr));
         if p2e.is_huge() {
             return Ok((p2e, PageSize::Size2M));
         }
 
-        let p1 = self.next_table(p2e)?;
-        let p1e = &p1[p1_index(vaddr)];
+        let p1 = self.next_table_paddr(p2e)?;
+        let p1e = self.load_entry(p1, p1_index(vaddr));
         Ok((p1e, PageSize::Size4K))
+    }
+
+    fn next_table_atomic_or_create(
+        &self,
+        table: PhysAddr,
+        index: usize,
+    ) -> PagingResult<PhysAddr> {
+        let slot = self.atomic_entry(table, index);
+        loop {
+            let current_bits = slot.load(Ordering::Acquire);
+            let current = PTE::from_bits(current_bits);
+            if !current.is_unused() {
+                return self.next_table_paddr(current);
+            }
+
+            let new_table = Self::alloc_table()?;
+            let new_bits = PTE::new_table(new_table).bits();
+            match slot.compare_exchange(
+                current_bits,
+                new_bits,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Ok(new_table),
+                Err(_) => H::dealloc_frame(new_table),
+            }
+        }
+    }
+
+    fn leaf_entry_atomic(
+        &self,
+        vaddr: M::VirtAddr,
+        create: bool,
+    ) -> PagingResult<&AtomicUsize> {
+        let addr: usize = vaddr.into();
+        let next = |table, index| {
+            if create {
+                self.next_table_atomic_or_create(table, index)
+            } else {
+                self.next_table_paddr(self.load_entry(table, index))
+            }
+        };
+
+        let p3 = if M::LEVELS == 3 {
+            self.root_paddr()
+        } else if M::LEVELS == 4 {
+            next(self.root_paddr(), p4_index(addr))?
+        } else {
+            unreachable!()
+        };
+        let p2 = next(p3, p3_index(addr))?;
+        let p1 = next(p2, p2_index(addr))?;
+        Ok(self.atomic_entry(p1, p1_index(addr)))
+    }
+
+    /// Installs one 4-KiB mapping without requiring exclusive access to the
+    /// whole page table. Intermediate tables and the leaf PTE are published
+    /// with compare-and-exchange, so faults on unrelated pages can commit in
+    /// parallel.
+    pub fn map_4k_concurrent(
+        &self,
+        vaddr: M::VirtAddr,
+        target: PhysAddr,
+        flags: MappingFlags,
+    ) -> PagingResult {
+        let slot = self.leaf_entry_atomic(vaddr, true)?;
+        let entry = PTE::new_page(target.align_down(PageSize::Size4K), flags, false).bits();
+        slot.compare_exchange(0, entry, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| ())
+            .map_err(|_| PagingError::AlreadyMapped)
+    }
+
+    /// Replaces one existing 4-KiB mapping if it still refers to
+    /// `expected_paddr`. Competing faults resolve through the leaf PTE CAS.
+    pub fn remap_4k_concurrent_if(
+        &self,
+        vaddr: M::VirtAddr,
+        expected_paddr: PhysAddr,
+        target: PhysAddr,
+        flags: MappingFlags,
+    ) -> PagingResult<bool> {
+        let slot = self.leaf_entry_atomic(vaddr, false)?;
+        loop {
+            let old_bits = slot.load(Ordering::Acquire);
+            let old = PTE::from_bits(old_bits);
+            if !old.is_present() {
+                return Err(PagingError::NotMapped);
+            }
+            if old.paddr() != expected_paddr.align_down(PageSize::Size4K) {
+                return Ok(false);
+            }
+            let new_bits =
+                PTE::new_page(target.align_down(PageSize::Size4K), flags, false).bits();
+            match slot.compare_exchange(
+                old_bits,
+                new_bits,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => {
+                    M::flush_tlb(Some(vaddr));
+                    return Ok(true);
+                }
+                Err(_) => continue,
+            }
+        }
     }
 
     fn dealloc_tree(&self, table_paddr: PhysAddr, level: usize) {

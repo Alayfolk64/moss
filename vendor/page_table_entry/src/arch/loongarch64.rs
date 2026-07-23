@@ -133,6 +133,9 @@ impl LA64PTE {
 }
 
 impl GenericPTE for LA64PTE {
+    fn from_bits(bits: usize) -> Self {
+        Self(bits as u64)
+    }
     fn new_page(paddr: PhysAddr, flags: MappingFlags, is_huge: bool) -> Self {
         let mut flags = PTEFlags::from(flags);
         if is_huge {

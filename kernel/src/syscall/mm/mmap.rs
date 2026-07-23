@@ -920,30 +920,53 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
     let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
-    if !aspace.can_access_range(start, length, MappingFlags::USER) {
-        return Err(AxError::NoMemory);
-    }
 
     match advice {
         MADV_WIPEONFORK => {
+            let aspace = aspace_ref.lock();
+            if !aspace.can_access_range(start, length, MappingFlags::USER) {
+                return Err(AxError::NoMemory);
+            }
             if !is_recorded_private_anonymous(pid, addr, length) {
                 return Err(AxError::InvalidInput);
             }
             add_wipeonfork_range(pid, addr, length);
         }
-        MADV_KEEPONFORK => remove_wipeonfork_range(pid, addr, length),
+        MADV_KEEPONFORK => {
+            let aspace = aspace_ref.lock();
+            if !aspace.can_access_range(start, length, MappingFlags::USER) {
+                return Err(AxError::NoMemory);
+            }
+            remove_wipeonfork_range(pid, addr, length);
+        }
         MADV_FREE => {
+            let mut aspace = aspace_ref.lock();
+            if !aspace.can_access_range(start, length, MappingFlags::USER) {
+                return Err(AxError::NoMemory);
+            }
             if !is_recorded_private_anonymous(pid, addr, length) {
                 return Err(AxError::InvalidInput);
             }
             aspace.discard_pages(start, length)?;
         }
-        MADV_DONTNEED => aspace.discard_pages(start, length)?,
+        MADV_DONTNEED => {
+            let mut aspace = aspace_ref.lock();
+            if !aspace.can_access_range(start, length, MappingFlags::USER) {
+                return Err(AxError::NoMemory);
+            }
+            aspace.discard_pages(start, length)?;
+        }
         MADV_NORMAL | MADV_RANDOM | MADV_SEQUENTIAL | MADV_WILLNEED | MADV_REMOVE
         | MADV_DONTFORK | MADV_DOFORK | MADV_HWPOISON | MADV_MERGEABLE | MADV_UNMERGEABLE
         | MADV_HUGEPAGE | MADV_NOHUGEPAGE | MADV_DONTDUMP | MADV_DODUMP | MADV_COLD
-        | MADV_PAGEOUT | MADV_SOFT_OFFLINE => {}
+        | MADV_PAGEOUT | MADV_SOFT_OFFLINE => {
+            if !aspace_ref
+                .read()
+                .can_access_range(start, length, MappingFlags::USER)
+            {
+                return Err(AxError::NoMemory);
+            }
+        }
         _ => return Err(AxError::InvalidInput),
     }
 

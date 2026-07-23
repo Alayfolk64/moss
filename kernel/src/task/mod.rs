@@ -29,7 +29,7 @@ use starry_signal::{
 };
 
 pub use self::{futex::*, ops::*, resources::*, rseq::*, signal::*, stat::*, timer::*, user::*};
-use crate::mm::AddrSpace;
+use crate::mm::AddrSpaceLock;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ProcessWaitStatus {
@@ -293,7 +293,7 @@ pub struct ProcessData {
     pub cmdline: RwLock<Arc<Vec<String>>>,
     /// The virtual memory address space.
     // TODO: scopify
-    aspace: RwLock<Arc<Mutex<AddrSpace>>>,
+    aspace: RwLock<Arc<AddrSpaceLock>>,
 
     /// Present only while this process is a vfork child. The parent sleeps on
     /// it until execve installs a private address space or the child exits.
@@ -359,7 +359,7 @@ impl ProcessData {
         proc: Arc<Process>,
         exe_path: String,
         cmdline: Arc<Vec<String>>,
-        aspace: Arc<Mutex<AddrSpace>>,
+        aspace: Arc<AddrSpaceLock>,
         signal_actions: Arc<SpinNoIrq<SignalActions>>,
         exit_signal: Option<Signo>,
     ) -> Arc<Self> {
@@ -414,11 +414,11 @@ impl ProcessData {
         self.heap_top.load(Ordering::Acquire)
     }
 
-    pub fn aspace(&self) -> Arc<Mutex<AddrSpace>> {
+    pub fn aspace(&self) -> Arc<AddrSpaceLock> {
         self.aspace.read().clone()
     }
 
-    pub fn replace_aspace(&self, new_aspace: Arc<Mutex<AddrSpace>>) -> Arc<Mutex<AddrSpace>> {
+    pub fn replace_aspace(&self, new_aspace: Arc<AddrSpaceLock>) -> Arc<AddrSpaceLock> {
         core::mem::replace(&mut *self.aspace.write(), new_aspace)
     }
 
@@ -444,7 +444,7 @@ impl ProcessData {
     }
 
     pub fn current_rss_kb(&self) -> usize {
-        self.aspace().lock().resident_set_size() / 1024
+        self.aspace().read().resident_set_size() / 1024
     }
 
     pub fn child_maxrss_kb(&self) -> usize {

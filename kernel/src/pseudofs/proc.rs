@@ -784,7 +784,7 @@ impl SimpleDirOps for ThreadDir {
             "maps" => SimpleFile::new_regular(fs, move || {
                 let pid = task.as_thread().proc_data.proc.pid();
                 let aspace_ref = task.as_thread().proc_data.aspace();
-                let aspace = aspace_ref.lock();
+                let aspace = aspace_ref.read();
                 Ok(crate::syscall::mmap_proc_maps(pid, &aspace))
             })
             .into(),

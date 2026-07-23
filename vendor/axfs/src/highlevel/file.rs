@@ -5,8 +5,9 @@ use alloc::{
     vec::Vec,
 };
 #[cfg(feature = "times")]
-use core::sync::atomic::{AtomicU8, Ordering};
-use core::{num::NonZeroUsize, ops::Range, task::Context, time::Duration};
+use core::sync::atomic::AtomicU8;
+use core::sync::atomic::{AtomicU64, Ordering};
+use core::{ops::Range, task::Context, time::Duration};
 
 use axalloc::{UsageKind, global_allocator};
 use axfs_ng_vfs::{
@@ -18,6 +19,7 @@ use axio::{SeekFrom, prelude::*};
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use intrusive_collections::{LinkedList, LinkedListAtomicLink, intrusive_adapter};
+use kspin::SpinNoIrq;
 use lru::LruCache;
 use spin::RwLock;
 
@@ -306,36 +308,150 @@ impl Default for OpenOptions {
 }
 
 const PAGE_SIZE: usize = 4096;
-const DEFAULT_LOCAL_FILE_CACHE_PAGES: usize = 256;
-const MAX_RETAINED_FILE_CACHE_RECORDS: usize = 256;
-const MAX_READAHEAD_BYTES: usize = DEFAULT_LOCAL_FILE_CACHE_PAGES * PAGE_SIZE;
+// Keep clean file pages while memory is plentiful.  Under pressure, reclaim
+// old cache pages until the allocator has breathing room again.  This mirrors
+// Linux's watermark-driven page-cache policy more closely than a fixed cache
+// size: a small machine retains less, while an otherwise idle large machine
+// can use most of its memory for useful cache.
+const MIN_FREE_MEMORY_BYTES: usize = 64 * 1024 * 1024;
+const FREE_MEMORY_LOW_DIVISOR: usize = 16;
+const FREE_MEMORY_TARGET_DIVISOR: usize = 8;
+const MAX_READAHEAD_BYTES: usize = 1024 * 1024;
+const READ_BATCH_BYTES: usize = 64 * 1024;
 const DEFERRED_FILE_LEN_THRESHOLD: u64 = 64 * 1024;
 const WRITEBACK_BATCH_PAGES: usize = 16;
 const WRITEBACK_BATCH_BYTES: usize = WRITEBACK_BATCH_PAGES * PAGE_SIZE;
+const PAGE_LOAD_LOCK_SHARDS: usize = 64;
+const LOCAL_PAGE_FRAME_CACHE_CAPACITY: usize = 32;
+const LOCAL_PAGE_FRAME_CACHE_SHARDS: usize = 64;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
+static FILE_CACHE_CLOCK: AtomicU64 = AtomicU64::new(1);
+
+struct LocalPageFrameCache {
+    pages: [usize; LOCAL_PAGE_FRAME_CACHE_CAPACITY],
+    len: usize,
+}
+
+impl LocalPageFrameCache {
+    const fn new() -> Self {
+        Self {
+            pages: [0; LOCAL_PAGE_FRAME_CACHE_CAPACITY],
+            len: 0,
+        }
+    }
+
+    fn pop(&mut self) -> Option<VirtAddr> {
+        if self.len == 0 {
+            return None;
+        }
+        self.len -= 1;
+        Some(self.pages[self.len].into())
+    }
+
+    fn push(&mut self, page: VirtAddr) -> bool {
+        if self.len == LOCAL_PAGE_FRAME_CACHE_CAPACITY {
+            return false;
+        }
+        self.pages[self.len] = page.as_usize();
+        self.len += 1;
+        true
+    }
+}
+
+static LOCAL_PAGE_FRAME_CACHES: [SpinNoIrq<LocalPageFrameCache>;
+    LOCAL_PAGE_FRAME_CACHE_SHARDS] =
+    [const { SpinNoIrq::new(LocalPageFrameCache::new()) }; LOCAL_PAGE_FRAME_CACHE_SHARDS];
+
+fn local_page_frame_cache() -> &'static SpinNoIrq<LocalPageFrameCache> {
+    &LOCAL_PAGE_FRAME_CACHES[axhal::percpu::this_cpu_id() % LOCAL_PAGE_FRAME_CACHE_SHARDS]
+}
+
+fn alloc_page_frame() -> VfsResult<VirtAddr> {
+    if let Some(page) = local_page_frame_cache().lock().pop() {
+        return Ok(page);
+    }
+
+    let (start, pages) = match global_allocator().alloc_pages(
+        LOCAL_PAGE_FRAME_CACHE_CAPACITY,
+        PAGE_SIZE,
+        UsageKind::PageCache,
+    ) {
+        Ok(start) => (start, LOCAL_PAGE_FRAME_CACHE_CAPACITY),
+        Err(_) => (
+            global_allocator()
+                .alloc_pages(1, PAGE_SIZE, UsageKind::PageCache)
+                .inspect_err(|err| warn!("Failed to allocate page cache: {:?}", err))
+                .map_err(|_| VfsError::NoMemory)?,
+            1,
+        ),
+    };
+    let page = VirtAddr::from(start);
+    let mut cache = local_page_frame_cache().lock();
+    let mut first_uncached = pages;
+    for index in 1..pages {
+        if !cache.push(page + index * PAGE_SIZE) {
+            first_uncached = index;
+            break;
+        }
+    }
+    drop(cache);
+    for index in first_uncached..pages {
+        global_allocator().dealloc_pages(
+            (page + index * PAGE_SIZE).as_usize(),
+            1,
+            UsageKind::PageCache,
+        );
+    }
+    Ok(page)
+}
+
+#[derive(Debug)]
+struct PageFrame {
+    addr: VirtAddr,
+}
+
+impl Drop for PageFrame {
+    fn drop(&mut self) {
+        let cached = { local_page_frame_cache().lock().push(self.addr) };
+        if !cached {
+            global_allocator().dealloc_pages(self.addr.as_usize(), 1, UsageKind::PageCache);
+        }
+    }
+}
+
+/// A stable reference to a cached file page. The physical frame remains alive
+/// even if the page is removed from the cache index.
+#[derive(Clone, Debug)]
+pub struct PageRef(Arc<PageFrame>);
+
+impl PageRef {
+    pub fn paddr(&self) -> PhysAddr {
+        virt_to_phys(self.0.addr)
+    }
+}
 
 #[derive(Debug)]
 pub struct PageCache {
-    addr: VirtAddr,
+    frame: PageRef,
     dirty: bool,
 }
 
 impl PageCache {
     fn new() -> VfsResult<Self> {
-        let addr = global_allocator()
-            .alloc_pages(1, PAGE_SIZE, UsageKind::PageCache)
-            .inspect_err(|err| {
-                warn!("Failed to allocate page cache: {:?}", err);
-            })
-            .map_err(|_| VfsError::NoMemory)?;
         Ok(Self {
-            addr: addr.into(),
+            frame: PageRef(Arc::new(PageFrame {
+                addr: alloc_page_frame()?,
+            })),
             dirty: false,
         })
     }
 
     pub fn paddr(&self) -> PhysAddr {
-        virt_to_phys(self.addr)
+        self.frame.paddr()
+    }
+
+    pub fn page_ref(&self) -> PageRef {
+        self.frame.clone()
     }
 
     pub fn mark_dirty(&mut self) {
@@ -343,7 +459,7 @@ impl PageCache {
     }
 
     pub fn data(&mut self) -> &mut [u8] {
-        unsafe { core::slice::from_raw_parts_mut(self.addr.as_mut_ptr(), PAGE_SIZE) }
+        unsafe { core::slice::from_raw_parts_mut(self.frame.0.addr.as_mut_ptr(), PAGE_SIZE) }
     }
 }
 
@@ -352,7 +468,6 @@ impl Drop for PageCache {
         if self.dirty {
             warn!("dirty page dropped without flushing");
         }
-        global_allocator().dealloc_pages(self.addr.as_usize(), 1, UsageKind::PageCache);
     }
 }
 
@@ -366,8 +481,13 @@ intrusive_adapter!(EvictListenerAdapter = Box<EvictListener>: EvictListener { li
 struct CachedFileShared {
     page_cache: Mutex<LruCache<u32, PageCache>>,
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
+    /// Prevents duplicate loads of one page without serializing unrelated
+    /// pages of the same inode.
+    page_load_locks: [Mutex<()>; PAGE_LOAD_LOCK_SHARDS],
     /// Keeps detached pages from being reloaded by the same inode operation.
     cache_op: Mutex<()>,
+    /// Changes whenever an operation can make an unlocked page read stale.
+    cache_generation: AtomicU64,
     /// Only one thread can append to the file at a time, while multiple writers
     /// are permitted.
     append_lock: RwLock<()>,
@@ -376,11 +496,13 @@ struct CachedFileShared {
 impl CachedFileShared {
     pub fn new() -> Self {
         Self {
-            page_cache: Mutex::new(LruCache::new(
-                NonZeroUsize::new(DEFAULT_LOCAL_FILE_CACHE_PAGES).unwrap(),
-            )),
+            // Grow lazily. Capacity is controlled globally by memory
+            // watermarks instead of an arbitrary per-inode limit.
+            page_cache: Mutex::new(LruCache::unbounded()),
             evict_listeners: Mutex::new(LinkedList::default()),
+            page_load_locks: [const { Mutex::new(()) }; PAGE_LOAD_LOCK_SHARDS],
             cache_op: Mutex::new(()),
+            cache_generation: AtomicU64::new(0),
             append_lock: RwLock::new(()),
         }
     }
@@ -389,10 +511,13 @@ impl CachedFileShared {
         Self {
             page_cache: Mutex::new(LruCache::unbounded()),
             evict_listeners: Mutex::new(LinkedList::default()),
+            page_load_locks: [const { Mutex::new(()) }; PAGE_LOAD_LOCK_SHARDS],
             cache_op: Mutex::new(()),
+            cache_generation: AtomicU64::new(0),
             append_lock: RwLock::new(()),
         }
     }
+
 }
 
 type FileCacheKey = (usize, u64);
@@ -402,10 +527,19 @@ struct CachedFileRecord {
     location: Location,
     shared: Arc<CachedFileShared>,
     in_memory: bool,
+    last_used: AtomicU64,
+}
+
+impl CachedFileRecord {
+    fn touch(&self) {
+        self.last_used
+            .store(FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed), Ordering::Relaxed);
+    }
 }
 
 static FILE_CACHES: spin::Lazy<RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>> =
     spin::Lazy::new(|| RwLock::new(BTreeMap::new()));
+static PAGE_CACHE_RECLAIM_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct CachedFile {
     inner: Location,
@@ -455,6 +589,9 @@ impl CachedFile {
                     location: location.clone(),
                     shared,
                     in_memory,
+                    last_used: AtomicU64::new(
+                        FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed),
+                    ),
                 })
             })
             .clone()
@@ -472,6 +609,7 @@ impl CachedFile {
             record
         };
         drop(guard);
+        record.touch();
 
         Self {
             inner: location,
@@ -481,9 +619,12 @@ impl CachedFile {
 
     fn get_existing(location: &Location) -> Option<Self> {
         let key = Self::file_cache_key(location);
-        FILE_CACHES.read().get(&key).cloned().map(|record| Self {
-            inner: location.clone(),
-            record,
+        FILE_CACHES.read().get(&key).cloned().map(|record| {
+            record.touch();
+            Self {
+                inner: location.clone(),
+                record,
+            }
         })
     }
 
@@ -501,6 +642,16 @@ impl CachedFile {
 
     fn shared(&self) -> &CachedFileShared {
         self.record.shared.as_ref()
+    }
+
+    fn page_load_lock(&self, pn: u32) -> &Mutex<()> {
+        &self.shared().page_load_locks[pn as usize % PAGE_LOAD_LOCK_SHARDS]
+    }
+
+    fn invalidate_unlocked_loads(&self) {
+        self.shared()
+            .cache_generation
+            .fetch_add(1, Ordering::Release);
     }
 
     fn page_range(range: Range<u64>) -> Range<u32> {
@@ -603,90 +754,15 @@ impl CachedFile {
         }
     }
 
-    fn writeback_page(
-        file: &FileNode,
-        file_len: u64,
-        pn: u32,
-        page: &mut PageCache,
-    ) -> VfsResult<()> {
-        if page.dirty {
-            let page_start = pn as u64 * PAGE_SIZE as u64;
-            let len = file_len.saturating_sub(page_start).min(PAGE_SIZE as u64) as usize;
-            if len > 0 {
-                Self::write_fully_at(file, &page.data()[..len], page_start)?;
-            }
-            page.dirty = false;
-        }
-        Ok(())
-    }
-
-    fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
-        self.notify_evict_listeners(pn, page);
-        if page.dirty {
-            let file_len = self.len()?;
-            Self::writeback_page(file, file_len, pn, page)?;
-            self.commit_len()?;
-        }
-        Ok(())
-    }
-
-    fn page_or_insert<'a>(
-        &self,
-        file: &FileNode,
-        cache: &'a mut LruCache<u32, PageCache>,
-        pn: u32,
-    ) -> VfsResult<(&'a mut PageCache, Option<(u32, PageCache)>)> {
-        // TODO: Matching the result of `get_mut` confuses compiler. See
-        // https://users.rust-lang.org/t/return-do-not-release-mutable-borrow/55757.
-        if cache.contains(&pn) {
-            return Ok((cache.get_mut(&pn).unwrap(), None));
-        }
-        let mut evicted = None;
-        if cache.len() == cache.cap().get() {
-            // Cache is full, remove the least recently used page
-            if let Some((pn, mut page)) = cache.pop_lru() {
-                if let Err(err) = self.evict_cache(file, pn, &mut page) {
-                    cache.put(pn, page);
-                    return Err(err);
-                }
-                evicted = Some((pn, page));
-            }
-        }
-
-        // Page not in cache, read it
+    fn load_page(&self, file: &FileNode, pn: u32, zeroed: bool) -> VfsResult<PageCache> {
         let mut page = PageCache::new()?;
-        page.data().fill(0);
-        if !self.in_memory() {
-            Self::read_fully_at(file, page.data(), pn as u64 * PAGE_SIZE as u64)?;
+        if zeroed || self.in_memory() {
+            page.data().fill(0);
+        } else {
+            let read = Self::read_fully_at(file, page.data(), pn as u64 * PAGE_SIZE as u64)?;
+            page.data()[read..].fill(0);
         }
-        cache.put(pn, page);
-        Ok((cache.get_mut(&pn).unwrap(), evicted))
-    }
-
-    fn page_or_insert_zeroed<'a>(
-        &self,
-        file: &FileNode,
-        cache: &'a mut LruCache<u32, PageCache>,
-        pn: u32,
-    ) -> VfsResult<(&'a mut PageCache, Option<(u32, PageCache)>)> {
-        if cache.contains(&pn) {
-            return Ok((cache.get_mut(&pn).unwrap(), None));
-        }
-        let mut evicted = None;
-        if cache.len() == cache.cap().get() {
-            if let Some((pn, mut page)) = cache.pop_lru() {
-                if let Err(err) = self.evict_cache(file, pn, &mut page) {
-                    cache.put(pn, page);
-                    return Err(err);
-                }
-                evicted = Some((pn, page));
-            }
-        }
-
-        let mut page = PageCache::new()?;
-        page.data().fill(0);
-        cache.put(pn, page);
-        Ok((cache.get_mut(&pn).unwrap(), evicted))
+        Ok(page)
     }
 
     fn can_zero_fill_write_page(old_len: u64, page_start: u64, range: &Range<usize>) -> bool {
@@ -702,6 +778,14 @@ impl CachedFile {
         f(self.shared().page_cache.lock().get_mut(&pn))
     }
 
+    fn page_ref_if_cached(&self, pn: u32) -> Option<PageRef> {
+        self.shared()
+            .page_cache
+            .lock()
+            .get_mut(&pn)
+            .map(|page| page.page_ref())
+    }
+
     fn with_page_or_insert_impl<R>(
         &self,
         pn: u32,
@@ -713,15 +797,39 @@ impl CachedFile {
             axsync::ProfileEvent::PageCache,
             self.shared() as *const CachedFileShared as usize,
         );
-        let _cache_guard = self.shared().cache_op.lock();
-        let mut guard = self.shared().page_cache.lock();
+        {
+            let mut cache = self.shared().page_cache.lock();
+            if cache.contains(&pn) {
+                return f(cache.get_mut(&pn).unwrap(), None);
+            }
+        }
+
+        let _page_guard = self.page_load_lock(pn).lock();
+        Self::reclaim_page_cache_if_needed(self.record.key);
         let file = self.inner().entry().as_file()?;
-        let (page, evicted) = if zeroed {
-            self.page_or_insert_zeroed(file, &mut guard, pn)?
-        } else {
-            self.page_or_insert(file, &mut guard, pn)?
-        };
-        f(page, evicted)
+
+        loop {
+            let generation = {
+                let _cache_guard = self.shared().cache_op.lock();
+                let mut cache = self.shared().page_cache.lock();
+                if cache.contains(&pn) {
+                    return f(cache.get_mut(&pn).unwrap(), None);
+                }
+                self.shared().cache_generation.load(Ordering::Acquire)
+            };
+
+            // Allocation and block I/O are the expensive part. Keep both the
+            // inode cache-operation lock and the LRU index lock free here.
+            let page = self.load_page(file, pn, zeroed)?;
+
+            let _cache_guard = self.shared().cache_op.lock();
+            if generation != self.shared().cache_generation.load(Ordering::Acquire) {
+                continue;
+            }
+            let mut cache = self.shared().page_cache.lock();
+            cache.put(pn, page);
+            return f(cache.get_mut(&pn).unwrap(), None);
+        }
     }
 
     pub fn with_page_or_insert<R>(
@@ -787,13 +895,87 @@ impl CachedFile {
         }
         let count = count.min(MAX_READAHEAD_BYTES);
         let end = offset.saturating_add(count as u64).min(len);
-        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let file = self.inner().entry().as_file()?;
+        let mut start_page = (offset / PAGE_SIZE as u64) as u32;
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+        let pages_per_batch = (READ_BATCH_BYTES / PAGE_SIZE) as u32;
 
-        for pn in start_page..end_page {
-            self.with_page_or_insert(pn, |_, _| Ok(()))?;
+        while start_page < end_page {
+            let batch_end = (start_page + pages_per_batch).min(end_page);
+            self.readahead_pages(file, start_page, batch_end)?;
+            start_page = batch_end;
         }
 
+        Ok(())
+    }
+
+    fn readahead_pages(&self, file: &FileNode, start_page: u32, end_page: u32) -> VfsResult<()> {
+        debug_assert!(start_page < end_page);
+        debug_assert!((end_page - start_page) as usize <= READ_BATCH_BYTES / PAGE_SIZE);
+
+        if {
+            let cache = self.shared().page_cache.lock();
+            (start_page..end_page).all(|pn| cache.contains(&pn))
+        } {
+            return Ok(());
+        }
+
+        // Consecutive pages in one batch use distinct load-lock shards. Keep
+        // them locked until publication so another fault cannot issue a
+        // duplicate read for any page in this window.
+        let mut load_shards = (start_page..end_page)
+            .map(|pn| pn as usize % PAGE_LOAD_LOCK_SHARDS)
+            .collect::<Vec<_>>();
+        load_shards.sort_unstable();
+        load_shards.dedup();
+        let mut load_guards = Vec::with_capacity(load_shards.len());
+        for shard in load_shards {
+            load_guards.push(self.shared().page_load_locks[shard].lock());
+        }
+
+        Self::reclaim_page_cache_if_needed(self.record.key);
+        let generation = {
+            let _cache_guard = self.shared().cache_op.lock();
+            self.shared().cache_generation.load(Ordering::Acquire)
+        };
+
+        let missing = {
+            let cache = self.shared().page_cache.lock();
+            (start_page..end_page)
+                .filter(|pn| !cache.contains(pn))
+                .collect::<Vec<_>>()
+        };
+        if missing.is_empty() {
+            return Ok(());
+        }
+
+        // One filesystem call lets ext4 map and submit a whole 64-KiB window
+        // while holding its filesystem lock once instead of once per 4-KiB
+        // page. Page allocation and copying remain outside cache-index locks.
+        let byte_len = (end_page - start_page) as usize * PAGE_SIZE;
+        let mut data = Vec::new();
+        data.resize(byte_len, 0);
+        Self::read_fully_at(file, &mut data, start_page as u64 * PAGE_SIZE as u64)?;
+
+        let mut pages = Vec::with_capacity(missing.len());
+        for pn in missing {
+            let mut page = PageCache::new()?;
+            let offset = (pn - start_page) as usize * PAGE_SIZE;
+            page.data().copy_from_slice(&data[offset..offset + PAGE_SIZE]);
+            pages.push((pn, page));
+        }
+
+        let _cache_guard = self.shared().cache_op.lock();
+        if generation != self.shared().cache_generation.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let mut cache = self.shared().page_cache.lock();
+        for (pn, page) in pages {
+            if !cache.contains(&pn) {
+                cache.put(pn, page);
+            }
+        }
+        drop(load_guards);
         Ok(())
     }
 
@@ -928,6 +1110,7 @@ impl CachedFile {
 
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         let _cache_guard = self.shared().cache_op.lock();
+        self.invalidate_unlocked_loads();
         let file = self.inner().entry().as_file()?;
         let old_len = self.len()?;
         file.set_len(len)?;
@@ -1038,6 +1221,7 @@ impl CachedFile {
             return Ok(());
         }
         let _cache_guard = self.shared().cache_op.lock();
+        self.invalidate_unlocked_loads();
         let page_range = Self::page_range(range);
         let file = self.inner().entry().as_file()?;
         let file_len = self.len()?;
@@ -1075,6 +1259,7 @@ impl CachedFile {
         let mut removed = Vec::new();
         {
             let _cache_guard = self.shared().cache_op.lock();
+            self.invalidate_unlocked_loads();
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
                 .iter()
@@ -1095,6 +1280,7 @@ impl CachedFile {
 
     fn discard_cached_pages(&self) {
         let _cache_guard = self.shared().cache_op.lock();
+        self.invalidate_unlocked_loads();
         let removed = {
             let mut cache = self.shared().page_cache.lock();
             let mut removed = Vec::new();
@@ -1110,40 +1296,97 @@ impl CachedFile {
         }
     }
 
-    fn prune_inactive_file_caches(retain_key: FileCacheKey) {
-        let inactive = FILE_CACHES
-            .read()
-            .iter()
-            .filter(|(key, record)| {
-                **key != retain_key && !record.in_memory && Arc::strong_count(record) == 1
-            })
-            .map(|(key, record)| (*key, record.clone()))
-            .collect::<Vec<_>>();
-        let inactive_after_current_drop = inactive.len() + 1;
-        if inactive_after_current_drop <= MAX_RETAINED_FILE_CACHE_RECORDS {
+    fn memory_watermarks() -> (usize, usize) {
+        let allocator = global_allocator();
+        let total = allocator.used_pages() + allocator.available_pages();
+        let minimum = MIN_FREE_MEMORY_BYTES / PAGE_SIZE;
+        let low = (total / FREE_MEMORY_LOW_DIVISOR).max(minimum).min(total);
+        let target = (total / FREE_MEMORY_TARGET_DIVISOR)
+            .max(low)
+            .min(total);
+        (low, target)
+    }
+
+    /// Reclaim the least-recently-used pages from this inode.  Clean and dirty
+    /// pages are detached under the cache lock; writeback and final drops take
+    /// place after releasing the index so unrelated page faults can continue.
+    fn reclaim_pages(&self, limit: usize) -> VfsResult<usize> {
+        if self.in_memory() || limit == 0 {
+            return Ok(0);
+        }
+
+        let _cache_guard = self.shared().cache_op.lock();
+        self.invalidate_unlocked_loads();
+        let file = self.inner().entry().as_file()?;
+        let file_len = self.len()?;
+        let removed = {
+            let mut cache = self.shared().page_cache.lock();
+            let mut removed = Vec::new();
+            for _ in 0..limit {
+                let Some((pn, page)) = cache.pop_lru() else {
+                    break;
+                };
+                let dirty = page.dirty;
+                removed.push((pn, page, dirty));
+            }
+            removed
+        };
+
+        let reclaimed = removed.len();
+        let mut dirty_pages = Vec::new();
+        for (pn, page, dirty) in removed {
+            self.notify_evict_listeners(pn, &page);
+            if dirty {
+                dirty_pages.push((pn, page));
+            }
+        }
+
+        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages)
+            .and_then(|_| self.commit_len().map(|_| ()));
+        if result.is_err() {
+            let mut cache = self.shared().page_cache.lock();
+            for (pn, page) in dirty_pages {
+                cache.put(pn, page);
+            }
+        }
+        result?;
+        Ok(reclaimed)
+    }
+
+    fn reclaim_page_cache_if_needed(retain_key: FileCacheKey) {
+        let allocator = global_allocator();
+        let (low, target) = Self::memory_watermarks();
+        if allocator.available_pages() >= low {
             return;
         }
 
-        for (key, record) in inactive
-            .into_iter()
-            .take(inactive_after_current_drop - MAX_RETAINED_FILE_CACHE_RECORDS)
-        {
-            let cached = Self::from_record(&record);
-            if let Err(err) = cached.drop_cached_pages() {
-                warn!("Failed to prune inactive file cache: {err:?}");
-                continue;
-            }
-            drop(cached);
+        let _reclaim_guard = PAGE_CACHE_RECLAIM_LOCK.lock();
+        if allocator.available_pages() >= low {
+            return;
+        }
 
-            let mut caches = FILE_CACHES.write();
-            if Arc::strong_count(&record) == 2
-                && caches
-                    .get(&key)
-                    .is_some_and(|current| Arc::ptr_eq(current, &record))
-            {
-                caches.remove(&key);
-                record.location.user_data().remove::<FileUserData>();
-                record.location.invalidate_metadata_cache();
+        let mut records = FILE_CACHES
+            .read()
+            .values()
+            .filter(|record| !record.in_memory)
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_unstable_by_key(|record| {
+            (
+                record.key == retain_key,
+                record.last_used.load(Ordering::Relaxed),
+            )
+        });
+
+        for record in records {
+            let available = allocator.available_pages();
+            if available >= target {
+                break;
+            }
+            let wanted = target - available;
+            let cached = Self::from_record(&record);
+            if let Err(err) = cached.reclaim_pages(wanted) {
+                warn!("Failed to reclaim file cache pages: {err:?}");
             }
         }
     }
@@ -1153,6 +1396,7 @@ impl CachedFile {
             return Ok(());
         }
         let _cache_guard = self.shared().cache_op.lock();
+        self.invalidate_unlocked_loads();
         let file = self.inner().entry().as_file()?;
         let file_len = self.len()?;
         let mut dirty_pages = {
@@ -1184,6 +1428,7 @@ impl CachedFile {
             return Ok(());
         }
         let _cache_guard = self.shared().cache_op.lock();
+        self.invalidate_unlocked_loads();
         let file = self.inner().entry().as_file()?;
         let file_len = self.len()?;
         let removed = {
@@ -1239,7 +1484,8 @@ impl Drop for CachedFile {
         if self.in_memory() || Arc::strong_count(&self.record) != 2 {
             return;
         }
-        Self::prune_inactive_file_caches(self.record.key);
+        self.record.touch();
+        Self::reclaim_page_cache_if_needed(self.record.key);
     }
 }
 
@@ -1441,6 +1687,45 @@ impl FileBackend {
         match self {
             Self::Cached(cached) => cached.readahead(offset, count),
             Self::Direct(_) => Ok(()),
+        }
+    }
+
+    /// Returns a stable reference to one aligned cached page. Direct backends
+    /// intentionally fall back to copying because they have no cache-owned
+    /// frame to pin.
+    pub fn page_ref_at(&self, offset: u64) -> VfsResult<Option<PageRef>> {
+        if !offset.is_multiple_of(PAGE_SIZE as u64) {
+            return Ok(None);
+        }
+        let Ok(pn) = u32::try_from(offset / PAGE_SIZE as u64) else {
+            return Ok(None);
+        };
+        match self {
+            Self::Cached(cached) => {
+                if let Some(page) = cached.page_ref_if_cached(pn) {
+                    Ok(Some(page))
+                } else {
+                    cached
+                        .with_page_or_insert(pn, |page, _| Ok(page.page_ref()))
+                        .map(Some)
+                }
+            }
+            Self::Direct(_) => Ok(None),
+        }
+    }
+
+    /// Returns an already resident aligned cache page without issuing I/O.
+    /// This is used by mmap fault-around: the faulting page may perform
+    /// readahead, while neighboring PTEs are installed only for pages that are
+    /// ready by the time the address-space lock is reacquired.
+    pub fn cached_page_ref_at(&self, offset: u64) -> Option<PageRef> {
+        if !offset.is_multiple_of(PAGE_SIZE as u64) {
+            return None;
+        }
+        let pn = u32::try_from(offset / PAGE_SIZE as u64).ok()?;
+        match self {
+            Self::Cached(cached) => cached.page_ref_if_cached(pn),
+            Self::Direct(_) => None,
         }
     }
 

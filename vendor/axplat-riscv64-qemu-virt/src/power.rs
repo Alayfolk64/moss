@@ -22,6 +22,8 @@ impl PowerIf for PowerImpl {
 
     /// Shutdown the whole system.
     fn system_off() -> ! {
+        #[cfg(feature = "irq")]
+        crate::irq::log_ipi_stats();
         info!("Shutting down...");
         sbi_rt::system_reset(sbi_rt::Shutdown, sbi_rt::NoReason);
         warn!("It should shutdown!");

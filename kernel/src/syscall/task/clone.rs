@@ -197,7 +197,7 @@ impl CloneArgs {
         let new_proc_data = if flags.contains(CloneFlags::THREAD) {
             new_task
                 .ctx_mut()
-                .set_page_table_root(old_proc_data.aspace().lock().page_table_root());
+                .set_page_table_root(old_proc_data.aspace().read().page_table_root());
             old_proc_data.clone()
         } else {
             let proc = if flags.contains(CloneFlags::PARENT) {
@@ -226,7 +226,7 @@ impl CloneArgs {
             };
             new_task
                 .ctx_mut()
-                .set_page_table_root(aspace.lock().page_table_root());
+                .set_page_table_root(aspace.read().page_table_root());
 
             let signal_actions = if flags.contains(CloneFlags::SIGHAND) {
                 old_proc_data.signal.actions.clone()
@@ -439,6 +439,10 @@ pub fn sys_unshare(flags: u64) -> AxResult<isize> {
             return Err(AxError::from(LinuxError::EPERM));
         }
         warn!("sys_unshare: namespace flags detected, stub support only");
+    }
+
+    if flags.contains(CloneFlags::FILES) {
+        crate::syscall::unshare_current_fd_table();
     }
 
     Ok(0)

@@ -7,7 +7,6 @@ use axhal::{
     mem::{phys_to_virt, virt_to_phys},
     paging::{MappingFlags, PageSize, PageTable, PageTableMut},
 };
-use axsync::Mutex;
 use enum_dispatch::enum_dispatch;
 use kspin::SpinNoIrq;
 use memory_addr::{DynPageIter, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
@@ -18,8 +17,25 @@ mod file;
 mod linear;
 mod shared;
 
+pub(crate) use self::cow::CowFaultPlan;
 pub use self::shared::SharedPages;
-use super::AddrSpace;
+use super::{AddrSpace, AddrSpaceLock};
+
+/// Result of the short, locked phase of a page fault.
+pub(crate) enum FaultPreparation {
+    /// The mapping already satisfies the faulting access.
+    Handled,
+    /// A private page can be prepared without holding the address-space lock.
+    Cow(CowFaultPlan),
+    /// This fault still needs the regular locked backend path.
+    Fallback,
+}
+
+/// Result of revalidating a page prepared outside the address-space lock.
+pub(crate) enum FaultCommit {
+    Handled,
+    Stale,
+}
 
 const LOCAL_FRAME_CACHE_CAPACITY: usize = 32;
 
@@ -97,8 +113,21 @@ fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
                 }
             };
             let mut cache = local_frame_cache().lock();
+            let mut first_uncached = LOCAL_FRAME_CACHE_CAPACITY;
             for index in 1..LOCAL_FRAME_CACHE_CAPACITY {
-                cache.push(virt_to_phys(VirtAddr::from(batch + index * PAGE_SIZE_4K)));
+                let frame = virt_to_phys(VirtAddr::from(batch + index * PAGE_SIZE_4K));
+                if !cache.push(frame) {
+                    first_uncached = index;
+                    break;
+                }
+            }
+            drop(cache);
+            for index in first_uncached..LOCAL_FRAME_CACHE_CAPACITY {
+                global_allocator().dealloc_pages(
+                    batch + index * PAGE_SIZE_4K,
+                    1,
+                    UsageKind::VirtMem,
+                );
             }
             virt_to_phys(VirtAddr::from(batch))
         }
@@ -185,7 +214,7 @@ pub trait BackendOps {
         flags: MappingFlags,
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
-        new_aspace: &Arc<Mutex<AddrSpace>>,
+        new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend>;
 }
 
@@ -197,6 +226,36 @@ pub enum Backend {
     Cow(cow::CowBackend),          // Copy-on-write，写时复制
     Shared(shared::SharedBackend), // 共享内存
     File(file::FileBackend),       // 文件映射
+}
+
+impl Backend {
+    pub(crate) fn prepare_fault(
+        &self,
+        vaddr: VirtAddr,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> FaultPreparation {
+        match self {
+            Self::Cow(backend) => backend.prepare_fault(vaddr, area_range, flags, access_flags, pt),
+            _ => FaultPreparation::Fallback,
+        }
+    }
+
+    pub(crate) fn commit_fault(
+        &self,
+        plan: &mut CowFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        match self {
+            Self::Cow(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
+            _ => Ok(FaultCommit::Stale),
+        }
+    }
 }
 
 impl MappingBackend for Backend {

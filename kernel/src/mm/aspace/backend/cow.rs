@@ -1,24 +1,30 @@
-use alloc::{collections::BTreeMap, sync::Arc};
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::{
     slice,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
 use axerrno::{AxError, AxResult};
-use axfs::FileBackend;
+use axfs::{FileBackend, PageRef};
 use axhal::{
     mem::phys_to_virt,
-    paging::{MappingFlags, PageSize, PageTableMut, PagingError},
+    paging::{MappingFlags, PageSize, PageTable, PageTableMut, PagingError},
 };
 use axsync::Mutex;
 use kspin::SpinNoIrq;
-use memory_addr::{PhysAddr, VirtAddr, VirtAddrRange};
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
-    AddrSpace, Backend, BackendOps, PopulateCallback, alloc_frame, dealloc_frame, pages_in,
+    AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
+    alloc_frame, dealloc_frame, pages_in,
 };
 
 struct FrameRefCnt(usize);
+
+/// Linux defaults `fault_around_bytes` to 64 KiB.  Use the same naturally
+/// aligned window so sequential instruction/data access amortizes the trap,
+/// address-space lock and page-table update over up to sixteen cached pages.
+const FILE_FAULT_AROUND_BYTES: usize = 64 * 1024;
 
 impl FrameRefCnt {
     // This function may lock FRAME_TABLE again, so the caller should drop the lock first.
@@ -75,6 +81,7 @@ impl FrameTableRefCount {
 }
 
 const FRAME_TABLE_SHARDS: usize = 64;
+const FILE_PAGE_SHARDS: usize = 64;
 
 static FRAME_TABLE: [SpinNoIrq<FrameTableRefCount>; FRAME_TABLE_SHARDS] =
     [const { SpinNoIrq::new(FrameTableRefCount::new()) }; FRAME_TABLE_SHARDS];
@@ -82,6 +89,35 @@ static FRAME_TABLE: [SpinNoIrq<FrameTableRefCount>; FRAME_TABLE_SHARDS] =
 fn frame_table(paddr: PhysAddr) -> &'static SpinNoIrq<FrameTableRefCount> {
     let index = (paddr.as_usize() / memory_addr::PAGE_SIZE_4K) % FRAME_TABLE_SHARDS;
     &FRAME_TABLE[index]
+}
+
+struct FilePageRefs {
+    shards: [Mutex<BTreeMap<VirtAddr, PageRef>>; FILE_PAGE_SHARDS],
+}
+
+impl FilePageRefs {
+    fn new() -> Self {
+        Self {
+            shards: [const { Mutex::new(BTreeMap::new()) }; FILE_PAGE_SHARDS],
+        }
+    }
+
+    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, PageRef>> {
+        let page = vaddr.as_usize() / memory_addr::PAGE_SIZE_4K;
+        &self.shards[page % FILE_PAGE_SHARDS]
+    }
+
+    fn get(&self, vaddr: VirtAddr) -> Option<PageRef> {
+        self.shard(vaddr).lock().get(&vaddr).cloned()
+    }
+
+    fn insert(&self, vaddr: VirtAddr, page: PageRef) {
+        self.shard(vaddr).lock().insert(vaddr, page);
+    }
+
+    fn remove(&self, vaddr: VirtAddr) -> Option<PageRef> {
+        self.shard(vaddr).lock().remove(&vaddr)
+    }
 }
 
 /// Copy-on-write mapping backend.
@@ -92,6 +128,10 @@ pub struct CowBackend {
     size: PageSize,
     file: Option<(FileBackend, u64, Option<u64>)>,
     mapped_pages: AtomicUsize,
+    identity: Arc<()>,
+    /// Cached file pages mapped directly into this address space. Keeping the
+    /// reference here pins the frame even after it leaves the file-cache LRU.
+    file_pages: Arc<FilePageRefs>,
 }
 
 impl Clone for CowBackend {
@@ -101,11 +141,181 @@ impl Clone for CowBackend {
             size: self.size,
             file: self.file.clone(),
             mapped_pages: AtomicUsize::new(self.mapped_pages.load(Ordering::Relaxed)),
+            identity: self.identity.clone(),
+            file_pages: self.file_pages.clone(),
         }
     }
 }
 
+/// A not-yet-mapped private page. Allocation and file I/O are deliberately
+/// performed while no address-space lock is held. `Drop` releases a page that
+/// loses the revalidation race.
+pub(crate) struct CowFaultPlan {
+    identity: Arc<()>,
+    vaddr: VirtAddr,
+    mapping_start: VirtAddr,
+    area_range: VirtAddrRange,
+    size: PageSize,
+    file: Option<(FileBackend, u64, Option<u64>)>,
+    access_flags: MappingFlags,
+    frame: Option<PhysAddr>,
+    file_pages: Vec<(VirtAddr, PageRef)>,
+    source: Option<CowFaultSource>,
+}
+
+enum CowFaultSource {
+    /// One extra COW reference pins an anonymous frame while the address-space
+    /// lock is released.
+    Anonymous(PhysAddr),
+    /// A cloned cache reference pins a directly mapped file page.
+    File(PageRef),
+}
+
+impl CowFaultSource {
+    fn paddr(&self) -> PhysAddr {
+        match self {
+            Self::Anonymous(paddr) => *paddr,
+            Self::File(page) => page.paddr(),
+        }
+    }
+}
+
+impl CowFaultPlan {
+    pub(crate) fn execute(&mut self) -> AxResult {
+        if let Some(source) = &self.source {
+            let frame = alloc_referenced_frame(false, self.size)?;
+            self.frame = Some(frame);
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    phys_to_virt(source.paddr()).as_ptr(),
+                    phys_to_virt(frame).as_mut_ptr(),
+                    self.size as _,
+                );
+            }
+            return Ok(());
+        }
+
+        if let Some((file, mapping_file_start, file_end)) = &self.file {
+            let start = self
+                .mapping_start
+                .as_usize()
+                .saturating_sub(self.vaddr.as_usize());
+            assert!(start < self.size as usize);
+
+            let fault_file_start = *mapping_file_start
+                + self
+                    .vaddr
+                    .as_usize()
+                    .saturating_sub(self.mapping_start.as_usize()) as u64;
+            let max_read = file_end
+                .map_or(u64::MAX, |end| end.saturating_sub(fault_file_start))
+                .min((self.size as usize).saturating_sub(start) as u64)
+                as usize;
+
+            // Complete aligned cached pages can be installed read-only and
+            // copied only when actually written.  Like Linux fault-around,
+            // synchronously read ahead one naturally aligned 64 KiB window,
+            // then install every neighboring page that is ready.  Never cross
+            // the current VMA or the file-backed portion of the mapping.
+            if self.size == PageSize::Size4K
+                && !self.access_flags.contains(MappingFlags::WRITE)
+                && start == 0
+                && max_read == self.size as usize
+            {
+                let page_size = self.size as usize;
+                let window_start = self.vaddr.align_down(FILE_FAULT_AROUND_BYTES);
+                let window_end = window_start + FILE_FAULT_AROUND_BYTES;
+                let first = window_start
+                    .max(self.area_range.start.align_up(page_size))
+                    .max(self.mapping_start.align_up(page_size));
+                let last = window_end.min(self.area_range.end.align_down(page_size));
+
+                if first < last {
+                    let first_offset = *mapping_file_start
+                        + first
+                            .as_usize()
+                            .saturating_sub(self.mapping_start.as_usize())
+                            as u64;
+                    let file_limit = file_end.unwrap_or(u64::MAX);
+                    let byte_count =
+                        (last - first).min(file_limit.saturating_sub(first_offset) as usize);
+                    let _ = file.readahead(first_offset, byte_count);
+                }
+
+                if let Some(page) = file.page_ref_at(fault_file_start)? {
+                    // Put the faulting page first so commit either resolves the
+                    // original fault or reports failure before optional pages.
+                    self.file_pages.push((self.vaddr, page));
+                    let mut addr = first;
+                    while addr < last {
+                        if addr != self.vaddr {
+                            let offset = *mapping_file_start
+                                + addr
+                                    .as_usize()
+                                    .saturating_sub(self.mapping_start.as_usize())
+                                    as u64;
+                            let complete = file_end
+                                .is_none_or(|end| offset.saturating_add(page_size as u64) <= end);
+                            if complete && let Some(page) = file.cached_page_ref_at(offset) {
+                                self.file_pages.push((addr, page));
+                            }
+                        }
+                        addr += page_size;
+                    }
+                    return Ok(());
+                }
+            }
+
+            let frame = alloc_referenced_frame(true, self.size)?;
+            self.frame = Some(frame);
+            let buf = unsafe {
+                slice::from_raw_parts_mut(phys_to_virt(frame).as_mut_ptr(), self.size as _)
+            };
+            file.read_at(&mut &mut buf[start..start + max_read], fault_file_start)?;
+        } else {
+            self.frame = Some(alloc_referenced_frame(true, self.size)?);
+        }
+        Ok(())
+    }
+}
+
+impl Drop for CowFaultPlan {
+    fn drop(&mut self) {
+        if let Some(frame) = self.frame.take() {
+            drop_referenced_frame(frame, self.size);
+        }
+        if let Some(CowFaultSource::Anonymous(frame)) = self.source.take() {
+            drop_referenced_frame(frame, self.size);
+        }
+    }
+}
+
+fn alloc_referenced_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
+    let frame = alloc_frame(zeroed, size)?;
+    frame_table(frame).lock().init_frame(frame);
+    Ok(frame)
+}
+
+fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
+    let frame_ref = frame_table(frame)
+        .lock()
+        .get_frame_ref(frame)
+        .expect("new frame must be referenced");
+    frame_ref.lock().drop_frame(frame, size);
+}
+
 impl CowBackend {
+    fn clone_for_fork(&self) -> Self {
+        Self {
+            start: self.start,
+            size: self.size,
+            file: self.file.clone(),
+            mapped_pages: AtomicUsize::new(0),
+            identity: Arc::new(()),
+            file_pages: Arc::new(FilePageRefs::new()),
+        }
+    }
+
     fn dec_mapped_pages(&self) {
         let mut old = self.mapped_pages.load(Ordering::Relaxed);
         while old != 0 {
@@ -122,17 +332,199 @@ impl CowBackend {
     }
 
     fn alloc_new_frame(&self, zeroed: bool) -> AxResult<PhysAddr> {
-        let frame = alloc_frame(zeroed, self.size)?;
-        frame_table(frame).lock().init_frame(frame);
-        Ok(frame)
+        alloc_referenced_frame(zeroed, self.size)
     }
 
     fn drop_new_frame(&self, frame: PhysAddr) {
-        let frame_ref = frame_table(frame)
-            .lock()
-            .get_frame_ref(frame)
-            .expect("new frame must be referenced");
-        frame_ref.lock().drop_frame(frame, self.size);
+        drop_referenced_frame(frame, self.size);
+    }
+
+    pub(crate) fn prepare_fault(
+        &self,
+        vaddr: VirtAddr,
+        area_range: VirtAddrRange,
+        _flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> FaultPreparation {
+        if self.size != PageSize::Size4K {
+            return FaultPreparation::Fallback;
+        }
+        let vaddr = vaddr.align_down(self.size as usize);
+        match pt.query(vaddr) {
+            Ok((paddr, page_flags, page_size)) => {
+                if page_size == self.size && page_flags.contains(access_flags) {
+                    FaultPreparation::Handled
+                } else if page_size == self.size
+                    && access_flags.contains(MappingFlags::WRITE)
+                    && !page_flags.contains(MappingFlags::WRITE)
+                {
+                    let file_page = self.file_pages.get(vaddr);
+                    let source = if let Some(page) = file_page {
+                        if page.paddr() != paddr {
+                            return FaultPreparation::Fallback;
+                        }
+                        CowFaultSource::File(page)
+                    } else {
+                        let Some(frame_ref) = frame_table(paddr).lock().get_frame_ref(paddr) else {
+                            return FaultPreparation::Fallback;
+                        };
+                        let mut frame_ref = frame_ref.lock();
+                        if frame_ref.0 == 1 {
+                            return FaultPreparation::Fallback;
+                        }
+                        let Some(count) = frame_ref.0.checked_add(1) else {
+                            return FaultPreparation::Fallback;
+                        };
+                        frame_ref.0 = count;
+                        CowFaultSource::Anonymous(paddr)
+                    };
+                    FaultPreparation::Cow(CowFaultPlan {
+                        identity: self.identity.clone(),
+                        vaddr,
+                        mapping_start: self.start,
+                        area_range,
+                        size: self.size,
+                        file: None,
+                        access_flags,
+                        frame: None,
+                        file_pages: Vec::new(),
+                        source: Some(source),
+                    })
+                } else {
+                    FaultPreparation::Fallback
+                }
+            }
+            Err(PagingError::NotMapped) => FaultPreparation::Cow(CowFaultPlan {
+                identity: self.identity.clone(),
+                vaddr,
+                mapping_start: self.start,
+                area_range,
+                size: self.size,
+                file: self.file.clone(),
+                access_flags,
+                frame: None,
+                file_pages: Vec::new(),
+                source: None,
+            }),
+            Err(_) => FaultPreparation::Fallback,
+        }
+    }
+
+    pub(crate) fn commit_fault(
+        &self,
+        plan: &mut CowFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        if !Arc::ptr_eq(&self.identity, &plan.identity) || self.size != plan.size {
+            return Ok(FaultCommit::Stale);
+        }
+
+        match pt.query(plan.vaddr) {
+            Ok((paddr, page_flags, page_size)) => {
+                if page_size == self.size && page_flags.contains(access_flags) {
+                    Ok(FaultCommit::Handled)
+                } else if let Some(source) = plan.source.as_ref() {
+                    if page_size != self.size
+                        || paddr != source.paddr()
+                        || !access_flags.contains(MappingFlags::WRITE)
+                        || page_flags.contains(MappingFlags::WRITE)
+                    {
+                        return Ok(FaultCommit::Stale);
+                    }
+
+                    let frame = plan.frame.ok_or(AxError::BadAddress)?;
+                    match source {
+                        CowFaultSource::File(_) => {
+                            let mut file_pages = self.file_pages.shard(plan.vaddr).lock();
+                            let Some(mapped_page) = file_pages.get(&plan.vaddr) else {
+                                return Ok(FaultCommit::Stale);
+                            };
+                            if mapped_page.paddr() != paddr {
+                                return Ok(FaultCommit::Stale);
+                            }
+                            if !pt.remap_4k_concurrent_if(plan.vaddr, paddr, frame, flags)? {
+                                return Ok(FaultCommit::Stale);
+                            }
+                            file_pages.remove(&plan.vaddr);
+                        }
+                        CowFaultSource::Anonymous(_) => {
+                            if !pt.remap_4k_concurrent_if(plan.vaddr, paddr, frame, flags)? {
+                                return Ok(FaultCommit::Stale);
+                            }
+                            // Drop the reference formerly owned by this PTE;
+                            // the plan's extra reference keeps the source alive
+                            // until the unlocked copy is completely committed.
+                            drop_referenced_frame(paddr, self.size);
+                        }
+                    }
+                    plan.frame = None;
+                    Ok(FaultCommit::Handled)
+                } else {
+                    Ok(FaultCommit::Stale)
+                }
+            }
+            Err(PagingError::NotMapped) => {
+                if plan.source.is_some() {
+                    return Ok(FaultCommit::Stale);
+                }
+                if !plan.file_pages.is_empty() {
+                    let pages = core::mem::take(&mut plan.file_pages);
+                    let mut installed = 0;
+                    for (addr, page) in pages {
+                        if !area_range.contains(addr) {
+                            continue;
+                        }
+                        match pt.query(addr) {
+                            Err(PagingError::NotMapped) => {
+                                // Hold only this address shard while publishing
+                                // the PTE and its cache-page pin. A COW fault on
+                                // the same page cannot observe a half-published
+                                // mapping, while unrelated pages remain free.
+                                let mut file_pages = self.file_pages.shard(addr).lock();
+                                if let Err(err) = pt.map_4k_concurrent(
+                                    addr,
+                                    page.paddr(),
+                                    flags - MappingFlags::WRITE,
+                                ) {
+                                    if addr == plan.vaddr && err != PagingError::AlreadyMapped {
+                                        return Err(err.into());
+                                    }
+                                    continue;
+                                }
+                                file_pages.insert(addr, page);
+                                installed += 1;
+                            }
+                            Ok(_) => {}
+                            Err(err) if addr == plan.vaddr => return Err(err.into()),
+                            Err(_) => {}
+                        }
+                    }
+                    self.mapped_pages.fetch_add(installed, Ordering::Relaxed);
+                    return match pt.query(plan.vaddr) {
+                        Ok((_paddr, page_flags, page_size))
+                            if page_size == self.size && page_flags.contains(access_flags) =>
+                        {
+                            Ok(FaultCommit::Handled)
+                        }
+                        _ => Ok(FaultCommit::Stale),
+                    };
+                } else {
+                    let frame = plan.frame.ok_or(AxError::BadAddress)?;
+                    match pt.map_4k_concurrent(plan.vaddr, frame, flags) {
+                        Ok(()) => plan.frame = None,
+                        Err(PagingError::AlreadyMapped) => return Ok(FaultCommit::Stale),
+                        Err(err) => return Err(err.into()),
+                    }
+                }
+                self.mapped_pages.fetch_add(1, Ordering::Relaxed);
+                Ok(FaultCommit::Handled)
+            }
+            Err(_) => Err(AxError::BadAddress),
+        }
     }
 
     fn alloc_new_at(
@@ -203,9 +595,18 @@ impl CowBackend {
         for vaddr in pages {
             match pt.unmap(vaddr) {
                 Ok((frame, _flags, page_size)) => {
+                    let file_page = self.file_pages.remove(vaddr);
                     pt.finish();
                     if page_size != self.size {
                         warn!("rollback COW clone got unexpected page size: {page_size:?}");
+                        continue;
+                    }
+
+                    if let Some(page) = file_page {
+                        if page.paddr() != frame {
+                            warn!("rollback COW clone got mismatched cached frame");
+                        }
+                        self.dec_mapped_pages();
                         continue;
                     }
 
@@ -214,6 +615,7 @@ impl CowBackend {
                         continue;
                     };
                     frame_ref.lock().drop_frame(frame, self.size);
+                    self.dec_mapped_pages();
                 }
                 Err(PagingError::NotMapped) => {}
                 Err(err) => warn!("rollback COW clone failed to unmap {vaddr:?}: {err:?}"),
@@ -228,6 +630,40 @@ impl CowBackend {
         flags: MappingFlags,
         pt: &mut PageTableMut,
     ) -> AxResult {
+        // End the map guard before allocating or changing the page table.  In
+        // particular, the error paths below must be able to put the pin back
+        // without recursively locking `file_pages`.
+        let file_page = self.file_pages.remove(vaddr);
+        if let Some(page) = file_page {
+            if page.paddr() != paddr {
+                self.file_pages.insert(vaddr, page);
+                return Err(AxError::BadAddress);
+            }
+
+            let new_frame = match self.alloc_new_frame(false) {
+                Ok(frame) => frame,
+                Err(err) => {
+                    self.file_pages.insert(vaddr, page);
+                    return Err(err);
+                }
+            };
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    phys_to_virt(paddr).as_ptr(),
+                    phys_to_virt(new_frame).as_mut_ptr(),
+                    self.size as _,
+                );
+            }
+            if let Err(err) = pt.remap(vaddr, new_frame, flags) {
+                self.drop_new_frame(new_frame);
+                self.file_pages.insert(vaddr, page);
+                return Err(err.into());
+            }
+            pt.finish();
+            drop(page);
+            return Ok(());
+        }
+
         let frame_ref = frame_table(paddr)
             .lock()
             .get_frame_ref(paddr)
@@ -279,13 +715,20 @@ impl BackendOps for CowBackend {
         for addr in pages_in(range, self.size)? {
             if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
                 assert_eq!(page_size, self.size);
+                let file_page = self.file_pages.remove(addr);
                 pt.finish();
-                let frame_ref = frame_table(frame)
-                    .lock()
-                    .get_frame_ref(frame)
-                    .ok_or(AxError::BadAddress)?;
-                let mut frame_ref = frame_ref.lock();
-                frame_ref.drop_frame(frame, self.size);
+                if let Some(page) = file_page {
+                    if page.paddr() != frame {
+                        warn!("unmapping COW page got mismatched cached frame");
+                    }
+                } else {
+                    let frame_ref = frame_table(frame)
+                        .lock()
+                        .get_frame_ref(frame)
+                        .ok_or(AxError::BadAddress)?;
+                    let mut frame_ref = frame_ref.lock();
+                    frame_ref.drop_frame(frame, self.size);
+                }
                 self.dec_mapped_pages();
             } else {
                 // Deallocation is needn't if the page is not allocated.
@@ -336,12 +779,13 @@ impl BackendOps for CowBackend {
         flags: MappingFlags,
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<Mutex<AddrSpace>>,
+        _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
+        let new_backend = self.clone_for_fork();
         // Forking untouched lazy COW regions is common (e.g. fork14). In that
         // case, there is nothing in page tables to duplicate.
         if self.mapped_pages.load(Ordering::Relaxed) == 0 {
-            return Ok(Backend::Cow(self.clone()));
+            return Ok(Backend::Cow(new_backend));
         }
 
         let cow_flags = flags - MappingFlags::WRITE;
@@ -355,23 +799,39 @@ impl BackendOps for CowBackend {
                     // - Update its permissions in the old page table using `flags`.
                     // - Map the same physical page into the new page table at the same
                     // virtual address, with the same page size and `flags`.
-                    if let Err(err) =
+                    let file_page = self.file_pages.get(vaddr);
+                    let result = if let Some(page) = file_page {
+                        if page.paddr() != paddr {
+                            Err(AxError::BadAddress)
+                        } else {
+                            (|| -> AxResult {
+                                old_pt.protect(vaddr, cow_flags)?;
+                                new_pt.map(vaddr, paddr, self.size, cow_flags)?;
+                                new_backend.file_pages.insert(vaddr, page);
+                                Ok(())
+                            })()
+                        }
+                    } else {
                         self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)
-                    {
-                        self.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                    };
+                    if let Err(err) = result {
+                        new_backend
+                            .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
                         return Err(err);
                     }
+                    new_backend.mapped_pages.fetch_add(1, Ordering::Relaxed);
                 }
                 // If the page is not mapped, skip it.
                 Err(PagingError::NotMapped) => {}
                 Err(_) => {
-                    self.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                    new_backend
+                        .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
                     return Err(AxError::BadAddress);
                 }
             };
         }
 
-        Ok(Backend::Cow(self.clone()))
+        Ok(Backend::Cow(new_backend))
     }
 }
 
@@ -388,6 +848,8 @@ impl Backend {
             size,
             file: Some((file, file_start, file_end)),
             mapped_pages: AtomicUsize::new(0),
+            identity: Arc::new(()),
+            file_pages: Arc::new(FilePageRefs::new()),
         })
     }
 
@@ -397,6 +859,8 @@ impl Backend {
             size,
             file: None,
             mapped_pages: AtomicUsize::new(0),
+            identity: Arc::new(()),
+            file_pages: Arc::new(FilePageRefs::new()),
         })
     }
 }

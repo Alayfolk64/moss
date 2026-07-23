@@ -1,5 +1,9 @@
 use alloc::sync::Arc;
-use core::{fmt, ops::DerefMut};
+use core::{
+    fmt,
+    ops::DerefMut,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use axerrno::{AxError, AxResult, ax_bail};
 use axhal::{
@@ -7,11 +11,119 @@ use axhal::{
     paging::{MappingFlags, PageTable, PagingError},
     trap::PageFaultFlags,
 };
-use axsync::Mutex;
+use event_listener::{Event, listener};
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
 use memory_set::{MemoryArea, MemorySet};
+
+const WRITER_LOCKED: usize = 1;
+const ONE_READER: usize = 2;
+
+pub(crate) struct RawAddrSpaceRwLock {
+    state: AtomicUsize,
+    waiting_writers: AtomicUsize,
+    event: Event,
+}
+
+impl RawAddrSpaceRwLock {
+    const fn new() -> Self {
+        Self {
+            state: AtomicUsize::new(0),
+            waiting_writers: AtomicUsize::new(0),
+            event: Event::new(),
+        }
+    }
+}
+
+unsafe impl lock_api::RawRwLock for RawAddrSpaceRwLock {
+    const INIT: Self = Self::new();
+    type GuardMarker = lock_api::GuardSend;
+
+    fn lock_shared(&self) {
+        loop {
+            if self.try_lock_shared() {
+                return;
+            }
+            listener!(self.event => waiter);
+            if self.try_lock_shared() {
+                return;
+            }
+            axtask::future::block_on(waiter);
+        }
+    }
+
+    fn try_lock_shared(&self) -> bool {
+        if self.waiting_writers.load(Ordering::Acquire) != 0 {
+            return false;
+        }
+        let mut state = self.state.load(Ordering::Acquire);
+        loop {
+            if state & WRITER_LOCKED != 0 {
+                return false;
+            }
+            match self.state.compare_exchange_weak(
+                state,
+                state + ONE_READER,
+                Ordering::Acquire,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(next) => state = next,
+            }
+        }
+    }
+
+    unsafe fn unlock_shared(&self) {
+        let previous = self.state.fetch_sub(ONE_READER, Ordering::Release);
+        debug_assert!(previous >= ONE_READER && previous & WRITER_LOCKED == 0);
+        if previous == ONE_READER {
+            self.event.notify(usize::MAX);
+        }
+    }
+
+    fn lock_exclusive(&self) {
+        self.waiting_writers.fetch_add(1, Ordering::AcqRel);
+        loop {
+            if self
+                .state
+                .compare_exchange(0, WRITER_LOCKED, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+            {
+                self.waiting_writers.fetch_sub(1, Ordering::Release);
+                return;
+            }
+            listener!(self.event => waiter);
+            if self
+                .state
+                .compare_exchange(0, WRITER_LOCKED, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+            {
+                self.waiting_writers.fetch_sub(1, Ordering::Release);
+                return;
+            }
+            axtask::future::block_on(waiter);
+        }
+    }
+
+    fn try_lock_exclusive(&self) -> bool {
+        self.state
+            .compare_exchange(0, WRITER_LOCKED, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+    }
+
+    unsafe fn unlock_exclusive(&self) {
+        debug_assert_eq!(self.state.load(Ordering::Relaxed), WRITER_LOCKED);
+        self.state.store(0, Ordering::Release);
+        self.event.notify(usize::MAX);
+    }
+}
+
+pub(crate) type BlockingRwLock<T> = lock_api::RwLock<RawAddrSpaceRwLock, T>;
+pub(crate) type BlockingRwLockReadGuard<'a, T> =
+    lock_api::RwLockReadGuard<'a, RawAddrSpaceRwLock, T>;
+pub(crate) type BlockingRwLockWriteGuard<'a, T> =
+    lock_api::RwLockWriteGuard<'a, RawAddrSpaceRwLock, T>;
 
 mod backend;
 
@@ -22,6 +134,30 @@ pub struct AddrSpace {
     va_range: VirtAddrRange,
     areas: MemorySet<Backend>,
     pt: PageTable,
+}
+
+/// Synchronizes structural address-space changes while allowing unrelated
+/// page faults to inspect and update independent PTEs concurrently.
+pub struct AddrSpaceLock(BlockingRwLock<AddrSpace>);
+
+impl AddrSpaceLock {
+    pub(crate) fn new(aspace: AddrSpace) -> Self {
+        Self(BlockingRwLock::new(aspace))
+    }
+
+    /// Existing mapping-changing operations take the exclusive side.
+    pub(crate) fn lock(&self) -> BlockingRwLockWriteGuard<'_, AddrSpace> {
+        self.0.write()
+    }
+
+    /// Page faults take the shared side only for VMA lookup and PTE commit.
+    pub(crate) fn read(&self) -> BlockingRwLockReadGuard<'_, AddrSpace> {
+        self.0.read()
+    }
+
+    pub(crate) fn try_lock(&self) -> Option<BlockingRwLockWriteGuard<'_, AddrSpace>> {
+        self.0.try_write()
+    }
 }
 
 impl AddrSpace {
@@ -407,13 +543,106 @@ impl AddrSpace {
         false
     }
 
+    /// Handles a single private missing-page fault without keeping the process
+    /// address-space lock across frame allocation and file I/O.
+    pub fn handle_page_fault_concurrent(
+        aspace: &Arc<AddrSpaceLock>,
+        vaddr: VirtAddr,
+        access_flags: PageFaultFlags,
+    ) -> bool {
+        Self::handle_page_fault_concurrent_inner(aspace, vaddr, access_flags, true)
+    }
+
+    /// Populates one page for a kernel access check.  Unlike a real user-mode
+    /// fault, finding that another thread already installed the mapping does
+    /// not require a local TLB invalidation.
+    pub fn populate_page_concurrent(
+        aspace: &Arc<AddrSpaceLock>,
+        vaddr: VirtAddr,
+        access_flags: MappingFlags,
+    ) -> bool {
+        Self::handle_page_fault_concurrent_inner(aspace, vaddr, access_flags, false)
+    }
+
+    fn handle_page_fault_concurrent_inner(
+        aspace: &Arc<AddrSpaceLock>,
+        vaddr: VirtAddr,
+        access_flags: PageFaultFlags,
+        flush_existing: bool,
+    ) -> bool {
+        let preparation = {
+            let guard = aspace.read();
+            if !guard.va_range.contains(vaddr) {
+                return false;
+            }
+            let Some(area) = guard.areas.find(vaddr) else {
+                return false;
+            };
+            if !area.flags().contains(access_flags) {
+                return false;
+            }
+            area.backend().prepare_fault(
+                vaddr,
+                area.va_range(),
+                area.flags(),
+                access_flags,
+                &guard.pt,
+            )
+        };
+
+        match preparation {
+            FaultPreparation::Handled => {
+                if flush_existing {
+                    axhal::asm::flush_tlb(Some(vaddr));
+                }
+                true
+            }
+            FaultPreparation::Fallback => aspace.lock().handle_page_fault(vaddr, access_flags),
+            FaultPreparation::Cow(mut plan) => {
+                if let Err(err) = plan.execute() {
+                    warn!("Failed to prepare private page for {vaddr:?}: {err}");
+                    return false;
+                }
+
+                let committed = {
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
+                    }
+                    let flags = area.flags();
+                    area.backend()
+                        .commit_fault(&mut plan, area.va_range(), flags, access_flags, pt)
+                };
+
+                match committed {
+                    Ok(FaultCommit::Handled) => {
+                        axhal::asm::flush_tlb(Some(vaddr));
+                        true
+                    }
+                    Ok(FaultCommit::Stale) => aspace.lock().handle_page_fault(vaddr, access_flags),
+                    Err(err) => {
+                        warn!("Failed to commit private page for {vaddr:?}: {err}");
+                        false
+                    }
+                }
+            }
+        }
+    }
+
     /// Attempts to clone the current address space into a new one.
     ///
     /// This method creates a new empty address space with the same base and
     /// size, then iterates over all memory areas in the original address
     /// space to copy or share their mappings into the new one.
-    pub fn try_clone(&mut self) -> AxResult<Arc<Mutex<Self>>> {
-        let new_aspace = Arc::new(Mutex::new(Self::new_empty(self.base(), self.size())?));
+    pub fn try_clone(&mut self) -> AxResult<Arc<AddrSpaceLock>> {
+        let new_aspace = Arc::new(AddrSpaceLock::new(Self::new_empty(
+            self.base(),
+            self.size(),
+        )?));
         let new_aspace_clone = new_aspace.clone();
 
         let mut guard = new_aspace.lock();

@@ -15,7 +15,7 @@
     "src/fs/fat/mod.rs": "38b98c7db4b65f39073d6e10b98e8fd5debbf740510a616c3872a899448eaece",
     "src/fs/fat/util.rs": "c72a5cf3cdac9cf64c6885eb25868d879a4284da9f140b39ad0475bf18e47b55",
     "src/fs/mod.rs": "e598b6a1750713db8ba3896310c3b1f6bac63eb4f8c837268ab046151d1190c5",
-    "src/highlevel/file.rs": "f14b76c6aa7413fc2815debe2abb16aaf9a0564611ba9ac43c33679363cea0f1",
+    "src/highlevel/file.rs": "41863e8507c6e5798386fdf0bc7e064599da94dcfe56d2f614a63f78f60cc7c2",
     "src/highlevel/fs.rs": "3f3426deab659ec42e7fc9fe2b5255ffbe3c51a7dbc22b1827c7c0482cad23a8",
     "src/highlevel/mod.rs": "a69f5a1272f52819ed68c0780ddd4f81b04491a884257153293c0d7abdbcd827",
     "src/lib.rs": "c254dea730184fa60a2f248a5a255f96757ceb9918caa862b66aff3c28cad119",

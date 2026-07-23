@@ -16,7 +16,7 @@ use axhal::{
 use axio::prelude::*;
 use axtask::current;
 use extern_trait::extern_trait;
-use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
+use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PageIter4K, VirtAddr};
 use starry_vm::{VmError, VmIo, VmResult, vm_load_until_nul, vm_read_slice, vm_write_slice};
 
 use crate::{
@@ -51,15 +51,20 @@ fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> 
 
     let curr = current();
     let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
-
-    if !aspace.can_access_range(start, layout.size(), access_flags) {
+    if !aspace_ref
+        .read()
+        .can_access_range(start, layout.size(), access_flags)
+    {
         return Err(AxError::BadAddress);
     }
 
     let page_start = start.align_down_4k();
     let page_end = (start + layout.size()).align_up_4k();
-    aspace.populate_area(page_start, page_end - page_start, access_flags)?;
+    for page in PageIter4K::new(page_start, page_end).ok_or(AxError::BadAddress)? {
+        if !crate::mm::AddrSpace::populate_page_concurrent(&aspace_ref, page, access_flags) {
+            return Err(AxError::BadAddress);
+        }
+    }
 
     Ok(())
 }
@@ -96,7 +101,7 @@ fn check_null_terminated<T: PartialEq + Default>(
                 // allocated yet.
                 let curr = current();
                 let aspace_ref = curr.as_thread().proc_data.aspace();
-                let aspace = aspace_ref.lock();
+                let aspace = aspace_ref.read();
                 if !aspace.can_access_range(page, PAGE_SIZE_4K, access_flags) {
                     return Err(AxError::BadAddress);
                 }
@@ -278,10 +283,8 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags) -> bool {
         return false;
     }
 
-    thr.proc_data
-        .aspace()
-        .lock()
-        .handle_page_fault(vaddr, access_flags)
+    let aspace = thr.proc_data.aspace();
+    crate::mm::AddrSpace::handle_page_fault_concurrent(&aspace, vaddr, access_flags)
 }
 
 pub fn vm_load_string(ptr: *const c_char) -> AxResult<String> {

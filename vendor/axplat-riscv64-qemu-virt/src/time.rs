@@ -1,10 +1,29 @@
-use riscv::register::time;
+#[cfg(feature = "irq")]
+use core::arch::asm;
 
 use axplat::time::{NANOS_PER_SEC, TimeIf};
+use riscv::register::time;
 
 const NANOS_PER_TICK: u64 = NANOS_PER_SEC / crate::config::devices::TIMER_FREQUENCY as u64;
 /// RTC wall time offset in nanoseconds at monotonic time base.
 static mut RTC_EPOCHOFFSET_NANOS: u64 = 0;
+
+/// Programs the supervisor timer directly through the Sstc extension.
+///
+/// The QEMU virt platform used by Moss exposes Sstc on every hart.  Writing
+/// `stimecmp` avoids an SBI ecall (and an S-mode -> M-mode round trip) for
+/// every scheduler tick.
+#[inline]
+#[cfg(feature = "irq")]
+fn set_timer(deadline: u64) {
+    unsafe {
+        asm!(
+            "csrw 0x14d, {deadline}",
+            deadline = in(reg) deadline,
+            options(nomem, nostack),
+        );
+    }
+}
 
 pub(super) fn init_early() {
     #[cfg(feature = "rtc")]
@@ -28,7 +47,7 @@ pub(super) fn init_early() {
 
 pub(super) fn init_percpu() {
     #[cfg(feature = "irq")]
-    sbi_rt::set_timer(0);
+    set_timer(0);
 }
 
 struct TimeIfImpl;
@@ -66,6 +85,6 @@ impl TimeIf for TimeIfImpl {
     /// A timer interrupt will be triggered at the specified monotonic time deadline (in nanoseconds).
     #[cfg(feature = "irq")]
     fn set_oneshot_timer(deadline_ns: u64) {
-        sbi_rt::set_timer(Self::nanos_to_ticks(deadline_ns));
+        set_timer(Self::nanos_to_ticks(deadline_ns));
     }
 }

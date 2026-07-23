@@ -66,6 +66,9 @@ impl X64PTE {
 }
 
 impl GenericPTE for X64PTE {
+    fn from_bits(bits: usize) -> Self {
+        Self(bits as u64)
+    }
     fn new_page(paddr: PhysAddr, flags: MappingFlags, is_huge: bool) -> Self {
         let mut flags = PTF::from(flags);
         if is_huge {

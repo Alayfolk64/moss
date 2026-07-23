@@ -671,6 +671,28 @@ bitflags! {
     }
 }
 
+/// Gives the current process a private copy of its descriptor table.
+///
+/// Scope-local resources keep a read lock installed while the task is
+/// running, so temporarily switch to the global scope before replacing the
+/// table pointer. File descriptions themselves remain shared, as required by
+/// dup/fork semantics.
+pub fn unshare_current_fd_table() {
+    let cloned = FD_TABLE.read().clone();
+
+    let curr = current();
+    let thr = curr.as_thread();
+    let _preempt_guard = NoPreempt::new();
+    ActiveScope::set_global();
+    unsafe { thr.proc_data.scope.force_read_decrement() };
+    let mut scope = thr.proc_data.scope.write();
+    *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
+    drop(scope);
+    let scope = thr.proc_data.scope.read();
+    unsafe { ActiveScope::set(&scope) };
+    core::mem::forget(scope);
+}
+
 pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     if last < first {
         return Err(AxError::InvalidInput);
@@ -682,24 +704,7 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     let last = last as usize;
 
     if flags.contains(CloseRangeFlags::UNSHARE) {
-        // 1) Snapshot current FD table.
-        let cloned = FD_TABLE.read().clone();
-
-        // 2) Detach current task's scope-local FD table pointer.
-        // The running task keeps a leaked scope read-lock (see TaskExt::on_enter/on_leave),
-        // so we must temporarily drop it before taking scope.write(). Keep preemption
-        // disabled during this window to avoid task switch with a mismatched lock count.
-        let curr = current();
-        let thr = curr.as_thread();
-        let _preempt_guard = NoPreempt::new();
-        ActiveScope::set_global();
-        unsafe { thr.proc_data.scope.force_read_decrement() };
-        let mut scope = thr.proc_data.scope.write();
-        *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
-        drop(scope);
-        let scope = thr.proc_data.scope.read();
-        unsafe { ActiveScope::set(&scope) };
-        core::mem::forget(scope);
+        unshare_current_fd_table();
     }
 
     let mut fd_table = FD_TABLE.write();

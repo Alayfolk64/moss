@@ -79,6 +79,8 @@ axhal = { path = "vendor/axhal" }
 axplat = { path = "vendor/axplat" }
 axfs = { path = "vendor/axfs" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
+page_table_entry = { path = "vendor/page_table_entry" }
+page_table_multiarch = { path = "vendor/page_table_multiarch" }
 lwext4_rust = { path = "third_party/lwext4_rust" }
 starry-smoltcp = { path = "vendor/starry-smoltcp" }
 starry-process = { path = "vendor/starry-process" }

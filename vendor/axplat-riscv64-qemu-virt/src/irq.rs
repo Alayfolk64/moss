@@ -1,7 +1,7 @@
 use core::{
     num::NonZeroU32,
     ptr::NonNull,
-    sync::atomic::{AtomicPtr, Ordering},
+    sync::atomic::{AtomicPtr, AtomicU64, Ordering},
 };
 
 use axplat::{
@@ -31,6 +31,11 @@ pub(super) const S_EXT: usize = INTC_IRQ_BASE + 9;
 static TIMER_HANDLER: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
 
 static IPI_HANDLER: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
+static SBI_IPI_CALLS: AtomicU64 = AtomicU64::new(0);
+static SBI_IPI_UNICASTS: AtomicU64 = AtomicU64::new(0);
+static SBI_IPI_BROADCASTS: AtomicU64 = AtomicU64::new(0);
+static SBI_IPI_BROADCAST_HARTS: AtomicU64 = AtomicU64::new(0);
+static RECEIVED_IPIS: AtomicU64 = AtomicU64::new(0);
 
 /// The maximum number of IRQs.
 pub const MAX_IRQ_COUNT: usize = 1024;
@@ -54,6 +59,19 @@ pub(super) fn init_percpu() {
         sie::set_sext();
     }
     PLIC.lock().init_by_context(this_context());
+}
+
+pub(crate) fn log_ipi_stats() {
+    let calls = SBI_IPI_CALLS.load(Ordering::Relaxed);
+    let unicasts = SBI_IPI_UNICASTS.load(Ordering::Relaxed);
+    let broadcasts = SBI_IPI_BROADCASTS.load(Ordering::Relaxed);
+    let broadcast_harts = SBI_IPI_BROADCAST_HARTS.load(Ordering::Relaxed);
+    let received = RECEIVED_IPIS.load(Ordering::Relaxed);
+    let old_calls = unicasts.saturating_add(broadcast_harts);
+    warn!(
+        "[ipi] sbi_calls={calls} unicasts={unicasts} broadcasts={broadcasts} broadcast_harts={broadcast_harts} received={received} old_per_hart_calls={old_calls} saved_calls={}",
+        old_calls.saturating_sub(calls),
+    );
 }
 
 macro_rules! with_cause {
@@ -194,6 +212,7 @@ impl IrqIf for IrqIfImpl {
             },
             @S_SOFT => {
                 trace!("IRQ: IPI");
+                RECEIVED_IPIS.fetch_add(1, Ordering::Relaxed);
                 // SBI raises an IPI by setting SSIP. Acknowledge it before
                 // running callbacks so the hart does not immediately trap
                 // again after returning from this handler.
@@ -226,24 +245,45 @@ impl IrqIf for IrqIfImpl {
     fn send_ipi(_irq_num: usize, target: IpiTarget) {
         match target {
             IpiTarget::Current { cpu_id } => {
+                SBI_IPI_CALLS.fetch_add(1, Ordering::Relaxed);
+                SBI_IPI_UNICASTS.fetch_add(1, Ordering::Relaxed);
                 let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << cpu_id, 0));
                 if res.is_err() {
                     warn!("send_ipi failed: {res:?}");
                 }
             }
             IpiTarget::Other { cpu_id } => {
+                SBI_IPI_CALLS.fetch_add(1, Ordering::Relaxed);
+                SBI_IPI_UNICASTS.fetch_add(1, Ordering::Relaxed);
                 let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << cpu_id, 0));
                 if res.is_err() {
                     warn!("send_ipi failed: {res:?}");
                 }
             }
             IpiTarget::AllExceptCurrent { cpu_id, cpu_num } => {
-                for i in 0..cpu_num {
-                    if i != cpu_id {
-                        let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << i, 0));
-                        if res.is_err() {
-                            warn!("send_ipi_all_others failed: {res:?}");
-                        }
+                // SBI accepts a hart bitmap. Send one ecall per machine-word
+                // chunk instead of entering M-mode once for every target CPU.
+                SBI_IPI_BROADCASTS.fetch_add(1, Ordering::Relaxed);
+                SBI_IPI_BROADCAST_HARTS
+                    .fetch_add(cpu_num.saturating_sub(1) as u64, Ordering::Relaxed);
+                let mask_width = usize::BITS as usize;
+                for base in (0..cpu_num).step_by(mask_width) {
+                    let count = (cpu_num - base).min(mask_width);
+                    let mut target_mask = if count == mask_width {
+                        usize::MAX
+                    } else {
+                        (1usize << count) - 1
+                    };
+                    if (base..base + count).contains(&cpu_id) {
+                        target_mask &= !(1usize << (cpu_id - base));
+                    }
+                    if target_mask == 0 {
+                        continue;
+                    }
+                    SBI_IPI_CALLS.fetch_add(1, Ordering::Relaxed);
+                    let res = sbi_rt::send_ipi(HartMask::from_mask_base(target_mask, base));
+                    if res.is_err() {
+                        warn!("send_ipi_all_others failed: {res:?}");
                     }
                 }
             }

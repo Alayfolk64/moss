@@ -3,7 +3,6 @@
 use alloc::{
     collections::{btree_map::BTreeMap, vec_deque::VecDeque},
     sync::{Arc, Weak},
-    vec::Vec,
 };
 use core::{
     future::poll_fn,
@@ -113,18 +112,56 @@ impl WaitQueue {
         self.queue.lock().is_empty()
     }
 
-    /// Requeue at most `count` tasks to the target wait queue.
-    pub fn requeue(&self, mut count: usize, target: &WaitQueue) -> usize {
-        let tasks: Vec<_> = {
-            let mut wq = self.queue.lock();
-            count = count.min(wq.len());
-            wq.drain(..count).collect()
-        };
-        if !tasks.is_empty() {
-            let mut wq = target.queue.lock();
-            wq.extend(tasks);
+    /// Wakes waiters and moves the remainder to `target` as one atomic queue
+    /// operation.  A gap between removing from the source and inserting into
+    /// the target loses a concurrent wake on the target futex and can leave a
+    /// pthread condition-variable waiter asleep forever.
+    pub fn wake_requeue(
+        &self,
+        wake_count: usize,
+        requeue_count: usize,
+        target: &WaitQueue,
+    ) -> usize {
+        if core::ptr::eq(self, target) {
+            return self.wake(wake_count, u32::MAX);
         }
-        count
+
+        fn apply(
+            source: &mut VecDeque<(Arc<AtomicBool>, u32, Arc<PollSet>)>,
+            target: &mut VecDeque<(Arc<AtomicBool>, u32, Arc<PollSet>)>,
+            wake_count: usize,
+            requeue_count: usize,
+        ) -> usize {
+            let mut woke = 0;
+            source.retain(|(waiter, _bitset, poll)| {
+                if woke == wake_count {
+                    true
+                } else {
+                    waiter.store(true, Ordering::Release);
+                    poll.wake();
+                    woke += 1;
+                    false
+                }
+            });
+
+            let moved = requeue_count.min(source.len());
+            target.extend(source.drain(..moved));
+            woke + moved
+        }
+
+        // A futex can be requeued in both directions.  Use a stable address
+        // order so two concurrent reverse requeues cannot deadlock.
+        let source_addr = core::ptr::from_ref(&self.queue).addr();
+        let target_addr = core::ptr::from_ref(&target.queue).addr();
+        if source_addr < target_addr {
+            let mut source = self.queue.lock();
+            let mut target = target.queue.lock();
+            apply(&mut source, &mut target, wake_count, requeue_count)
+        } else {
+            let mut target = target.queue.lock();
+            let mut source = self.queue.lock();
+            apply(&mut source, &mut target, wake_count, requeue_count)
+        }
     }
 }
 
@@ -170,7 +207,7 @@ impl FutexKey {
 
     /// Shortcut to create a `FutexKey` for the current task's address space.
     pub fn new_current(address: usize) -> Self {
-        Self::new(&current().as_thread().proc_data.aspace().lock(), address)
+        Self::new(&current().as_thread().proc_data.aspace().read(), address)
     }
 
     fn as_usize(&self) -> usize {

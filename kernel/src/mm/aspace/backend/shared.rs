@@ -2,11 +2,12 @@ use alloc::{sync::Arc, vec, vec::Vec};
 
 use axerrno::{AxError, AxResult};
 use axhal::paging::{MappingFlags, PageSize, PageTableMut, PagingError};
-use axsync::Mutex;
 use kspin::SpinNoIrq;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
-use super::{AddrSpace, Backend, BackendOps, alloc_frame, dealloc_frame, divide_page, pages_in};
+use super::{
+    AddrSpaceLock, Backend, BackendOps, alloc_frame, dealloc_frame, divide_page, pages_in,
+};
 
 pub struct SharedPages {
     phys_pages: SpinNoIrq<Vec<Option<PhysAddr>>>,
@@ -139,7 +140,7 @@ impl BackendOps for SharedBackend {
         _flags: MappingFlags,
         _old_pt: &mut PageTableMut,
         _new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<Mutex<AddrSpace>>,
+        _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
         Ok(Backend::Shared(self.clone()))
     }
