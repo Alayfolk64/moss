@@ -89,7 +89,7 @@ def emit_table(
         event = entry[EVENT_OFFSET]
         if phase not in (1, 2, 3):
             raise ValueError(f"invalid phase {phase} in aggregate table")
-        if expect_wait and event not in range(1, 8):
+        if expect_wait and event not in range(1, 11):
             raise ValueError(f"invalid wait event {event}")
         if not expect_wait and event != 0:
             raise ValueError(f"invalid CPU event {event}")

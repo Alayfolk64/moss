@@ -21,6 +21,9 @@ EVENT_NAMES = {
     5: "block-write-sync",
     6: "off-cpu-all",
     7: "ext4-global-lock-wait",
+    8: "folio-load-wait",
+    9: "invalidate-read-wait",
+    10: "invalidate-write-wait",
 }
 INSTRUMENTATION_FRAMES = (
     "starry_kernel::profiler::",
@@ -29,6 +32,10 @@ INSTRUMENTATION_FRAMES = (
     "axplat::percpu::this_cpu_id",
 )
 BACKGROUND_TASKS = {"gc", "rebalance-task", "profile-watchdog"}
+BACKGROUND_STACK_MARKERS = (
+    "axfs::highlevel::file::start_readahead_workers::",
+    "axfs::fs::ext4::block_io::SharedBlockDevice::ensure_completion_task::",
+)
 
 CPU_RE = re.compile(r"MOSS_CPU phase=(\d+) samples=(\d+) task=([0-9a-f]*) stack=(.*)")
 WAIT_RE = re.compile(
@@ -233,7 +240,12 @@ def main() -> None:
         wait_values[(row["phase"], None)][stack] += microseconds
         wait_values[(None, row["event"])][stack] += microseconds
         wait_values[(row["phase"], row["event"])][stack] += microseconds
-        if row["event"] == 6 and row["task"] not in BACKGROUND_TASKS:
+        background_stack = any(marker in stack for marker in BACKGROUND_STACK_MARKERS)
+        if (
+            row["event"] == 6
+            and row["task"] not in BACKGROUND_TASKS
+            and not background_stack
+        ):
             workload_offcpu_values[None][stack] += microseconds
             workload_offcpu_values[row["phase"]][stack] += microseconds
 
@@ -285,6 +297,28 @@ def main() -> None:
             "top": top_rows(ext4_lock_values),
         }
 
+        for event, label, title in (
+            (8, "folio-load", "folio load wait"),
+            (9, "invalidate-read", "invalidation read-lock wait"),
+            (10, "invalidate-write", "invalidation write-lock wait"),
+        ):
+            event_values = wait_values[(phase, event)]
+            folded = args.out / f"guest-{label}-wait-{suffix}.folded"
+            svg = args.out / f"guest-{label}-wait-{suffix}.svg"
+            write_folded(folded, event_values)
+            render_svg(
+                flamegraph,
+                folded,
+                svg,
+                f"Moss guest {title} - {suffix}",
+                "microseconds",
+                "chain",
+            )
+            summary["wait"][f"{label}-{suffix}"] = {
+                "total_us": sum(event_values.values()),
+                "top": top_rows(event_values),
+            }
+
         offcpu_values = wait_values[(phase, 6)]
         folded = args.out / f"guest-offcpu-{suffix}.folded"
         svg = args.out / f"guest-offcpu-{suffix}.svg"
@@ -316,6 +350,7 @@ def main() -> None:
         )
         summary["wait"][f"offcpu-workload-{suffix}"] = {
             "excluded_tasks": sorted(BACKGROUND_TASKS),
+            "excluded_stack_markers": list(BACKGROUND_STACK_MARKERS),
             "total_us": sum(workload_values.values()),
             "top": top_rows(workload_values),
         }

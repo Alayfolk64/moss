@@ -304,7 +304,7 @@ impl TaskInner {
 impl TaskInner {
     fn new_common(id: TaskId, name: String) -> Self {
         let mut cpumask = AxCpuMask::new();
-        for cpu_id in 0..crate::api::active_cpu_num() {
+        for cpu_id in 0..crate::api::active_cpu_count() {
             cpumask.set(cpu_id, true);
         }
 

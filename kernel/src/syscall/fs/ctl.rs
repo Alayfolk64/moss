@@ -191,11 +191,6 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
     with_fs(dirfd, |fs| {
         let path = Path::new(path.as_str());
         let (dir, name) = fs.resolve_nonexistent(path)?;
-        match dir.lookup_no_follow_fresh(name) {
-            Ok(_) => return Err(AxError::AlreadyExists),
-            Err(err) if err.canonicalize() == AxError::NotFound => {}
-            Err(err) => return Err(err),
-        }
         let dir_stat = dir.metadata()?;
         debug!(
             "sys_mkdirat: creating {} in parent (mode={:#o}, SET_GID={}, gid={})",

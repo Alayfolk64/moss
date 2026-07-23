@@ -75,16 +75,21 @@ axfeat.workspace = true
 starry-kernel.workspace = true
 
 [patch.crates-io]
+axdriver = { path = "vendor/axdriver" }
+axdriver_block = { path = "vendor/axdriver_block" }
+axdriver_virtio = { path = "vendor/axdriver_virtio" }
 axhal = { path = "vendor/axhal" }
 axplat = { path = "vendor/axplat" }
 axfs = { path = "vendor/axfs" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
+memory_set = { path = "vendor/memory_set" }
 page_table_entry = { path = "vendor/page_table_entry" }
 page_table_multiarch = { path = "vendor/page_table_multiarch" }
 lwext4_rust = { path = "third_party/lwext4_rust" }
 starry-smoltcp = { path = "vendor/starry-smoltcp" }
 starry-process = { path = "vendor/starry-process" }
 starry-signal = { path = "vendor/starry-signal" }
+virtio-drivers = { path = "vendor/virtio-drivers" }
 
 [package.metadata.vendor-filter]
 platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none-softfloat"]

@@ -195,14 +195,52 @@ void ext4_bcache_invalidate_lba(struct ext4_bcache *bc,
 				uint64_t from,
 				uint32_t cnt)
 {
+	if (!cnt)
+		return;
+
 	uint64_t end = from + cnt - 1;
-	struct ext4_buf *tmp = ext4_buf_lookup(bc, from), *buf;
+	if (end < from)
+		end = UINT64_MAX;
+	struct ext4_buf key = {
+		.lba = from
+	};
+	struct ext4_buf *tmp = RB_NFIND(ext4_buf_lba, &bc->lba_root, &key);
+	struct ext4_buf *buf;
 	RB_FOREACH_FROM(buf, ext4_buf_lba, tmp) {
 		if (buf->lba > end)
 			break;
 
 		ext4_bcache_invalidate_buf(bc, buf);
 	}
+}
+
+int ext4_bcache_flush_invalidate_lba(struct ext4_bcache *bc,
+				     uint64_t from,
+				     uint32_t cnt)
+{
+	if (!cnt)
+		return EOK;
+
+	uint64_t end = from + cnt - 1;
+	if (end < from)
+		end = UINT64_MAX;
+	struct ext4_buf key = {
+		.lba = from
+	};
+	struct ext4_buf *tmp = RB_NFIND(ext4_buf_lba, &bc->lba_root, &key);
+	struct ext4_buf *buf;
+	RB_FOREACH_FROM(buf, ext4_buf_lba, tmp) {
+		int r;
+
+		if (buf->lba > end)
+			break;
+
+		r = ext4_block_flush_buf(bc->bdev, buf);
+		if (r != EOK)
+			return r;
+		ext4_bcache_invalidate_buf(bc, buf);
+	}
+	return EOK;
 }
 
 struct ext4_buf *

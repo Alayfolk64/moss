@@ -101,13 +101,18 @@ fn record_file_access(file: &axfs::File) {
     }
 }
 
-pub fn with_fs<R>(dirfd: c_int, f: impl FnOnce(&mut FsContext) -> AxResult<R>) -> AxResult<R> {
-    let mut fs = FS_CONTEXT.lock();
+pub fn with_fs<R>(dirfd: c_int, f: impl FnOnce(&FsContext) -> AxResult<R>) -> AxResult<R> {
+    // FS_CONTEXT protects only the process root/current-directory pair. Path
+    // walking may miss the dentry cache and sleep on filesystem I/O, so
+    // keeping this process-wide lock for the whole walk serializes otherwise
+    // independent worker threads. A syscall needs one coherent cwd snapshot,
+    // not exclusive ownership of the cwd while storage is accessed.
+    let fs = FS_CONTEXT.lock().clone();
     if dirfd == AT_FDCWD {
-        f(&mut fs)
+        f(&fs)
     } else {
         let dir = Directory::from_fd(dirfd)?.inner.clone();
-        f(&mut fs.with_current_dir(dir)?)
+        f(&fs.with_current_dir(dir)?)
     }
 }
 

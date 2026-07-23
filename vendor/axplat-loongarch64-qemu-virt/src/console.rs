@@ -24,8 +24,11 @@ struct ConsoleIfImpl;
 impl ConsoleIf for ConsoleIfImpl {
     /// Writes bytes to the console from input u8 slice.
     fn write_bytes(bytes: &[u8]) {
+        // Keep one write contiguous on an SMP guest. Taking the UART lock for
+        // every byte lets another CPU splice its output into the middle of a
+        // line, which also makes machine-readable test results unreliable.
+        let mut uart = UART.lock();
         for &c in bytes {
-            let mut uart = UART.lock();
             match c {
                 b'\n' => {
                     uart.send_raw(b'\r');

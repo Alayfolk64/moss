@@ -5,7 +5,7 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult};
-use axfs::{FileBackend, PageRef};
+use axfs::{FileBackend, FolioPageRef};
 use axhal::{
     mem::phys_to_virt,
     paging::{MappingFlags, PageSize, PageTable, PageTableMut, PagingError},
@@ -92,7 +92,7 @@ fn frame_table(paddr: PhysAddr) -> &'static SpinNoIrq<FrameTableRefCount> {
 }
 
 struct FilePageRefs {
-    shards: [Mutex<BTreeMap<VirtAddr, PageRef>>; FILE_PAGE_SHARDS],
+    shards: [Mutex<BTreeMap<VirtAddr, FolioPageRef>>; FILE_PAGE_SHARDS],
 }
 
 impl FilePageRefs {
@@ -102,20 +102,20 @@ impl FilePageRefs {
         }
     }
 
-    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, PageRef>> {
+    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, FolioPageRef>> {
         let page = vaddr.as_usize() / memory_addr::PAGE_SIZE_4K;
         &self.shards[page % FILE_PAGE_SHARDS]
     }
 
-    fn get(&self, vaddr: VirtAddr) -> Option<PageRef> {
+    fn get(&self, vaddr: VirtAddr) -> Option<FolioPageRef> {
         self.shard(vaddr).lock().get(&vaddr).cloned()
     }
 
-    fn insert(&self, vaddr: VirtAddr, page: PageRef) {
+    fn insert(&self, vaddr: VirtAddr, page: FolioPageRef) {
         self.shard(vaddr).lock().insert(vaddr, page);
     }
 
-    fn remove(&self, vaddr: VirtAddr) -> Option<PageRef> {
+    fn remove(&self, vaddr: VirtAddr) -> Option<FolioPageRef> {
         self.shard(vaddr).lock().remove(&vaddr)
     }
 }
@@ -159,22 +159,25 @@ pub(crate) struct CowFaultPlan {
     file: Option<(FileBackend, u64, Option<u64>)>,
     access_flags: MappingFlags,
     frame: Option<PhysAddr>,
-    file_pages: Vec<(VirtAddr, PageRef)>,
+    file_pages: Vec<(VirtAddr, FolioPageRef)>,
     source: Option<CowFaultSource>,
 }
 
 enum CowFaultSource {
+    /// The PTE owns the only ordinary reference. The extra plan reference
+    /// keeps the frame alive while the address-space lock is released.
+    Exclusive(PhysAddr),
     /// One extra COW reference pins an anonymous frame while the address-space
     /// lock is released.
     Anonymous(PhysAddr),
     /// A cloned cache reference pins a directly mapped file page.
-    File(PageRef),
+    File(FolioPageRef),
 }
 
 impl CowFaultSource {
     fn paddr(&self) -> PhysAddr {
         match self {
-            Self::Anonymous(paddr) => *paddr,
+            Self::Exclusive(paddr) | Self::Anonymous(paddr) => *paddr,
             Self::File(page) => page.paddr(),
         }
     }
@@ -183,6 +186,9 @@ impl CowFaultSource {
 impl CowFaultPlan {
     pub(crate) fn execute(&mut self) -> AxResult {
         if let Some(source) = &self.source {
+            if matches!(source, CowFaultSource::Exclusive(_)) {
+                return Ok(());
+            }
             let frame = alloc_referenced_frame(false, self.size)?;
             self.frame = Some(frame);
             unsafe {
@@ -213,35 +219,34 @@ impl CowFaultPlan {
                 as usize;
 
             // Complete aligned cached pages can be installed read-only and
-            // copied only when actually written.  Like Linux fault-around,
-            // synchronously read ahead one naturally aligned 64 KiB window,
-            // then install every neighboring page that is ready.  Never cross
-            // the current VMA or the file-backed portion of the mapping.
+            // copied only when actually written. Like Linux fault-around, the
+            // faulting page is demand-loaded while the remainder of the
+            // naturally aligned 64-KiB window enters the page cache
+            // asynchronously. Never cross the current VMA or file-backed
+            // portion of the mapping.
             if self.size == PageSize::Size4K
                 && !self.access_flags.contains(MappingFlags::WRITE)
                 && start == 0
                 && max_read == self.size as usize
             {
                 let page_size = self.size as usize;
-                let window_start = self.vaddr.align_down(FILE_FAULT_AROUND_BYTES);
+                // Align the fault-around window to the file folio rather than
+                // to the randomized virtual address. ELF mappings are only
+                // page-aligned, so virtual 64-KiB alignment can otherwise
+                // straddle two file folios and leave most of the folio we just
+                // loaded unmapped.
+                let offset_in_folio = (fault_file_start % FILE_FAULT_AROUND_BYTES as u64) as usize;
+                let window_start =
+                    VirtAddr::from(self.vaddr.as_usize().saturating_sub(offset_in_folio));
                 let window_end = window_start + FILE_FAULT_AROUND_BYTES;
                 let first = window_start
                     .max(self.area_range.start.align_up(page_size))
                     .max(self.mapping_start.align_up(page_size));
                 let last = window_end.min(self.area_range.end.align_down(page_size));
 
-                if first < last {
-                    let first_offset = *mapping_file_start
-                        + first
-                            .as_usize()
-                            .saturating_sub(self.mapping_start.as_usize())
-                            as u64;
-                    let file_limit = file_end.unwrap_or(u64::MAX);
-                    let byte_count =
-                        (last - first).min(file_limit.saturating_sub(first_offset) as usize);
-                    let _ = file.readahead(first_offset, byte_count);
-                }
-
+                // `page_ref_at` demand-loads the aligned folio containing the
+                // fault. Once it completes, the following cache-only walk can
+                // install neighboring pages without issuing more I/O.
                 if let Some(page) = file.page_ref_at(fault_file_start)? {
                     // Put the faulting page first so commit either resolves the
                     // original fault or reports failure before optional pages.
@@ -284,8 +289,13 @@ impl Drop for CowFaultPlan {
         if let Some(frame) = self.frame.take() {
             drop_referenced_frame(frame, self.size);
         }
-        if let Some(CowFaultSource::Anonymous(frame)) = self.source.take() {
-            drop_referenced_frame(frame, self.size);
+        if let Some(source) = self.source.take() {
+            match source {
+                CowFaultSource::Exclusive(frame) | CowFaultSource::Anonymous(frame) => {
+                    drop_referenced_frame(frame, self.size);
+                }
+                CowFaultSource::File(_) => {}
+            }
         }
     }
 }
@@ -370,14 +380,16 @@ impl CowBackend {
                             return FaultPreparation::Fallback;
                         };
                         let mut frame_ref = frame_ref.lock();
-                        if frame_ref.0 == 1 {
-                            return FaultPreparation::Fallback;
-                        }
                         let Some(count) = frame_ref.0.checked_add(1) else {
                             return FaultPreparation::Fallback;
                         };
+                        let source = if frame_ref.0 == 1 {
+                            CowFaultSource::Exclusive(paddr)
+                        } else {
+                            CowFaultSource::Anonymous(paddr)
+                        };
                         frame_ref.0 = count;
-                        CowFaultSource::Anonymous(paddr)
+                        source
                     };
                     FaultPreparation::Cow(CowFaultPlan {
                         identity: self.identity.clone(),
@@ -436,9 +448,26 @@ impl CowBackend {
                         return Ok(FaultCommit::Stale);
                     }
 
-                    let frame = plan.frame.ok_or(AxError::BadAddress)?;
                     match source {
+                        CowFaultSource::Exclusive(paddr) => {
+                            let Some(frame_ref) = frame_table(*paddr).lock().get_frame_ref(*paddr)
+                            else {
+                                return Ok(FaultCommit::Stale);
+                            };
+                            let frame_ref = frame_ref.lock();
+                            // One reference belongs to the PTE and one is the
+                            // temporary pin held by this plan. A larger count
+                            // means the page became shared while the lock was
+                            // released and must be reconsidered as a real COW.
+                            if frame_ref.0 != 2 {
+                                return Ok(FaultCommit::Stale);
+                            }
+                            if !pt.remap_4k_concurrent_if(plan.vaddr, *paddr, *paddr, flags)? {
+                                return Ok(FaultCommit::Stale);
+                            }
+                        }
                         CowFaultSource::File(_) => {
+                            let frame = plan.frame.ok_or(AxError::BadAddress)?;
                             let mut file_pages = self.file_pages.shard(plan.vaddr).lock();
                             let Some(mapped_page) = file_pages.get(&plan.vaddr) else {
                                 return Ok(FaultCommit::Stale);
@@ -452,6 +481,7 @@ impl CowBackend {
                             file_pages.remove(&plan.vaddr);
                         }
                         CowFaultSource::Anonymous(_) => {
+                            let frame = plan.frame.ok_or(AxError::BadAddress)?;
                             if !pt.remap_4k_concurrent_if(plan.vaddr, paddr, frame, flags)? {
                                 return Ok(FaultCommit::Stale);
                             }
@@ -461,7 +491,9 @@ impl CowBackend {
                             drop_referenced_frame(paddr, self.size);
                         }
                     }
-                    plan.frame = None;
+                    if !matches!(source, CowFaultSource::Exclusive(_)) {
+                        plan.frame = None;
+                    }
                     Ok(FaultCommit::Handled)
                 } else {
                     Ok(FaultCommit::Stale)
@@ -472,6 +504,9 @@ impl CowBackend {
                     return Ok(FaultCommit::Stale);
                 }
                 if !plan.file_pages.is_empty() {
+                    let Some((file, mapping_file_start, _)) = plan.file.as_ref() else {
+                        return Ok(FaultCommit::Stale);
+                    };
                     let pages = core::mem::take(&mut plan.file_pages);
                     let mut installed = 0;
                     for (addr, page) in pages {
@@ -480,22 +515,36 @@ impl CowBackend {
                         }
                         match pt.query(addr) {
                             Err(PagingError::NotMapped) => {
-                                // Hold only this address shard while publishing
-                                // the PTE and its cache-page pin. A COW fault on
-                                // the same page cannot observe a half-published
-                                // mapping, while unrelated pages remain free.
-                                let mut file_pages = self.file_pages.shard(addr).lock();
-                                if let Err(err) = pt.map_4k_concurrent(
-                                    addr,
-                                    page.paddr(),
-                                    flags - MappingFlags::WRITE,
-                                ) {
-                                    if addr == plan.vaddr && err != PagingError::AlreadyMapped {
-                                        return Err(err.into());
+                                let offset = *mapping_file_start
+                                    + addr
+                                        .as_usize()
+                                        .saturating_sub(plan.mapping_start.as_usize())
+                                        as u64;
+                                let mapping_page = page.clone();
+                                let mapped = file.with_valid_page_ref(offset, &page, || {
+                                    // Hold only this address shard while
+                                    // publishing the PTE and its cache-page
+                                    // pin. A COW fault on the same page cannot
+                                    // observe a half-published mapping.
+                                    let mut file_pages = self.file_pages.shard(addr).lock();
+                                    match pt.map_4k_concurrent(
+                                        addr,
+                                        page.paddr(),
+                                        flags - MappingFlags::WRITE,
+                                    ) {
+                                        Ok(()) => {
+                                            file_pages.insert(addr, mapping_page);
+                                            true
+                                        }
+                                        Err(_) => false,
+                                    }
+                                });
+                                if mapped != Some(true) {
+                                    if addr == plan.vaddr {
+                                        return Ok(FaultCommit::Stale);
                                     }
                                     continue;
                                 }
-                                file_pages.insert(addr, page);
                                 installed += 1;
                             }
                             Ok(_) => {}

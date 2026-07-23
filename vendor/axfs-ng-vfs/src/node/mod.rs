@@ -20,6 +20,7 @@ use core::{
 use smallvec::SmallVec;
 
 use axpoll::{IoEvents, Pollable};
+use axsync::Mutex as SleepMutex;
 pub use dir::*;
 pub use file::*;
 use inherit_methods_macro::inherit_methods;
@@ -220,34 +221,57 @@ struct InodeMetadataCache {
     metadata: Metadata,
     dirty_size: bool,
     dirty_update: MetadataUpdate,
+    /// Serializes storage writeback for this inode only. Cache hits and
+    /// in-memory metadata updates never take this sleeping lock.
+    flush_lock: Arc<SleepMutex<()>>,
 }
 
 type InodeMetadataCacheKey = (usize, u64);
 type SharedInodeMetadataCache = Arc<RwLock<InodeMetadataCache>>;
 
-static INODE_METADATA_CACHES: spin::Lazy<
-    RwLock<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>>,
-> = spin::Lazy::new(|| RwLock::new(BTreeMap::new()));
+const INODE_METADATA_CACHE_SHARDS: usize = 64;
+static INODE_METADATA_CACHES: [
+    RwLock<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>>;
+    INODE_METADATA_CACHE_SHARDS
+] = [const { RwLock::new(BTreeMap::new()) }; INODE_METADATA_CACHE_SHARDS];
+static INODE_METADATA_LOAD_LOCKS: [SleepMutex<()>; INODE_METADATA_CACHE_SHARDS] =
+    [const { SleepMutex::new(()) }; INODE_METADATA_CACHE_SHARDS];
 
 fn inode_metadata_cache_key(filesystem: &dyn FilesystemOps, inode: u64) -> InodeMetadataCacheKey {
     let fs_ptr: *const dyn FilesystemOps = filesystem;
     (fs_ptr as *const () as usize, inode)
 }
 
+fn inode_metadata_cache_shard(
+    key: InodeMetadataCacheKey,
+) -> &'static RwLock<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>> {
+    &INODE_METADATA_CACHES[((key.0 >> 6) ^ key.1 as usize) % INODE_METADATA_CACHE_SHARDS]
+}
+
+fn inode_metadata_load_lock(key: InodeMetadataCacheKey) -> &'static SleepMutex<()> {
+    &INODE_METADATA_LOAD_LOCKS[((key.0 >> 6) ^ key.1 as usize) % INODE_METADATA_CACHE_SHARDS]
+}
+
 pub(super) fn invalidate_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
     let key = inode_metadata_cache_key(filesystem, inode);
-    let shared = INODE_METADATA_CACHES.write().remove(&key);
+    // Serialize invalidation against the cold-load path. Otherwise a metadata
+    // read started before a mutation could publish stale state after this
+    // function has already removed the old cache entry.
+    let _load = inode_metadata_load_lock(key).lock();
+    let cache = inode_metadata_cache_shard(key);
+    let shared = cache.write().remove(&key);
     if let Some(shared) = shared
         && let Err(err) = flush_metadata_cache_shared(&shared, false)
     {
-        INODE_METADATA_CACHES.write().entry(key).or_insert(shared);
+        cache.write().entry(key).or_insert(shared);
         warn!("Failed to flush inode metadata cache on invalidation: {err:?}");
     }
 }
 
 fn discard_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
     let key = inode_metadata_cache_key(filesystem, inode);
-    INODE_METADATA_CACHES.write().remove(&key);
+    let _load = inode_metadata_load_lock(key).lock();
+    inode_metadata_cache_shard(key).write().remove(&key);
 }
 
 fn metadata_update_is_empty(update: &MetadataUpdate) -> bool {
@@ -321,6 +345,11 @@ fn flush_metadata_cache_shared(
     shared: &SharedInodeMetadataCache,
     data_only: bool,
 ) -> VfsResult<()> {
+    // Invalidation and sync may race on the same inode. Keep their storage
+    // writes ordered so an older size/timestamp snapshot cannot land after a
+    // newer mutation. This is per inode, not a filesystem-wide gate.
+    let flush_lock = shared.read().flush_lock.clone();
+    let _flush = flush_lock.lock();
     let (size, update, file, node) = {
         let mut cache = shared.write();
         let size = cache.dirty_size.then_some(cache.metadata.size);
@@ -362,9 +391,8 @@ fn flush_metadata_cache_shared(
 
 pub fn flush_inode_metadata_caches(data_only: bool) -> VfsResult<()> {
     let caches = INODE_METADATA_CACHES
-        .read()
-        .values()
-        .cloned()
+        .iter()
+        .flat_map(|cache| cache.read().values().cloned().collect::<Vec<_>>())
         .collect::<Vec<_>>();
     for cache in caches {
         flush_metadata_cache_shared(&cache, data_only)?;
@@ -450,7 +478,7 @@ impl DirEntry {
     }
 
     fn cacheable_metadata(&self) -> bool {
-        self.node_type() != NodeType::Directory && !self.flags().contains(NodeFlags::NON_CACHEABLE)
+        !self.flags().contains(NodeFlags::NON_CACHEABLE)
     }
 
     fn metadata_cache_key(&self) -> InodeMetadataCacheKey {
@@ -469,9 +497,10 @@ impl DirEntry {
             return Some(cache);
         }
 
-        let cache = INODE_METADATA_CACHES
+        let key = self.metadata_cache_key();
+        let cache = inode_metadata_cache_shard(key)
             .read()
-            .get(&self.metadata_cache_key())
+            .get(&key)
             .cloned();
         if let Some(cache) = &cache {
             *self.0.metadata_cache.write() = Arc::downgrade(cache);
@@ -485,8 +514,16 @@ impl DirEntry {
         }
 
         let key = self.metadata_cache_key();
+        // Multiple compiler processes commonly open and stat the same crate
+        // inputs together. Coalesce the cold miss with a sleeping per-key
+        // shard, then recheck after waking so only one task enters the
+        // filesystem metadata path.
+        let _load = inode_metadata_load_lock(key).lock();
+        if let Some(cache) = self.metadata_cache() {
+            return Ok(cache);
+        }
         let metadata = self.raw_metadata()?;
-        let mut caches = INODE_METADATA_CACHES.write();
+        let mut caches = inode_metadata_cache_shard(key).write();
         let cache = caches
             .entry(key)
             .or_insert_with(|| {
@@ -496,6 +533,7 @@ impl DirEntry {
                     metadata,
                     dirty_size: false,
                     dirty_update: MetadataUpdate::default(),
+                    flush_lock: Arc::new(SleepMutex::new(())),
                 }))
             })
             .clone();

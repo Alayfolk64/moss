@@ -15,7 +15,7 @@ mod fs;
 
 mod highlevel;
 #[cfg(feature = "ext4")]
-pub use fs::ext4::Inode as Ext4Inode;
+pub use fs::ext4::{Inode as Ext4Inode, enable_async_block_io};
 pub use highlevel::*;
 
 pub fn new_filesystem_from_block_device(

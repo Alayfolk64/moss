@@ -129,6 +129,27 @@ mod backend;
 
 pub use self::backend::*;
 
+#[inline]
+fn synchronize_executable_fault(access_flags: PageFaultFlags) {
+    if access_flags.contains(MappingFlags::EXECUTE) {
+        // A linker output in tmpfs can be executed immediately after it is
+        // written. Synchronize instruction fetch on the hart which resolved
+        // the executable fault before retrying the user instruction.
+        #[cfg(target_arch = "riscv64")]
+        riscv::asm::fence_i();
+        #[cfg(target_arch = "loongarch64")]
+        unsafe {
+            // LoongArch keeps I/D caches coherent in hardware; Linux uses
+            // IBAR here to remove the remaining instruction-fetch hazard.
+            core::arch::asm!("ibar 0", options(nostack));
+        }
+    }
+    #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]
+    let _ = access_flags;
+}
+
+const MAX_CONCURRENT_FAULT_RETRIES: usize = 4;
+
 /// The virtual memory address space.
 pub struct AddrSpace {
     va_range: VirtAddrRange,
@@ -530,6 +551,7 @@ impl AddrSpace {
                             // Drop any locally cached invalid translation before
                             // retrying the faulting instruction.
                             axhal::asm::flush_tlb(Some(vaddr));
+                            synchronize_executable_fault(access_flags);
                             true
                         }
                     }
@@ -570,41 +592,43 @@ impl AddrSpace {
         access_flags: PageFaultFlags,
         flush_existing: bool,
     ) -> bool {
-        let preparation = {
-            let guard = aspace.read();
-            if !guard.va_range.contains(vaddr) {
-                return false;
-            }
-            let Some(area) = guard.areas.find(vaddr) else {
-                return false;
-            };
-            if !area.flags().contains(access_flags) {
-                return false;
-            }
-            area.backend().prepare_fault(
-                vaddr,
-                area.va_range(),
-                area.flags(),
-                access_flags,
-                &guard.pt,
-            )
-        };
-
-        match preparation {
-            FaultPreparation::Handled => {
-                if flush_existing {
-                    axhal::asm::flush_tlb(Some(vaddr));
-                }
-                true
-            }
-            FaultPreparation::Fallback => aspace.lock().handle_page_fault(vaddr, access_flags),
-            FaultPreparation::Cow(mut plan) => {
-                if let Err(err) = plan.execute() {
-                    warn!("Failed to prepare private page for {vaddr:?}: {err}");
+        let mut stale_retries = 0;
+        loop {
+            let preparation = {
+                let guard = aspace.read();
+                if !guard.va_range.contains(vaddr) {
                     return false;
                 }
+                let Some(area) = guard.areas.find(vaddr) else {
+                    return false;
+                };
+                if !area.flags().contains(access_flags) {
+                    return false;
+                }
+                area.backend().prepare_fault(
+                    vaddr,
+                    area.va_range(),
+                    area.flags(),
+                    access_flags,
+                    &guard.pt,
+                )
+            };
 
-                let committed = {
+            let committed = match preparation {
+                FaultPreparation::Handled => {
+                    if flush_existing {
+                        axhal::asm::flush_tlb(Some(vaddr));
+                        synchronize_executable_fault(access_flags);
+                    }
+                    return true;
+                }
+                FaultPreparation::Fallback => break,
+                FaultPreparation::Cow(mut plan) => {
+                    if let Err(err) = plan.execute() {
+                        warn!("Failed to prepare private page for {vaddr:?}: {err}");
+                        return false;
+                    }
+
                     let guard = aspace.read();
                     let Self { areas, pt, .. } = &*guard;
                     let Some(area) = areas.find(vaddr) else {
@@ -616,21 +640,73 @@ impl AddrSpace {
                     let flags = area.flags();
                     area.backend()
                         .commit_fault(&mut plan, area.va_range(), flags, access_flags, pt)
-                };
+                }
+                FaultPreparation::File(mut plan) => {
+                    if let Err(err) = plan.execute() {
+                        warn!("Failed to prepare file page for {vaddr:?}: {err}");
+                        return false;
+                    }
 
-                match committed {
-                    Ok(FaultCommit::Handled) => {
-                        axhal::asm::flush_tlb(Some(vaddr));
-                        true
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
                     }
-                    Ok(FaultCommit::Stale) => aspace.lock().handle_page_fault(vaddr, access_flags),
-                    Err(err) => {
-                        warn!("Failed to commit private page for {vaddr:?}: {err}");
-                        false
+                    let flags = area.flags();
+                    area.backend().commit_file_fault(
+                        &mut plan,
+                        area.va_range(),
+                        flags,
+                        access_flags,
+                        pt,
+                    )
+                }
+                FaultPreparation::Shared(mut plan) => {
+                    if let Err(err) = plan.execute() {
+                        warn!("Failed to prepare shared page for {vaddr:?}: {err}");
+                        return false;
                     }
+
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
+                    }
+                    let flags = area.flags();
+                    area.backend().commit_shared_fault(
+                        &mut plan,
+                        area.va_range(),
+                        flags,
+                        access_flags,
+                        pt,
+                    )
+                }
+            };
+
+            match committed {
+                Ok(FaultCommit::Handled) => {
+                    axhal::asm::flush_tlb(Some(vaddr));
+                    synchronize_executable_fault(access_flags);
+                    return true;
+                }
+                Ok(FaultCommit::Stale) if stale_retries < MAX_CONCURRENT_FAULT_RETRIES => {
+                    stale_retries += 1;
+                }
+                Ok(FaultCommit::Stale) => break,
+                Err(err) => {
+                    warn!("Failed to commit page for {vaddr:?}: {err}");
+                    return false;
                 }
             }
         }
+
+        aspace.lock().handle_page_fault(vaddr, access_flags)
     }
 
     /// Attempts to clone the current address space into a new one.

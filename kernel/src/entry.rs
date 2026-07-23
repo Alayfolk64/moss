@@ -5,7 +5,7 @@ use alloc::{
     vec::Vec,
 };
 
-use axfs::{FS_CONTEXT, sync_global_file_caches};
+use axfs::{FS_CONTEXT, enable_async_block_io, sync_global_file_caches};
 use axhal::uspace::UserContext;
 use axtask::{AxTaskExt, spawn_task};
 use starry_process::{Pid, Process};
@@ -74,6 +74,11 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
 
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
+    // axruntime mounts rootfs before all secondary run queues are online.
+    // From this point onward SMP is fully initialized, so block completions
+    // may safely run independently of the faulting task.
+    enable_async_block_io();
+
     #[cfg(target_arch = "loongarch64")]
     crate::mm::init_tlb_shootdown();
 

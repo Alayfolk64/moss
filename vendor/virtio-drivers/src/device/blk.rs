@@ -380,6 +380,19 @@ impl<H: Hal, T: Transport> VirtIOBlk<H, T> {
     pub fn virt_queue_size(&self) -> u16 {
         QUEUE_SIZE
     }
+
+    /// Maximum number of block requests that fit in the queue.
+    pub fn request_capacity(&self) -> usize {
+        if self
+            .negotiated_features
+            .contains(BlkFeature::RING_INDIRECT_DESC)
+        {
+            QUEUE_SIZE as usize
+        } else {
+            // A block request uses request, data and response descriptors.
+            QUEUE_SIZE as usize / 3
+        }
+    }
 }
 
 impl<H: Hal, T: Transport> Drop for VirtIOBlk<H, T> {

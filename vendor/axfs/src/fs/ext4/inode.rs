@@ -58,20 +58,53 @@ impl Inode {
         .map_err(into_vfs_err)
     }
 
-    fn directory_nlink_locked(&self, fs: &mut LwExt4Filesystem) -> VfsResult<u64> {
-        let mut reader = fs.read_dir(self.ino, 0).map_err(into_vfs_err)?;
-        let mut nlink = 2;
-        while let Some(entry) = reader.current() {
-            let ino = entry.ino();
-            let name = core::str::from_utf8(entry.name()).map_err(|_| VfsError::InvalidData)?;
-            let is_child_dir =
-                ino != 0 && entry.inode_type() == InodeType::Directory && name != "." && name != "..";
-            reader.step().map_err(into_vfs_err)?;
-            if is_child_dir {
-                nlink += 1;
-            }
-        }
-        Ok(nlink)
+    fn create_locked(
+        &self,
+        fs: &mut LwExt4Filesystem,
+        name: &str,
+        inode_type: InodeType,
+        node_type: NodeType,
+        permission: NodePermission,
+    ) -> VfsResult<DirEntry> {
+        let ino = fs
+            .create(self.ino, name, inode_type, permission.bits() as _)
+            .map_err(into_vfs_err)?;
+        self.update_ctime_locked(fs, ino)?;
+
+        let reference = Reference::new(
+            self.this.as_ref().and_then(WeakDirEntry::upgrade),
+            name.to_owned(),
+        );
+        Ok(if node_type == NodeType::Directory {
+            DirEntry::new_dir(
+                |this| DirNode::new(Inode::new(self.fs.clone(), ino, Some(this))),
+                reference,
+            )
+        } else {
+            DirEntry::new_file(
+                FileNode::new(Inode::new(self.fs.clone(), ino, None)),
+                node_type,
+                reference,
+            )
+        })
+    }
+
+    pub(crate) fn read_cached_at(
+        &self,
+        buf: &mut [u8],
+        offset: u64,
+        file_size: u64,
+    ) -> VfsResult<usize> {
+        self.fs.read_mapped(self.ino, buf, offset, file_size)
+    }
+
+    pub(crate) fn write_cached_at(
+        &self,
+        buf: &[u8],
+        offset: u64,
+        file_len: u64,
+    ) -> VfsResult<usize> {
+        self.fs.write_mapped(self.ino, buf, offset, file_len)
     }
 
     pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
@@ -121,15 +154,10 @@ impl NodeOps for Inode {
         let mut fs = self.fs.lock();
         fs.get_attr(self.ino, &mut attr).map_err(into_vfs_err)?;
         let node_type = into_vfs_type(attr.node_type);
-        let nlink = if node_type == NodeType::Directory {
-            self.directory_nlink_locked(&mut fs).unwrap_or(attr.nlink)
-        } else {
-            attr.nlink
-        };
         Ok(Metadata {
             inode: self.ino as _,
             device: attr.device,
-            nlink,
+            nlink: attr.nlink,
             mode: NodePermission::from_bits_truncate(attr.mode as u16),
             node_type,
             uid: attr.uid,
@@ -186,7 +214,7 @@ impl NodeOps for Inode {
     fn sync(&self, _data_only: bool) -> VfsResult<()> {
         // ext4 uses a filesystem-level block cache; flushing one inode must
         // drain pending metadata/data updates to keep directory integrity.
-        self.fs.lock().flush().map_err(into_vfs_err)
+        self.fs.flush_all()
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -223,6 +251,7 @@ impl FileNodeOps for Inode {
     }
 
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
+        self.fs.invalidate_extent_cache(self.ino);
         self.fs
             .lock()
             .write_at(self.ino, buf, offset)
@@ -230,6 +259,7 @@ impl FileNodeOps for Inode {
     }
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
+        self.fs.invalidate_extent_cache(self.ino);
         let mut fs = self.fs.lock();
         let length = fs
             .with_inode_ref(self.ino, |inode| Ok(inode.size()))
@@ -239,6 +269,7 @@ impl FileNodeOps for Inode {
     }
 
     fn set_len(&self, len: u64) -> VfsResult<()> {
+        self.fs.invalidate_extent_cache(self.ino);
         self.fs.lock().set_len(self.ino, len).map_err(into_vfs_err)
     }
 
@@ -305,30 +336,16 @@ impl DirNodeOps for Inode {
             }
         };
         let mut fs = self.fs.lock();
-        if fs.lookup(self.ino, name).is_ok() {
-            return Err(VfsError::AlreadyExists);
+        match fs.lookup(self.ino, name) {
+            Ok(_) => return Err(VfsError::AlreadyExists),
+            Err(err) => {
+                let err = into_vfs_err(err);
+                if err.canonicalize() != VfsError::NotFound {
+                    return Err(err);
+                }
+            }
         }
-        let ino = fs
-            .create(self.ino, name, inode_type, permission.bits() as _)
-            .map_err(into_vfs_err)?;
-        self.update_ctime_locked(&mut fs, ino)?;
-
-        let reference = Reference::new(
-            self.this.as_ref().and_then(WeakDirEntry::upgrade),
-            name.to_owned(),
-        );
-        Ok(if node_type == NodeType::Directory {
-            DirEntry::new_dir(
-                |this| DirNode::new(Inode::new(self.fs.clone(), ino, Some(this))),
-                reference,
-            )
-        } else {
-            DirEntry::new_file(
-                FileNode::new(Inode::new(self.fs.clone(), ino, None)),
-                node_type,
-                reference,
-            )
-        })
+        self.create_locked(&mut fs, name, inode_type, node_type, permission)
     }
 
     fn link(&self, name: &str, node: &DirEntry) -> VfsResult<DirEntry> {
@@ -340,13 +357,25 @@ impl DirNodeOps for Inode {
     }
 
     fn unlink(&self, name: &str) -> VfsResult<()> {
-        self.fs.lock().unlink(self.ino, name).map_err(into_vfs_err)
+        let removed = self
+            .fs
+            .lock()
+            .unlink(self.ino, name)
+            .map_err(into_vfs_err)?;
+        self.fs.invalidate_extent_cache(removed);
+        Ok(())
     }
 
     fn rename(&self, src_name: &str, dst_dir: &DirNode, dst_name: &str) -> VfsResult<()> {
         let dst_dir: Arc<Self> = dst_dir.downcast().map_err(|_| VfsError::InvalidInput)?;
         let mut fs = self.fs.lock();
-        fs.rename(self.ino, src_name, dst_dir.ino, dst_name)
-            .map_err(into_vfs_err)
+        let replaced = fs
+            .rename(self.ino, src_name, dst_dir.ino, dst_name)
+            .map_err(into_vfs_err)?;
+        drop(fs);
+        if let Some(ino) = replaced {
+            self.fs.invalidate_extent_cache(ino);
+        }
+        Ok(())
     }
 }

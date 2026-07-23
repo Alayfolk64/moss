@@ -24,6 +24,12 @@ pub enum ProfileEvent {
     OffCpu       = 6,
     /// Contended acquisition time for the filesystem-wide ext4 mutex.
     Ext4LockWait = 7,
+    /// Time spent waiting for another task to finish loading a folio.
+    FolioLoadWait = 8,
+    /// Contended acquisition time for the read side of a file invalidation gate.
+    InvalidateReadWait = 9,
+    /// Contended acquisition time for the write side of a file invalidation gate.
+    InvalidateWriteWait = 10,
 }
 
 type BeginHook = fn(ProfileEvent, usize) -> u64;

@@ -253,6 +253,15 @@ void ext4_bcache_invalidate_lba(struct ext4_bcache *bc,
 				uint64_t from,
 				uint32_t cnt);
 
+/**@brief   Flush dirty buffers and invalidate every cached buffer in a range.
+ * @param   bc block cache descriptor
+ * @param   from starting lba
+ * @param   cnt block count
+ * @return  standard error code*/
+int ext4_bcache_flush_invalidate_lba(struct ext4_bcache *bc,
+				     uint64_t from,
+				     uint32_t cnt);
+
 /**@brief   Find existing buffer from block cache memory.
  *          Unreferenced block allocation is based on LRU
  *          (Last Recently Used) algorithm.

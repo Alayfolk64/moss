@@ -8,7 +8,6 @@ use axhal::{
     paging::{MappingFlags, PageSize, PageTable, PageTableMut},
 };
 use enum_dispatch::enum_dispatch;
-use kspin::SpinNoIrq;
 use memory_addr::{DynPageIter, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 use memory_set::MappingBackend;
 
@@ -17,8 +16,8 @@ mod file;
 mod linear;
 mod shared;
 
-pub(crate) use self::cow::CowFaultPlan;
 pub use self::shared::SharedPages;
+pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan, shared::SharedFaultPlan};
 use super::{AddrSpace, AddrSpaceLock};
 
 /// Result of the short, locked phase of a page fault.
@@ -27,6 +26,10 @@ pub(crate) enum FaultPreparation {
     Handled,
     /// A private page can be prepared without holding the address-space lock.
     Cow(CowFaultPlan),
+    /// A shared file folio can be read without holding the address-space lock.
+    File(FileFaultPlan),
+    /// A shared anonymous page can be prepared without holding the address-space lock.
+    Shared(SharedFaultPlan),
     /// This fault still needs the regular locked backend path.
     Fallback,
 }
@@ -35,46 +38,6 @@ pub(crate) enum FaultPreparation {
 pub(crate) enum FaultCommit {
     Handled,
     Stale,
-}
-
-const LOCAL_FRAME_CACHE_CAPACITY: usize = 32;
-
-struct LocalFrameCache {
-    frames: [usize; LOCAL_FRAME_CACHE_CAPACITY],
-    len: usize,
-}
-
-impl LocalFrameCache {
-    const fn new() -> Self {
-        Self {
-            frames: [0; LOCAL_FRAME_CACHE_CAPACITY],
-            len: 0,
-        }
-    }
-
-    fn pop(&mut self) -> Option<PhysAddr> {
-        if self.len == 0 {
-            return None;
-        }
-        self.len -= 1;
-        Some(PhysAddr::from_usize(self.frames[self.len]))
-    }
-
-    fn push(&mut self, frame: PhysAddr) -> bool {
-        if self.len == LOCAL_FRAME_CACHE_CAPACITY {
-            return false;
-        }
-        self.frames[self.len] = frame.as_usize();
-        self.len += 1;
-        true
-    }
-}
-
-static LOCAL_FRAME_CACHES: [SpinNoIrq<LocalFrameCache>; axconfig::plat::CPU_NUM] =
-    [const { SpinNoIrq::new(LocalFrameCache::new()) }; axconfig::plat::CPU_NUM];
-
-fn local_frame_cache() -> &'static SpinNoIrq<LocalFrameCache> {
-    &LOCAL_FRAME_CACHES[axhal::percpu::this_cpu_id()]
 }
 
 fn divide_page(size: usize, page_size: PageSize) -> usize {
@@ -86,51 +49,16 @@ fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     let page_size = size as usize;
     let num_pages = page_size / PAGE_SIZE_4K;
     let frame = if size == PageSize::Size4K {
-        if let Some(frame) = local_frame_cache().lock().pop() {
-            frame
-        } else {
-            let batch = match global_allocator().alloc_pages(
-                LOCAL_FRAME_CACHE_CAPACITY,
-                PAGE_SIZE_4K,
-                UsageKind::VirtMem,
-            ) {
-                Ok(batch) => batch,
-                Err(_) => {
-                    let vaddr = global_allocator()
-                        .alloc_pages(1, PAGE_SIZE_4K, UsageKind::VirtMem)
-                        .map_err(|_| AxError::NoMemory)?;
-                    let frame = virt_to_phys(VirtAddr::from(vaddr));
-                    if zeroed {
-                        unsafe {
-                            core::ptr::write_bytes(
-                                phys_to_virt(frame).as_mut_ptr(),
-                                0,
-                                PAGE_SIZE_4K,
-                            )
-                        };
-                    }
-                    return Ok(frame);
-                }
-            };
-            let mut cache = local_frame_cache().lock();
-            let mut first_uncached = LOCAL_FRAME_CACHE_CAPACITY;
-            for index in 1..LOCAL_FRAME_CACHE_CAPACITY {
-                let frame = virt_to_phys(VirtAddr::from(batch + index * PAGE_SIZE_4K));
-                if !cache.push(frame) {
-                    first_uncached = index;
-                    break;
-                }
-            }
-            drop(cache);
-            for index in first_uncached..LOCAL_FRAME_CACHE_CAPACITY {
-                global_allocator().dealloc_pages(
-                    batch + index * PAGE_SIZE_4K,
-                    1,
+        let vaddr = VirtAddr::from(
+            global_allocator()
+                .alloc_page_cached(
+                    axhal::percpu::this_cpu_id(),
+                    axconfig::plat::CPU_NUM,
                     UsageKind::VirtMem,
-                );
-            }
-            virt_to_phys(VirtAddr::from(batch))
-        }
+                )
+                .map_err(|_| AxError::NoMemory)?,
+        );
+        virt_to_phys(vaddr)
     } else {
         let vaddr = VirtAddr::from(
             global_allocator()
@@ -146,13 +74,19 @@ fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
 }
 
 fn dealloc_frame(frame: PhysAddr, align: PageSize) {
-    if align == PageSize::Size4K && local_frame_cache().lock().push(frame) {
-        return;
-    }
     let vaddr = phys_to_virt(frame);
-    let page_size: usize = align.into();
-    let num_pages = page_size / PAGE_SIZE_4K;
-    global_allocator().dealloc_pages(vaddr.as_usize(), num_pages, UsageKind::VirtMem);
+    if align == PageSize::Size4K {
+        global_allocator().dealloc_page_cached(
+            axhal::percpu::this_cpu_id(),
+            axconfig::plat::CPU_NUM,
+            vaddr.as_usize(),
+            UsageKind::VirtMem,
+        );
+    } else {
+        let page_size: usize = align.into();
+        let num_pages = page_size / PAGE_SIZE_4K;
+        global_allocator().dealloc_pages(vaddr.as_usize(), num_pages, UsageKind::VirtMem);
+    }
 }
 
 fn pages_in(range: VirtAddrRange, align: PageSize) -> AxResult<DynPageIter<VirtAddr>> {
@@ -239,6 +173,12 @@ impl Backend {
     ) -> FaultPreparation {
         match self {
             Self::Cow(backend) => backend.prepare_fault(vaddr, area_range, flags, access_flags, pt),
+            Self::File(backend) => {
+                backend.prepare_fault(vaddr, area_range, flags, access_flags, pt)
+            }
+            Self::Shared(backend) => {
+                backend.prepare_fault(vaddr, area_range, flags, access_flags, pt)
+            }
             _ => FaultPreparation::Fallback,
         }
     }
@@ -253,6 +193,36 @@ impl Backend {
     ) -> AxResult<FaultCommit> {
         match self {
             Self::Cow(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
+            _ => Ok(FaultCommit::Stale),
+        }
+    }
+
+    pub(crate) fn commit_file_fault(
+        &self,
+        plan: &mut FileFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        match self {
+            Self::File(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
+            _ => Ok(FaultCommit::Stale),
+        }
+    }
+
+    pub(crate) fn commit_shared_fault(
+        &self,
+        plan: &mut SharedFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        match self {
+            Self::Shared(backend) => {
+                backend.commit_fault(plan, area_range, flags, access_flags, pt)
+            }
             _ => Ok(FaultCommit::Stale),
         }
     }
@@ -298,6 +268,15 @@ impl MappingBackend for Backend {
             warn!("Failed to protect area: {:?}", err);
             return false;
         }
-        cursor.protect_region(start, size, new_flags).is_ok()
+        // A private mapping may still point at a file-cache page or at an
+        // anonymous frame shared after fork.  Keep those PTEs read-only even
+        // when mprotect() makes the VMA writable; the first store must still
+        // fault so CowBackend can copy (or exclusively upgrade) the page.
+        let pte_flags = if matches!(self, Self::Cow(_)) {
+            new_flags - MappingFlags::WRITE
+        } else {
+            new_flags
+        };
+        cursor.protect_region(start, size, pte_flags).is_ok()
     }
 }

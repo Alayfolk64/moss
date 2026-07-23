@@ -210,7 +210,8 @@ fn map_elf<'a>(
             backend,
         )?;
 
-        // TDOO: flush the I-cache
+        // Executable file pages are synchronized on the hart which resolves
+        // their first instruction fault; see `synchronize_executable_fault`.
     }
 
     Ok(elf_parser)

@@ -114,7 +114,10 @@ pub fn init_scheduler_with_cpu_num(cpu_num: usize) {
     info!("  use {} scheduler.", Scheduler::scheduler_name());
 }
 
-pub(crate) fn active_cpu_num() -> usize {
+/// Returns the number of CPUs currently managed by the scheduler.
+///
+/// Before scheduler initialization this returns one.
+pub fn active_cpu_count() -> usize {
     CPU_NUM.load(core::sync::atomic::Ordering::Relaxed)
 }
 

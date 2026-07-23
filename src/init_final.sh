@@ -46,12 +46,15 @@ run_cagent() {
 run_buildstorm() {
     buildstorm_script=/tmp/buildstorm_testcode.sh
     cp /glibc/buildstorm_testcode.sh "$buildstorm_script"
+    # The official clean image omits the globally configured Cargo target
+    # directory.  Cargo does not create its missing parent for the minibuild.
+    mkdir -p /work/tgoskits/target
 
     if [ -w /proc/moss_profile ]; then
         sed -i \
             -e '/OS COMP TEST GROUP START buildstorm-glibc/a echo reset > /proc/moss_profile; echo phase=setup > /proc/moss_profile' \
             -e '/----- pre-build tg-xtask/a echo phase=prebuild > /proc/moss_profile' \
-            -e '/----- build arceos-helloworld/a echo stop > /proc/moss_profile; echo "#### MOSS PREBUILD PROFILE START ####"; cat /proc/moss_profile; echo "#### MOSS PREBUILD PROFILE END ####"; echo phase=timed > /proc/moss_profile' \
+            -e '/----- build arceos-helloworld/a echo phase=timed > /proc/moss_profile' \
             "$buildstorm_script"
     fi
 
@@ -61,6 +64,11 @@ run_buildstorm() {
 
     if [ -r /proc/moss_profile ]; then
         echo stop > /proc/moss_profile
+        echo "#### MOSS GUEST PROFILE READY ####"
+        # The host profiler freezes the VM at this marker and copies the
+        # binary tables through QEMU's GDB stub.  Keep the text snapshot as a
+        # fallback, but give the host a quiet interval with profiling stopped.
+        sleep 30
         echo "#### MOSS GUEST PROFILE START ####"
         cat /proc/moss_profile
         echo "#### MOSS GUEST PROFILE END ####"

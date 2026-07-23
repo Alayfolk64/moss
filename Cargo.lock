@@ -282,8 +282,6 @@ dependencies = [
 [[package]]
 name = "axdriver"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0fb1b9104560a2ea0342fbd82820910d380f47dab08ef5213cf112c65429cbd"
 dependencies = [
  "axalloc",
  "axconfig",
@@ -310,8 +308,6 @@ checksum = "c4614d9e505dae224e4e4cb934c8fa916d77ecfb7b770a8bf8eac78bdeec3dba"
 [[package]]
 name = "axdriver_block"
 version = "0.1.4-preview.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cccf23999a9dff620ef87c08c571509d2e90cc9dc80f932381b0fd949f020f9"
 dependencies = [
  "axdriver_base",
  "log",
@@ -360,8 +356,6 @@ dependencies = [
 [[package]]
 name = "axdriver_virtio"
 version = "0.1.4-preview.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da6c36cc900745f3bab9de0dd8d5a2d5ac720a253937b3c5f3ab81bbb9c9e139"
 dependencies = [
  "axdriver_base",
  "axdriver_block",
@@ -424,6 +418,7 @@ dependencies = [
  "axio",
  "axpoll",
  "axsync",
+ "axtask",
  "bitflags 2.11.0",
  "cfg-if",
  "chrono",
@@ -444,6 +439,7 @@ version = "0.1.1"
 dependencies = [
  "axerrno 0.2.2",
  "axpoll",
+ "axsync",
  "bitflags 2.11.0",
  "cfg-if",
  "hashbrown",
@@ -1643,8 +1639,6 @@ checksum = "b1f0625c50adb5f6aaf47f05cae3c4dbc13a74c659241b06c4576f3d7e1da940"
 [[package]]
 name = "memory_set"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a49ecd4114cf87f7e442ec5dd03bd590e7094541f987057310dbb32a6341ad"
 dependencies = [
  "axerrno 0.1.2",
  "memory_addr",
@@ -2563,8 +2557,6 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "virtio-drivers"
 version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6a39747311dabb3d37807037ed1c3c38d39f99198d091b5b79ecd5c8d82f799"
 dependencies = [
  "bitflags 2.11.0",
  "enumn",

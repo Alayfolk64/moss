@@ -1,8 +1,8 @@
-use alloc::boxed::Box;
+use alloc::{boxed::Box, vec::Vec};
 use core::{marker::PhantomData, mem, time::Duration};
 
 use crate::{
-    DirLookupResult, DirReader, Ext4Error, Ext4Result, FileAttr, InodeRef, InodeType,
+    BlockExtent, DirLookupResult, DirReader, Ext4Error, Ext4Result, FileAttr, InodeRef, InodeType,
     blockdev::{BlockDevice, Ext4BlockDevice},
     error::Context,
     ffi::*,
@@ -126,6 +126,33 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
     pub fn read_at(&mut self, ino: u32, buf: &mut [u8], offset: u64) -> Ext4Result<usize> {
         self.inode_ref(ino)?.read_at(buf, offset)
     }
+    pub fn map_blocks(&mut self, ino: u32, start: u32, count: u32) -> Ext4Result<Vec<BlockExtent>> {
+        self.inode_ref(ino)?.map_blocks(start, count)
+    }
+    pub fn map_blocks_for_write(
+        &mut self,
+        ino: u32,
+        start: u32,
+        count: u32,
+    ) -> Ext4Result<Vec<BlockExtent>> {
+        self.inode_ref(ino)?.map_blocks_for_write(start, count)
+    }
+    pub fn prepare_direct_data_access(&mut self, extents: &[BlockExtent]) -> Ext4Result<()> {
+        unsafe {
+            let bdev = self.bdev.inner.as_mut();
+            for extent in extents {
+                let Some(first) = extent.physical_block else {
+                    continue;
+                };
+                ext4_bcache_flush_invalidate_lba(bdev.bc, first, extent.block_count)
+                    .context("ext4_bcache_flush_invalidate_lba")?;
+            }
+        }
+        Ok(())
+    }
+    pub fn block_size(&self) -> u32 {
+        get_block_size(&self.inner.sb)
+    }
     pub fn write_at(&mut self, ino: u32, buf: &[u8], offset: u64) -> Ext4Result<usize> {
         self.inode_ref(ino)?.write_at(buf, offset)
     }
@@ -147,6 +174,10 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         let mut parent = self.inode_ref(parent)?;
         parent.add_entry(name, &mut child)?;
         if ty == InodeType::Directory {
+            // The filesystem-wide `dir_index` feature only permits indexed
+            // directories; it does not require every new directory to start
+            // as an HTree. Keep a new, small directory linear until we have a
+            // complete and independently verified HTree conversion path.
             child.add_self_entry(".")?;
             child.add_entry("..", &mut parent)?;
             assert_eq!(child.nlink(), 2);
@@ -162,16 +193,16 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         src_name: &str,
         dst_dir: u32,
         dst_name: &str,
-    ) -> Ext4Result {
+    ) -> Ext4Result<Option<u32>> {
         let mut src_dir_ref = self.inode_ref(src_dir)?;
         let mut dst_dir_ref = self.inode_ref(dst_dir)?;
 
         // TODO: optimize
-        match self.unlink(dst_dir, dst_name) {
-            Ok(_) => {}
-            Err(err) if err.code == ENOENT as i32 => {}
+        let replaced = match self.unlink(dst_dir, dst_name) {
+            Ok(ino) => Some(ino),
+            Err(err) if err.code == ENOENT as i32 => None,
             Err(err) => return Err(err),
-        }
+        };
 
         let src = self.lookup(src_dir, src_name)?.entry().ino();
 
@@ -185,7 +216,7 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         src_dir_ref.remove_entry(src_name, &mut src_ref)?;
         dst_dir_ref.add_entry(dst_name, &mut src_ref)?;
 
-        Ok(())
+        Ok(replaced)
     }
 
     pub fn link(&mut self, dir: u32, name: &str, child: u32) -> Ext4Result {
@@ -197,7 +228,7 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         Ok(())
     }
 
-    pub fn unlink(&mut self, dir: u32, name: &str) -> Ext4Result {
+    pub fn unlink(&mut self, dir: u32, name: &str) -> Ext4Result<u32> {
         let mut dir_ref = self.inode_ref(dir)?;
         let child = self.clone_ref(&dir_ref).lookup(name)?.entry().ino();
         let mut child_ref = self.inode_ref(child)?;
@@ -231,7 +262,7 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
                 ext4_fs_free_inode(child_ref.inner.as_mut());
             }
         }
-        Ok(())
+        Ok(child)
     }
 
     pub fn stat(&mut self) -> Ext4Result<StatFs> {
