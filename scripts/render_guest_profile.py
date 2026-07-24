@@ -31,6 +31,17 @@ EVENT_NAMES = {
     15: "mprotect-local-update",
     16: "mprotect-record-lock-wait",
     17: "mprotect-record-update",
+    18: "aspace-mmap-write-hold",
+    19: "aspace-munmap-write-hold",
+    20: "aspace-mprotect-write-hold",
+    21: "aspace-mremap-write-hold",
+    22: "aspace-madvise-write-hold",
+    23: "aspace-exit-clear-write-hold",
+    24: "aspace-exec-clear-write-hold",
+    25: "aspace-fault-fallback-write-hold",
+    26: "aspace-clone-write-hold",
+    27: "aspace-file-evict-write-hold",
+    28: "aspace-other-write-hold",
 }
 MPROTECT_PAGE_BUCKET_LABELS = (
     "0",

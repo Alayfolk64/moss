@@ -18,6 +18,7 @@ use super::{
     AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
     pages_in,
 };
+use crate::mm::AddrSpaceWriteOwner;
 
 const NO_FAULT_PAGE: u32 = u32::MAX;
 const MMAP_FAULT_READAHEAD_PAGES: u32 = 4;
@@ -91,7 +92,7 @@ impl FileBackendInner {
                     // The address space has been dropped, nothing to do.
                     return;
                 };
-                if let Some(mut guard) = aspace.try_lock() {
+                if let Some(mut guard) = aspace.try_lock_profiled(AddrSpaceWriteOwner::FileEvict) {
                     this.on_evict(pn, page, &mut guard);
                 } else {
                     this.defer_evict(pn, page.clone(), aspace);
@@ -129,7 +130,7 @@ impl FileBackendInner {
                     continue;
                 }
 
-                let mut guard = aspace.lock();
+                let mut guard = aspace.lock_profiled(AddrSpaceWriteOwner::FileEvict);
                 for (pn, page) in pending {
                     this.on_evict(pn, &page, &mut guard);
                 }

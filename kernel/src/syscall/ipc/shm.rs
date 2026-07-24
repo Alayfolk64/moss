@@ -13,7 +13,7 @@ use starry_process::Pid;
 
 use super::{IPC_PRIVATE, IPC_RMID, IPC_SET, IPC_STAT, IpcPerm, has_ipc_permission, next_ipc_id};
 use crate::{
-    mm::{Backend, SharedPages, UserPtr},
+    mm::{AddrSpaceWriteOwner, Backend, SharedPages, UserPtr},
     task::AsThread,
 };
 
@@ -470,7 +470,7 @@ pub fn sys_shmat(shmid: i32, addr: usize, shmflg: u32) -> AxResult<isize> {
     let proc_data = &curr.as_thread().proc_data;
     let pid = proc_data.proc.pid();
     let aspace_ref = proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
+    let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Other);
 
     let start_aligned = memory_addr::align_down_4k(addr);
     let length = shm_inner.page_num * PAGE_SIZE_4K;
@@ -624,7 +624,7 @@ pub fn sys_shmdt(shmaddr: usize) -> AxResult<isize> {
     let va_range = shm_inner.get_addr_range(pid).ok_or(AxError::InvalidInput)?;
 
     let aspace_ref = proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
+    let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Other);
     aspace.unmap(va_range.start, va_range.size())?;
 
     let mut shm_manager = SHM_MANAGER.lock();

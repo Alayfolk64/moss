@@ -13,7 +13,7 @@ use starry_vm::VmMutPtr;
 
 use crate::{
     file::{FD_TABLE, FileLike, PidFd, close_file_like},
-    mm::copy_from_kernel,
+    mm::{AddrSpaceWriteOwner, copy_from_kernel},
     task::{AsThread, ProcessData, Thread, VforkCompletion, add_task_to_table, new_user_task},
 };
 
@@ -211,10 +211,10 @@ impl CloneArgs {
                 old_proc_data.aspace()
             } else {
                 let old_aspace = old_proc_data.aspace();
-                let mut aspace = old_aspace.lock();
+                let mut aspace = old_aspace.lock_profiled(AddrSpaceWriteOwner::Clone);
                 let aspace = aspace.try_clone()?;
                 {
-                    let mut child_aspace = aspace.lock();
+                    let mut child_aspace = aspace.lock_profiled(AddrSpaceWriteOwner::Clone);
                     copy_from_kernel(&mut child_aspace)?;
                     crate::syscall::inherit_wipeonfork_ranges(
                         old_proc_data.proc.pid(),

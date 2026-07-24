@@ -81,7 +81,8 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                             ) {
                                 None
                             } else {
-                                let mut aspace = aspace_ref.lock();
+                                let mut aspace =
+                                    aspace_ref.lock_profiled(crate::mm::AddrSpaceWriteOwner::Other);
                                 if crate::syscall::try_growdown_fault(
                                     thr.proc_data.proc.pid(),
                                     &mut aspace,

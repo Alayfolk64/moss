@@ -12,7 +12,7 @@ use starry_vm::{vm_load, vm_write_slice};
 
 use crate::{
     file::{File, FileLike},
-    mm::{AddrSpace, Backend, SharedPages, VmaMetadata},
+    mm::{AddrSpace, AddrSpaceWriteOwner, Backend, SharedPages, VmaMetadata},
     pseudofs::{Device, DeviceMmap},
     syscall::{fs::memfd_write_sealed, notify_inotify_file},
     task::AsThread,
@@ -367,7 +367,7 @@ pub fn sys_mmap(
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
     let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
+    let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Mmap);
     let permission_flags = MmapProt::from_bits_truncate(prot);
     // TODO: check illegal flags for mmap
     let map_flags = match MmapFlags::from_bits(flags) {
@@ -608,7 +608,7 @@ pub fn sys_munmap(addr: usize, length: usize) -> AxResult<isize> {
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
     let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
+    let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Munmap);
     if !aspace.contains_range(start_addr, length) {
         return Err(AxError::InvalidInput);
     }
@@ -634,6 +634,7 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
 
     let curr = current();
     let length = align_up_4k(length);
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
     let pages = length / PageSize::Size4K as usize;
     #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
     let profile_phase = crate::profiler::mprotect_begin(pages, permission_flags.bits());
@@ -647,19 +648,20 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
 
     let aspace_ref = curr.as_thread().proc_data.aspace();
     #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
-    let mut aspace = if let Some(aspace) = aspace_ref.try_lock() {
-        aspace
-    } else {
-        let token = axsync::profile_wait_begin(
-            axsync::ProfileEvent::MprotectAddrSpaceWait,
-            Arc::as_ptr(&aspace_ref) as usize,
-        );
-        let aspace = aspace_ref.lock();
-        axsync::profile_wait_end(token);
-        aspace
-    };
+    let mut aspace =
+        if let Some(aspace) = aspace_ref.try_lock_profiled(AddrSpaceWriteOwner::Mprotect) {
+            aspace
+        } else {
+            let token = axsync::profile_wait_begin(
+                axsync::ProfileEvent::MprotectAddrSpaceWait,
+                Arc::as_ptr(&aspace_ref) as usize,
+            );
+            let aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Mprotect);
+            axsync::profile_wait_end(token);
+            aspace
+        };
     #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
-    let mut aspace = aspace_ref.lock();
+    let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Mprotect);
 
     let start_addr = VirtAddr::from(addr);
     let update = {
@@ -673,6 +675,8 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
             user_mapping_flags(permission_flags),
         )?
     };
+    #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
+    let _ = update;
     #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
     crate::profiler::mprotect_record_validation(profile_phase, update.validated);
     #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
@@ -722,7 +726,7 @@ pub fn sys_mremap(
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
     let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
+    let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Mremap);
     let old_size = align_up_4k(old_size);
     let new_size = align_up_4k(new_size);
 
@@ -848,7 +852,7 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
 
     match advice {
         MADV_WIPEONFORK => {
-            let aspace = aspace_ref.lock();
+            let aspace = aspace_ref.read();
             if !aspace.can_access_range(start, length, MappingFlags::USER) {
                 return Err(AxError::NoMemory);
             }
@@ -858,14 +862,14 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
             add_wipeonfork_range(pid, addr, length);
         }
         MADV_KEEPONFORK => {
-            let aspace = aspace_ref.lock();
+            let aspace = aspace_ref.read();
             if !aspace.can_access_range(start, length, MappingFlags::USER) {
                 return Err(AxError::NoMemory);
             }
             remove_wipeonfork_range(pid, addr, length);
         }
         MADV_FREE => {
-            let mut aspace = aspace_ref.lock();
+            let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Madvise);
             if !aspace.can_access_range(start, length, MappingFlags::USER) {
                 return Err(AxError::NoMemory);
             }
@@ -875,7 +879,7 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
             aspace.discard_pages(start, length)?;
         }
         MADV_DONTNEED => {
-            let mut aspace = aspace_ref.lock();
+            let mut aspace = aspace_ref.lock_profiled(AddrSpaceWriteOwner::Madvise);
             if !aspace.can_access_range(start, length, MappingFlags::USER) {
                 return Err(AxError::NoMemory);
             }
@@ -931,7 +935,7 @@ pub fn sys_mlock2(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
     let proc_data = &curr.as_thread().proc_data;
     if !proc_data
         .aspace()
-        .lock()
+        .read()
         .can_access_range(start, locked_len, MappingFlags::USER)
     {
         return Err(AxError::NoMemory);

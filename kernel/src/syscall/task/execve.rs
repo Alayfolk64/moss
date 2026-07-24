@@ -19,8 +19,8 @@ use crate::{
     config::USER_HEAP_BASE,
     file::{FD_TABLE, File, resolve_at},
     mm::{
-        copy_from_kernel, load_user_app, load_user_app_from_location, new_user_aspace_empty,
-        vm_load_string,
+        AddrSpaceWriteOwner, copy_from_kernel, defer_address_space_reclaim, load_user_app,
+        load_user_app_from_location, new_user_aspace_empty, vm_load_string,
     },
     syscall::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
@@ -284,15 +284,20 @@ fn execve_common(
     };
     let page_table_root = new_aspace.page_table_root();
     let old_aspace = proc_data.replace_aspace(Arc::new(crate::mm::AddrSpaceLock::new(new_aspace)));
-    let old_locked_bytes =
-        if address_space_shared_with_live_process(&old_aspace, proc_data.proc.pid()) {
-            0
-        } else {
-            old_aspace.read().locked_bytes()
-        };
+    let old_aspace_shared =
+        address_space_shared_with_live_process(&old_aspace, proc_data.proc.pid());
+    let old_locked_bytes = if old_aspace_shared {
+        0
+    } else {
+        old_aspace.read().locked_bytes()
+    };
     crate::syscall::release_process_mmap_resources(proc_data.proc.pid(), old_locked_bytes);
     axtask::replace_current_page_table(page_table_root);
-    drop(old_aspace);
+    if old_aspace_shared {
+        drop(old_aspace);
+    } else {
+        defer_address_space_reclaim(old_aspace, AddrSpaceWriteOwner::ExecClear);
+    }
 
     curr.set_name(loc.name());
 

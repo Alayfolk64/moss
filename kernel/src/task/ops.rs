@@ -112,7 +112,7 @@ pub(crate) fn address_space_shared_with_live_process(
 fn reclaim_process_address_space(proc_data: &ProcessData) {
     let aspace = proc_data.aspace();
     if !address_space_shared_with_live_process(&aspace, proc_data.proc.pid()) {
-        aspace.lock().clear();
+        crate::mm::defer_address_space_reclaim(aspace, crate::mm::AddrSpaceWriteOwner::ExitClear);
     }
 }
 

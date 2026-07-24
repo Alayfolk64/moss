@@ -44,6 +44,28 @@ pub enum ProfileEvent {
     MprotectRecordLockWait = 16,
     /// Time spent rebuilding mapping records after permissions change.
     MprotectRecordUpdate = 17,
+    /// Time for which mmap holds the process address-space write lock.
+    AddrSpaceMmapHold = 18,
+    /// Time for which munmap holds the process address-space write lock.
+    AddrSpaceMunmapHold = 19,
+    /// Time for which mprotect holds the process address-space write lock.
+    AddrSpaceMprotectHold = 20,
+    /// Time for which mremap holds the process address-space write lock.
+    AddrSpaceMremapHold = 21,
+    /// Time for which madvise holds the process address-space write lock.
+    AddrSpaceMadviseHold = 22,
+    /// Time spent holding the write lock while reclaiming an exiting process.
+    AddrSpaceExitClearHold = 23,
+    /// Time spent holding the write lock while reclaiming an execve image.
+    AddrSpaceExecClearHold = 24,
+    /// Time for which the serial page-fault fallback holds the write lock.
+    AddrSpaceFaultFallbackHold = 25,
+    /// Time for which fork/clone construction holds an address-space write lock.
+    AddrSpaceCloneHold = 26,
+    /// Time for which file-cache eviction holds an address-space write lock.
+    AddrSpaceFileEvictHold = 27,
+    /// Time for which another operation holds an address-space write lock.
+    AddrSpaceOtherHold = 28,
 }
 
 type BeginHook = fn(ProfileEvent, usize) -> u64;

@@ -1,8 +1,8 @@
-use alloc::sync::Arc;
+use alloc::{collections::VecDeque, sync::Arc};
 use core::{
     fmt,
-    ops::DerefMut,
-    sync::atomic::{AtomicUsize, Ordering},
+    ops::{Deref, DerefMut},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 use axerrno::{AxError, AxResult, ax_bail};
@@ -12,6 +12,7 @@ use axhal::{
     trap::PageFaultFlags,
 };
 use event_listener::{Event, listener};
+use kspin::SpinNoIrq;
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
@@ -242,14 +243,85 @@ pub struct AddrSpace {
 /// page faults to inspect and update independent PTEs concurrently.
 pub struct AddrSpaceLock(BlockingRwLock<AddrSpace>);
 
+/// Operation responsible for holding an address-space write lock.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum AddrSpaceWriteOwner {
+    Mmap,
+    Munmap,
+    Mprotect,
+    Mremap,
+    Madvise,
+    ExitClear,
+    ExecClear,
+    FaultFallback,
+    Clone,
+    FileEvict,
+    Other,
+}
+
+impl AddrSpaceWriteOwner {
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    fn profile_event(self) -> axsync::ProfileEvent {
+        use axsync::ProfileEvent;
+
+        match self {
+            Self::Mmap => ProfileEvent::AddrSpaceMmapHold,
+            Self::Munmap => ProfileEvent::AddrSpaceMunmapHold,
+            Self::Mprotect => ProfileEvent::AddrSpaceMprotectHold,
+            Self::Mremap => ProfileEvent::AddrSpaceMremapHold,
+            Self::Madvise => ProfileEvent::AddrSpaceMadviseHold,
+            Self::ExitClear => ProfileEvent::AddrSpaceExitClearHold,
+            Self::ExecClear => ProfileEvent::AddrSpaceExecClearHold,
+            Self::FaultFallback => ProfileEvent::AddrSpaceFaultFallbackHold,
+            Self::Clone => ProfileEvent::AddrSpaceCloneHold,
+            Self::FileEvict => ProfileEvent::AddrSpaceFileEvictHold,
+            Self::Other => ProfileEvent::AddrSpaceOtherHold,
+        }
+    }
+}
+
+/// Write guard paired with a hold-time profile interval.
+///
+/// Rust drops struct fields in declaration order, so the lock is released
+/// before the profile interval ends.
+pub(crate) struct ProfiledAddrSpaceWriteGuard<'a> {
+    guard: BlockingRwLockWriteGuard<'a, AddrSpace>,
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    _profile: axsync::ProfileScope,
+}
+
+impl Deref for ProfiledAddrSpaceWriteGuard<'_> {
+    type Target = AddrSpace;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl DerefMut for ProfiledAddrSpaceWriteGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
 impl AddrSpaceLock {
     pub(crate) fn new(aspace: AddrSpace) -> Self {
         Self(BlockingRwLock::new(aspace))
     }
 
-    /// Existing mapping-changing operations take the exclusive side.
-    pub(crate) fn lock(&self) -> BlockingRwLockWriteGuard<'_, AddrSpace> {
-        self.0.write()
+    /// Takes the write lock and records how long `owner` keeps it.
+    pub(crate) fn lock_profiled(
+        &self,
+        owner: AddrSpaceWriteOwner,
+    ) -> ProfiledAddrSpaceWriteGuard<'_> {
+        #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
+        let _ = owner;
+        let guard = self.0.write();
+        ProfiledAddrSpaceWriteGuard {
+            guard,
+            #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+            _profile: axsync::ProfileScope::new(owner.profile_event(), self as *const _ as usize),
+        }
     }
 
     /// Page faults take the shared side only for VMA lookup and PTE commit.
@@ -257,9 +329,64 @@ impl AddrSpaceLock {
         self.0.read()
     }
 
-    pub(crate) fn try_lock(&self) -> Option<BlockingRwLockWriteGuard<'_, AddrSpace>> {
-        self.0.try_write()
+    pub(crate) fn try_lock_profiled(
+        &self,
+        owner: AddrSpaceWriteOwner,
+    ) -> Option<ProfiledAddrSpaceWriteGuard<'_>> {
+        #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
+        let _ = owner;
+        self.0.try_write().map(|guard| ProfiledAddrSpaceWriteGuard {
+            guard,
+            #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+            _profile: axsync::ProfileScope::new(owner.profile_event(), self as *const _ as usize),
+        })
     }
+}
+
+const RECLAIM_BATCH_PAGES: usize = 256;
+
+struct AddrSpaceReclaim {
+    aspace: Arc<AddrSpaceLock>,
+    owner: AddrSpaceWriteOwner,
+}
+
+static RECLAIM_QUEUE: SpinNoIrq<VecDeque<AddrSpaceReclaim>> = SpinNoIrq::new(VecDeque::new());
+static RECLAIM_WORKER_RUNNING: AtomicBool = AtomicBool::new(false);
+
+/// Clears an address space outside exit/execve and bounds each write-side
+/// critical section to at most one reclaim batch.
+pub(crate) fn defer_address_space_reclaim(aspace: Arc<AddrSpaceLock>, owner: AddrSpaceWriteOwner) {
+    RECLAIM_QUEUE
+        .lock()
+        .push_back(AddrSpaceReclaim { aspace, owner });
+    if RECLAIM_WORKER_RUNNING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+
+    axtask::spawn(|| {
+        loop {
+            let request = { RECLAIM_QUEUE.lock().pop_front() };
+            if let Some(request) = request {
+                let mut aspace = request.aspace.lock_profiled(request.owner);
+                let finished = aspace.clear_batch(RECLAIM_BATCH_PAGES);
+                drop(aspace);
+                if !finished {
+                    RECLAIM_QUEUE.lock().push_back(request);
+                    axtask::yield_now();
+                }
+                continue;
+            }
+
+            RECLAIM_WORKER_RUNNING.store(false, Ordering::Release);
+            if RECLAIM_QUEUE.lock().is_empty()
+                || RECLAIM_WORKER_RUNNING
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                    .is_err()
+            {
+                return;
+            }
+        }
+    });
 }
 
 impl AddrSpace {
@@ -633,6 +760,29 @@ impl AddrSpace {
         self.areas.clear(&mut self.pt).unwrap();
     }
 
+    /// Removes at most `max_pages` base pages from the first VMA.
+    ///
+    /// Exit and execve reclaim use this to release the address-space write lock
+    /// between bounded chunks instead of unmapping the entire image in one
+    /// critical section.
+    fn clear_batch(&mut self, max_pages: usize) -> bool {
+        let Some((start, size, page_size)) = self.areas.iter().next().map(|area| {
+            (
+                area.start(),
+                area.size(),
+                area.backend().page_size() as usize,
+            )
+        }) else {
+            return true;
+        };
+        let batch_size = max_pages
+            .saturating_mul(PAGE_SIZE_4K)
+            .max(page_size)
+            .min(size);
+        self.areas.unmap(start, batch_size, &mut self.pt).unwrap();
+        self.areas.is_empty()
+    }
+
     /// Checks whether an access to the specified memory region is valid.
     ///
     /// Returns `true` if the memory region given by `range` is all mapped and
@@ -886,7 +1036,9 @@ impl AddrSpace {
             }
         }
 
-        aspace.lock().handle_page_fault(vaddr, access_flags)
+        aspace
+            .lock_profiled(AddrSpaceWriteOwner::FaultFallback)
+            .handle_page_fault(vaddr, access_flags)
     }
 
     /// Attempts to clone the current address space into a new one.
@@ -901,7 +1053,7 @@ impl AddrSpace {
         )?));
         let new_aspace_clone = new_aspace.clone();
 
-        let mut guard = new_aspace.lock();
+        let mut guard = new_aspace.lock_profiled(AddrSpaceWriteOwner::Clone);
 
         let mut self_modify = self.pt.modify();
         for area in self.areas.iter() {

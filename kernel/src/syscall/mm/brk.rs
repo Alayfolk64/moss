@@ -5,7 +5,7 @@ use memory_addr::{VirtAddr, align_up_4k};
 
 use crate::{
     config::{USER_HEAP_BASE, USER_HEAP_SIZE, USER_HEAP_SIZE_MAX},
-    mm::Backend,
+    mm::{AddrSpaceWriteOwner, Backend},
     task::AsThread,
 };
 
@@ -38,7 +38,7 @@ pub fn sys_brk(addr: usize) -> AxResult<isize> {
         if expand_size > 0
             && proc_data
                 .aspace()
-                .lock()
+                .lock_profiled(AddrSpaceWriteOwner::Other)
                 .map(
                     expand_start,
                     expand_size,
@@ -58,7 +58,7 @@ pub fn sys_brk(addr: usize) -> AxResult<isize> {
         if shrink_size > 0
             && proc_data
                 .aspace()
-                .lock()
+                .lock_profiled(AddrSpaceWriteOwner::Other)
                 .unmap(shrink_start, shrink_size)
                 .is_err()
         {

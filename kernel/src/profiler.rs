@@ -22,7 +22,8 @@ const EXT4_SAMPLE_RATE: u32 = 16;
 const PAGE_CACHE_SAMPLE_RATE: u32 = 32;
 const OFFCPU_SAMPLE_RATE: u32 = 8;
 const MPROTECT_SAMPLE_RATE: u32 = 32;
-const EVENT_COUNT: usize = 18;
+const ADDRSPACE_HOLD_SAMPLE_RATE: u32 = 16;
+const EVENT_COUNT: usize = 29;
 const MPROTECT_SIZE_BUCKETS: usize = 8;
 const MPROTECT_PROT_BUCKETS: usize = 8;
 const USER_SPACE_FRAME: usize = usize::MAX;
@@ -418,6 +419,18 @@ fn profile_begin(event: ProfileEvent, object: usize) -> u64 {
         | ProfileEvent::MprotectLocalUpdate
         | ProfileEvent::MprotectRecordLockWait
         | ProfileEvent::MprotectRecordUpdate => MPROTECT_SAMPLE_RATE,
+        ProfileEvent::AddrSpaceMmapHold
+        | ProfileEvent::AddrSpaceMunmapHold
+        | ProfileEvent::AddrSpaceMprotectHold
+        | ProfileEvent::AddrSpaceMremapHold
+        | ProfileEvent::AddrSpaceMadviseHold
+        | ProfileEvent::AddrSpaceFaultFallbackHold
+        | ProfileEvent::AddrSpaceCloneHold
+        | ProfileEvent::AddrSpaceFileEvictHold
+        | ProfileEvent::AddrSpaceOtherHold => ADDRSPACE_HOLD_SAMPLE_RATE,
+        // Process teardown and exec image replacement are rare. Record every
+        // batch so one long-running clear cannot disappear through sampling.
+        ProfileEvent::AddrSpaceExitClearHold | ProfileEvent::AddrSpaceExecClearHold => 1,
         _ => 1,
     };
     if EVENT_TICKS[cpu][event as usize].fetch_add(1, Ordering::Relaxed) % scale != 0 {
@@ -769,13 +782,15 @@ pub fn snapshot() -> String {
     }
     let mut output = format!(
         "MOSS_PROFILE_V1 sample_hz={} ext4_sample_rate={} page_cache_sample_rate={} \
-         offcpu_sample_rate={} mprotect_sample_rate={} setup_ns={} prebuild_ns={} timed_ns={} \
-         dropped_cpu={} dropped_wait={} dropped_pending={} skipped_cpu={}\n",
+         offcpu_sample_rate={} mprotect_sample_rate={} addrspace_hold_sample_rate={} setup_ns={} \
+         prebuild_ns={} timed_ns={} dropped_cpu={} dropped_wait={} dropped_pending={} \
+         skipped_cpu={}\n",
         axconfig::TICKS_PER_SEC / SAMPLE_TICK_DIVISOR as usize,
         EXT4_SAMPLE_RATE,
         PAGE_CACHE_SAMPLE_RATE,
         OFFCPU_SAMPLE_RATE,
         MPROTECT_SAMPLE_RATE,
+        ADDRSPACE_HOLD_SAMPLE_RATE,
         PHASE_TOTAL_NS[1].load(Ordering::Relaxed),
         PHASE_TOTAL_NS[2].load(Ordering::Relaxed),
         PHASE_TOTAL_NS[3].load(Ordering::Relaxed),

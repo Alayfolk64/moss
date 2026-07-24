@@ -95,7 +95,7 @@ def emit_table(
         event = entry[EVENT_OFFSET]
         if phase not in (1, 2, 3):
             raise ValueError(f"invalid phase {phase} in aggregate table")
-        if expect_wait and event not in range(1, 18):
+        if expect_wait and event not in range(1, 29):
             raise ValueError(f"invalid wait event {event}")
         if not expect_wait and event != 0:
             raise ValueError(f"invalid CPU event {event}")
@@ -182,6 +182,7 @@ def main() -> None:
     header = (
         "MOSS_PROFILE_V1 sample_hz=10 ext4_sample_rate=16 "
         "page_cache_sample_rate=32 offcpu_sample_rate=8 mprotect_sample_rate=32 "
+        "addrspace_hold_sample_rate=16 "
         f"setup_ns={phase_totals[1]} prebuild_ns={phase_totals[2]} "
         f"timed_ns={phase_totals[3]} dropped_cpu={dropped_cpu} "
         f"dropped_wait={dropped_wait} dropped_pending={dropped_pending} "
