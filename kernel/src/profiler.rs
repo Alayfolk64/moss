@@ -21,7 +21,10 @@ const SAMPLE_TICK_DIVISOR: u32 = 10;
 const EXT4_SAMPLE_RATE: u32 = 16;
 const PAGE_CACHE_SAMPLE_RATE: u32 = 32;
 const OFFCPU_SAMPLE_RATE: u32 = 8;
-const EVENT_COUNT: usize = 11;
+const MPROTECT_SAMPLE_RATE: u32 = 32;
+const EVENT_COUNT: usize = 18;
+const MPROTECT_SIZE_BUCKETS: usize = 8;
+const MPROTECT_PROT_BUCKETS: usize = 8;
 const USER_SPACE_FRAME: usize = usize::MAX;
 const WATCHDOG_INTERVAL: Duration = Duration::from_secs(5);
 const LONG_WAIT_NS: u64 = 30_000_000_000;
@@ -39,6 +42,69 @@ static EVENT_TICKS: [[AtomicU32; EVENT_COUNT]; axconfig::plat::CPU_NUM] =
     [const { [const { AtomicU32::new(0) }; EVENT_COUNT] }; axconfig::plat::CPU_NUM];
 static PROFILES: [SpinNoIrq<ProfileState>; axconfig::plat::CPU_NUM] =
     [const { SpinNoIrq::new(ProfileState::new()) }; axconfig::plat::CPU_NUM];
+static MPROTECT_STATS: [MprotectPhaseStats; 4] = [const { MprotectPhaseStats::new() }; 4];
+
+/// Counter layout exported with the binary profile. Keep this `repr(C)` in
+/// sync with `extract_guest_profile_dump.py`.
+#[repr(C)]
+struct MprotectPhaseStats {
+    calls: AtomicU64,
+    successes: AtomicU64,
+    failures: AtomicU64,
+    requested_pages: AtomicU64,
+    max_pages: AtomicU64,
+    page_buckets: [AtomicU64; MPROTECT_SIZE_BUCKETS],
+    prot_buckets: [AtomicU64; MPROTECT_PROT_BUCKETS],
+    seal_records_scanned: AtomicU64,
+    max_seal_records_scanned: AtomicU64,
+    update_records_scanned: AtomicU64,
+    max_update_records_scanned: AtomicU64,
+    update_records_overlapped: AtomicU64,
+    update_records_split: AtomicU64,
+    update_records_output: AtomicU64,
+}
+
+impl MprotectPhaseStats {
+    const fn new() -> Self {
+        Self {
+            calls: AtomicU64::new(0),
+            successes: AtomicU64::new(0),
+            failures: AtomicU64::new(0),
+            requested_pages: AtomicU64::new(0),
+            max_pages: AtomicU64::new(0),
+            page_buckets: [const { AtomicU64::new(0) }; MPROTECT_SIZE_BUCKETS],
+            prot_buckets: [const { AtomicU64::new(0) }; MPROTECT_PROT_BUCKETS],
+            seal_records_scanned: AtomicU64::new(0),
+            max_seal_records_scanned: AtomicU64::new(0),
+            update_records_scanned: AtomicU64::new(0),
+            max_update_records_scanned: AtomicU64::new(0),
+            update_records_overlapped: AtomicU64::new(0),
+            update_records_split: AtomicU64::new(0),
+            update_records_output: AtomicU64::new(0),
+        }
+    }
+
+    fn reset(&self) {
+        self.calls.store(0, Ordering::Relaxed);
+        self.successes.store(0, Ordering::Relaxed);
+        self.failures.store(0, Ordering::Relaxed);
+        self.requested_pages.store(0, Ordering::Relaxed);
+        self.max_pages.store(0, Ordering::Relaxed);
+        for counter in &self.page_buckets {
+            counter.store(0, Ordering::Relaxed);
+        }
+        for counter in &self.prot_buckets {
+            counter.store(0, Ordering::Relaxed);
+        }
+        self.seal_records_scanned.store(0, Ordering::Relaxed);
+        self.max_seal_records_scanned.store(0, Ordering::Relaxed);
+        self.update_records_scanned.store(0, Ordering::Relaxed);
+        self.max_update_records_scanned.store(0, Ordering::Relaxed);
+        self.update_records_overlapped.store(0, Ordering::Relaxed);
+        self.update_records_split.store(0, Ordering::Relaxed);
+        self.update_records_output.store(0, Ordering::Relaxed);
+    }
+}
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 struct StackTrace {
@@ -336,6 +402,13 @@ fn profile_begin(event: ProfileEvent, object: usize) -> u64 {
         ProfileEvent::Ext4 => EXT4_SAMPLE_RATE,
         ProfileEvent::PageCache => PAGE_CACHE_SAMPLE_RATE,
         ProfileEvent::OffCpu => OFFCPU_SAMPLE_RATE,
+        ProfileEvent::MprotectTotal
+        | ProfileEvent::MprotectAddrSpaceWait
+        | ProfileEvent::MprotectSealLockWait
+        | ProfileEvent::MprotectSealScan
+        | ProfileEvent::MprotectPageTable
+        | ProfileEvent::MprotectRecordLockWait
+        | ProfileEvent::MprotectRecordUpdate => MPROTECT_SAMPLE_RATE,
         _ => 1,
     };
     if EVENT_TICKS[cpu][event as usize].fetch_add(1, Ordering::Relaxed) % scale != 0 {
@@ -396,6 +469,104 @@ fn profile_end(token: u64) {
         finished_ns.saturating_sub(pending.started_ns),
         pending.scale,
     );
+}
+
+fn mprotect_size_bucket(pages: usize) -> usize {
+    match pages {
+        0 => 0,
+        1 => 1,
+        2..=4 => 2,
+        5..=16 => 3,
+        17..=64 => 4,
+        65..=256 => 5,
+        257..=1024 => 6,
+        _ => 7,
+    }
+}
+
+/// Records one accepted `mprotect` request and returns its profile phase.
+///
+/// `prot` contains only the Linux `PROT_READ`, `PROT_WRITE` and
+/// `PROT_EXEC` bits, so it directly indexes the eight possible combinations.
+pub(crate) fn mprotect_begin(pages: usize, prot: u32) -> u8 {
+    if !ENABLED.load(Ordering::Relaxed) {
+        return 0;
+    }
+    let phase = PHASE.load(Ordering::Relaxed);
+    let Some(stats) = MPROTECT_STATS.get(phase as usize) else {
+        return 0;
+    };
+    if phase == 0 {
+        return 0;
+    }
+
+    stats.calls.fetch_add(1, Ordering::Relaxed);
+    stats
+        .requested_pages
+        .fetch_add(pages as u64, Ordering::Relaxed);
+    stats.max_pages.fetch_max(pages as u64, Ordering::Relaxed);
+    stats.page_buckets[mprotect_size_bucket(pages)].fetch_add(1, Ordering::Relaxed);
+    stats.prot_buckets[(prot & 0b111) as usize].fetch_add(1, Ordering::Relaxed);
+    phase
+}
+
+pub(crate) fn mprotect_finish(phase: u8, success: bool) {
+    let Some(stats) = MPROTECT_STATS.get(phase as usize) else {
+        return;
+    };
+    if phase == 0 {
+        return;
+    }
+    if success {
+        stats.successes.fetch_add(1, Ordering::Relaxed);
+    } else {
+        stats.failures.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+pub(crate) fn mprotect_record_seal_scan(phase: u8, scanned: usize) {
+    let Some(stats) = MPROTECT_STATS.get(phase as usize) else {
+        return;
+    };
+    if phase == 0 {
+        return;
+    }
+    stats
+        .seal_records_scanned
+        .fetch_add(scanned as u64, Ordering::Relaxed);
+    stats
+        .max_seal_records_scanned
+        .fetch_max(scanned as u64, Ordering::Relaxed);
+}
+
+pub(crate) fn mprotect_record_update(
+    phase: u8,
+    scanned: usize,
+    overlapped: usize,
+    split: usize,
+    output: usize,
+) {
+    let Some(stats) = MPROTECT_STATS.get(phase as usize) else {
+        return;
+    };
+    if phase == 0 {
+        return;
+    }
+    stats
+        .update_records_scanned
+        .fetch_add(scanned as u64, Ordering::Relaxed);
+    stats
+        .max_update_records_scanned
+        .fetch_max(scanned as u64, Ordering::Relaxed);
+    stats
+        .update_records_overlapped
+        .fetch_add(overlapped as u64, Ordering::Relaxed);
+    stats
+        .update_records_split
+        .fetch_add(split as u64, Ordering::Relaxed);
+    stats
+        .update_records_output
+        .fetch_add(output as u64, Ordering::Relaxed);
 }
 
 #[register_trap_handler(PROFILE_SAMPLE)]
@@ -527,6 +698,9 @@ pub fn command(input: &[u8]) {
             for elapsed in &PHASE_TOTAL_NS {
                 elapsed.store(0, Ordering::Relaxed);
             }
+            for stats in &MPROTECT_STATS {
+                stats.reset();
+            }
         }
         "start" => ENABLED.store(true, Ordering::Release),
         "stop" => {
@@ -580,12 +754,13 @@ pub fn snapshot() -> String {
     }
     let mut output = format!(
         "MOSS_PROFILE_V1 sample_hz={} ext4_sample_rate={} page_cache_sample_rate={} \
-         offcpu_sample_rate={} setup_ns={} prebuild_ns={} timed_ns={} dropped_cpu={} \
-         dropped_wait={} dropped_pending={} skipped_cpu={}\n",
+         offcpu_sample_rate={} mprotect_sample_rate={} setup_ns={} prebuild_ns={} timed_ns={} \
+         dropped_cpu={} dropped_wait={} dropped_pending={} skipped_cpu={}\n",
         axconfig::TICKS_PER_SEC / SAMPLE_TICK_DIVISOR as usize,
         EXT4_SAMPLE_RATE,
         PAGE_CACHE_SAMPLE_RATE,
         OFFCPU_SAMPLE_RATE,
+        MPROTECT_SAMPLE_RATE,
         PHASE_TOTAL_NS[1].load(Ordering::Relaxed),
         PHASE_TOTAL_NS[2].load(Ordering::Relaxed),
         PHASE_TOTAL_NS[3].load(Ordering::Relaxed),
@@ -595,6 +770,42 @@ pub fn snapshot() -> String {
         SKIPPED_CPU.load(Ordering::Relaxed),
     );
     output.push_str("MOSS_PHASE 1 setup\nMOSS_PHASE 2 prebuild\nMOSS_PHASE 3 timed\n");
+    for (phase, stats) in MPROTECT_STATS.iter().enumerate().skip(1) {
+        let _ = write!(
+            output,
+            "MOSS_MPROTECT phase={} calls={} successes={} failures={} requested_pages={} \
+             max_pages={} seal_records_scanned={} max_seal_records_scanned={} \
+             update_records_scanned={} max_update_records_scanned={} update_records_overlapped={} \
+             update_records_split={} update_records_output={} page_buckets=",
+            phase,
+            stats.calls.load(Ordering::Relaxed),
+            stats.successes.load(Ordering::Relaxed),
+            stats.failures.load(Ordering::Relaxed),
+            stats.requested_pages.load(Ordering::Relaxed),
+            stats.max_pages.load(Ordering::Relaxed),
+            stats.seal_records_scanned.load(Ordering::Relaxed),
+            stats.max_seal_records_scanned.load(Ordering::Relaxed),
+            stats.update_records_scanned.load(Ordering::Relaxed),
+            stats.max_update_records_scanned.load(Ordering::Relaxed),
+            stats.update_records_overlapped.load(Ordering::Relaxed),
+            stats.update_records_split.load(Ordering::Relaxed),
+            stats.update_records_output.load(Ordering::Relaxed),
+        );
+        for (index, counter) in stats.page_buckets.iter().enumerate() {
+            if index != 0 {
+                output.push(',');
+            }
+            let _ = write!(output, "{}", counter.load(Ordering::Relaxed));
+        }
+        output.push_str(" prot_buckets=");
+        for (index, counter) in stats.prot_buckets.iter().enumerate() {
+            if index != 0 {
+                output.push(',');
+            }
+            let _ = write!(output, "{}", counter.load(Ordering::Relaxed));
+        }
+        output.push('\n');
+    }
     for profile in &PROFILES {
         // Formatting and growing the output string may allocate. Copy the
         // compact records while holding the shard, then release it first.

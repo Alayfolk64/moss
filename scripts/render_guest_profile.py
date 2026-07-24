@@ -24,7 +24,34 @@ EVENT_NAMES = {
     8: "folio-load-wait",
     9: "invalidate-read-wait",
     10: "invalidate-write-wait",
+    11: "mprotect-total",
+    12: "mprotect-aspace-lock-wait",
+    13: "mprotect-seal-lock-wait",
+    14: "mprotect-seal-scan",
+    15: "mprotect-page-table",
+    16: "mprotect-record-lock-wait",
+    17: "mprotect-record-update",
 }
+MPROTECT_PAGE_BUCKET_LABELS = (
+    "0",
+    "1",
+    "2-4",
+    "5-16",
+    "17-64",
+    "65-256",
+    "257-1024",
+    "1025+",
+)
+MPROTECT_PROT_BUCKET_LABELS = (
+    "none",
+    "read",
+    "write",
+    "read-write",
+    "exec",
+    "read-exec",
+    "write-exec",
+    "read-write-exec",
+)
 INSTRUMENTATION_FRAMES = (
     "starry_kernel::profiler::",
     "axtask::future::profile_block_",
@@ -62,10 +89,11 @@ def parse_task_name(raw: str) -> str:
     return bytes.fromhex(raw).decode(errors="replace") if raw else "unknown"
 
 
-def read_profile(log: Path) -> tuple[list[dict], list[dict], dict]:
+def read_profile(log: Path) -> tuple[list[dict], list[dict], dict, dict[int, dict]]:
     cpu: list[dict] = []
     waits: list[dict] = []
     header: dict[str, int] = {}
+    mprotect: dict[int, dict] = {}
     inside = False
     for raw_line in log.read_text(errors="replace").splitlines():
         line = raw_line.replace("\r", "")
@@ -79,6 +107,17 @@ def read_profile(log: Path) -> tuple[list[dict], list[dict], dict]:
         if line.startswith("MOSS_PROFILE_V1"):
             for key, value in re.findall(r"(\w+)=(\d+)", line):
                 header[key] = int(value)
+            continue
+        if line.startswith("MOSS_MPROTECT "):
+            fields = dict(field.split("=", 1) for field in line.split()[1:])
+            phase = int(fields.pop("phase"))
+            page_buckets = [int(value) for value in fields.pop("page_buckets").split(",")]
+            prot_buckets = [int(value) for value in fields.pop("prot_buckets").split(",")]
+            mprotect[phase] = {
+                **{key: int(value) for key, value in fields.items()},
+                "page_buckets": dict(zip(MPROTECT_PAGE_BUCKET_LABELS, page_buckets)),
+                "prot_buckets": dict(zip(MPROTECT_PROT_BUCKET_LABELS, prot_buckets)),
+            }
             continue
         match = CPU_RE.search(line)
         if match:
@@ -106,7 +145,7 @@ def read_profile(log: Path) -> tuple[list[dict], list[dict], dict]:
             )
     if not cpu and not waits:
         raise SystemExit("no complete MOSS guest profile found in the log")
-    return cpu, waits, header
+    return cpu, waits, header, mprotect
 
 
 def symbolize(addresses: set[str], elf: Path, addr2line: str) -> dict[str, str]:
@@ -204,7 +243,7 @@ def top_rows(values: dict[str, int], limit: int = 30) -> list[dict]:
 def main() -> None:
     args = parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
-    cpu, waits, header = read_profile(args.log)
+    cpu, waits, header, mprotect = read_profile(args.log)
     addresses = {
         address
         for row in [*cpu, *waits]
@@ -253,7 +292,14 @@ def main() -> None:
     if not flamegraph.exists():
         raise SystemExit(f"missing FlameGraph renderer: {flamegraph}")
 
-    summary: dict[str, object] = {"header": header, "cpu": {}, "wait": {}}
+    summary: dict[str, object] = {
+        "header": header,
+        "cpu": {},
+        "wait": {},
+        "mprotect": {
+            PHASE_NAMES[phase]: values for phase, values in mprotect.items()
+        },
+    }
     for phase in [None, 1, 2, 3]:
         suffix = "all" if phase is None else PHASE_NAMES[phase]
         values = cpu_values[(phase, "cpu")]
@@ -305,6 +351,32 @@ def main() -> None:
             event_values = wait_values[(phase, event)]
             folded = args.out / f"guest-{label}-wait-{suffix}.folded"
             svg = args.out / f"guest-{label}-wait-{suffix}.svg"
+            write_folded(folded, event_values)
+            render_svg(
+                flamegraph,
+                folded,
+                svg,
+                f"Moss guest {title} - {suffix}",
+                "microseconds",
+                "chain",
+            )
+            summary["wait"][f"{label}-{suffix}"] = {
+                "total_us": sum(event_values.values()),
+                "top": top_rows(event_values),
+            }
+
+        for event, label, title in (
+            (11, "mprotect-total", "mprotect total latency"),
+            (12, "mprotect-aspace-lock-wait", "mprotect address-space lock wait"),
+            (13, "mprotect-seal-lock-wait", "mprotect seal-check record-lock wait"),
+            (14, "mprotect-seal-scan", "mprotect seal-check record scan"),
+            (15, "mprotect-page-table", "mprotect page-table update"),
+            (16, "mprotect-record-lock-wait", "mprotect update record-lock wait"),
+            (17, "mprotect-record-update", "mprotect mapping-record rebuild"),
+        ):
+            event_values = wait_values[(phase, event)]
+            folded = args.out / f"guest-{label}-{suffix}.folded"
+            svg = args.out / f"guest-{label}-{suffix}.svg"
             write_folded(folded, event_values)
             render_svg(
                 flamegraph,

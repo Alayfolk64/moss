@@ -30,6 +30,20 @@ pub enum ProfileEvent {
     InvalidateReadWait = 9,
     /// Contended acquisition time for the write side of a file invalidation gate.
     InvalidateWriteWait = 10,
+    /// End-to-end time spent in a valid `mprotect` syscall.
+    MprotectTotal = 11,
+    /// Contended acquisition time for the process address-space write lock.
+    MprotectAddrSpaceWait = 12,
+    /// Contended acquisition time for the mapping-record lock during seal checks.
+    MprotectSealLockWait = 13,
+    /// Time spent scanning mapping records for a write-sealed shared mapping.
+    MprotectSealScan = 14,
+    /// Time spent updating page-table permissions.
+    MprotectPageTable = 15,
+    /// Contended acquisition time for the mapping-record lock before an update.
+    MprotectRecordLockWait = 16,
+    /// Time spent rebuilding mapping records after permissions change.
+    MprotectRecordUpdate = 17,
 }
 
 type BeginHook = fn(ProfileEvent, usize) -> u64;

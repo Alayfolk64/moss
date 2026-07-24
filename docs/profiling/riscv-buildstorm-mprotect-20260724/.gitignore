@@ -1,0 +1,10 @@
+# Large local captures and reproducible intermediate files.
+*.log
+*.bin
+*.elf
+*.folded
+run.json
+
+# Discarded diagnostic runs; only the final low-overhead run is reportable.
+attempt1-export-failed/
+attempt2-observer-tuning/

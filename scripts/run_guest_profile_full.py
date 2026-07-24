@@ -23,6 +23,7 @@ from pathlib import Path
 PROFILE_SHARD_SIZE = 2_867_240
 PROFILE_CPU_COUNT = 8
 PROFILE_STATICS_SIZE = 56
+MPROTECT_STATS_SIZE = 896
 READY_MARKER = b"#### MOSS GUEST PROFILE READY ####"
 PANIC_MARKERS = (b"panicked at", b"Kernel panic", b"assertion failed")
 PROGRESS_RE = re.compile(
@@ -87,7 +88,7 @@ def require_file(path: Path) -> Path:
     return path
 
 
-def profiler_symbols(elf: Path) -> tuple[int, int, int]:
+def profiler_symbols(elf: Path) -> tuple[int, int, int, int, int]:
     result = subprocess.run(
         ["rust-nm", "-S", str(elf)],
         text=True,
@@ -96,6 +97,7 @@ def profiler_symbols(elf: Path) -> tuple[int, int, int]:
     )
     profiles: tuple[int, int] | None = None
     enabled: int | None = None
+    mprotect_stats: tuple[int, int] | None = None
     for line in result.stdout.splitlines():
         fields = line.split()
         if len(fields) < 4:
@@ -105,14 +107,21 @@ def profiler_symbols(elf: Path) -> tuple[int, int, int]:
             profiles = (int(address, 16), int(size, 16))
         elif "starry_kernel8profiler7ENABLED" in name:
             enabled = int(address, 16)
-    if profiles is None or enabled is None:
+        elif "MPROTECT_STATS" in name:
+            mprotect_stats = (int(address, 16), int(size, 16))
+    if profiles is None or enabled is None or mprotect_stats is None:
         raise SystemExit("profiler symbols are missing from the kernel ELF")
     expected = PROFILE_SHARD_SIZE * PROFILE_CPU_COUNT
     if profiles[1] != expected:
         raise SystemExit(
             f"unexpected PROFILES size {profiles[1]}, expected {expected}"
         )
-    return profiles[0], profiles[1], enabled
+    if mprotect_stats[1] != MPROTECT_STATS_SIZE:
+        raise SystemExit(
+            f"unexpected MPROTECT_STATS size {mprotect_stats[1]}, "
+            f"expected {MPROTECT_STATS_SIZE}"
+        )
+    return profiles[0], profiles[1], enabled, mprotect_stats[0], mprotect_stats[1]
 
 
 def process_ticks(pid: int) -> int:
@@ -122,6 +131,8 @@ def process_ticks(pid: int) -> int:
 
 
 def profile_locks_are_clear(path: Path) -> bool:
+    if not path.is_file():
+        return False
     data = path.read_bytes()
     if len(data) != PROFILE_SHARD_SIZE * PROFILE_CPU_COUNT:
         return False
@@ -135,10 +146,15 @@ def dump_profile(
     profiles_address: int,
     profiles_size: int,
     statics_address: int,
+    mprotect_stats_address: int,
+    mprotect_stats_size: int,
 ) -> None:
     profiles = (out / "profiles.bin").resolve()
     statics = (out / "profile-statics.bin").resolve()
+    mprotect_stats = (out / "mprotect-stats.bin").resolve()
     for attempt in range(1, 6):
+        for capture in (profiles, statics, mprotect_stats):
+            capture.unlink(missing_ok=True)
         command = [
             "gdb-multiarch",
             "-q",
@@ -159,10 +175,23 @@ def dump_profile(
                 f"{statics_address:#x} {statics_address + PROFILE_STATICS_SIZE:#x}"
             ),
             "-ex",
+            (
+                f"dump binary memory {mprotect_stats} "
+                f"{mprotect_stats_address:#x} "
+                f"{mprotect_stats_address + mprotect_stats_size:#x}"
+            ),
+            "-ex",
             "detach",
         ]
         result = subprocess.run(command, text=True, capture_output=True)
-        if result.returncode == 0 and profile_locks_are_clear(profiles):
+        if (
+            result.returncode == 0
+            and profile_locks_are_clear(profiles)
+            and statics.is_file()
+            and statics.stat().st_size == PROFILE_STATICS_SIZE
+            and mprotect_stats.is_file()
+            and mprotect_stats.stat().st_size == MPROTECT_STATS_SIZE
+        ):
             print(f"profile dump completed on attempt {attempt}", flush=True)
             return
         print(
@@ -197,7 +226,13 @@ def main() -> None:
     console_path = out / "console.log"
     metadata_path = out / "run.json"
 
-    profiles_address, profiles_size, statics_address = profiler_symbols(elf)
+    (
+        profiles_address,
+        profiles_size,
+        statics_address,
+        mprotect_stats_address,
+        mprotect_stats_size,
+    ) = profiler_symbols(elf)
     qemu = [
         "qemu-system-riscv64",
         "-machine",
@@ -307,6 +342,8 @@ def main() -> None:
                         profiles_address,
                         profiles_size,
                         statics_address,
+                        mprotect_stats_address,
+                        mprotect_stats_size,
                     )
                     break
                 if any(marker in tail for marker in PANIC_MARKERS):
@@ -320,6 +357,8 @@ def main() -> None:
                         profiles_address,
                         profiles_size,
                         statics_address,
+                        mprotect_stats_address,
+                        mprotect_stats_size,
                     )
                     break
 
@@ -349,6 +388,8 @@ def main() -> None:
                         profiles_address,
                         profiles_size,
                         statics_address,
+                        mprotect_stats_address,
+                        mprotect_stats_size,
                     )
                     break
                 if (
@@ -368,6 +409,8 @@ def main() -> None:
                         profiles_address,
                         profiles_size,
                         statics_address,
+                        mprotect_stats_address,
+                        mprotect_stats_size,
                     )
                     break
                 if now - started >= args.timeout_seconds:
@@ -381,6 +424,8 @@ def main() -> None:
                         profiles_address,
                         profiles_size,
                         statics_address,
+                        mprotect_stats_address,
+                        mprotect_stats_size,
                     )
                     break
                 print(
@@ -409,6 +454,8 @@ def main() -> None:
         "profiles_address": profiles_address,
         "profiles_size": profiles_size,
         "statics_address": statics_address,
+        "mprotect_stats_address": mprotect_stats_address,
+        "mprotect_stats_size": mprotect_stats_size,
         "cpu_samples": cpu_samples,
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")

@@ -1,0 +1,1106 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="294" onload="init(evt)" viewBox="0 0 1800 294" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#e0e0ff" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="294.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Moss guest folio load wait - timed</text>
+<text id="details" x="10.00" y="277" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="277" > </text>
+<g id="frames">
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="133" width="56.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="657.17" y="143.5" >starry..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (1,209 microseconds, 0.64%)</title><rect x="1774.0" y="101" width="11.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1777.02" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="165" width="56.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="657.17" y="175.5" >&lt;alloc..</text>
+</g>
+<g >
+<title>-- (606 microseconds, 0.32%)</title><rect x="22.6" y="85" width="5.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="25.58" y="95.5" ></text>
+</g>
+<g >
+<title>-- (785 microseconds, 0.42%)</title><rect x="48.1" y="69" width="7.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="51.07" y="79.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:279) (1,099 microseconds, 0.58%)</title><rect x="10.0" y="117" width="10.4" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="13.00" y="127.5" ></text>
+</g>
+<g >
+<title>-- (1,002 microseconds, 0.53%)</title><rect x="55.5" y="69" width="9.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="58.50" y="79.5" ></text>
+</g>
+<g >
+<title>-- (229 microseconds, 0.12%)</title><rect x="20.4" y="53" width="2.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="23.41" y="63.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (785 microseconds, 0.42%)</title><rect x="48.1" y="101" width="7.4" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="51.07" y="111.5" ></text>
+</g>
+<g >
+<title>task:cargo (229 microseconds, 0.12%)</title><rect x="20.4" y="197" width="2.2" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="23.41" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="117" width="56.7" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="657.17" y="127.5" >starry..</text>
+</g>
+<g >
+<title>task:build-script-bui (1,099 microseconds, 0.58%)</title><rect x="10.0" y="197" width="10.4" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="181" width="56.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="657.17" y="191.5" >&lt;alloc..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="85" width="490.9" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="77.65" y="95.5" >axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="133" width="9.5" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="58.50" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (1,099 microseconds, 0.58%)</title><rect x="10.0" y="149" width="10.4" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="13.00" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (606 microseconds, 0.32%)</title><rect x="22.6" y="165" width="5.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="25.58" y="175.5" ></text>
+</g>
+<g >
+<title>all (187,957 microseconds, 100%)</title><rect x="10.0" y="245" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="117" width="74.1" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="568.61" y="127.5" >starry_k..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,099 microseconds, 0.58%)</title><rect x="10.0" y="165" width="10.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (785 microseconds, 0.42%)</title><rect x="48.1" y="117" width="7.4" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="51.07" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="181" width="11.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="39.36" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="53" width="190.8" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1566.70" y="63.5" >axfs::highlevel::file::C..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="85" width="9.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="58.50" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (720 microseconds, 0.38%)</title><rect x="29.5" y="85" width="6.9" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="32.54" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (229 microseconds, 0.12%)</title><rect x="20.4" y="181" width="2.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="23.41" y="191.5" ></text>
+</g>
+<g >
+<title>-- (7,211 microseconds, 3.84%)</title><rect x="764.0" y="69" width="68.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="767.02" y="79.5" >--</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="85" width="74.1" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="568.61" y="95.5" >axfs::hi..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (606 microseconds, 0.32%)</title><rect x="22.6" y="133" width="5.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="25.58" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="181" width="53.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="713.92" y="191.5" >&lt;allo..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::sys_write (kernel/src/syscall/fs/io.rs:135) (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="117" width="190.8" height="15.0" fill="rgb(105,105,226)" rx="2" ry="2" />
+<text  x="1566.70" y="127.5" >starry_kernel::syscall::..</text>
+</g>
+<g >
+<title>task:opt cgu.13 (5,993 microseconds, 3.19%)</title><rect x="654.2" y="197" width="56.7" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="657.17" y="207.5" >task:o..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (129 microseconds, 0.07%)</title><rect x="28.3" y="165" width="1.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="31.32" y="175.5" ></text>
+</g>
+<g >
+<title>task:llvm-config (606 microseconds, 0.32%)</title><rect x="22.6" y="197" width="5.7" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="25.58" y="207.5" ></text>
+</g>
+<g >
+<title>task:opt cgu.02 (1,528 microseconds, 0.81%)</title><rect x="639.7" y="197" width="14.5" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="642.70" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (1,099 microseconds, 0.58%)</title><rect x="10.0" y="101" width="10.4" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="13.00" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::fs::File as starry_kernel::file::FileLike&gt;::write (kernel/src/file/fs.rs:347) (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="101" width="190.8" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="1566.70" y="111.5" >&lt;starry_kernel::file::fs..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="181" width="9.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="67.99" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (785 microseconds, 0.42%)</title><rect x="48.1" y="149" width="7.4" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="51.07" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:279) (1,209 microseconds, 0.64%)</title><rect x="1774.0" y="117" width="11.5" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="1777.02" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (606 microseconds, 0.32%)</title><rect x="22.6" y="181" width="5.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="25.58" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="181" width="74.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="568.61" y="191.5" >&lt;alloc::..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="133" width="9.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="67.99" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (129 microseconds, 0.07%)</title><rect x="28.3" y="101" width="1.2" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="31.32" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="165" width="74.1" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="568.61" y="175.5" >&lt;alloc::..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (229 microseconds, 0.12%)</title><rect x="20.4" y="149" width="2.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="23.41" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (785 microseconds, 0.42%)</title><rect x="48.1" y="133" width="7.4" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="51.07" y="143.5" ></text>
+</g>
+<g >
+<title>guest-wait:folio-load-wait (187,957 microseconds, 100.00%)</title><rect x="10.0" y="229" width="1780.0" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" >guest-wait:folio-load-wait</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="117" width="14.5" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="642.70" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (720 microseconds, 0.38%)</title><rect x="29.5" y="149" width="6.9" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="32.54" y="159.5" ></text>
+</g>
+<g >
+<title>-- (77,230 microseconds, 41.09%)</title><rect x="832.3" y="53" width="731.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="835.31" y="63.5" >--</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="181" width="14.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="642.70" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::fs::File as starry_kernel::file::FileLike&gt;::read (kernel/src/file/fs.rs:332) (229 microseconds, 0.12%)</title><rect x="20.4" y="101" width="2.2" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="23.41" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="101" width="14.5" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="642.70" y="111.5" ></text>
+</g>
+<g >
+<title>-- (720 microseconds, 0.38%)</title><rect x="29.5" y="69" width="6.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="32.54" y="79.5" ></text>
+</g>
+<g >
+<title>task:lto cgu.08 (785 microseconds, 0.42%)</title><rect x="48.1" y="197" width="7.4" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="51.07" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="101" width="490.9" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="77.65" y="111.5" >axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/hi..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (129 microseconds, 0.07%)</title><rect x="28.3" y="149" width="1.2" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="31.32" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:279) (606 microseconds, 0.32%)</title><rect x="22.6" y="117" width="5.7" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="25.58" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="101" width="68.3" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="767.02" y="111.5" >axfs::h..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (606 microseconds, 0.32%)</title><rect x="22.6" y="101" width="5.7" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="25.58" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="117" width="11.7" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="39.36" y="127.5" ></text>
+</g>
+<g >
+<title>task:lto cgu.13 (1,002 microseconds, 0.53%)</title><rect x="55.5" y="197" width="9.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="58.50" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (77,230 microseconds, 41.09%)</title><rect x="832.3" y="69" width="731.4" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="835.31" y="79.5" >axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383)</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="149" width="53.1" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="713.92" y="159.5" >starr..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (129 microseconds, 0.07%)</title><rect x="28.3" y="133" width="1.2" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="31.32" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="85" width="68.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="767.02" y="95.5" >axfs::h..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (97,382 microseconds, 51.81%)</title><rect x="832.3" y="149" width="922.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="835.31" y="159.5" >starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67)</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="149" width="9.5" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="58.50" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="85" width="11.7" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="39.36" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="133" width="11.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="39.36" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (3,744 microseconds, 1.99%)</title><rect x="1754.5" y="149" width="35.5" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="1757.54" y="159.5" >sta..</text>
+</g>
+<g >
+<title>-- (5,993 microseconds, 3.19%)</title><rect x="654.2" y="69" width="56.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="657.17" y="79.5" >--</text>
+</g>
+<g >
+<title>-- (1,099 microseconds, 0.58%)</title><rect x="10.0" y="85" width="10.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="13.00" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (720 microseconds, 0.38%)</title><rect x="29.5" y="117" width="6.9" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="32.54" y="127.5" ></text>
+</g>
+<g >
+<title>-- (7,823 microseconds, 4.16%)</title><rect x="565.6" y="69" width="74.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="568.61" y="79.5" >--</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (720 microseconds, 0.38%)</title><rect x="29.5" y="165" width="6.9" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="32.54" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (720 microseconds, 0.38%)</title><rect x="29.5" y="181" width="6.9" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="32.54" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="133" width="68.3" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="767.02" y="143.5" >starry_..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="149" width="56.7" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="657.17" y="159.5" >starry..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (77,230 microseconds, 41.09%)</title><rect x="832.3" y="133" width="731.4" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="835.31" y="143.5" >starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211)</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="85" width="53.1" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="713.92" y="95.5" >axfs:..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (129 microseconds, 0.07%)</title><rect x="28.3" y="181" width="1.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="31.32" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (2,057 microseconds, 1.09%)</title><rect x="1754.5" y="85" width="19.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1757.54" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (1,099 microseconds, 0.58%)</title><rect x="10.0" y="133" width="10.4" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="13.00" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,099 microseconds, 0.58%)</title><rect x="10.0" y="181" width="10.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="13.00" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (3,266 microseconds, 1.74%)</title><rect x="1754.5" y="133" width="31.0" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1757.54" y="143.5" >st..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="181" width="68.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="767.02" y="191.5" >&lt;alloc:..</text>
+</g>
+<g >
+<title>-- (129 microseconds, 0.07%)</title><rect x="28.3" y="85" width="1.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="31.32" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="165" width="490.9" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="77.65" y="175.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call..</text>
+</g>
+<g >
+<title>task:lto cgu.05 (1,237 microseconds, 0.66%)</title><rect x="36.4" y="197" width="11.7" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="39.36" y="207.5" ></text>
+</g>
+<g >
+<title>task:lto cgu.01 (720 microseconds, 0.38%)</title><rect x="29.5" y="197" width="6.9" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="32.54" y="207.5" ></text>
+</g>
+<g >
+<title>task:opt cgu.00 (51,842 microseconds, 27.58%)</title><rect x="74.7" y="197" width="490.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="77.65" y="207.5" >task:opt cgu.00</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="117" width="490.9" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="77.65" y="127.5" >starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (ker..</text>
+</g>
+<g >
+<title>task:opt cgu.14 (5,607 microseconds, 2.98%)</title><rect x="710.9" y="197" width="53.1" height="15.0" fill="rgb(100,100,221)" rx="2" ry="2" />
+<text  x="713.92" y="207.5" >task:..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::write_at (vendor/axfs/src/highlevel/file.rs:1710) (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="69" width="190.8" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1566.70" y="79.5" >axfs::highlevel::file::C..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (97,382 microseconds, 51.81%)</title><rect x="832.3" y="165" width="922.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="835.31" y="175.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (3,744 microseconds, 1.99%)</title><rect x="1754.5" y="181" width="35.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1757.54" y="191.5" >&lt;al..</text>
+</g>
+<g >
+<title>-- (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="37" width="190.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1566.70" y="47.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (77,230 microseconds, 41.09%)</title><rect x="832.3" y="117" width="731.4" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="835.31" y="127.5" >starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82)</text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="101" width="11.7" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="39.36" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="117" width="9.5" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="58.50" y="127.5" ></text>
+</g>
+<g >
+<title>-- (478 microseconds, 0.25%)</title><rect x="1785.5" y="101" width="4.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1788.47" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="117" width="68.3" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="767.02" y="127.5" >starry_..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="117" width="53.1" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="713.92" y="127.5" >starr..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (606 microseconds, 0.32%)</title><rect x="22.6" y="149" width="5.7" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="25.58" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:213) (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="133" width="190.8" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="1566.70" y="143.5" >starry_kernel::syscall::..</text>
+</g>
+<g >
+<title>task:opt cgu.15 (7,211 microseconds, 3.84%)</title><rect x="764.0" y="197" width="68.3" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="767.02" y="207.5" >task:op..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="133" width="490.9" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="77.65" y="143.5" >starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::File::read (vendor/axfs/src/highlevel/file.rs:2641) (77,230 microseconds, 41.09%)</title><rect x="832.3" y="85" width="731.4" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="835.31" y="95.5" >axfs::highlevel::file::File::read (vendor/axfs/src/highlevel/file.rs:2641)</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="149" width="14.5" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="642.70" y="159.5" ></text>
+</g>
+<g >
+<title>-- (1,528 microseconds, 0.81%)</title><rect x="639.7" y="69" width="14.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="642.70" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (229 microseconds, 0.12%)</title><rect x="20.4" y="69" width="2.2" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="23.41" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="85" width="56.7" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="657.17" y="95.5" >axfs::..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="149" width="490.9" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="77.65" y="159.5" >starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent ..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="149" width="9.7" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="67.99" y="159.5" ></text>
+</g>
+<g >
+<title>-- (5,607 microseconds, 2.98%)</title><rect x="710.9" y="69" width="53.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="713.92" y="79.5" >--</text>
+</g>
+<g >
+<title>task:llvm-objcopy (129 microseconds, 0.07%)</title><rect x="28.3" y="197" width="1.2" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="31.32" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="85" width="14.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="642.70" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="165" width="9.5" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="58.50" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (478 microseconds, 0.25%)</title><rect x="1785.5" y="117" width="4.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1788.47" y="127.5" ></text>
+</g>
+<g >
+<title>-- (2,057 microseconds, 1.09%)</title><rect x="1754.5" y="69" width="19.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1757.54" y="79.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="165" width="14.5" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="642.70" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="149" width="68.3" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="767.02" y="159.5" >starry_..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (229 microseconds, 0.12%)</title><rect x="20.4" y="133" width="2.2" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="23.41" y="143.5" ></text>
+</g>
+<g >
+<title>phase:timed (187,957 microseconds, 100.00%)</title><rect x="10.0" y="213" width="1780.0" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" >phase:timed</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (51,842 microseconds, 27.58%)</title><rect x="74.7" y="181" width="490.9" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="77.65" y="191.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/...</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (1,528 microseconds, 0.81%)</title><rect x="639.7" y="133" width="14.5" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="642.70" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::file::FileFaultPlan::execute (kernel/src/mm/aspace/backend/file.rs:209) (478 microseconds, 0.25%)</title><rect x="1785.5" y="133" width="4.5" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1788.47" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (3,744 microseconds, 1.99%)</title><rect x="1754.5" y="165" width="35.5" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1757.54" y="175.5" >&lt;al..</text>
+</g>
+<g >
+<title>task:rust-lld (3,744 microseconds, 1.99%)</title><rect x="1754.5" y="197" width="35.5" height="15.0" fill="rgb(88,88,212)" rx="2" ry="2" />
+<text  x="1757.54" y="207.5" >tas..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="149" width="74.1" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="568.61" y="159.5" >starry_k..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="101" width="53.1" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="713.92" y="111.5" >axfs:..</text>
+</g>
+<g >
+<title>-- (1,237 microseconds, 0.66%)</title><rect x="36.4" y="69" width="11.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="39.36" y="79.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="165" width="9.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="67.99" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="181" width="9.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="58.50" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="133" width="74.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="568.61" y="143.5" >starry_k..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::File::write (vendor/axfs/src/highlevel/file.rs:2665) (20,152 microseconds, 10.72%)</title><rect x="1563.7" y="85" width="190.8" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1566.70" y="95.5" >axfs::highlevel::file::F..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="133" width="53.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="713.92" y="143.5" >starr..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (5,993 microseconds, 3.19%)</title><rect x="654.2" y="101" width="56.7" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="657.17" y="111.5" >axfs::..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (kernel/src/mm/aspace/mod.rs:627) (720 microseconds, 0.38%)</title><rect x="29.5" y="133" width="6.9" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="32.54" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (2,057 microseconds, 1.09%)</title><rect x="1754.5" y="101" width="19.5" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="1757.54" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (229 microseconds, 0.12%)</title><rect x="20.4" y="117" width="2.2" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="23.41" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (785 microseconds, 0.42%)</title><rect x="48.1" y="181" width="7.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="51.07" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="117" width="9.7" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="67.99" y="127.5" ></text>
+</g>
+<g >
+<title>-- (1,020 microseconds, 0.54%)</title><rect x="65.0" y="69" width="9.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="67.99" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (1,002 microseconds, 0.53%)</title><rect x="55.5" y="101" width="9.5" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="58.50" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="165" width="11.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="39.36" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::File::read (vendor/axfs/src/highlevel/file.rs:2641) (229 microseconds, 0.12%)</title><rect x="20.4" y="85" width="2.2" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="23.41" y="95.5" ></text>
+</g>
+<g >
+<title>task:lto cgu.15 (1,020 microseconds, 0.54%)</title><rect x="65.0" y="197" width="9.7" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="67.99" y="207.5" ></text>
+</g>
+<g >
+<title>task:riscv64-linux-gn (97,382 microseconds, 51.81%)</title><rect x="832.3" y="197" width="922.2" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="835.31" y="207.5" >task:riscv64-linux-gn</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:279) (129 microseconds, 0.07%)</title><rect x="28.3" y="117" width="1.2" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="31.32" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="101" width="9.7" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="67.99" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:575) (1,237 microseconds, 0.66%)</title><rect x="36.4" y="149" width="11.7" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="39.36" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::fs::File as starry_kernel::file::FileLike&gt;::read (kernel/src/file/fs.rs:332) (77,230 microseconds, 41.09%)</title><rect x="832.3" y="101" width="731.4" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="835.31" y="111.5" >&lt;starry_kernel::file::fs::File as starry_kernel::file::FileLike&gt;::read (kernel/src/file/fs.rs:332)</text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (720 microseconds, 0.38%)</title><rect x="29.5" y="101" width="6.9" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="32.54" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (5,607 microseconds, 2.98%)</title><rect x="710.9" y="165" width="53.1" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="713.92" y="175.5" >&lt;allo..</text>
+</g>
+<g >
+<title>task:opt cgu.01 (7,823 microseconds, 4.16%)</title><rect x="565.6" y="197" width="74.1" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="568.61" y="207.5" >task:opt..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (97,382 microseconds, 51.81%)</title><rect x="832.3" y="181" width="922.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="835.31" y="191.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (7,211 microseconds, 3.84%)</title><rect x="764.0" y="165" width="68.3" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="767.02" y="175.5" >&lt;alloc:..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (785 microseconds, 0.42%)</title><rect x="48.1" y="85" width="7.4" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="51.07" y="95.5" ></text>
+</g>
+<g >
+<title>-- (51,842 microseconds, 27.58%)</title><rect x="74.7" y="69" width="490.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="77.65" y="79.5" >--</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (229 microseconds, 0.12%)</title><rect x="20.4" y="165" width="2.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="23.41" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (vendor/axfs/src/highlevel/file.rs:2393) (7,823 microseconds, 4.16%)</title><rect x="565.6" y="101" width="74.1" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="568.61" y="111.5" >axfs::hi..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1383) (1,020 microseconds, 0.54%)</title><rect x="65.0" y="85" width="9.7" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="67.99" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (785 microseconds, 0.42%)</title><rect x="48.1" y="165" width="7.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="51.07" y="175.5" ></text>
+</g>
+<g >
+<title>-- (1,209 microseconds, 0.64%)</title><rect x="1774.0" y="85" width="11.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1777.02" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (kernel/src/mm/aspace/backend/cow.rs:250) (2,057 microseconds, 1.09%)</title><rect x="1754.5" y="117" width="19.5" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="1757.54" y="127.5" ></text>
+</g>
+</g>
+</svg>

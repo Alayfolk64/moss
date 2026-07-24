@@ -18,6 +18,11 @@ AGGREGATE_SIZE = 224
 PENDING_SIZE_BYTES = 224
 PROFILE_STATE_SIZE = 2_867_232
 PROFILE_SHARD_SIZE = 2_867_240
+MPROTECT_PHASES = 4
+MPROTECT_PHASE_STATS_SIZE = 224
+MPROTECT_STATS_SIZE = MPROTECT_PHASES * MPROTECT_PHASE_STATS_SIZE
+MPROTECT_PAGE_BUCKETS = 8
+MPROTECT_PROT_BUCKETS = 8
 
 STATE_OFFSET = 8
 PENDING_OFFSET = STATE_OFFSET
@@ -44,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profiles", type=Path, required=True)
     parser.add_argument("--statics", type=Path, required=True)
+    parser.add_argument("--mprotect-stats", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--timed-end-seconds",
@@ -89,7 +95,7 @@ def emit_table(
         event = entry[EVENT_OFFSET]
         if phase not in (1, 2, 3):
             raise ValueError(f"invalid phase {phase} in aggregate table")
-        if expect_wait and event not in range(1, 11):
+        if expect_wait and event not in range(1, 18):
             raise ValueError(f"invalid wait event {event}")
         if not expect_wait and event != 0:
             raise ValueError(f"invalid CPU event {event}")
@@ -105,6 +111,36 @@ def emit_table(
                 f"MOSS_CPU phase={phase} samples={u64(entry, TOTAL_OFFSET)} "
                 f"task={task_name.hex()} stack={stack_text(frames)}"
             )
+
+
+def emit_mprotect_stats(lines: list[str], data: bytes) -> None:
+    if len(data) != MPROTECT_STATS_SIZE:
+        raise ValueError(
+            f"mprotect stats have {len(data)} bytes, expected {MPROTECT_STATS_SIZE}"
+        )
+    for phase in range(1, MPROTECT_PHASES):
+        entry = data[
+            phase
+            * MPROTECT_PHASE_STATS_SIZE : (phase + 1)
+            * MPROTECT_PHASE_STATS_SIZE
+        ]
+        page_buckets = struct.unpack_from(f"<{MPROTECT_PAGE_BUCKETS}Q", entry, 40)
+        prot_buckets = struct.unpack_from(f"<{MPROTECT_PROT_BUCKETS}Q", entry, 104)
+        lines.append(
+            "MOSS_MPROTECT "
+            f"phase={phase} calls={u64(entry, 0)} successes={u64(entry, 8)} "
+            f"failures={u64(entry, 16)} requested_pages={u64(entry, 24)} "
+            f"max_pages={u64(entry, 32)} "
+            f"seal_records_scanned={u64(entry, 168)} "
+            f"max_seal_records_scanned={u64(entry, 176)} "
+            f"update_records_scanned={u64(entry, 184)} "
+            f"max_update_records_scanned={u64(entry, 192)} "
+            f"update_records_overlapped={u64(entry, 200)} "
+            f"update_records_split={u64(entry, 208)} "
+            f"update_records_output={u64(entry, 216)} "
+            f"page_buckets={','.join(map(str, page_buckets))} "
+            f"prot_buckets={','.join(map(str, prot_buckets))}"
+        )
 
 
 def main() -> None:
@@ -143,7 +179,7 @@ def main() -> None:
 
     header = (
         "MOSS_PROFILE_V1 sample_hz=10 ext4_sample_rate=16 "
-        "page_cache_sample_rate=32 offcpu_sample_rate=8 "
+        "page_cache_sample_rate=32 offcpu_sample_rate=8 mprotect_sample_rate=32 "
         f"setup_ns={phase_totals[1]} prebuild_ns={phase_totals[2]} "
         f"timed_ns={phase_totals[3]} dropped_cpu={dropped_cpu} "
         f"dropped_wait={dropped_wait} dropped_pending={dropped_pending} "
@@ -155,10 +191,10 @@ def main() -> None:
         "MOSS_PHASE 1 setup",
         "MOSS_PHASE 2 prebuild",
         "MOSS_PHASE 3 timed",
-        *body,
-        "#### MOSS GUEST PROFILE END ####",
-        "",
     ]
+    if args.mprotect_stats is not None:
+        emit_mprotect_stats(output, args.mprotect_stats.read_bytes())
+    output.extend([*body, "#### MOSS GUEST PROFILE END ####", ""])
     args.output.write_text("\n".join(output))
 
 

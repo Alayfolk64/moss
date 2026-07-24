@@ -124,6 +124,27 @@ struct MapRecord {
     locked: bool,
 }
 
+#[derive(Default)]
+struct MprotectRecordUpdateStats {
+    scanned: usize,
+    overlapped: usize,
+    split: usize,
+    output: usize,
+}
+
+#[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+struct MprotectOutcome {
+    phase: u8,
+    success: bool,
+}
+
+#[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+impl Drop for MprotectOutcome {
+    fn drop(&mut self) {
+        crate::profiler::mprotect_finish(self.phase, self.success);
+    }
+}
+
 struct SigbusArea {
     pid: u32,
     start: usize,
@@ -135,6 +156,19 @@ static GROW_DOWN_AREAS: Mutex<Vec<GrowdownArea>> = Mutex::new(Vec::new());
 static WIPEONFORK_AREAS: Mutex<Vec<WipeOnForkArea>> = Mutex::new(Vec::new());
 static MMAP_RECORDS: Mutex<Vec<MapRecord>> = Mutex::new(Vec::new());
 static SIGBUS_AREAS: Mutex<Vec<SigbusArea>> = Mutex::new(Vec::new());
+
+#[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+fn lock_mmap_records_profiled(
+    event: axsync::ProfileEvent,
+) -> axsync::MutexGuard<'static, Vec<MapRecord>> {
+    if let Some(records) = MMAP_RECORDS.try_lock() {
+        return records;
+    }
+    let token = axsync::profile_wait_begin(event, &MMAP_RECORDS as *const _ as usize);
+    let records = MMAP_RECORDS.lock();
+    axsync::profile_wait_end(token);
+    records
+}
 
 fn is_shared_mapping(map_type: MmapFlags) -> bool {
     map_type == MmapFlags::SHARED || map_type == MmapFlags::SHARED_VALIDATE
@@ -266,9 +300,18 @@ fn record_mmap(
     });
 }
 
-fn update_mmap_prot(pid: u32, start: usize, length: usize, prot: MmapProt) {
+fn update_mmap_prot_records(
+    records: &mut Vec<MapRecord>,
+    pid: u32,
+    start: usize,
+    length: usize,
+    prot: MmapProt,
+) -> MprotectRecordUpdateStats {
     let end = start + length;
-    let mut records = MMAP_RECORDS.lock();
+    let mut stats = MprotectRecordUpdateStats {
+        scanned: records.len(),
+        ..MprotectRecordUpdateStats::default()
+    };
     let mut updated = Vec::with_capacity(records.len() + 2);
 
     for record in records.drain(..) {
@@ -276,8 +319,10 @@ fn update_mmap_prot(pid: u32, start: usize, length: usize, prot: MmapProt) {
             updated.push(record);
             continue;
         }
+        stats.overlapped += 1;
 
         if record.start < start {
+            stats.split += 1;
             updated.push(MapRecord {
                 end: start,
                 ..record
@@ -292,6 +337,7 @@ fn update_mmap_prot(pid: u32, start: usize, length: usize, prot: MmapProt) {
         });
 
         if record.end > end {
+            stats.split += 1;
             updated.push(MapRecord {
                 start: end,
                 ..record
@@ -299,7 +345,9 @@ fn update_mmap_prot(pid: u32, start: usize, length: usize, prot: MmapProt) {
         }
     }
 
+    stats.output = updated.len();
     *records = updated;
+    stats
 }
 
 fn overlap_len(a_start: usize, a_end: usize, b_start: usize, b_end: usize) -> usize {
@@ -451,16 +499,27 @@ fn is_recorded_shared_file(pid: u32, start: usize, length: usize) -> bool {
     })
 }
 
-fn is_recorded_write_sealed_shared_file(pid: u32, start: usize, length: usize) -> bool {
+fn find_recorded_write_sealed_shared_file(
+    records: &[MapRecord],
+    pid: u32,
+    start: usize,
+    length: usize,
+) -> (bool, usize) {
     let end = start + length;
-    MMAP_RECORDS.lock().iter().rev().any(|record| {
-        record.pid == pid
+    let mut scanned = 0;
+    for record in records.iter().rev() {
+        scanned += 1;
+        if record.pid == pid
             && record.shared
             && record.file_backed
             && record.write_sealed
             && record.start <= start
             && record.end >= end
-    })
+        {
+            return (true, scanned);
+        }
+    }
+    (false, scanned)
 }
 
 fn force_sigbus_on_write(pid: u32, start: usize, length: usize) {
@@ -757,17 +816,91 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
 
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
     let length = align_up_4k(length);
+    let pages = length / PageSize::Size4K as usize;
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    let profile_phase = crate::profiler::mprotect_begin(pages, permission_flags.bits());
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    let mut profile_outcome = MprotectOutcome {
+        phase: profile_phase,
+        success: false,
+    };
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    let _profile_total = axsync::ProfileScope::new(axsync::ProfileEvent::MprotectTotal, pages);
+
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    let mut aspace = if let Some(aspace) = aspace_ref.try_lock() {
+        aspace
+    } else {
+        let token = axsync::profile_wait_begin(
+            axsync::ProfileEvent::MprotectAddrSpaceWait,
+            Arc::as_ptr(&aspace_ref) as usize,
+        );
+        let aspace = aspace_ref.lock();
+        axsync::profile_wait_end(token);
+        aspace
+    };
+    #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
+    let mut aspace = aspace_ref.lock();
+
     let start_addr = VirtAddr::from(addr);
-    if permission_flags.contains(MmapProt::WRITE)
-        && is_recorded_write_sealed_shared_file(pid, addr, length)
-    {
-        return Err(AxError::from(LinuxError::EPERM));
+    if permission_flags.contains(MmapProt::WRITE) {
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        let records = lock_mmap_records_profiled(axsync::ProfileEvent::MprotectSealLockWait);
+        #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
+        let records = MMAP_RECORDS.lock();
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        let _profile_seal_scan =
+            axsync::ProfileScope::new(axsync::ProfileEvent::MprotectSealScan, records.len());
+        let (write_sealed, scanned) =
+            find_recorded_write_sealed_shared_file(&records, pid, addr, length);
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        drop(records);
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        {
+            drop(_profile_seal_scan);
+            crate::profiler::mprotect_record_seal_scan(profile_phase, scanned);
+        }
+        if write_sealed {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
     }
-    aspace.protect(start_addr, length, permission_flags.into())?;
-    update_mmap_prot(pid, addr, length, permission_flags);
+
+    {
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        let _profile_page_table =
+            axsync::ProfileScope::new(axsync::ProfileEvent::MprotectPageTable, pages);
+        aspace.protect(start_addr, length, permission_flags.into())?;
+    }
+
+    let update = {
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        let mut records = lock_mmap_records_profiled(axsync::ProfileEvent::MprotectRecordLockWait);
+        #[cfg(not(all(feature = "guest-profile", target_arch = "riscv64")))]
+        let mut records = MMAP_RECORDS.lock();
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        let profile_record_update =
+            axsync::ProfileScope::new(axsync::ProfileEvent::MprotectRecordUpdate, records.len());
+        let update = update_mmap_prot_records(&mut records, pid, addr, length, permission_flags);
+        drop(records);
+        #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+        drop(profile_record_update);
+        update
+    };
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    crate::profiler::mprotect_record_update(
+        profile_phase,
+        update.scanned,
+        update.overlapped,
+        update.split,
+        update.output,
+    );
+
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    {
+        profile_outcome.success = true;
+    }
 
     Ok(0)
 }
