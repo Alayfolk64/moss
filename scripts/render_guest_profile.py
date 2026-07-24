@@ -402,6 +402,25 @@ def main() -> None:
                 "top": top_rows(event_values),
             }
 
+        for event in range(18, 29):
+            label = EVENT_NAMES[event]
+            event_values = wait_values[(phase, event)]
+            folded = args.out / f"guest-{label}-{suffix}.folded"
+            svg = args.out / f"guest-{label}-{suffix}.svg"
+            write_folded(folded, event_values)
+            render_svg(
+                flamegraph,
+                folded,
+                svg,
+                f"Moss guest {label.replace('-', ' ')} - {suffix}",
+                "microseconds",
+                "chain",
+            )
+            summary["wait"][f"{label}-{suffix}"] = {
+                "total_us": sum(event_values.values()),
+                "top": top_rows(event_values),
+            }
+
         offcpu_values = wait_values[(phase, 6)]
         folded = args.out / f"guest-offcpu-{suffix}.folded"
         svg = args.out / f"guest-offcpu-{suffix}.svg"
