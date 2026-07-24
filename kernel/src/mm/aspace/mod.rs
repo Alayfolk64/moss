@@ -343,8 +343,6 @@ impl AddrSpaceLock {
     }
 }
 
-const RECLAIM_BATCH_PAGES: usize = 256;
-
 struct AddrSpaceReclaim {
     aspace: Arc<AddrSpaceLock>,
     owner: AddrSpaceWriteOwner,
@@ -353,8 +351,11 @@ struct AddrSpaceReclaim {
 static RECLAIM_QUEUE: SpinNoIrq<VecDeque<AddrSpaceReclaim>> = SpinNoIrq::new(VecDeque::new());
 static RECLAIM_WORKER_RUNNING: AtomicBool = AtomicBool::new(false);
 
-/// Clears an address space outside exit/execve and bounds each write-side
-/// critical section to at most one reclaim batch.
+/// Clears a dead address space outside the exit/execve critical path.
+///
+/// The address space is no longer used for normal user faults, so splitting it
+/// into small virtual ranges only repeats VMA lookups, splits, and queue
+/// operations without helping a live reader.
 pub(crate) fn defer_address_space_reclaim(aspace: Arc<AddrSpaceLock>, owner: AddrSpaceWriteOwner) {
     RECLAIM_QUEUE
         .lock()
@@ -367,13 +368,7 @@ pub(crate) fn defer_address_space_reclaim(aspace: Arc<AddrSpaceLock>, owner: Add
         loop {
             let request = { RECLAIM_QUEUE.lock().pop_front() };
             if let Some(request) = request {
-                let mut aspace = request.aspace.lock_profiled(request.owner);
-                let finished = aspace.clear_batch(RECLAIM_BATCH_PAGES);
-                drop(aspace);
-                if !finished {
-                    RECLAIM_QUEUE.lock().push_back(request);
-                    axtask::yield_now();
-                }
+                request.aspace.lock_profiled(request.owner).clear();
                 continue;
             }
 
@@ -758,29 +753,6 @@ impl AddrSpace {
     /// Removes all mappings in the address space.
     pub fn clear(&mut self) {
         self.areas.clear(&mut self.pt).unwrap();
-    }
-
-    /// Removes at most `max_pages` base pages from the first VMA.
-    ///
-    /// Exit and execve reclaim use this to release the address-space write lock
-    /// between bounded chunks instead of unmapping the entire image in one
-    /// critical section.
-    fn clear_batch(&mut self, max_pages: usize) -> bool {
-        let Some((start, size, page_size)) = self.areas.iter().next().map(|area| {
-            (
-                area.start(),
-                area.size(),
-                area.backend().page_size() as usize,
-            )
-        }) else {
-            return true;
-        };
-        let batch_size = max_pages
-            .saturating_mul(PAGE_SIZE_4K)
-            .max(page_size)
-            .min(size);
-        self.areas.unmap(start, batch_size, &mut self.pt).unwrap();
-        self.areas.is_empty()
     }
 
     /// Checks whether an access to the specified memory region is valid.
