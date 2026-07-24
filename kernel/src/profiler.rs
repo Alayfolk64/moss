@@ -55,14 +55,19 @@ struct MprotectPhaseStats {
     max_pages: AtomicU64,
     page_buckets: [AtomicU64; MPROTECT_SIZE_BUCKETS],
     prot_buckets: [AtomicU64; MPROTECT_PROT_BUCKETS],
-    seal_records_scanned: AtomicU64,
-    max_seal_records_scanned: AtomicU64,
-    update_records_scanned: AtomicU64,
-    max_update_records_scanned: AtomicU64,
-    update_records_overlapped: AtomicU64,
-    update_records_split: AtomicU64,
-    update_records_output: AtomicU64,
+    vmas_validated: AtomicU64,
+    max_vmas_validated: AtomicU64,
+    vmas_visited: AtomicU64,
+    max_vmas_visited: AtomicU64,
+    vmas_changed: AtomicU64,
+    vmas_unchanged: AtomicU64,
+    vmas_split: AtomicU64,
+    vmas_merged: AtomicU64,
+    vmas_output: AtomicU64,
 }
+
+const _: [(); 240] = [(); size_of::<MprotectPhaseStats>()];
+const _: [(); 960] = [(); size_of::<[MprotectPhaseStats; 4]>()];
 
 impl MprotectPhaseStats {
     const fn new() -> Self {
@@ -74,13 +79,15 @@ impl MprotectPhaseStats {
             max_pages: AtomicU64::new(0),
             page_buckets: [const { AtomicU64::new(0) }; MPROTECT_SIZE_BUCKETS],
             prot_buckets: [const { AtomicU64::new(0) }; MPROTECT_PROT_BUCKETS],
-            seal_records_scanned: AtomicU64::new(0),
-            max_seal_records_scanned: AtomicU64::new(0),
-            update_records_scanned: AtomicU64::new(0),
-            max_update_records_scanned: AtomicU64::new(0),
-            update_records_overlapped: AtomicU64::new(0),
-            update_records_split: AtomicU64::new(0),
-            update_records_output: AtomicU64::new(0),
+            vmas_validated: AtomicU64::new(0),
+            max_vmas_validated: AtomicU64::new(0),
+            vmas_visited: AtomicU64::new(0),
+            max_vmas_visited: AtomicU64::new(0),
+            vmas_changed: AtomicU64::new(0),
+            vmas_unchanged: AtomicU64::new(0),
+            vmas_split: AtomicU64::new(0),
+            vmas_merged: AtomicU64::new(0),
+            vmas_output: AtomicU64::new(0),
         }
     }
 
@@ -96,13 +103,15 @@ impl MprotectPhaseStats {
         for counter in &self.prot_buckets {
             counter.store(0, Ordering::Relaxed);
         }
-        self.seal_records_scanned.store(0, Ordering::Relaxed);
-        self.max_seal_records_scanned.store(0, Ordering::Relaxed);
-        self.update_records_scanned.store(0, Ordering::Relaxed);
-        self.max_update_records_scanned.store(0, Ordering::Relaxed);
-        self.update_records_overlapped.store(0, Ordering::Relaxed);
-        self.update_records_split.store(0, Ordering::Relaxed);
-        self.update_records_output.store(0, Ordering::Relaxed);
+        self.vmas_validated.store(0, Ordering::Relaxed);
+        self.max_vmas_validated.store(0, Ordering::Relaxed);
+        self.vmas_visited.store(0, Ordering::Relaxed);
+        self.max_vmas_visited.store(0, Ordering::Relaxed);
+        self.vmas_changed.store(0, Ordering::Relaxed);
+        self.vmas_unchanged.store(0, Ordering::Relaxed);
+        self.vmas_split.store(0, Ordering::Relaxed);
+        self.vmas_merged.store(0, Ordering::Relaxed);
+        self.vmas_output.store(0, Ordering::Relaxed);
     }
 }
 
@@ -406,7 +415,7 @@ fn profile_begin(event: ProfileEvent, object: usize) -> u64 {
         | ProfileEvent::MprotectAddrSpaceWait
         | ProfileEvent::MprotectSealLockWait
         | ProfileEvent::MprotectSealScan
-        | ProfileEvent::MprotectPageTable
+        | ProfileEvent::MprotectLocalUpdate
         | ProfileEvent::MprotectRecordLockWait
         | ProfileEvent::MprotectRecordUpdate => MPROTECT_SAMPLE_RATE,
         _ => 1,
@@ -524,7 +533,7 @@ pub(crate) fn mprotect_finish(phase: u8, success: bool) {
     }
 }
 
-pub(crate) fn mprotect_record_seal_scan(phase: u8, scanned: usize) {
+pub(crate) fn mprotect_record_validation(phase: u8, validated: usize) {
     let Some(stats) = MPROTECT_STATS.get(phase as usize) else {
         return;
     };
@@ -532,18 +541,20 @@ pub(crate) fn mprotect_record_seal_scan(phase: u8, scanned: usize) {
         return;
     }
     stats
-        .seal_records_scanned
-        .fetch_add(scanned as u64, Ordering::Relaxed);
+        .vmas_validated
+        .fetch_add(validated as u64, Ordering::Relaxed);
     stats
-        .max_seal_records_scanned
-        .fetch_max(scanned as u64, Ordering::Relaxed);
+        .max_vmas_validated
+        .fetch_max(validated as u64, Ordering::Relaxed);
 }
 
-pub(crate) fn mprotect_record_update(
+pub(crate) fn mprotect_record_vmas(
     phase: u8,
-    scanned: usize,
-    overlapped: usize,
+    visited: usize,
+    changed: usize,
+    unchanged: usize,
     split: usize,
+    merged: usize,
     output: usize,
 ) {
     let Some(stats) = MPROTECT_STATS.get(phase as usize) else {
@@ -553,19 +564,23 @@ pub(crate) fn mprotect_record_update(
         return;
     }
     stats
-        .update_records_scanned
-        .fetch_add(scanned as u64, Ordering::Relaxed);
+        .vmas_visited
+        .fetch_add(visited as u64, Ordering::Relaxed);
     stats
-        .max_update_records_scanned
-        .fetch_max(scanned as u64, Ordering::Relaxed);
+        .max_vmas_visited
+        .fetch_max(visited as u64, Ordering::Relaxed);
     stats
-        .update_records_overlapped
-        .fetch_add(overlapped as u64, Ordering::Relaxed);
+        .vmas_changed
+        .fetch_add(changed as u64, Ordering::Relaxed);
     stats
-        .update_records_split
-        .fetch_add(split as u64, Ordering::Relaxed);
+        .vmas_unchanged
+        .fetch_add(unchanged as u64, Ordering::Relaxed);
+    stats.vmas_split.fetch_add(split as u64, Ordering::Relaxed);
     stats
-        .update_records_output
+        .vmas_merged
+        .fetch_add(merged as u64, Ordering::Relaxed);
+    stats
+        .vmas_output
         .fetch_add(output as u64, Ordering::Relaxed);
 }
 
@@ -774,22 +789,24 @@ pub fn snapshot() -> String {
         let _ = write!(
             output,
             "MOSS_MPROTECT phase={} calls={} successes={} failures={} requested_pages={} \
-             max_pages={} seal_records_scanned={} max_seal_records_scanned={} \
-             update_records_scanned={} max_update_records_scanned={} update_records_overlapped={} \
-             update_records_split={} update_records_output={} page_buckets=",
+             max_pages={} vmas_validated={} max_vmas_validated={} vmas_visited={} \
+             max_vmas_visited={} vmas_changed={} vmas_unchanged={} vmas_split={} vmas_merged={} \
+             vmas_output={} page_buckets=",
             phase,
             stats.calls.load(Ordering::Relaxed),
             stats.successes.load(Ordering::Relaxed),
             stats.failures.load(Ordering::Relaxed),
             stats.requested_pages.load(Ordering::Relaxed),
             stats.max_pages.load(Ordering::Relaxed),
-            stats.seal_records_scanned.load(Ordering::Relaxed),
-            stats.max_seal_records_scanned.load(Ordering::Relaxed),
-            stats.update_records_scanned.load(Ordering::Relaxed),
-            stats.max_update_records_scanned.load(Ordering::Relaxed),
-            stats.update_records_overlapped.load(Ordering::Relaxed),
-            stats.update_records_split.load(Ordering::Relaxed),
-            stats.update_records_output.load(Ordering::Relaxed),
+            stats.vmas_validated.load(Ordering::Relaxed),
+            stats.max_vmas_validated.load(Ordering::Relaxed),
+            stats.vmas_visited.load(Ordering::Relaxed),
+            stats.max_vmas_visited.load(Ordering::Relaxed),
+            stats.vmas_changed.load(Ordering::Relaxed),
+            stats.vmas_unchanged.load(Ordering::Relaxed),
+            stats.vmas_split.load(Ordering::Relaxed),
+            stats.vmas_merged.load(Ordering::Relaxed),
+            stats.vmas_output.load(Ordering::Relaxed),
         );
         for (index, counter) in stats.page_buckets.iter().enumerate() {
             if index != 0 {

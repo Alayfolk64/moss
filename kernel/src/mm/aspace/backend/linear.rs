@@ -20,6 +20,10 @@ impl LinearBackend {
     fn pa(&self, va: VirtAddr) -> PhysAddr {
         PhysAddr::from((va.as_usize() as isize - self.offset) as usize)
     }
+
+    pub(super) fn merge_compatible(&self, other: &Self) -> bool {
+        self.offset == other.offset
+    }
 }
 
 impl BackendOps for LinearBackend {

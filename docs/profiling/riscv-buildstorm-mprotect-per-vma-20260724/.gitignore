@@ -1,0 +1,6 @@
+# Large local captures and reproducible intermediate files.
+*.log
+*.bin
+*.elf
+*.folded
+run.json

@@ -1,0 +1,1594 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="326" onload="init(evt)" viewBox="0 0 1800 326" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#e0e0ff" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="326.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Moss guest total off-CPU time - all</text>
+<text id="details" x="10.00" y="309" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="309" > </text>
+<g id="frames">
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (601,759,769 microseconds, 0.65%)</title><rect x="1269.4" y="165" width="11.6" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="1272.39" y="175.5" ></text>
+</g>
+<g >
+<title>-- (158,640,293 microseconds, 0.17%)</title><rect x="1266.3" y="133" width="3.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1269.29" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (14,673,415,067 microseconds, 15.89%)</title><rect x="670.0" y="149" width="282.9" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="673.00" y="159.5" >starry_kernel::syscall::sync::futex::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (34,478,570 microseconds, 0.04%)</title><rect x="61.1" y="149" width="0.7" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="64.11" y="159.5" ></text>
+</g>
+<g >
+<title>task:rustc (15,937,635,791 microseconds, 17.26%)</title><rect x="646.3" y="229" width="307.2" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="649.27" y="239.5" >task:rustc</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (128,376,148 microseconds, 0.14%)</title><rect x="1423.7" y="165" width="2.5" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="1426.71" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (100,224,319 microseconds, 0.11%)</title><rect x="1199.4" y="213" width="2.0" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1202.43" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (20,879,387 microseconds, 0.02%)</title><rect x="1547.6" y="165" width="0.4" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="1550.59" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::start_readahead_workers::{{closure}} (vendor/axfs/src/highlevel/file.rs:874) (7,211,664,916 microseconds, 7.81%)</title><rect x="1651.0" y="181" width="139.0" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1653.96" y="191.5" >axfs::highlevel::..</text>
+</g>
+<g >
+<title>-- (100,224,319 microseconds, 0.11%)</title><rect x="1199.4" y="181" width="2.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1202.43" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (4,480,814,966 microseconds, 4.85%)</title><rect x="1548.0" y="197" width="86.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1550.99" y="207.5" >&lt;alloc::bo..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (462,843,241 microseconds, 0.50%)</title><rect x="1283.6" y="149" width="8.9" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1286.60" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (156,602,149 microseconds, 0.17%)</title><rect x="1426.3" y="149" width="3.1" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1429.34" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::block_io::SharedBlockDevice::ensure_completion_task::{{closure}} (vendor/axfs/src/fs/ext4/block_io.rs:140) (856,240,036 microseconds, 0.93%)</title><rect x="1634.4" y="181" width="16.6" height="15.0" fill="rgb(87,87,211)" rx="2" ry="2" />
+<text  x="1637.45" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (5,226,468,846 microseconds, 5.66%)</title><rect x="1433.2" y="165" width="100.8" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="1436.20" y="175.5" >starry_kerne..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:38) (17,679,311 microseconds, 0.02%)</title><rect x="227.3" y="149" width="0.4" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="230.32" y="159.5" ></text>
+</g>
+<g >
+<title>-- (4,185,720,064 microseconds, 4.53%)</title><rect x="1342.8" y="181" width="80.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1345.79" y="191.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (4,480,809,402 microseconds, 4.85%)</title><rect x="1548.0" y="165" width="86.4" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="1550.99" y="175.5" >starry_ker..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,468,940,729 microseconds, 1.59%)</title><rect x="617.9" y="213" width="28.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="620.95" y="223.5" >&lt;a..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:756) (32,526,753 microseconds, 0.04%)</title><rect x="952.9" y="165" width="0.6" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="955.91" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (4,480,814,966 microseconds, 4.85%)</title><rect x="1548.0" y="213" width="86.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1550.99" y="223.5" >&lt;alloc::sy..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (8,067,905,389 microseconds, 8.74%)</title><rect x="1634.4" y="213" width="155.6" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1637.45" y="223.5" >&lt;alloc::sync::Arc&lt;T..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (5,612,849,023 microseconds, 6.08%)</title><rect x="1426.3" y="213" width="108.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1429.26" y="223.5" >&lt;alloc::sync:..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:320) (213,156,710 microseconds, 0.23%)</title><rect x="665.7" y="165" width="4.1" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="668.70" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (398,138,186 microseconds, 0.43%)</title><rect x="1540.3" y="213" width="7.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1543.32" y="223.5" ></text>
+</g>
+<g >
+<title>phase:timed (30,487,306,979 microseconds, 33.02%)</title><rect x="1202.2" y="245" width="587.8" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="1205.20" y="255.5" >phase:timed</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (156,602,149 microseconds, 0.17%)</title><rect x="1426.3" y="165" width="3.1" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1429.34" y="175.5" ></text>
+</g>
+<g >
+<title>-- (17,404,236 microseconds, 0.02%)</title><rect x="1634.5" y="149" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1637.45" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (800,678,093 microseconds, 0.87%)</title><rect x="211.8" y="197" width="15.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="214.76" y="207.5" ></text>
+</g>
+<g >
+<title>-- (838,799,430 microseconds, 0.91%)</title><rect x="1634.8" y="149" width="16.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1637.79" y="159.5" ></text>
+</g>
+<g >
+<title>phase:setup (159,135,370 microseconds, 0.17%)</title><rect x="1199.1" y="245" width="3.1" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="1202.13" y="255.5" ></text>
+</g>
+<g >
+<title>task:build-script-bui (17,829,149 microseconds, 0.02%)</title><rect x="1202.2" y="229" width="0.4" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="1205.21" y="239.5" ></text>
+</g>
+<g >
+<title>task:collect2 (800,687,492 microseconds, 0.87%)</title><rect x="211.8" y="229" width="15.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="214.76" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::rseq::&lt;impl starry_kernel::task::Thread&gt;::prepare_rseq (kernel/src/task/rseq.rs:147) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="165" width="0.4" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="1205.58" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::RawAddrSpaceRwLock as lock_api::rwlock::RawRwLock&gt;::lock_shared (kernel/src/mm/aspace/mod.rs:52) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="53" width="0.5" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="63.63" y="63.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll (kernel/src/syscall/io_mpx/poll.rs:60) (6,013,901,517 microseconds, 6.51%)</title><rect x="61.8" y="149" width="115.9" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="64.77" y="159.5" >starry_kernel:..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (59,567,720 microseconds, 0.06%)</title><rect x="1203.0" y="165" width="1.1" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1205.98" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:188) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="181" width="0.5" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="63.63" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (59,567,720 microseconds, 0.06%)</title><rect x="1203.0" y="149" width="1.1" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1205.98" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (65,119,999 microseconds, 0.07%)</title><rect x="10.0" y="181" width="1.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="13.00" y="191.5" ></text>
+</g>
+<g >
+<title>enter_user (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="133" width="0.4" height="15.0" fill="rgb(87,87,211)" rx="2" ry="2" />
+<text  x="1205.58" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (12,737,285,779 microseconds, 13.80%)</title><rect x="953.6" y="197" width="245.5" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="956.56" y="207.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as core:..</text>
+</g>
+<g >
+<title>-- (193,632,687 microseconds, 0.21%)</title><rect x="207.9" y="117" width="3.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="210.92" y="127.5" ></text>
+</g>
+<g >
+<title>-- (373,310,024 microseconds, 0.40%)</title><rect x="1540.3" y="117" width="7.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1543.32" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (2,273,026,242 microseconds, 2.46%)</title><rect x="227.3" y="165" width="43.8" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="230.32" y="175.5" >star..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll (kernel/src/syscall/io_mpx/poll.rs:60) (41,708,653 microseconds, 0.05%)</title><rect x="10.2" y="149" width="0.8" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="13.16" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::writeback_folios_in_range (vendor/axfs/src/highlevel/file.rs:1938) (14,418,613 microseconds, 0.02%)</title><rect x="1534.5" y="117" width="0.3" height="15.0" fill="rgb(87,87,210)" rx="2" ry="2" />
+<text  x="1537.49" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (160,752,529 microseconds, 0.17%)</title><rect x="1266.3" y="165" width="3.1" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="1269.29" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (6,465,799,238 microseconds, 7.00%)</title><rect x="271.1" y="213" width="124.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="274.14" y="223.5" >&lt;alloc::sync::A..</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::fs::File as starry_kernel::file::FileLike&gt;::read (kernel/src/file/fs.rs:332) (25,265,515 microseconds, 0.03%)</title><rect x="646.6" y="133" width="0.5" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="649.57" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (2,277,523,674 microseconds, 2.47%)</title><rect x="227.2" y="181" width="43.9" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="230.23" y="191.5" >star..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll::{{closure}} (kernel/src/syscall/io_mpx/poll.rs:61) (3,217,876,212 microseconds, 3.49%)</title><rect x="1204.1" y="133" width="62.1" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="1207.13" y="143.5" >starry..</text>
+</g>
+<g >
+<title>axcpu::riscv::trap::handle_page_fault (vendor/axcpu/src/trap.rs:43) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="101" width="0.4" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1205.58" y="111.5" ></text>
+</g>
+<g >
+<title>-- (799,319,876 microseconds, 0.87%)</title><rect x="211.8" y="133" width="15.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="214.78" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:320) (6,021,059,860 microseconds, 6.52%)</title><rect x="61.8" y="165" width="116.1" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="64.77" y="175.5" >starry_kernel:..</text>
+</g>
+<g >
+<title>task:coordinator (1,201,416,677 microseconds, 1.30%)</title><rect x="1283.5" y="229" width="23.2" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1286.55" y="239.5" >t..</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="133" width="5.5" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1537.77" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (800,678,093 microseconds, 0.87%)</title><rect x="211.8" y="213" width="15.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="214.76" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (1,312,142,565 microseconds, 1.42%)</title><rect x="182.6" y="133" width="25.3" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="185.60" y="143.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll::{{closure}} (kernel/src/syscall/io_mpx/poll.rs:61) (213,156,710 microseconds, 0.23%)</title><rect x="665.7" y="133" width="4.1" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="668.70" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axnet::socket::Socket as axnet::socket::SocketOps&gt;::recv (vendor/axnet/src/socket.rs:166) (69,072,654 microseconds, 0.07%)</title><rect x="1281.0" y="149" width="1.3" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="1284.00" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::block_io::SharedBlockDevice::ensure_completion_task::{{closure}} (vendor/axfs/src/fs/ext4/block_io.rs:140) (1,808,832,801 microseconds, 1.96%)</title><rect x="953.6" y="181" width="34.8" height="15.0" fill="rgb(87,87,211)" rx="2" ry="2" />
+<text  x="956.56" y="191.5" >ax..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (1,859,812,330 microseconds, 2.01%)</title><rect x="1306.7" y="149" width="35.9" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1309.72" y="159.5" >sta..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (65,119,999 microseconds, 0.07%)</title><rect x="10.0" y="197" width="1.3" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (15,924,133,079 microseconds, 17.25%)</title><rect x="646.5" y="181" width="307.0" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="649.53" y="191.5" >starry_kernel::task::user::new_user_task:..</text>
+</g>
+<g >
+<title>axcpu::riscv::trap::handle_page_fault (vendor/axcpu/src/trap.rs:43) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="101" width="0.5" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="63.63" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::Inode::read_cached_at (vendor/axfs/src/fs/ext4/inode.rs:98) (25,256,411 microseconds, 0.03%)</title><rect x="646.6" y="85" width="0.5" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="649.57" y="95.5" ></text>
+</g>
+<g >
+<title>-- (35,122,170 microseconds, 0.04%)</title><rect x="1201.5" y="149" width="0.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1204.52" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="181" width="5.5" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1537.77" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:478) (570,502,323 microseconds, 0.62%)</title><rect x="49.5" y="165" width="11.0" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="52.45" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (2,255,346,931 microseconds, 2.44%)</title><rect x="227.7" y="149" width="43.4" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="230.66" y="159.5" >star..</text>
+</g>
+<g >
+<title>-- (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="37" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1205.58" y="47.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (1,322,145,336 microseconds, 1.43%)</title><rect x="182.4" y="165" width="25.5" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="185.40" y="175.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (593,792,357 microseconds, 0.64%)</title><rect x="1269.5" y="149" width="11.5" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1272.54" y="159.5" ></text>
+</g>
+<g >
+<title>-- (17,679,311 microseconds, 0.02%)</title><rect x="227.3" y="101" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="230.32" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (17,822,625 microseconds, 0.02%)</title><rect x="1202.2" y="213" width="0.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1205.21" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,201,416,677 microseconds, 1.30%)</title><rect x="1283.5" y="213" width="23.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1286.55" y="223.5" >&lt;..</text>
+</g>
+<g >
+<title>lock_api::rwlock::RwLock&lt;R,T&gt;::read (vendor/lock_api/src/rwlock.rs:458) (17,679,311 microseconds, 0.02%)</title><rect x="227.3" y="133" width="0.4" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="230.32" y="143.5" ></text>
+</g>
+<g >
+<title>task:coordinator (2,279,464,612 microseconds, 2.47%)</title><rect x="227.2" y="229" width="43.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="230.20" y="239.5" >task..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (14,816,732 microseconds, 0.02%)</title><rect x="1534.5" y="197" width="0.3" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1537.49" y="207.5" ></text>
+</g>
+<g >
+<title>phase:prebuild (61,676,715,414 microseconds, 66.81%)</title><rect x="10.0" y="245" width="1189.1" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >phase:prebuild</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (11,507,183,005 microseconds, 12.46%)</title><rect x="395.8" y="197" width="221.9" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="398.84" y="207.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as co..</text>
+</g>
+<g >
+<title>task:tokio-rt-worker (4,480,814,966 microseconds, 4.85%)</title><rect x="1548.0" y="229" width="86.4" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="1550.99" y="239.5" >task:tokio..</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (33,915,671 microseconds, 0.04%)</title><rect x="61.1" y="133" width="0.7" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="64.12" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::File::read (vendor/axfs/src/highlevel/file.rs:2641) (25,265,515 microseconds, 0.03%)</title><rect x="646.6" y="117" width="0.5" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="649.57" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (462,843,241 microseconds, 0.50%)</title><rect x="1283.6" y="133" width="8.9" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1286.60" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (59,543,401 microseconds, 0.06%)</title><rect x="1203.0" y="133" width="1.1" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1205.98" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (14,816,732 microseconds, 0.02%)</title><rect x="1534.5" y="213" width="0.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1537.49" y="223.5" ></text>
+</g>
+<g >
+<title>starry_vm::vm_write_slice (vendor/starry-vm/src/lib.rs:80) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="149" width="0.5" height="15.0" fill="rgb(102,102,224)" rx="2" ry="2" />
+<text  x="63.63" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (34,478,570 microseconds, 0.04%)</title><rect x="61.1" y="165" width="0.7" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="64.11" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (1,312,142,565 microseconds, 1.42%)</title><rect x="182.6" y="149" width="25.3" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="185.60" y="159.5" >s..</text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (7,211,366,813 microseconds, 7.81%)</title><rect x="1651.0" y="165" width="139.0" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1653.96" y="175.5" >axtask::wait_queu..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll::{{closure}} (kernel/src/syscall/io_mpx/poll.rs:61) (196,254,987 microseconds, 0.21%)</title><rect x="1429.4" y="133" width="3.7" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="1432.36" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (128,980,147 microseconds, 0.14%)</title><rect x="1423.7" y="213" width="2.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1426.70" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::RawAddrSpaceRwLock as lock_api::rwlock::RawRwLock&gt;::lock_shared (kernel/src/mm/aspace/mod.rs:52) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="53" width="0.4" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1205.58" y="63.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (4,185,720,064 microseconds, 4.53%)</title><rect x="1342.8" y="197" width="80.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1345.79" y="207.5" >&lt;alloc::b..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (734,264,226 microseconds, 0.80%)</title><rect x="1292.6" y="165" width="14.1" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="1295.55" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (62,730,244 microseconds, 0.07%)</title><rect x="1282.3" y="197" width="1.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1285.34" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (6,464,308,022 microseconds, 7.00%)</title><rect x="271.2" y="181" width="124.6" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="274.17" y="191.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (37,987,630 microseconds, 0.04%)</title><rect x="1201.5" y="213" width="0.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1204.47" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (4,137,865,019 microseconds, 4.48%)</title><rect x="1202.6" y="213" width="79.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1205.56" y="223.5" >&lt;alloc::s..</text>
+</g>
+<g >
+<title>&lt;axnet::socket::Socket as axnet::socket::SocketOps&gt;::recv (vendor/axnet/src/socket.rs:166) (193,632,687 microseconds, 0.21%)</title><rect x="207.9" y="149" width="3.8" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="210.92" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (14,673,415,067 microseconds, 15.89%)</title><rect x="670.0" y="133" width="282.9" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="673.00" y="143.5" >starry_kernel::task::futex::WaitQueue..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (233,728,654 microseconds, 0.25%)</title><rect x="177.9" y="149" width="4.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="180.90" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (593,792,357 microseconds, 0.64%)</title><rect x="1269.5" y="133" width="11.5" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1272.54" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (1,468,502,820 microseconds, 1.59%)</title><rect x="618.0" y="181" width="28.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="620.95" y="191.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (4,480,765,565 microseconds, 4.85%)</title><rect x="1548.0" y="149" width="86.4" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1551.00" y="159.5" >starry_ker..</text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (4,480,765,565 microseconds, 4.85%)</title><rect x="1548.0" y="133" width="86.4" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1551.00" y="143.5" >starry_ker..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (5,612,849,023 microseconds, 6.08%)</title><rect x="1426.3" y="197" width="108.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1429.26" y="207.5" >&lt;alloc::boxed..</text>
+</g>
+<g >
+<title>-- (33,915,671 microseconds, 0.04%)</title><rect x="61.1" y="117" width="0.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="64.12" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="197" width="5.5" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1537.77" y="207.5" ></text>
+</g>
+<g >
+<title>task:tee (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="229" width="5.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1537.77" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (6,463,829,764 microseconds, 7.00%)</title><rect x="271.2" y="149" width="124.6" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="274.18" y="159.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>axfs::fs::ext4::block_io::SharedBlockDevice::write_blocks (vendor/axfs/src/fs/ext4/block_io.rs:312) (14,414,432 microseconds, 0.02%)</title><rect x="1534.5" y="85" width="0.3" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="1537.49" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (15,937,483,483 microseconds, 17.26%)</title><rect x="646.3" y="197" width="307.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="649.27" y="207.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::fun..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (6,465,799,238 microseconds, 7.00%)</title><rect x="271.1" y="197" width="124.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="274.14" y="207.5" >&lt;alloc::boxed::..</text>
+</g>
+<g >
+<title>task:collect2 (62,730,244 microseconds, 0.07%)</title><rect x="1282.3" y="229" width="1.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1285.34" y="239.5" ></text>
+</g>
+<g >
+<title>-- (1,805,465,731 microseconds, 1.96%)</title><rect x="953.6" y="149" width="34.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="956.62" y="159.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (462,843,241 microseconds, 0.50%)</title><rect x="1283.6" y="165" width="8.9" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1286.60" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (1,970,766,147 microseconds, 2.13%)</title><rect x="11.3" y="165" width="38.0" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="14.26" y="175.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:755) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="85" width="0.4" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="1205.58" y="95.5" ></text>
+</g>
+<g >
+<title>-- (25,058,696 microseconds, 0.03%)</title><rect x="646.6" y="37" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="649.57" y="47.5" ></text>
+</g>
+<g >
+<title>task:tg-xtask (398,139,330 microseconds, 0.43%)</title><rect x="1540.3" y="229" width="7.7" height="15.0" fill="rgb(119,119,238)" rx="2" ry="2" />
+<text  x="1543.32" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (2,559,811,333 microseconds, 2.77%)</title><rect x="11.3" y="181" width="49.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="14.26" y="191.5" >star..</text>
+</g>
+<g >
+<title>-- (213,156,710 microseconds, 0.23%)</title><rect x="665.7" y="117" width="4.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="668.70" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (233,728,654 microseconds, 0.25%)</title><rect x="177.9" y="165" width="4.5" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="180.90" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:756) (193,632,687 microseconds, 0.21%)</title><rect x="207.9" y="165" width="3.8" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="210.92" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (373,311,196 microseconds, 0.40%)</title><rect x="1540.3" y="149" width="7.2" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1543.32" y="159.5" ></text>
+</g>
+<g >
+<title>task:cargo (7,834,267,436 microseconds, 8.49%)</title><rect x="60.6" y="229" width="151.1" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="63.61" y="239.5" >task:cargo</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (1,859,812,330 microseconds, 2.01%)</title><rect x="1306.7" y="165" width="35.9" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="1309.72" y="175.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (800,668,158 microseconds, 0.87%)</title><rect x="211.8" y="181" width="15.4" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="214.76" y="191.5" ></text>
+</g>
+<g >
+<title>-- (69,072,654 microseconds, 0.07%)</title><rect x="1281.0" y="117" width="1.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1284.00" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (17,822,625 microseconds, 0.02%)</title><rect x="1202.2" y="197" width="0.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1205.21" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (4,480,814,966 microseconds, 4.85%)</title><rect x="1548.0" y="181" width="86.4" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1550.99" y="191.5" >starry_ker..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (7,834,246,775 microseconds, 8.49%)</title><rect x="60.6" y="213" width="151.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="63.61" y="223.5" >&lt;alloc::sync::Arc&lt;T..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (992,227,424 microseconds, 1.07%)</title><rect x="646.6" y="165" width="19.1" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="649.57" y="175.5" ></text>
+</g>
+<g >
+<title>task:build-script-mai (2,559,817,963 microseconds, 2.77%)</title><rect x="11.3" y="229" width="49.3" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="14.26" y="239.5" >task..</text>
+</g>
+<g >
+<title>task:gc (11,507,183,005 microseconds, 12.46%)</title><rect x="395.8" y="229" width="221.9" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="398.84" y="239.5" >task:gc</text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (5,225,240,015 microseconds, 5.66%)</title><rect x="1433.2" y="133" width="100.8" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1436.22" y="143.5" >starry_kerne..</text>
+</g>
+<g >
+<title>-- (462,843,241 microseconds, 0.50%)</title><rect x="1283.6" y="117" width="8.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1286.60" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (799,319,876 microseconds, 0.87%)</title><rect x="211.8" y="149" width="15.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="214.78" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="149" width="5.5" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1537.77" y="159.5" ></text>
+</g>
+<g >
+<title>-- (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="117" width="5.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1537.77" y="127.5" ></text>
+</g>
+<g >
+<title>.L0 (vendor/axcpu/src/riscv/trap.rs:?) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="117" width="0.5" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="63.63" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (6,463,829,764 microseconds, 7.00%)</title><rect x="271.2" y="133" width="124.6" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="274.18" y="143.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>guest-wait:off-cpu-all (92,323,157,763 microseconds, 100.00%)</title><rect x="10.0" y="261" width="1780.0" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >guest-wait:off-cpu-all</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (6,464,016,871 microseconds, 7.00%)</title><rect x="271.2" y="165" width="124.6" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="274.18" y="175.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (1,970,766,147 microseconds, 2.13%)</title><rect x="11.3" y="133" width="38.0" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="14.26" y="143.5" >&lt;st..</text>
+</g>
+<g >
+<title>-- (18,115,606 microseconds, 0.02%)</title><rect x="618.1" y="117" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="621.06" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (2,279,464,612 microseconds, 2.47%)</title><rect x="227.2" y="213" width="43.9" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="230.20" y="223.5" >&lt;all..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::clone3::sys_clone3 (kernel/src/syscall/task/clone3.rs:116) (18,115,606 microseconds, 0.02%)</title><rect x="618.1" y="149" width="0.3" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="621.06" y="159.5" ></text>
+</g>
+<g >
+<title>-- (2,255,346,931 microseconds, 2.44%)</title><rect x="227.7" y="117" width="43.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="230.66" y="127.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:94) (14,814,604 microseconds, 0.02%)</title><rect x="1534.5" y="165" width="0.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1537.49" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (100,224,319 microseconds, 0.11%)</title><rect x="1199.4" y="197" width="2.0" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1202.43" y="207.5" ></text>
+</g>
+<g >
+<title>-- (3,217,876,212 microseconds, 3.49%)</title><rect x="1204.1" y="117" width="62.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1207.13" y="127.5" >--</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (966,961,909 microseconds, 1.05%)</title><rect x="647.1" y="133" width="18.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="650.06" y="143.5" ></text>
+</g>
+<g >
+<title>lock_api::rwlock::RwLock&lt;R,T&gt;::read (vendor/lock_api/src/rwlock.rs:458) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="69" width="0.4" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1205.58" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1421) (25,256,411 microseconds, 0.03%)</title><rect x="646.6" y="101" width="0.5" height="15.0" fill="rgb(117,117,235)" rx="2" ry="2" />
+<text  x="649.57" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll (kernel/src/syscall/io_mpx/poll.rs:60) (3,217,876,212 microseconds, 3.49%)</title><rect x="1204.1" y="149" width="62.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1207.13" y="159.5" >starry..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (1,970,766,147 microseconds, 2.13%)</title><rect x="11.3" y="149" width="38.0" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="14.26" y="159.5" >sta..</text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (1,805,465,731 microseconds, 1.96%)</title><rect x="953.6" y="165" width="34.8" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="956.62" y="175.5" >ax..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (128,980,147 microseconds, 0.14%)</title><rect x="1423.7" y="197" width="2.5" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1426.70" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;axnet::socket::Socket as axnet::socket::SocketOps&gt;::recv (vendor/axnet/src/socket.rs:166) (32,526,753 microseconds, 0.04%)</title><rect x="952.9" y="149" width="0.6" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="955.91" y="159.5" ></text>
+</g>
+<g >
+<title>-- (570,502,323 microseconds, 0.62%)</title><rect x="49.5" y="133" width="11.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="52.45" y="143.5" ></text>
+</g>
+<g >
+<title>lock_api::rwlock::RwLock&lt;R,T&gt;::read (vendor/lock_api/src/rwlock.rs:458) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="69" width="0.5" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="63.63" y="79.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (15,937,483,483 microseconds, 17.26%)</title><rect x="646.3" y="213" width="307.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="649.27" y="223.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Cl..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (4,116,195,297 microseconds, 4.46%)</title><rect x="1203.0" y="181" width="79.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1205.98" y="191.5" >starry_ke..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (kernel/src/mm/aspace/mod.rs:755) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="85" width="0.5" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="63.63" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (1,444,815,352 microseconds, 1.56%)</title><rect x="618.4" y="149" width="27.9" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="621.41" y="159.5" >s..</text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (35,122,170 microseconds, 0.04%)</title><rect x="1201.5" y="165" width="0.7" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1204.52" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (11,507,183,005 microseconds, 12.46%)</title><rect x="395.8" y="213" width="221.9" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="398.84" y="223.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as cor..</text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (1,859,812,330 microseconds, 2.01%)</title><rect x="1306.7" y="133" width="35.9" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1309.72" y="143.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="165" width="5.5" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1537.77" y="175.5" ></text>
+</g>
+<g >
+<title>task:gc (100,224,319 microseconds, 0.11%)</title><rect x="1199.4" y="229" width="2.0" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1202.43" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (992,227,424 microseconds, 1.07%)</title><rect x="646.6" y="149" width="19.1" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="649.57" y="159.5" ></text>
+</g>
+<g >
+<title>-- (10,923,253,638 microseconds, 11.83%)</title><rect x="988.5" y="149" width="210.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="991.53" y="159.5" >--</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (4,137,865,019 microseconds, 4.48%)</title><rect x="1202.6" y="197" width="79.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1205.56" y="207.5" >&lt;alloc::b..</text>
+</g>
+<g >
+<title>-- (20,879,387 microseconds, 0.02%)</title><rect x="1547.6" y="133" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1550.59" y="143.5" ></text>
+</g>
+<g >
+<title>-- (147,403,068 microseconds, 0.16%)</title><rect x="1426.5" y="117" width="2.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1429.52" y="127.5" ></text>
+</g>
+<g >
+<title>task:unknown (37,987,630 microseconds, 0.04%)</title><rect x="1201.5" y="229" width="0.7" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1204.47" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (128,980,147 microseconds, 0.14%)</title><rect x="1423.7" y="181" width="2.5" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1426.70" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::start_readahead_workers::{{closure}} (vendor/axfs/src/highlevel/file.rs:874) (10,928,452,978 microseconds, 11.84%)</title><rect x="988.4" y="181" width="210.7" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="991.43" y="191.5" >axfs::highlevel::file::star..</text>
+</g>
+<g >
+<title>task:unknown (12,737,285,779 microseconds, 13.80%)</title><rect x="953.6" y="229" width="245.5" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="956.56" y="239.5" >task:unknown</text>
+</g>
+<g >
+<title>-- (6,013,901,517 microseconds, 6.51%)</title><rect x="61.8" y="117" width="115.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="64.77" y="127.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (17,701,686 microseconds, 0.02%)</title><rect x="1202.2" y="181" width="0.4" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1205.21" y="191.5" ></text>
+</g>
+<g >
+<title>-- (1,859,812,330 microseconds, 2.01%)</title><rect x="1306.7" y="117" width="35.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1309.72" y="127.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (799,319,876 microseconds, 0.87%)</title><rect x="211.8" y="165" width="15.4" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="214.78" y="175.5" ></text>
+</g>
+<g >
+<title>starry_vm::vm_write_slice (vendor/starry-vm/src/lib.rs:80) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="149" width="0.4" height="15.0" fill="rgb(102,102,224)" rx="2" ry="2" />
+<text  x="1205.58" y="159.5" ></text>
+</g>
+<g >
+<title>-- (41,708,653 microseconds, 0.05%)</title><rect x="10.2" y="117" width="0.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="13.16" y="127.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (838,799,430 microseconds, 0.91%)</title><rect x="1634.8" y="165" width="16.2" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1637.79" y="175.5" ></text>
+</g>
+<g >
+<title>-- (11,507,183,005 microseconds, 12.46%)</title><rect x="395.8" y="181" width="221.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="398.84" y="191.5" >--</text>
+</g>
+<g >
+<title>-- (6,463,829,764 microseconds, 7.00%)</title><rect x="271.2" y="117" width="124.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="274.18" y="127.5" >--</text>
+</g>
+<g >
+<title>task:gc (4,185,720,064 microseconds, 4.53%)</title><rect x="1342.8" y="229" width="80.7" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1345.79" y="239.5" >task:gc</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (147,403,068 microseconds, 0.16%)</title><rect x="1426.5" y="133" width="2.9" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1429.52" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll::{{closure}} (kernel/src/syscall/io_mpx/poll.rs:61) (41,708,653 microseconds, 0.05%)</title><rect x="10.2" y="133" width="0.8" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="13.16" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (729,039,772 microseconds, 0.79%)</title><rect x="1292.7" y="149" width="14.0" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1295.65" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (62,730,244 microseconds, 0.07%)</title><rect x="1282.3" y="213" width="1.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1285.34" y="223.5" ></text>
+</g>
+<g >
+<title>-- (966,961,909 microseconds, 1.05%)</title><rect x="647.1" y="117" width="18.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="650.06" y="127.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (25,058,696 microseconds, 0.03%)</title><rect x="646.6" y="53" width="0.5" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="649.57" y="63.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:320) (3,223,430,804 microseconds, 3.49%)</title><rect x="1204.1" y="165" width="62.2" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1207.13" y="175.5" >starry..</text>
+</g>
+<g >
+<title>-- (1,312,142,565 microseconds, 1.42%)</title><rect x="182.6" y="117" width="25.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="185.60" y="127.5" >--</text>
+</g>
+<g >
+<title>task:rustc (5,613,279,990 microseconds, 6.08%)</title><rect x="1426.3" y="229" width="108.2" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1429.26" y="239.5" >task:rustc</text>
+</g>
+<g >
+<title>-- (128,376,148 microseconds, 0.14%)</title><rect x="1423.7" y="133" width="2.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1426.71" y="143.5" ></text>
+</g>
+<g >
+<title>task:cargo (4,138,102,698 microseconds, 4.48%)</title><rect x="1202.6" y="229" width="79.7" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="1205.55" y="239.5" >task:cargo</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (12,737,285,779 microseconds, 13.80%)</title><rect x="953.6" y="213" width="245.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="956.56" y="223.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as core::..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,860,476,643 microseconds, 2.02%)</title><rect x="1306.7" y="197" width="35.9" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1309.71" y="207.5" >&lt;al..</text>
+</g>
+<g >
+<title>axnet::general::GeneralOptions::recv_poller (vendor/axnet/src/general.rs:172) (32,526,753 microseconds, 0.04%)</title><rect x="952.9" y="133" width="0.6" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="955.91" y="143.5" ></text>
+</g>
+<g >
+<title>-- (59,518,657 microseconds, 0.06%)</title><rect x="1203.0" y="117" width="1.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1205.98" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,468,940,729 microseconds, 1.59%)</title><rect x="617.9" y="197" width="28.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="620.95" y="207.5" >&lt;a..</text>
+</g>
+<g >
+<title>-- (14,673,415,067 microseconds, 15.89%)</title><rect x="670.0" y="117" width="282.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="673.00" y="127.5" >--</text>
+</g>
+<g >
+<title>.L0 (vendor/axcpu/src/riscv/trap.rs:?) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="117" width="0.4" height="15.0" fill="rgb(137,137,253)" rx="2" ry="2" />
+<text  x="1205.58" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (2,255,346,931 microseconds, 2.44%)</title><rect x="227.7" y="133" width="43.4" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="230.66" y="143.5" >star..</text>
+</g>
+<g >
+<title>axnet::general::GeneralOptions::recv_poller (vendor/axnet/src/general.rs:172) (193,632,687 microseconds, 0.21%)</title><rect x="207.9" y="133" width="3.8" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="210.92" y="143.5" ></text>
+</g>
+<g >
+<title>-- (7,211,366,813 microseconds, 7.81%)</title><rect x="1651.0" y="149" width="139.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1653.96" y="159.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (14,814,604 microseconds, 0.02%)</title><rect x="1534.5" y="181" width="0.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1537.49" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::block_io::SharedBlockDevice::read_blocks (vendor/axfs/src/fs/ext4/block_io.rs:304) (25,059,185 microseconds, 0.03%)</title><rect x="646.6" y="69" width="0.5" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="649.57" y="79.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll::{{closure}} (kernel/src/syscall/io_mpx/poll.rs:61) (6,013,901,517 microseconds, 6.51%)</title><rect x="61.8" y="133" width="115.9" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="64.77" y="143.5" >starry_kernel:..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::schedule::sys_clock_nanosleep (kernel/src/syscall/task/schedule.rs:112) (570,502,323 microseconds, 0.62%)</title><rect x="49.5" y="149" width="11.0" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="52.45" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:555) (18,115,606 microseconds, 0.02%)</title><rect x="618.1" y="165" width="0.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="621.06" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::block_io::SharedBlockDevice::wait_for_interrupt (vendor/axfs/src/fs/ext4/block_io.rs:175) (17,405,779 microseconds, 0.02%)</title><rect x="1634.5" y="165" width="0.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1637.45" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::writeback_dirty_pages_in_cache (vendor/axfs/src/highlevel/file.rs:2099) (14,419,031 microseconds, 0.02%)</title><rect x="1534.5" y="133" width="0.3" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1537.49" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:756) (26,272,225 microseconds, 0.03%)</title><rect x="1534.0" y="165" width="0.5" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="1536.97" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (2,559,811,333 microseconds, 2.77%)</title><rect x="11.3" y="197" width="49.3" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="14.26" y="207.5" >&lt;all..</text>
+</g>
+<g >
+<title>task:build-script-bui (65,119,999 microseconds, 0.07%)</title><rect x="10.0" y="229" width="1.3" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:320) (41,708,653 microseconds, 0.05%)</title><rect x="10.2" y="165" width="0.8" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="13.16" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:756) (69,072,654 microseconds, 0.07%)</title><rect x="1281.0" y="165" width="1.3" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="1284.00" y="175.5" ></text>
+</g>
+<g >
+<title>task:sync (14,817,119 microseconds, 0.02%)</title><rect x="1534.5" y="229" width="0.3" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1537.49" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (1,860,434,915 microseconds, 2.02%)</title><rect x="1306.7" y="181" width="35.9" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1309.71" y="191.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::task::rseq::&lt;impl starry_kernel::task::Thread&gt;::prepare_rseq (kernel/src/task/rseq.rs:147) (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="165" width="0.5" height="15.0" fill="rgb(131,131,247)" rx="2" ry="2" />
+<text  x="63.63" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (37,987,630 microseconds, 0.04%)</title><rect x="1201.5" y="197" width="0.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1204.47" y="207.5" ></text>
+</g>
+<g >
+<title>axnet::general::GeneralOptions::recv_poller (vendor/axnet/src/general.rs:172) (69,072,654 microseconds, 0.07%)</title><rect x="1281.0" y="133" width="1.3" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1284.00" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (7,834,246,775 microseconds, 8.49%)</title><rect x="60.6" y="197" width="151.1" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="63.61" y="207.5" >&lt;alloc::boxed::Box&lt;..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,201,416,677 microseconds, 1.30%)</title><rect x="1283.5" y="197" width="23.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1286.55" y="207.5" >&lt;..</text>
+</g>
+<g >
+<title>-- (1,444,815,352 microseconds, 1.56%)</title><rect x="618.4" y="133" width="27.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="621.41" y="143.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (5,609,029,093 microseconds, 6.08%)</title><rect x="1426.3" y="181" width="108.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1429.33" y="191.5" >starry_kernel..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll (kernel/src/syscall/io_mpx/poll.rs:60) (213,156,710 microseconds, 0.23%)</title><rect x="665.7" y="149" width="4.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="668.70" y="159.5" ></text>
+</g>
+<g >
+<title>-- (196,254,987 microseconds, 0.21%)</title><rect x="1429.4" y="117" width="3.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1432.36" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (7,808,501,763 microseconds, 8.46%)</title><rect x="61.1" y="181" width="150.6" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="64.11" y="191.5" >starry_kernel::task..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::io_mpx::poll::do_poll (kernel/src/syscall/io_mpx/poll.rs:60) (196,254,987 microseconds, 0.21%)</title><rect x="1429.4" y="149" width="3.7" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1432.36" y="159.5" ></text>
+</g>
+<g >
+<title>task:ctrl-c (6,465,799,238 microseconds, 7.00%)</title><rect x="271.1" y="229" width="124.7" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="274.14" y="239.5" >task:ctrl-c</text>
+</g>
+<g >
+<title>axfs::highlevel::file::start_readahead_workers::{{closure}} (vendor/axfs/src/highlevel/file.rs:874) (35,167,648 microseconds, 0.04%)</title><rect x="1201.5" y="181" width="0.7" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1204.52" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (398,138,186 microseconds, 0.43%)</title><rect x="1540.3" y="197" width="7.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1543.32" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::RawAddrSpaceRwLock as lock_api::rwlock::RawRwLock&gt;::lock_shared (kernel/src/mm/aspace/mod.rs:52) (17,679,311 microseconds, 0.02%)</title><rect x="227.3" y="117" width="0.4" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="230.32" y="127.5" ></text>
+</g>
+<g >
+<title>-- (729,039,772 microseconds, 0.79%)</title><rect x="1292.7" y="117" width="14.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1295.65" y="127.5" ></text>
+</g>
+<g >
+<title>-- (62,045,746 microseconds, 0.07%)</title><rect x="1282.4" y="133" width="1.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1285.35" y="143.5" ></text>
+</g>
+<g >
+<title>axnet::general::GeneralOptions::recv_poller (vendor/axnet/src/general.rs:172) (26,272,225 microseconds, 0.03%)</title><rect x="1534.0" y="133" width="0.5" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1536.97" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (1,198,773,530 microseconds, 1.30%)</title><rect x="1283.6" y="181" width="23.1" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1286.60" y="191.5" >s..</text>
+</g>
+<g >
+<title>-- (32,526,753 microseconds, 0.04%)</title><rect x="952.9" y="117" width="0.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="955.91" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (62,045,746 microseconds, 0.07%)</title><rect x="1282.4" y="149" width="1.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1285.35" y="159.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (10,923,253,638 microseconds, 11.83%)</title><rect x="988.5" y="165" width="210.6" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="991.53" y="175.5" >axtask::wait_queue::WaitQue..</text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (18,115,606 microseconds, 0.02%)</title><rect x="618.1" y="133" width="0.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="621.06" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:320) (196,254,987 microseconds, 0.21%)</title><rect x="1429.4" y="165" width="3.7" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1432.36" y="175.5" ></text>
+</g>
+<g >
+<title>-- (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="37" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="63.63" y="47.5" ></text>
+</g>
+<g >
+<title>all (92,323,157,763 microseconds, 100%)</title><rect x="10.0" y="277" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" ></text>
+</g>
+<g >
+<title>-- (14,414,432 microseconds, 0.02%)</title><rect x="1534.5" y="53" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1537.49" y="63.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::Inode::write_cached_at (vendor/axfs/src/fs/ext4/inode.rs:107) (14,418,613 microseconds, 0.02%)</title><rect x="1534.5" y="101" width="0.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1537.49" y="111.5" ></text>
+</g>
+<g >
+<title>task:unknown (8,067,905,389 microseconds, 8.74%)</title><rect x="1634.4" y="229" width="155.6" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1637.45" y="239.5" >task:unknown</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (398,137,879 microseconds, 0.43%)</title><rect x="1540.3" y="181" width="7.7" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1543.32" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (62,045,746 microseconds, 0.07%)</title><rect x="1282.4" y="165" width="1.1" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="1285.35" y="175.5" ></text>
+</g>
+<g >
+<title>-- (593,792,357 microseconds, 0.64%)</title><rect x="1269.5" y="117" width="11.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1272.54" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sync::futex::sys_futex (kernel/src/syscall/sync/futex.rs:75) (5,225,240,015 microseconds, 5.66%)</title><rect x="1433.2" y="149" width="100.8" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1436.22" y="159.5" >starry_kerne..</text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (vendor/axtask/src/wait_queue.rs:65) (14,414,432 microseconds, 0.02%)</title><rect x="1534.5" y="69" width="0.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1537.49" y="79.5" ></text>
+</g>
+<g >
+<title>task:riscv64-linux-gn (1,469,016,293 microseconds, 1.59%)</title><rect x="617.9" y="229" width="28.4" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="620.94" y="239.5" >ta..</text>
+</g>
+<g >
+<title>starry_kernel::task::futex::WaitQueue::wait_if (kernel/src/task/futex.rs:63) (729,039,772 microseconds, 0.79%)</title><rect x="1292.7" y="133" width="14.0" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1295.65" y="143.5" ></text>
+</g>
+<g >
+<title>-- (26,272,225 microseconds, 0.03%)</title><rect x="1534.0" y="117" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1536.97" y="127.5" ></text>
+</g>
+<g >
+<title>task:ctrl-c (1,860,476,643 microseconds, 2.02%)</title><rect x="1306.7" y="229" width="35.9" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1309.71" y="239.5" >tas..</text>
+</g>
+<g >
+<title>-- (4,480,765,565 microseconds, 4.85%)</title><rect x="1548.0" y="117" width="86.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1551.00" y="127.5" >--</text>
+</g>
+<g >
+<title>-- (232,929,509 microseconds, 0.25%)</title><rect x="177.9" y="133" width="4.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="180.90" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (8,067,905,389 microseconds, 8.74%)</title><rect x="1634.4" y="197" width="155.6" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1637.45" y="207.5" >&lt;alloc::boxed::Box&lt;..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (2,559,811,333 microseconds, 2.77%)</title><rect x="11.3" y="213" width="49.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="14.26" y="223.5" >&lt;all..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:565) (1,444,815,352 microseconds, 1.56%)</title><rect x="618.4" y="165" width="27.9" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="621.41" y="175.5" >s..</text>
+</g>
+<g >
+<title>-- (1,970,766,147 microseconds, 2.13%)</title><rect x="11.3" y="117" width="38.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="14.26" y="127.5" >--</text>
+</g>
+<g >
+<title>enter_user (24,513,454 microseconds, 0.03%)</title><rect x="60.6" y="133" width="0.5" height="15.0" fill="rgb(87,87,211)" rx="2" ry="2" />
+<text  x="63.63" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (160,752,529 microseconds, 0.17%)</title><rect x="1266.3" y="149" width="3.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1269.29" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (65,119,999 microseconds, 0.07%)</title><rect x="10.0" y="213" width="1.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_sync (kernel/src/syscall/fs/ctl.rs:1336) (14,814,604 microseconds, 0.02%)</title><rect x="1534.5" y="149" width="0.3" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="1537.49" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (62,730,244 microseconds, 0.07%)</title><rect x="1282.3" y="181" width="1.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1285.34" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (2,279,464,612 microseconds, 2.47%)</title><rect x="227.2" y="197" width="43.9" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="230.20" y="207.5" >&lt;all..</text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::pipe::Pipe as starry_kernel::file::FileLike&gt;::read (kernel/src/file/pipe.rs:289) (373,310,024 microseconds, 0.40%)</title><rect x="1540.3" y="133" width="7.2" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1543.32" y="143.5" ></text>
+</g>
+<g >
+<title>task:riscv64-linux-gn (128,982,617 microseconds, 0.14%)</title><rect x="1423.7" y="229" width="2.5" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="1426.70" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (287,605,887 microseconds, 0.31%)</title><rect x="1534.8" y="213" width="5.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1537.77" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (4,185,720,064 microseconds, 4.53%)</title><rect x="1342.8" y="213" width="80.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1345.79" y="223.5" >&lt;alloc::s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:620) (14,676,706,974 microseconds, 15.90%)</title><rect x="669.9" y="165" width="283.0" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="672.94" y="175.5" >starry_kernel::syscall::handle_syscal..</text>
+</g>
+<g >
+<title>-- (5,225,240,015 microseconds, 5.66%)</title><rect x="1433.2" y="117" width="100.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1436.22" y="127.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (20,879,387 microseconds, 0.02%)</title><rect x="1547.6" y="149" width="0.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1550.59" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (373,311,196 microseconds, 0.40%)</title><rect x="1540.3" y="165" width="7.2" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1543.32" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:188) (20,663,662 microseconds, 0.02%)</title><rect x="1202.6" y="181" width="0.4" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1205.58" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::wait::sys_waitpid (kernel/src/syscall/task/wait.rs:415) (128,376,148 microseconds, 0.14%)</title><rect x="1423.7" y="149" width="2.5" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1426.71" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axnet::socket::Socket as axnet::socket::SocketOps&gt;::recv (vendor/axnet/src/socket.rs:166) (26,272,225 microseconds, 0.03%)</title><rect x="1534.0" y="149" width="0.5" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="1536.97" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,860,476,643 microseconds, 2.02%)</title><rect x="1306.7" y="213" width="35.9" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1309.71" y="223.5" >&lt;al..</text>
+</g>
+</g>
+</svg>

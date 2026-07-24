@@ -38,8 +38,8 @@ pub enum ProfileEvent {
     MprotectSealLockWait = 13,
     /// Time spent scanning mapping records for a write-sealed shared mapping.
     MprotectSealScan = 14,
-    /// Time spent updating page-table permissions.
-    MprotectPageTable = 15,
+    /// Time spent validating and updating the current mm's VMAs and PTEs.
+    MprotectLocalUpdate = 15,
     /// Contended acquisition time for the mapping-record lock before an update.
     MprotectRecordLockWait = 16,
     /// Time spent rebuilding mapping records after permissions change.

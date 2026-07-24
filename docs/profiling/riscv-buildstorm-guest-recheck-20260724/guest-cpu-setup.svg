@@ -1,0 +1,1330 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="358" onload="init(evt)" viewBox="0 0 1800 358" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="358.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Moss guest CPU - setup</text>
+<text id="details" x="10.00" y="341" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="341" > </text>
+<g id="frames">
+<g >
+<title>axtask::wait_queue::WaitQueue::notify_many (/tmp/moss-profile-ea78/vendor/axtask/src/wait_queue.rs:125) (1 samples, 0.21%)</title><rect x="1676.6" y="133" width="3.8" height="15.0" fill="rgb(233,128,30)" rx="2" ry="2" />
+<text  x="1679.62" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axsync::mutex::RawMutex as lock_api::mutex::RawMutex&gt;::lock (/tmp/moss-profile-ea78/vendor/axsync/src/mutex.rs:?) (1 samples, 0.21%)</title><rect x="1718.2" y="117" width="3.8" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="1721.20" y="127.5" ></text>
+</g>
+<g >
+<title>all (471 samples, 100%)</title><rect x="10.0" y="309" width="1780.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" ></text>
+</g>
+<g >
+<title>&lt;axtask::api::KernelGuardIfImpl as kernel_guard::KernelGuardIf&gt;::disable_preempt (/tmp/moss-profile-ea78/vendor/axtask/src/api.rs:61) (1 samples, 0.21%)</title><rect x="28.9" y="165" width="3.8" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="31.90" y="175.5" ></text>
+</g>
+<g >
+<title>kernel_guard::arch::riscv::local_irq_save_and_disable (/tmp/moss-profile-ea78/vendor/kernel_guard/src/arch/riscv.rs:10) (1 samples, 0.21%)</title><rect x="1699.3" y="181" width="3.8" height="15.0" fill="rgb(253,225,53)" rx="2" ry="2" />
+<text  x="1702.30" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_folio_page (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1260) (1 samples, 0.21%)</title><rect x="1756.0" y="149" width="3.8" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="1758.99" y="159.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (3 samples, 0.64%)</title><rect x="1767.3" y="133" width="11.4" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="1770.32" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::Backend::commit_fault (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:195) (2 samples, 0.42%)</title><rect x="1691.7" y="197" width="7.6" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="1694.74" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::mm::mmap::sys_mprotect (/tmp/moss-profile-ea78/kernel/src/syscall/mm/mmap.rs:769) (1 samples, 0.21%)</title><rect x="1733.3" y="181" width="3.8" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1736.31" y="191.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::release (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:177) (1 samples, 0.21%)</title><rect x="1767.3" y="85" width="3.8" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1770.32" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::reclaim_process_address_space (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:114) (3 samples, 0.64%)</title><rect x="1718.2" y="181" width="11.3" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1721.20" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::readahead (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1531) (1 samples, 0.21%)</title><rect x="25.1" y="149" width="3.8" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="28.12" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1 samples, 0.21%)</title><rect x="74.2" y="245" width="3.8" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="77.25" y="255.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:250) (2 samples, 0.42%)</title><rect x="1752.2" y="181" width="7.6" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="1755.21" y="191.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::alloc (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/alloc.rs:93) (1 samples, 0.21%)</title><rect x="25.1" y="133" width="3.8" height="15.0" fill="rgb(236,146,34)" rx="2" ry="2" />
+<text  x="28.12" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axtask::api::KernelGuardIfImpl as kernel_guard::KernelGuardIf&gt;::disable_preempt (/tmp/moss-profile-ea78/vendor/axtask/src/api.rs:61) (1 samples, 0.21%)</title><rect x="1669.1" y="117" width="3.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1672.07" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1421) (1 samples, 0.21%)</title><rect x="1665.3" y="149" width="3.8" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="1668.29" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:575) (10 samples, 2.12%)</title><rect x="1661.5" y="213" width="37.8" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="1664.51" y="223.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:575) (4 samples, 0.85%)</title><rect x="1752.2" y="213" width="15.1" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="1755.21" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;core::slice::iter::Iter&lt;T&gt; as core::iter::traits::iterator::Iterator&gt;::next (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/iter/macros.rs:179) (1 samples, 0.21%)</title><rect x="1672.8" y="149" width="3.8" height="15.0" fill="rgb(242,171,41)" rx="2" ry="2" />
+<text  x="1675.85" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::cow::CowBackend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:767) (4 samples, 0.85%)</title><rect x="47.8" y="133" width="15.1" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="50.79" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::cow::CowBackend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:?) (1 samples, 0.21%)</title><rect x="36.5" y="133" width="3.7" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="39.45" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::do_exit (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:270) (1 samples, 0.21%)</title><rect x="1714.4" y="181" width="3.8" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="1717.42" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::do_exit (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:270) (1 samples, 0.21%)</title><rect x="44.0" y="181" width="3.8" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="47.01" y="191.5" ></text>
+</g>
+<g >
+<title>__MemIf_phys_to_virt (/tmp/moss-profile-ea78/vendor/axplat-riscv64-qemu-virt/src/mem.rs:10) (1 samples, 0.21%)</title><rect x="1771.1" y="85" width="3.8" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1774.10" y="95.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::unmap (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:501) (1 samples, 0.21%)</title><rect x="1771.1" y="101" width="3.8" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="1774.10" y="111.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::release (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:177) (1 samples, 0.21%)</title><rect x="1676.6" y="37" width="3.8" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1679.62" y="47.5" ></text>
+</g>
+<g >
+<title>guest-cpu (471 samples, 100.00%)</title><rect x="10.0" y="293" width="1780.0" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" >guest-cpu</text>
+</g>
+<g >
+<title>starry_kernel::task::signal::check_signals (/tmp/moss-profile-ea78/kernel/src/task/signal.rs:?) (1 samples, 0.21%)</title><rect x="74.2" y="197" width="3.8" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="77.25" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:197) (8 samples, 1.70%)</title><rect x="44.0" y="213" width="30.2" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="47.01" y="223.5" >st..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:279) (1 samples, 0.21%)</title><rect x="1763.5" y="181" width="3.8" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="1766.55" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::as_dir (/tmp/moss-profile-ea78/vendor/axfs-ng-vfs/src/node/mod.rs:766) (1 samples, 0.21%)</title><rect x="13.8" y="117" width="3.8" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="16.78" y="127.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until::{{closure}} (/tmp/moss-profile-ea78/vendor/axtask/src/wait_queue.rs:67) (1 samples, 0.21%)</title><rect x="1786.2" y="181" width="3.8" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="1789.22" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axtask::future::AxWaker as alloc::task::Wake&gt;::wake (/tmp/moss-profile-ea78/vendor/axtask/src/future/mod.rs:86) (1 samples, 0.21%)</title><rect x="1676.6" y="69" width="3.8" height="15.0" fill="rgb(227,103,24)" rx="2" ry="2" />
+<text  x="1679.62" y="79.5" ></text>
+</g>
+<g >
+<title>axtask::future::block_on (/tmp/moss-profile-ea78/vendor/axtask/src/future/mod.rs:109) (1 samples, 0.21%)</title><rect x="1756.0" y="117" width="3.8" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1758.99" y="127.5" ></text>
+</g>
+<g >
+<title>task:rustc (20 samples, 4.25%)</title><rect x="1661.5" y="261" width="75.6" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="1664.51" y="271.5" >task:rustc</text>
+</g>
+<g >
+<title>task:rustfmt (4 samples, 0.85%)</title><rect x="1737.1" y="261" width="15.1" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="1740.09" y="271.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (54 samples, 11.46%)</title><rect x="78.0" y="245" width="204.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="81.03" y="255.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as ..</text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (2 samples, 0.42%)</title><rect x="17.6" y="117" width="7.5" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="20.56" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::reclaim_process_address_space (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:114) (2 samples, 0.42%)</title><rect x="1744.6" y="181" width="7.6" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1747.65" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::alloc_frame (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:53) (1 samples, 0.21%)</title><rect x="1759.8" y="165" width="3.7" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1762.77" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:67) (2 samples, 0.42%)</title><rect x="32.7" y="213" width="7.5" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="35.68" y="223.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::protect_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:96) (1 samples, 0.21%)</title><rect x="1733.3" y="165" width="3.8" height="15.0" fill="rgb(221,75,18)" rx="2" ry="2" />
+<text  x="1736.31" y="175.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::release (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:177) (1 samples, 0.21%)</title><rect x="1729.5" y="133" width="3.8" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1732.53" y="143.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::id (/tmp/moss-profile-ea78/vendor/axtask/src/task.rs:156) (1 samples, 0.21%)</title><rect x="1786.2" y="165" width="3.8" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="1789.22" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;page_table_entry::arch::riscv::Rv64PTE as page_table_entry::GenericPTE&gt;::is_huge (/tmp/moss-profile-ea78/vendor/page_table_entry/src/arch/riscv.rs:128) (1 samples, 0.21%)</title><rect x="62.9" y="117" width="3.8" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="65.91" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::AddrSpace as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:766) (3 samples, 0.64%)</title><rect x="1767.3" y="149" width="11.4" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1770.32" y="159.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/alloc.rs:113) (1 samples, 0.21%)</title><rect x="1729.5" y="149" width="3.8" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1732.53" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axtask::api::KernelGuardIfImpl as kernel_guard::KernelGuardIf&gt;::enable_preempt (/tmp/moss-profile-ea78/vendor/axtask/src/api.rs:67) (1 samples, 0.21%)</title><rect x="32.7" y="101" width="3.8" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="35.68" y="111.5" ></text>
+</g>
+<g >
+<title>task:futures-timer (1 samples, 0.21%)</title><rect x="74.2" y="261" width="3.8" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="77.25" y="271.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;G,T&gt;::lock (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:78) (1 samples, 0.21%)</title><rect x="28.9" y="197" width="3.8" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="31.90" y="207.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;G,T&gt;::lock (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:78) (1 samples, 0.21%)</title><rect x="1699.3" y="197" width="3.8" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="1702.30" y="207.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;lock_api::mutex::MutexGuard&lt;axsync::mutex::RawMutex,axfs::highlevel::fs::FsContext&gt;&gt; (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:524) (1 samples, 0.21%)</title><rect x="51.6" y="117" width="3.8" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="54.57" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (20 samples, 4.25%)</title><rect x="1661.5" y="229" width="75.6" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1664.51" y="239.5" >&lt;alloc::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_faccessat2 (/tmp/moss-profile-ea78/kernel/src/syscall/fs/stat.rs:382) (1 samples, 0.21%)</title><rect x="1729.5" y="181" width="3.8" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="1732.53" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (7 samples, 1.49%)</title><rect x="47.8" y="149" width="26.4" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="50.79" y="159.5" >&lt;..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::start_readahead_workers::{{closure}} (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:874) (3 samples, 0.64%)</title><rect x="1778.7" y="213" width="11.3" height="15.0" fill="rgb(248,197,47)" rx="2" ry="2" />
+<text  x="1781.66" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:188) (2 samples, 0.42%)</title><rect x="1706.9" y="213" width="7.5" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="1709.86" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (20 samples, 4.25%)</title><rect x="1661.5" y="245" width="75.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1664.51" y="255.5" >&lt;alloc::..</text>
+</g>
+<g >
+<title>alloc::collections::btree::remove::&lt;impl alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut,K,V,alloc::collections::btree::node::marker::LeafOrInternal&gt;,alloc::collections::btree::node::marker::KV&gt;&gt;::remove_kv_tracking (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/btree/remove.rs:19) (1 samples, 0.21%)</title><rect x="55.4" y="85" width="3.7" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="58.35" y="95.5" ></text>
+</g>
+<g >
+<title>event_listener::Event&lt;T&gt;::notify (/tmp/moss-profile-ea78/vendor/event-listener/src/lib.rs:456) (1 samples, 0.21%)</title><rect x="1676.6" y="117" width="3.8" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="1679.62" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:182) (1 samples, 0.21%)</title><rect x="1699.3" y="213" width="3.8" height="15.0" fill="rgb(251,211,50)" rx="2" ry="2" />
+<text  x="1702.30" y="223.5" ></text>
+</g>
+<g >
+<title>__KernelGuardIf_disable_preempt (/tmp/moss-profile-ea78/vendor/axtask/src/api.rs:58) (1 samples, 0.21%)</title><rect x="1748.4" y="117" width="3.8" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1751.43" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::ops::drop::Drop&gt;::drop (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2686) (1 samples, 0.21%)</title><rect x="32.7" y="133" width="3.8" height="15.0" fill="rgb(248,197,47)" rx="2" ry="2" />
+<text  x="35.68" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (54 samples, 11.46%)</title><rect x="78.0" y="229" width="204.1" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="81.03" y="239.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as..</text>
+</g>
+<g >
+<title>kernel_guard::arch::riscv::local_irq_save_and_disable (/tmp/moss-profile-ea78/vendor/kernel_guard/src/arch/riscv.rs:10) (1 samples, 0.21%)</title><rect x="1691.7" y="133" width="3.8" height="15.0" fill="rgb(253,225,53)" rx="2" ry="2" />
+<text  x="1694.74" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::reclaim_process_address_space (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:114) (2 samples, 0.42%)</title><rect x="32.7" y="181" width="7.5" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="35.68" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (7 samples, 1.49%)</title><rect x="1752.2" y="229" width="26.5" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1755.21" y="239.5" >&lt;..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (/tmp/moss-profile-ea78/kernel/src/syscall/mod.rs:501) (3 samples, 0.64%)</title><rect x="13.8" y="197" width="11.3" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="16.78" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:2393) (1 samples, 0.21%)</title><rect x="1665.3" y="165" width="3.8" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="1668.29" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (/tmp/moss-profile-ea78/kernel/src/syscall/mod.rs:501) (3 samples, 0.64%)</title><rect x="1767.3" y="197" width="11.4" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="1770.32" y="207.5" ></text>
+</g>
+<g >
+<title>core::cmp::impls::&lt;impl core::cmp::Ord for u32&gt;::cmp (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/cmp.rs:1939) (2 samples, 0.42%)</title><rect x="1680.4" y="149" width="7.6" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="1683.40" y="159.5" ></text>
+</g>
+<g >
+<title>axtask::run_queue::current_run_queue (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:79) (364 samples, 77.28%)</title><rect x="282.1" y="245" width="1375.6" height="15.0" fill="rgb(212,33,8)" rx="2" ry="2" />
+<text  x="285.10" y="255.5" >axtask::run_queue::current_run_queue (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:79)</text>
+</g>
+<g >
+<title>crc32 (target/riscv64gc-unknown-none-elf/release/build/lwext4_rust-3e3dd31ec36d4df2/out/c/lwext4/src/ext4_crc32.c:170) (1 samples, 0.21%)</title><rect x="40.2" y="245" width="3.8" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="43.23" y="255.5" ></text>
+</g>
+<g >
+<title>axplat::percpu::CPU_ID_WRAPPER::read_current (/tmp/moss-profile-ea78/vendor/axplat/src/percpu.rs:1) (1 samples, 0.21%)</title><rect x="1706.9" y="197" width="3.7" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="1709.86" y="207.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::id (/tmp/moss-profile-ea78/vendor/axtask/src/task.rs:156) (1 samples, 0.21%)</title><rect x="1752.2" y="149" width="3.8" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="1755.21" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1386) (1 samples, 0.21%)</title><rect x="1737.1" y="165" width="3.8" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="1740.09" y="175.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;lock_api::mutex::MutexGuard&lt;axsync::mutex::RawMutex,axfs::highlevel::file::SleepRwState&gt;&gt; (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ptr/mod.rs:524) (1 samples, 0.21%)</title><rect x="1740.9" y="149" width="3.7" height="15.0" fill="rgb(248,200,47)" rx="2" ry="2" />
+<text  x="1743.87" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::alloc_frame (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:53) (1 samples, 0.21%)</title><rect x="1669.1" y="165" width="3.7" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1672.07" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:250) (1 samples, 0.21%)</title><rect x="1665.3" y="181" width="3.8" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="1668.29" y="191.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (7 samples, 1.49%)</title><rect x="47.8" y="165" width="26.4" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="50.79" y="175.5" >m..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::ops::drop::Drop&gt;::drop (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2686) (2 samples, 0.42%)</title><rect x="17.6" y="165" width="7.5" height="15.0" fill="rgb(248,197,47)" rx="2" ry="2" />
+<text  x="20.56" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;page_table_entry::arch::riscv::Rv64PTE as page_table_entry::GenericPTE&gt;::is_huge (/tmp/moss-profile-ea78/vendor/page_table_entry/src/arch/riscv.rs:128) (1 samples, 0.21%)</title><rect x="21.3" y="85" width="3.8" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="24.34" y="95.5" ></text>
+</g>
+<g >
+<title>axtask::task::CurrentTask::try_get (/tmp/moss-profile-ea78/vendor/axtask/src/task.rs:539) (1 samples, 0.21%)</title><rect x="1665.3" y="101" width="3.8" height="15.0" fill="rgb(234,133,32)" rx="2" ry="2" />
+<text  x="1668.29" y="111.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::unmap (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:501) (1 samples, 0.21%)</title><rect x="74.2" y="133" width="3.8" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="77.25" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::FilePageRefs::remove (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:120) (1 samples, 0.21%)</title><rect x="17.6" y="85" width="3.7" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="20.56" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;kspin::base::BaseSpinLockGuard&lt;G,T&gt; as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:226) (1 samples, 0.21%)</title><rect x="1759.8" y="149" width="3.7" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="1762.77" y="159.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64&lt;M,PTE,H&gt;::query (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:71) (1 samples, 0.21%)</title><rect x="44.0" y="149" width="3.8" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="47.01" y="159.5" ></text>
+</g>
+<g >
+<title>axtask::run_queue::current_run_queue (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:79) (54 samples, 11.46%)</title><rect x="78.0" y="197" width="204.1" height="15.0" fill="rgb(212,33,8)" rx="2" ry="2" />
+<text  x="81.03" y="207.5" >axtask::run_queue::current..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (3 samples, 0.64%)</title><rect x="1778.7" y="245" width="11.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1781.66" y="255.5" ></text>
+</g>
+<g >
+<title>&lt;axsync::mutex::RawMutex as lock_api::mutex::RawMutex&gt;::lock (/tmp/moss-profile-ea78/vendor/axsync/src/mutex.rs:?) (1 samples, 0.21%)</title><rect x="47.8" y="117" width="3.8" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="50.79" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;core::slice::iter::Iter&lt;T&gt; as core::iter::traits::iterator::Iterator&gt;::next (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/slice/iter/macros.rs:179) (1 samples, 0.21%)</title><rect x="1763.5" y="149" width="3.8" height="15.0" fill="rgb(242,171,41)" rx="2" ry="2" />
+<text  x="1766.55" y="159.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (2 samples, 0.42%)</title><rect x="1744.6" y="165" width="7.6" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="1747.65" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:274) (1 samples, 0.21%)</title><rect x="1759.8" y="181" width="3.7" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="1762.77" y="191.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::unmap (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:501) (1 samples, 0.21%)</title><rect x="21.3" y="101" width="3.8" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="24.34" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::reclaim_process_address_space (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:114) (7 samples, 1.49%)</title><rect x="47.8" y="181" width="26.4" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="50.79" y="191.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::resident_set_size (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:506) (1 samples, 0.21%)</title><rect x="1714.4" y="165" width="3.8" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="1717.42" y="175.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (2 samples, 0.42%)</title><rect x="17.6" y="133" width="7.5" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="20.56" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/fs.rs:137) (1 samples, 0.21%)</title><rect x="13.8" y="149" width="3.8" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="16.78" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:279) (1 samples, 0.21%)</title><rect x="1737.1" y="181" width="3.8" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="1740.09" y="191.5" ></text>
+</g>
+<g >
+<title>task:idle (419 samples, 88.96%)</title><rect x="78.0" y="261" width="1583.5" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="81.03" y="271.5" >task:idle</text>
+</g>
+<g >
+<title>phase:setup (471 samples, 100.00%)</title><rect x="10.0" y="277" width="1780.0" height="15.0" fill="rgb(247,195,46)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" >phase:setup</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (4 samples, 0.85%)</title><rect x="1737.1" y="245" width="15.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1740.09" y="255.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;G,T&gt;::lock (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:78) (1 samples, 0.21%)</title><rect x="1748.4" y="133" width="3.8" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="1751.43" y="143.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::unmap (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:501) (3 samples, 0.64%)</title><rect x="62.9" y="133" width="11.3" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="65.91" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (4 samples, 0.85%)</title><rect x="25.1" y="229" width="15.1" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="28.12" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (2 samples, 0.42%)</title><rect x="32.7" y="149" width="7.5" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="35.68" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;kspin::base::BaseSpinLockGuard&lt;G,T&gt; as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:226) (1 samples, 0.21%)</title><rect x="32.7" y="117" width="3.8" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="35.68" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::read_at (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:2313) (1 samples, 0.21%)</title><rect x="1763.5" y="165" width="3.8" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1766.55" y="175.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::acquire (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:168) (1 samples, 0.21%)</title><rect x="28.9" y="181" width="3.8" height="15.0" fill="rgb(227,102,24)" rx="2" ry="2" />
+<text  x="31.90" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;kspin::base::BaseSpinLockGuard&lt;G,T&gt; as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:226) (1 samples, 0.21%)</title><rect x="1756.0" y="69" width="3.8" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="1758.99" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/fs.rs:120) (1 samples, 0.21%)</title><rect x="13.8" y="133" width="3.8" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="16.78" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:627) (8 samples, 1.70%)</title><rect x="1661.5" y="197" width="30.2" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="1664.51" y="207.5" >st..</text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (2 samples, 0.42%)</title><rect x="32.7" y="165" width="7.5" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="35.68" y="175.5" ></text>
+</g>
+<g >
+<title>axtask::run_queue::init::{{closure}} (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:778) (54 samples, 11.46%)</title><rect x="78.0" y="213" width="204.1" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="81.03" y="223.5" >axtask::run_queue::init::{..</text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:575) (1 samples, 0.21%)</title><rect x="25.1" y="213" width="3.8" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="28.12" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;axtask::run_queue::CurrentRunQueueRef&lt;G&gt; as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:288) (2 samples, 0.42%)</title><rect x="1778.7" y="181" width="7.5" height="15.0" fill="rgb(239,158,37)" rx="2" ry="2" />
+<text  x="1781.66" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as memory_set::backend::MappingBackend&gt;::protect (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:280) (1 samples, 0.21%)</title><rect x="1733.3" y="149" width="3.8" height="15.0" fill="rgb(241,167,39)" rx="2" ry="2" />
+<text  x="1736.31" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (8 samples, 1.70%)</title><rect x="44.0" y="245" width="30.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="47.01" y="255.5" >&lt;a..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/fs.rs:145) (1 samples, 0.21%)</title><rect x="13.8" y="165" width="3.8" height="15.0" fill="rgb(242,170,40)" rx="2" ry="2" />
+<text  x="16.78" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::resident_set_size (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:506) (1 samples, 0.21%)</title><rect x="44.0" y="165" width="3.8" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="47.01" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:627) (1 samples, 0.21%)</title><rect x="25.1" y="197" width="3.8" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="28.12" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:2393) (1 samples, 0.21%)</title><rect x="1756.0" y="165" width="3.8" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="1758.99" y="175.5" ></text>
+</g>
+<g >
+<title>kernel_guard::arch::riscv::local_irq_save_and_disable (/tmp/moss-profile-ea78/vendor/kernel_guard/src/arch/riscv.rs:10) (1 samples, 0.21%)</title><rect x="25.1" y="85" width="3.8" height="15.0" fill="rgb(253,225,53)" rx="2" ry="2" />
+<text  x="28.12" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (4 samples, 0.85%)</title><rect x="25.1" y="245" width="15.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="28.12" y="255.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::cow::CowBackend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:769) (1 samples, 0.21%)</title><rect x="1744.6" y="133" width="3.8" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="1747.65" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowBackend::commit_fault (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:524) (1 samples, 0.21%)</title><rect x="1740.9" y="181" width="3.7" height="15.0" fill="rgb(248,197,47)" rx="2" ry="2" />
+<text  x="1743.87" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:67) (2 samples, 0.42%)</title><rect x="1729.5" y="213" width="7.6" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="1732.53" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::cow::CowBackend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:767) (1 samples, 0.21%)</title><rect x="1718.2" y="133" width="3.8" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="1721.20" y="143.5" ></text>
+</g>
+<g >
+<title>__MemIf_phys_to_virt (/tmp/moss-profile-ea78/vendor/axplat-riscv64-qemu-virt/src/mem.rs:10) (1 samples, 0.21%)</title><rect x="66.7" y="117" width="3.8" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="69.69" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (/tmp/moss-profile-ea78/kernel/src/syscall/mod.rs:?) (2 samples, 0.42%)</title><rect x="1744.6" y="197" width="7.6" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="1747.65" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:197) (4 samples, 0.85%)</title><rect x="1714.4" y="213" width="15.1" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="1717.42" y="223.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;G,T&gt;::lock (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:78) (1 samples, 0.21%)</title><rect x="1669.1" y="149" width="3.7" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="1672.07" y="159.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::protect (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:484) (1 samples, 0.21%)</title><rect x="1733.3" y="133" width="3.8" height="15.0" fill="rgb(212,32,7)" rx="2" ry="2" />
+<text  x="1736.31" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_valid_page_ref (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1352) (1 samples, 0.21%)</title><rect x="1691.7" y="165" width="3.8" height="15.0" fill="rgb(212,32,7)" rx="2" ry="2" />
+<text  x="1694.74" y="175.5" ></text>
+</g>
+<g >
+<title>axtask::task::CurrentTask::try_get (/tmp/moss-profile-ea78/vendor/axtask/src/task.rs:539) (1 samples, 0.21%)</title><rect x="1710.6" y="197" width="3.8" height="15.0" fill="rgb(234,133,32)" rx="2" ry="2" />
+<text  x="1713.64" y="207.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::alloc (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/alloc.rs:93) (1 samples, 0.21%)</title><rect x="1756.0" y="101" width="3.8" height="15.0" fill="rgb(236,146,34)" rx="2" ry="2" />
+<text  x="1758.99" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;kspin::base::BaseSpinLockGuard&lt;G,T&gt; as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:226) (1 samples, 0.21%)</title><rect x="1767.3" y="101" width="3.8" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="1770.32" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::signal::check_signals (/tmp/moss-profile-ea78/kernel/src/task/signal.rs:?) (8 samples, 1.70%)</title><rect x="44.0" y="197" width="30.2" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="47.01" y="207.5" >st..</text>
+</g>
+<g >
+<title>core::intrinsics::copy (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs:3818) (1 samples, 0.21%)</title><rect x="55.4" y="69" width="3.7" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="58.35" y="79.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::get_entry_mut (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:380) (1 samples, 0.21%)</title><rect x="1725.8" y="117" width="3.7" height="15.0" fill="rgb(227,104,25)" rx="2" ry="2" />
+<text  x="1728.75" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowBackend::commit_fault (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:524) (2 samples, 0.42%)</title><rect x="1691.7" y="181" width="7.6" height="15.0" fill="rgb(248,197,47)" rx="2" ry="2" />
+<text  x="1694.74" y="191.5" ></text>
+</g>
+<g >
+<title>compiler_builtins::mem::impls::copy_forward::copy_forward_aligned_words (/rust/deps/compiler_builtins-0.1.159/src/mem/impls.rs:129) (1 samples, 0.21%)</title><rect x="1661.5" y="165" width="3.8" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="1664.51" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (4 samples, 0.85%)</title><rect x="1737.1" y="229" width="15.1" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1740.09" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (4 samples, 0.85%)</title><rect x="10.0" y="229" width="15.1" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" ></text>
+</g>
+<g >
+<title>compiler_builtins::mem::memcpy (/rust/deps/compiler_builtins-0.1.159/src/macros.rs:406) (1 samples, 0.21%)</title><rect x="10.0" y="197" width="3.8" height="15.0" fill="rgb(213,41,9)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:67) (2 samples, 0.42%)</title><rect x="1744.6" y="213" width="7.6" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="1747.65" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;page_table_entry::arch::riscv::Rv64PTE as page_table_entry::GenericPTE&gt;::is_huge (/tmp/moss-profile-ea78/vendor/page_table_entry/src/arch/riscv.rs:128) (1 samples, 0.21%)</title><rect x="1714.4" y="149" width="3.8" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="1717.42" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::read_at (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:2313) (5 samples, 1.06%)</title><rect x="1672.8" y="165" width="18.9" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1675.85" y="175.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (/tmp/moss-profile-ea78/vendor/axtask/src/wait_queue.rs:65) (1 samples, 0.21%)</title><rect x="1665.3" y="117" width="3.8" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="1668.29" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;axtask::run_queue::AxRunQueueRef&lt;G&gt; as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:270) (1 samples, 0.21%)</title><rect x="1676.6" y="53" width="3.8" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="1679.62" y="63.5" ></text>
+</g>
+<g >
+<title>axtask::run_queue::rebalance_target (/tmp/moss-profile-ea78/vendor/axtask/src/run_queue.rs:155) (1 samples, 0.21%)</title><rect x="1703.1" y="197" width="3.8" height="15.0" fill="rgb(223,83,19)" rx="2" ry="2" />
+<text  x="1706.08" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:188) (1 samples, 0.21%)</title><rect x="28.9" y="213" width="3.8" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="31.90" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:627) (4 samples, 0.85%)</title><rect x="1752.2" y="197" width="15.1" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="1755.21" y="207.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::unmap (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:501) (1 samples, 0.21%)</title><rect x="1725.8" y="133" width="3.7" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="1728.75" y="143.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::release (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:177) (2 samples, 0.42%)</title><rect x="1778.7" y="165" width="7.5" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1781.66" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:575) (2 samples, 0.42%)</title><rect x="1737.1" y="213" width="7.5" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="1740.09" y="223.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (1 samples, 0.21%)</title><rect x="74.2" y="165" width="3.8" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="77.25" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (3 samples, 0.64%)</title><rect x="1718.2" y="149" width="11.3" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1721.20" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (7 samples, 1.49%)</title><rect x="1752.2" y="245" width="26.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1755.21" y="255.5" >&lt;..</text>
+</g>
+<g >
+<title>axtask::task::CurrentTask::try_get (/tmp/moss-profile-ea78/vendor/axtask/src/task.rs:539) (1 samples, 0.21%)</title><rect x="1657.7" y="245" width="3.8" height="15.0" fill="rgb(234,133,32)" rx="2" ry="2" />
+<text  x="1660.73" y="255.5" ></text>
+</g>
+<g >
+<title>task:ctrl-c (8 samples, 1.70%)</title><rect x="44.0" y="261" width="30.2" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="47.01" y="271.5" >ta..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:197) (1 samples, 0.21%)</title><rect x="74.2" y="213" width="3.8" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="77.25" y="223.5" ></text>
+</g>
+<g >
+<title>compiler_builtins::mem::impls::copy_forward::copy_forward_aligned_words (/rust/deps/compiler_builtins-0.1.159/src/mem/impls.rs:129) (1 samples, 0.21%)</title><rect x="55.4" y="53" width="3.7" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="58.35" y="63.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (/tmp/moss-profile-ea78/kernel/src/syscall/mod.rs:432) (1 samples, 0.21%)</title><rect x="1729.5" y="197" width="3.8" height="15.0" fill="rgb(237,151,36)" rx="2" ry="2" />
+<text  x="1732.53" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::AddrSpace as core::ops::drop::Drop&gt;::drop (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:766) (2 samples, 0.42%)</title><rect x="17.6" y="149" width="7.5" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="20.56" y="159.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::next_table_mut (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:352) (1 samples, 0.21%)</title><rect x="1733.3" y="117" width="3.8" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="1736.31" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::ResolveAtResult::stat (/tmp/moss-profile-ea78/kernel/src/file/fs.rs:136) (1 samples, 0.21%)</title><rect x="1729.5" y="165" width="3.8" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="1732.53" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::signal::check_signals (/tmp/moss-profile-ea78/kernel/src/task/signal.rs:?) (4 samples, 0.85%)</title><rect x="1714.4" y="197" width="15.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="1717.42" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (4 samples, 0.85%)</title><rect x="10.0" y="245" width="15.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent_inner (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:627) (1 samples, 0.21%)</title><rect x="1737.1" y="197" width="3.8" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="1740.09" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (3 samples, 0.64%)</title><rect x="1778.7" y="229" width="11.3" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1781.66" y="239.5" ></text>
+</g>
+<g >
+<title>event_listener::sys::&lt;impl event_listener::Inner&lt;T&gt;&gt;::notify (/tmp/moss-profile-ea78/vendor/event-listener/src/slab.rs:134) (1 samples, 0.21%)</title><rect x="1676.6" y="101" width="3.8" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="1679.62" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;axalloc::GlobalAllocator as core::alloc::global::GlobalAlloc&gt;::alloc::{{closure}} (/tmp/moss-profile-ea78/vendor/axalloc/src/lib.rs:615) (1 samples, 0.21%)</title><rect x="25.1" y="117" width="3.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="28.12" y="127.5" ></text>
+</g>
+<g >
+<title>axtask::task::CurrentTask::try_get (/tmp/moss-profile-ea78/vendor/axtask/src/task.rs:539) (1 samples, 0.21%)</title><rect x="1695.5" y="165" width="3.8" height="15.0" fill="rgb(234,133,32)" rx="2" ry="2" />
+<text  x="1698.52" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::handle_page_fault_concurrent (/tmp/moss-profile-ea78/kernel/src/mm/aspace/mod.rs:575) (1 samples, 0.21%)</title><rect x="10.0" y="213" width="3.8" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" ></text>
+</g>
+<g >
+<title>event_listener::sys::ListenerSlab&lt;T&gt;::notify (/tmp/moss-profile-ea78/vendor/event-listener/src/slab.rs:642) (1 samples, 0.21%)</title><rect x="1676.6" y="85" width="3.8" height="15.0" fill="rgb(235,141,33)" rx="2" ry="2" />
+<text  x="1679.62" y="95.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::remove::&lt;impl alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut,K,V,alloc::collections::btree::node::marker::LeafOrInternal&gt;,alloc::collections::btree::node::marker::KV&gt;&gt;::remove_kv_tracking (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/btree/remove.rs:13) (1 samples, 0.21%)</title><rect x="59.1" y="101" width="3.8" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="62.13" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:67) (3 samples, 0.64%)</title><rect x="1767.3" y="213" width="11.4" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="1770.32" y="223.5" ></text>
+</g>
+<g >
+<title>task:bash (4 samples, 0.85%)</title><rect x="10.0" y="261" width="15.1" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1 samples, 0.21%)</title><rect x="74.2" y="229" width="3.8" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="77.25" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axalloc::GlobalAllocator as core::alloc::global::GlobalAlloc&gt;::alloc::{{closure}} (/tmp/moss-profile-ea78/vendor/axalloc/src/lib.rs:615) (1 samples, 0.21%)</title><rect x="1756.0" y="85" width="3.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="1758.99" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::Backend::commit_fault (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:195) (1 samples, 0.21%)</title><rect x="1740.9" y="197" width="3.7" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="1743.87" y="207.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::get_entry_mut (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:381) (1 samples, 0.21%)</title><rect x="70.5" y="117" width="3.7" height="15.0" fill="rgb(221,75,17)" rx="2" ry="2" />
+<text  x="73.47" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:274) (1 samples, 0.21%)</title><rect x="1669.1" y="181" width="3.7" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="1672.07" y="191.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (/tmp/moss-profile-ea78/vendor/axtask/src/wait_queue.rs:65) (1 samples, 0.21%)</title><rect x="1756.0" y="133" width="3.8" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="1758.99" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:279) (1 samples, 0.21%)</title><rect x="25.1" y="181" width="3.8" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="28.12" y="191.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::get_entry_mut (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:381) (1 samples, 0.21%)</title><rect x="74.2" y="117" width="3.8" height="15.0" fill="rgb(221,75,17)" rx="2" ry="2" />
+<text  x="77.25" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::ops::drop::Drop&gt;::drop (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2686) (3 samples, 0.64%)</title><rect x="1767.3" y="165" width="11.4" height="15.0" fill="rgb(248,197,47)" rx="2" ry="2" />
+<text  x="1770.32" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::execve::sys_execve (/tmp/moss-profile-ea78/kernel/src/syscall/task/execve.rs:130) (1 samples, 0.21%)</title><rect x="13.8" y="181" width="3.8" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="16.78" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:186) (1 samples, 0.21%)</title><rect x="1703.1" y="213" width="3.8" height="15.0" fill="rgb(225,92,22)" rx="2" ry="2" />
+<text  x="1706.08" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::cow::CowBackend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:767) (1 samples, 0.21%)</title><rect x="17.6" y="101" width="3.7" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="20.56" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowBackend::commit_fault::{{closure}} (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:541) (1 samples, 0.21%)</title><rect x="1691.7" y="149" width="3.8" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="1694.74" y="159.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::map::entry::OccupiedEntry&lt;K,V,A&gt;::remove_kv (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/collections/btree/map/entry.rs:610) (1 samples, 0.21%)</title><rect x="55.4" y="101" width="3.7" height="15.0" fill="rgb(207,12,3)" rx="2" ry="2" />
+<text  x="58.35" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::load_folio (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1243) (1 samples, 0.21%)</title><rect x="1665.3" y="133" width="3.8" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="1668.29" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (/tmp/moss-profile-ea78/kernel/src/task/user.rs:67) (3 samples, 0.64%)</title><rect x="13.8" y="213" width="11.3" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="16.78" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::read_at (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:2313) (1 samples, 0.21%)</title><rect x="25.1" y="165" width="3.8" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="28.12" y="175.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_sub (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/sync/atomic.rs:3881) (1 samples, 0.21%)</title><rect x="1688.0" y="149" width="3.7" height="15.0" fill="rgb(224,87,20)" rx="2" ry="2" />
+<text  x="1690.96" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (/tmp/moss-profile-ea78/kernel/src/syscall/mod.rs:?) (2 samples, 0.42%)</title><rect x="32.7" y="197" width="7.5" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="35.68" y="207.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::unmap (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:502) (1 samples, 0.21%)</title><rect x="1774.9" y="101" width="3.8" height="15.0" fill="rgb(217,56,13)" rx="2" ry="2" />
+<text  x="1777.88" y="111.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::release (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:177) (1 samples, 0.21%)</title><rect x="1759.8" y="133" width="3.7" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1762.77" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::readahead (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1558) (1 samples, 0.21%)</title><rect x="1676.6" y="149" width="3.8" height="15.0" fill="rgb(211,28,6)" rx="2" ry="2" />
+<text  x="1679.62" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::execve::sys_execve (/tmp/moss-profile-ea78/kernel/src/syscall/task/execve.rs:132) (2 samples, 0.42%)</title><rect x="17.6" y="181" width="7.5" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="20.56" y="191.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::acquire (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:168) (1 samples, 0.21%)</title><rect x="1669.1" y="133" width="3.7" height="15.0" fill="rgb(227,102,24)" rx="2" ry="2" />
+<text  x="1672.07" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (/tmp/moss-profile-ea78/kernel/src/syscall/mod.rs:452) (1 samples, 0.21%)</title><rect x="1733.3" y="197" width="3.8" height="15.0" fill="rgb(224,91,21)" rx="2" ry="2" />
+<text  x="1736.31" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (8 samples, 1.70%)</title><rect x="44.0" y="229" width="30.2" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="47.01" y="239.5" >&lt;a..</text>
+</g>
+<g >
+<title>task:unknown (3 samples, 0.64%)</title><rect x="1778.7" y="261" width="11.3" height="15.0" fill="rgb(214,42,10)" rx="2" ry="2" />
+<text  x="1781.66" y="271.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (3 samples, 0.64%)</title><rect x="1767.3" y="117" width="11.4" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1770.32" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (2 samples, 0.42%)</title><rect x="1744.6" y="149" width="7.6" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1747.65" y="159.5" ></text>
+</g>
+<g >
+<title>core::intrinsics::copy_nonoverlapping (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/intrinsics/mod.rs:3721) (1 samples, 0.21%)</title><rect x="1661.5" y="181" width="3.8" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="1664.51" y="191.5" ></text>
+</g>
+<g >
+<title>axtask::wait_queue::WaitQueue::wait_until (/tmp/moss-profile-ea78/vendor/axtask/src/wait_queue.rs:65) (3 samples, 0.64%)</title><rect x="1778.7" y="197" width="11.3" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="1781.66" y="207.5" ></text>
+</g>
+<g >
+<title>task:cargo (5 samples, 1.06%)</title><rect x="25.1" y="261" width="18.9" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="28.12" y="271.5" ></text>
+</g>
+<g >
+<title>memory_set::area::MemoryArea&lt;B&gt;::unmap_area (/tmp/moss-profile-ea78/vendor/memory_set/src/area.rs:84) (3 samples, 0.64%)</title><rect x="1718.2" y="165" width="11.3" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="1721.20" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::FilePageRefs::remove (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:119) (2 samples, 0.42%)</title><rect x="55.4" y="117" width="7.5" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="58.35" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::page_ref_at (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:2390) (1 samples, 0.21%)</title><rect x="1752.2" y="165" width="3.8" height="15.0" fill="rgb(235,142,33)" rx="2" ry="2" />
+<text  x="1755.21" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::backend::cow::CowFaultPlan::execute (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/cow.rs:279) (5 samples, 1.06%)</title><rect x="1672.8" y="181" width="18.9" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="1675.85" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::mm::aspace::backend::Backend as starry_kernel::mm::aspace::backend::BackendOps&gt;::unmap (/tmp/moss-profile-ea78/kernel/src/mm/aspace/backend/mod.rs:157) (1 samples, 0.21%)</title><rect x="74.2" y="149" width="3.8" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="77.25" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::reclaim_process_address_space (/tmp/moss-profile-ea78/kernel/src/task/ops.rs:114) (1 samples, 0.21%)</title><rect x="74.2" y="181" width="3.8" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="77.25" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_valid_page_ref (/tmp/moss-profile-ea78/vendor/axfs/src/highlevel/file.rs:1339) (1 samples, 0.21%)</title><rect x="1740.9" y="165" width="3.7" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="1743.87" y="175.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;G,T&gt;::lock (/tmp/moss-profile-ea78/vendor/kspin/src/base.rs:78) (1 samples, 0.21%)</title><rect x="25.1" y="101" width="3.8" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="28.12" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::execve::sys_execve (/tmp/moss-profile-ea78/kernel/src/syscall/task/execve.rs:132) (3 samples, 0.64%)</title><rect x="1767.3" y="181" width="11.4" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="1770.32" y="191.5" ></text>
+</g>
+<g >
+<title>kernel_guard::imp::&lt;impl kernel_guard::BaseGuard for kernel_guard::NoPreemptIrqSave&gt;::release (/tmp/moss-profile-ea78/vendor/kernel_guard/src/lib.rs:177) (1 samples, 0.21%)</title><rect x="1756.0" y="53" width="3.8" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1758.99" y="63.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;M,PTE,H&gt;::get_entry_mut (/tmp/moss-profile-ea78/vendor/page_table_multiarch/src/bits64.rs:369) (1 samples, 0.21%)</title><rect x="1722.0" y="133" width="3.8" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="1724.97" y="143.5" ></text>
+</g>
+<g >
+<title>task:rustup (7 samples, 1.49%)</title><rect x="1752.2" y="261" width="26.5" height="15.0" fill="rgb(215,46,11)" rx="2" ry="2" />
+<text  x="1755.21" y="271.5" >t..</text>
+</g>
+</g>
+</svg>

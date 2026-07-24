@@ -1,0 +1,6 @@
+*.bin
+*.elf
+*.folded
+*.log
+*.qcow2
+run.json

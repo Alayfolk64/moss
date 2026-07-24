@@ -19,7 +19,7 @@ PENDING_SIZE_BYTES = 224
 PROFILE_STATE_SIZE = 2_867_232
 PROFILE_SHARD_SIZE = 2_867_240
 MPROTECT_PHASES = 4
-MPROTECT_PHASE_STATS_SIZE = 224
+MPROTECT_PHASE_STATS_SIZE = 240
 MPROTECT_STATS_SIZE = MPROTECT_PHASES * MPROTECT_PHASE_STATS_SIZE
 MPROTECT_PAGE_BUCKETS = 8
 MPROTECT_PROT_BUCKETS = 8
@@ -131,13 +131,15 @@ def emit_mprotect_stats(lines: list[str], data: bytes) -> None:
             f"phase={phase} calls={u64(entry, 0)} successes={u64(entry, 8)} "
             f"failures={u64(entry, 16)} requested_pages={u64(entry, 24)} "
             f"max_pages={u64(entry, 32)} "
-            f"seal_records_scanned={u64(entry, 168)} "
-            f"max_seal_records_scanned={u64(entry, 176)} "
-            f"update_records_scanned={u64(entry, 184)} "
-            f"max_update_records_scanned={u64(entry, 192)} "
-            f"update_records_overlapped={u64(entry, 200)} "
-            f"update_records_split={u64(entry, 208)} "
-            f"update_records_output={u64(entry, 216)} "
+            f"vmas_validated={u64(entry, 168)} "
+            f"max_vmas_validated={u64(entry, 176)} "
+            f"vmas_visited={u64(entry, 184)} "
+            f"max_vmas_visited={u64(entry, 192)} "
+            f"vmas_changed={u64(entry, 200)} "
+            f"vmas_unchanged={u64(entry, 208)} "
+            f"vmas_split={u64(entry, 216)} "
+            f"vmas_merged={u64(entry, 224)} "
+            f"vmas_output={u64(entry, 232)} "
             f"page_buckets={','.join(map(str, page_buckets))} "
             f"prot_buckets={','.join(map(str, prot_buckets))}"
         )

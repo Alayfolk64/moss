@@ -23,7 +23,7 @@ from pathlib import Path
 PROFILE_SHARD_SIZE = 2_867_240
 PROFILE_CPU_COUNT = 8
 PROFILE_STATICS_SIZE = 56
-MPROTECT_STATS_SIZE = 896
+MPROTECT_STATS_SIZE = 960
 READY_MARKER = b"#### MOSS GUEST PROFILE READY ####"
 PANIC_MARKERS = (b"panicked at", b"Kernel panic", b"assertion failed")
 PROGRESS_RE = re.compile(

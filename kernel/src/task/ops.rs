@@ -98,20 +98,21 @@ pub fn processes() -> Vec<Arc<ProcessData>> {
     PROCESS_TABLE.read().values().collect()
 }
 
-fn is_live_process_peer(proc_data: &ProcessData, other: &ProcessData) -> bool {
-    other.proc.pid() != proc_data.proc.pid() && !other.proc.is_zombie()
-}
-
-fn address_space_shared_with_live_process(proc_data: &ProcessData) -> bool {
-    let aspace = proc_data.aspace();
+pub(crate) fn address_space_shared_with_live_process(
+    aspace: &Arc<crate::mm::AddrSpaceLock>,
+    owner_pid: Pid,
+) -> bool {
     processes().iter().any(|other| {
-        is_live_process_peer(proc_data, other) && Arc::ptr_eq(&other.aspace(), &aspace)
+        other.proc.pid() != owner_pid
+            && !other.proc.is_zombie()
+            && Arc::ptr_eq(&other.aspace(), aspace)
     })
 }
 
 fn reclaim_process_address_space(proc_data: &ProcessData) {
-    if !address_space_shared_with_live_process(proc_data) {
-        proc_data.aspace().lock().clear();
+    let aspace = proc_data.aspace();
+    if !address_space_shared_with_live_process(&aspace, proc_data.proc.pid()) {
+        aspace.lock().clear();
     }
 }
 
@@ -275,7 +276,13 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         crate::syscall::release_process_aio_resources(process.pid());
         crate::syscall::release_process_cap_state(process.pid());
         crate::syscall::release_process_time_resources(process.pid());
-        crate::syscall::release_process_mmap_resources(process.pid());
+        let aspace = thr.proc_data.aspace();
+        let mmap_locked_bytes = if address_space_shared_with_live_process(&aspace, process.pid()) {
+            0
+        } else {
+            aspace.read().locked_bytes()
+        };
+        crate::syscall::release_process_mmap_resources(process.pid(), mmap_locked_bytes);
         crate::syscall::release_process_fanotify_resources(process.pid());
         crate::syscall::close_all_files_for_current_process();
         reclaim_process_address_space(&thr.proc_data);

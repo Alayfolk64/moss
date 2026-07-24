@@ -9,23 +9,42 @@ use crate::{MappingBackend, MappingError, MappingResult};
 ///
 /// The target physical memory frames are determined by [`MappingBackend`] and
 /// may not be contiguous.
-pub struct MemoryArea<B: MappingBackend> {
+pub struct MemoryArea<B: MappingBackend, M = ()> {
     va_range: AddrRange<B::Addr>,
     flags: B::Flags,
     backend: B,
+    metadata: M,
 }
 
-impl<B: MappingBackend> MemoryArea<B> {
+impl<B: MappingBackend> MemoryArea<B, ()> {
     /// Creates a new memory area.
     ///
     /// # Panics
     ///
     /// Panics if `start + size` overflows.
     pub fn new(start: B::Addr, size: usize, flags: B::Flags, backend: B) -> Self {
+        Self::new_with_metadata(start, size, flags, backend, ())
+    }
+}
+
+impl<B: MappingBackend, M> MemoryArea<B, M> {
+    /// Creates a new memory area carrying caller-defined VMA metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `start + size` overflows.
+    pub fn new_with_metadata(
+        start: B::Addr,
+        size: usize,
+        flags: B::Flags,
+        backend: B,
+        metadata: M,
+    ) -> Self {
         Self {
             va_range: AddrRange::from_start_size(start, size),
             flags,
             backend,
+            metadata,
         }
     }
 
@@ -58,12 +77,22 @@ impl<B: MappingBackend> MemoryArea<B> {
     pub const fn backend(&self) -> &B {
         &self.backend
     }
+
+    /// Returns the caller-defined VMA metadata.
+    pub const fn metadata(&self) -> &M {
+        &self.metadata
+    }
 }
 
-impl<B: MappingBackend> MemoryArea<B> {
+impl<B: MappingBackend, M> MemoryArea<B, M> {
     /// Changes the flags.
     pub(crate) fn set_flags(&mut self, new_flags: B::Flags) {
         self.flags = new_flags;
+    }
+
+    /// Replaces caller-defined VMA metadata.
+    pub(crate) fn set_metadata(&mut self, metadata: M) {
+        self.metadata = metadata;
     }
 
     /// Changes the end address of the memory area.
@@ -87,14 +116,22 @@ impl<B: MappingBackend> MemoryArea<B> {
             .ok_or(MappingError::BadState)
     }
 
-    /// Changes the flags in the page table.
-    pub(crate) fn protect_area(
-        &mut self,
+    /// Changes the flags for a subrange in the page table.
+    pub(crate) fn protect_subrange(
+        &self,
+        start: B::Addr,
+        size: usize,
         new_flags: B::Flags,
         page_table: &mut B::PageTable,
     ) -> MappingResult {
+        debug_assert!(self.va_range.contains(start));
+        debug_assert!(
+            start
+                .checked_add(size)
+                .is_some_and(|end| end <= self.end())
+        );
         self.backend
-            .protect(self.start(), self.size(), new_flags, page_table)
+            .protect(start, size, new_flags, page_table)
             .then_some(())
             .ok_or(MappingError::BadState)
     }
@@ -160,15 +197,19 @@ impl<B: MappingBackend> MemoryArea<B> {
     ///
     /// Returns `None` if the given position is not in the memory area, or one
     /// of the parts is empty after splitting.
-    pub(crate) fn split(&mut self, pos: B::Addr) -> Option<Self> {
+    pub(crate) fn split(&mut self, pos: B::Addr) -> Option<Self>
+    where
+        M: Clone,
+    {
         if self.start() < pos && pos < self.end() {
-            let new_area = Self::new(
+            let new_area = Self::new_with_metadata(
                 pos,
                 // Use wrapping_sub_addr to avoid overflow check. It is safe because
                 // `pos` is within the memory area.
                 self.end().wrapping_sub_addr(pos),
                 self.flags,
                 self.backend.clone(),
+                self.metadata.clone(),
             );
             self.va_range.end = pos;
             Some(new_area)
@@ -178,15 +219,17 @@ impl<B: MappingBackend> MemoryArea<B> {
     }
 }
 
-impl<B: MappingBackend> fmt::Debug for MemoryArea<B>
+impl<B: MappingBackend, M> fmt::Debug for MemoryArea<B, M>
 where
     B::Addr: fmt::Debug,
     B::Flags: fmt::Debug + Copy,
+    M: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("MemoryArea")
             .field("va_range", &self.va_range)
             .field("flags", &self.flags)
+            .field("metadata", &self.metadata)
             .finish()
     }
 }

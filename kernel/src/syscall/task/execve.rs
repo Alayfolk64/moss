@@ -27,7 +27,7 @@ use crate::{
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
         unshare_current_fd_table,
     },
-    task::{AsThread, ProcessData, get_task, processes},
+    task::{AsThread, ProcessData, address_space_shared_with_live_process, get_task, processes},
 };
 
 // 添加一个自动恢复状态的结构
@@ -284,6 +284,13 @@ fn execve_common(
     };
     let page_table_root = new_aspace.page_table_root();
     let old_aspace = proc_data.replace_aspace(Arc::new(crate::mm::AddrSpaceLock::new(new_aspace)));
+    let old_locked_bytes =
+        if address_space_shared_with_live_process(&old_aspace, proc_data.proc.pid()) {
+            0
+        } else {
+            old_aspace.read().locked_bytes()
+        };
+    crate::syscall::release_process_mmap_resources(proc_data.proc.pid(), old_locked_bytes);
     axtask::replace_current_page_table(page_table_root);
     drop(old_aspace);
 

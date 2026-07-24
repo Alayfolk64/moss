@@ -28,7 +28,7 @@ EVENT_NAMES = {
     12: "mprotect-aspace-lock-wait",
     13: "mprotect-seal-lock-wait",
     14: "mprotect-seal-scan",
-    15: "mprotect-page-table",
+    15: "mprotect-local-update",
     16: "mprotect-record-lock-wait",
     17: "mprotect-record-update",
 }
@@ -370,7 +370,7 @@ def main() -> None:
             (12, "mprotect-aspace-lock-wait", "mprotect address-space lock wait"),
             (13, "mprotect-seal-lock-wait", "mprotect seal-check record-lock wait"),
             (14, "mprotect-seal-scan", "mprotect seal-check record scan"),
-            (15, "mprotect-page-table", "mprotect page-table update"),
+            (15, "mprotect-local-update", "mprotect per-mm VMA and page-table update"),
             (16, "mprotect-record-lock-wait", "mprotect update record-lock wait"),
             (17, "mprotect-record-update", "mprotect mapping-record rebuild"),
         ):

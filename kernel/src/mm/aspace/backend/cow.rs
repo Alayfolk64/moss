@@ -127,7 +127,7 @@ pub struct CowBackend {
     start: VirtAddr,
     size: PageSize,
     file: Option<(FileBackend, u64, Option<u64>)>,
-    mapped_pages: AtomicUsize,
+    mapped_pages: Arc<AtomicUsize>,
     identity: Arc<()>,
     /// Cached file pages mapped directly into this address space. Keeping the
     /// reference here pins the frame even after it leaves the file-cache LRU.
@@ -140,10 +140,22 @@ impl Clone for CowBackend {
             start: self.start,
             size: self.size,
             file: self.file.clone(),
-            mapped_pages: AtomicUsize::new(self.mapped_pages.load(Ordering::Relaxed)),
+            mapped_pages: self.mapped_pages.clone(),
             identity: self.identity.clone(),
             file_pages: self.file_pages.clone(),
         }
+    }
+}
+
+impl CowBackend {
+    pub(super) fn file_backed(&self) -> bool {
+        self.file.is_some()
+    }
+
+    pub(super) fn merge_compatible(&self, other: &Self) -> bool {
+        self.start == other.start
+            && self.size == other.size
+            && Arc::ptr_eq(&self.identity, &other.identity)
     }
 }
 
@@ -320,7 +332,7 @@ impl CowBackend {
             start: self.start,
             size: self.size,
             file: self.file.clone(),
-            mapped_pages: AtomicUsize::new(0),
+            mapped_pages: Arc::new(AtomicUsize::new(0)),
             identity: Arc::new(()),
             file_pages: Arc::new(FilePageRefs::new()),
         }
@@ -896,7 +908,7 @@ impl Backend {
             start,
             size,
             file: Some((file, file_start, file_end)),
-            mapped_pages: AtomicUsize::new(0),
+            mapped_pages: Arc::new(AtomicUsize::new(0)),
             identity: Arc::new(()),
             file_pages: Arc::new(FilePageRefs::new()),
         })
@@ -907,7 +919,7 @@ impl Backend {
             start,
             size,
             file: None,
-            mapped_pages: AtomicUsize::new(0),
+            mapped_pages: Arc::new(AtomicUsize::new(0)),
             identity: Arc::new(()),
             file_pages: Arc::new(FilePageRefs::new()),
         })

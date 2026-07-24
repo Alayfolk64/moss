@@ -163,6 +163,28 @@ pub enum Backend {
 }
 
 impl Backend {
+    pub(crate) fn default_vma_kind(&self) -> (bool, bool, bool) {
+        match self {
+            Self::Linear(_) => (false, false, false),
+            Self::Cow(backend) => {
+                let file_backed = backend.file_backed();
+                (false, file_backed, !file_backed)
+            }
+            Self::Shared(_) => (true, false, true),
+            Self::File(_) => (true, true, false),
+        }
+    }
+
+    pub(crate) fn merge_compatible(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Linear(left), Self::Linear(right)) => left.merge_compatible(right),
+            (Self::Cow(left), Self::Cow(right)) => left.merge_compatible(right),
+            (Self::Shared(left), Self::Shared(right)) => left.merge_compatible(right),
+            (Self::File(left), Self::File(right)) => left.merge_compatible(right),
+            _ => false,
+        }
+    }
+
     pub(crate) fn prepare_fault(
         &self,
         vaddr: VirtAddr,

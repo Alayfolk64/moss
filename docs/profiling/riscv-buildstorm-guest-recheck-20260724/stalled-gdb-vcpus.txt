@@ -1,0 +1,160 @@
+axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+79	    let irq_state = G::acquire();
+  Id   Target Id                    Frame 
+* 1    Thread 1.1 (CPU#0 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  2    Thread 1.2 (CPU#1 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  3    Thread 1.3 (CPU#2 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  4    Thread 1.4 (CPU#3 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  5    Thread 1.5 (CPU#4 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  6    Thread 1.6 (CPU#5 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  7    Thread 1.7 (CPU#6 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+  8    Thread 1.8 (CPU#7 [halted ]) axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+
+Thread 8 (Thread 1.8 (CPU#7 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081e68e30	0xffffffc081e68e30 <axruntime::mp::SECONDARY_BOOT_STACK+1834544>
+s0             0xffffffc081e68f20  0xffffffc081e68f20 <axruntime::mp::SECONDARY_BOOT_STACK+1834784>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2b400	-272697740288
+a3             0x0	0
+
+Thread 7 (Thread 1.7 (CPU#6 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081e28e30	0xffffffc081e28e30 <axruntime::mp::SECONDARY_BOOT_STACK+1572400>
+s0             0xffffffc081e28f20  0xffffffc081e28f20 <axruntime::mp::SECONDARY_BOOT_STACK+1572640>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2bc00	-272697738240
+a3             0x0	0
+
+Thread 6 (Thread 1.6 (CPU#5 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081de8e30	0xffffffc081de8e30 <axruntime::mp::SECONDARY_BOOT_STACK+1310256>
+s0             0xffffffc081de8f20  0xffffffc081de8f20 <axruntime::mp::SECONDARY_BOOT_STACK+1310496>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2c400	-272697736192
+a3             0x0	0
+
+Thread 5 (Thread 1.5 (CPU#4 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081da8e30	0xffffffc081da8e30 <axruntime::mp::SECONDARY_BOOT_STACK+1048112>
+s0             0xffffffc081da8f20  0xffffffc081da8f20 <axruntime::mp::SECONDARY_BOOT_STACK+1048352>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2cc00	-272697734144
+a3             0x0	0
+
+Thread 4 (Thread 1.4 (CPU#3 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081d68e30	0xffffffc081d68e30 <axruntime::mp::SECONDARY_BOOT_STACK+785968>
+s0             0xffffffc081d68f20  0xffffffc081d68f20 <axruntime::mp::SECONDARY_BOOT_STACK+786208>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2d400	-272697732096
+a3             0x0	0
+
+Thread 3 (Thread 1.3 (CPU#2 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081d28e30	0xffffffc081d28e30 <axruntime::mp::SECONDARY_BOOT_STACK+523824>
+s0             0xffffffc081d28f20  0xffffffc081d28f20 <axruntime::mp::SECONDARY_BOOT_STACK+524064>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2dc00	-272697730048
+a3             0x0	0
+
+Thread 2 (Thread 1.2 (CPU#1 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081f3bee0	0xffffffc081f3bee0
+s0             0xffffffc081f3bfd0  0xffffffc081f3bfd0
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2fc00	-272697721856
+a3             0x0	0
+
+Thread 1 (Thread 1.1 (CPU#0 [halted ])):
+pc             0xffffffc08042de8a	0xffffffc08042de8a <axtask::api::run_idle+108>
+ra             0xffffffc08042dee6	0xffffffc08042dee6 <axtask::api::run_idle+200>
+sp             0xffffffc081ce8e30	0xffffffc081ce8e30 <axruntime::mp::SECONDARY_BOOT_STACK+261680>
+s0             0xffffffc081ce8f20  0xffffffc081ce8f20 <axruntime::mp::SECONDARY_BOOT_STACK+261920>
+a0             0x2	2
+a1             0x1	1
+a2             0xffffffc081f2e400	-272697728000
+a3             0x0	0
+
+Thread 8 (Thread 1.8 (CPU#7 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+
+Thread 7 (Thread 1.7 (CPU#6 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+
+Thread 6 (Thread 1.6 (CPU#5 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+
+Thread 5 (Thread 1.5 (CPU#4 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+
+Thread 4 (Thread 1.4 (CPU#3 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+
+Thread 3 (Thread 1.3 (CPU#2 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+
+Thread 2 (Thread 1.2 (CPU#1 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080425380 in axtask::run_queue::init::{closure#0} () at src/run_queue.rs:778
+#4  core::ops::function::FnOnce::call_once<axtask::run_queue::init::{closure_env#0}, ()> () at /home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250
+#5  0xffffffc080426a4a in alloc::boxed::{impl#28}::call_once<(), dyn core::ops::function::FnOnce<(), Output=()>, alloc::alloc::Global> () at /home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966
+#6  axtask::task::task_entry () at src/task.rs:602
+#7  0xffffffc0804269ec in alloc::sync::{impl#28}::clone<axsched::round_robin::RRTask<axtask::task::TaskInner, 5>, alloc::alloc::Global> () at /home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226
+#8  axtask::task::CurrentTask::clone () at src/task.rs:553
+Backtrace stopped: Cannot access memory at address 0xfffffffffffffff8
+
+Thread 1 (Thread 1.1 (CPU#0 [halted ])):
+#0  axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave> () at src/run_queue.rs:79
+#1  axtask::api::yield_now () at src/api.rs:271
+#2  axtask::api::run_idle () at src/api.rs:301
+#3  0xffffffc080366920 in axruntime::mp::rust_main_secondary () at src/mp.rs:68
+#4  0xffffffc080444644 in axplat::call_secondary_main () at vendor/axplat/src/lib.rs:72
+#5  0x0000000080438942 in ?? ()
+[Inferior 1 (process 1) detached]
