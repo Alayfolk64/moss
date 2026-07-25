@@ -389,15 +389,16 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
     /// This function is used to preempt the current task and reschedule
     /// to next task on current run queue.
     ///
-    /// This function is called by `current_check_preempt_pending` with IRQs and preemption disabled.
+    /// This function is called after `current_check_preempt_pending` acquires
+    /// the current run queue with [`kernel_guard::NoPreemptIrqSave`].
     ///
     /// Note:
     /// preemption may happened in `enable_preempt`, which is called
     /// each time a [`kspin::NoPreemptGuard`] is dropped.
     #[cfg(feature = "preempt")]
     pub fn preempt_resched(&mut self) {
-        // There is no need to disable IRQ and preemption here, because
-        // they both have been disabled in `current_check_preempt_pending`.
+        // There is no need to disable IRQ and preemption here because the
+        // current run-queue guard already disabled both.
         let curr = &self.current_task;
         assert!(curr.is_running());
 

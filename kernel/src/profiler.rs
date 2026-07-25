@@ -23,7 +23,8 @@ const PAGE_CACHE_SAMPLE_RATE: u32 = 32;
 const OFFCPU_SAMPLE_RATE: u32 = 8;
 const MPROTECT_SAMPLE_RATE: u32 = 32;
 const ADDRSPACE_HOLD_SAMPLE_RATE: u32 = 16;
-const EVENT_COUNT: usize = 29;
+// ProfileEvent uses explicit one-based IDs; keep one spare slot for index 0.
+const EVENT_COUNT: usize = 30;
 const MPROTECT_SIZE_BUCKETS: usize = 8;
 const MPROTECT_PROT_BUCKETS: usize = 8;
 const USER_SPACE_FRAME: usize = usize::MAX;
@@ -37,6 +38,8 @@ static PHASE_STARTED_NS: AtomicU64 = AtomicU64::new(0);
 static PHASE_TOTAL_NS: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
 static SKIPPED_CPU: AtomicU64 = AtomicU64::new(0);
 static WATCHDOG_TASK_ID: AtomicU64 = AtomicU64::new(0);
+static AWS_LC_PROFILE_ARMED: AtomicBool = AtomicBool::new(false);
+static AWS_LC_PROFILE_PID: AtomicU32 = AtomicU32::new(0);
 static CPU_TICKS: [AtomicU32; axconfig::plat::CPU_NUM] =
     [const { AtomicU32::new(0) }; axconfig::plat::CPU_NUM];
 static EVENT_TICKS: [[AtomicU32; EVENT_COUNT]; axconfig::plat::CPU_NUM] =
@@ -426,6 +429,7 @@ fn profile_begin(event: ProfileEvent, object: usize) -> u64 {
         | ProfileEvent::AddrSpaceMadviseHold
         | ProfileEvent::AddrSpaceFaultFallbackHold
         | ProfileEvent::AddrSpaceCloneHold
+        | ProfileEvent::AddrSpaceCloneChildHold
         | ProfileEvent::AddrSpaceFileEvictHold
         | ProfileEvent::AddrSpaceOtherHold => ADDRSPACE_HOLD_SAMPLE_RATE,
         // Process teardown and exec image replacement are rare. Record every
@@ -711,6 +715,7 @@ pub fn command(input: &[u8]) {
         "reset" => {
             ENABLED.store(false, Ordering::SeqCst);
             switch_phase(0);
+            AWS_LC_PROFILE_PID.store(0, Ordering::Relaxed);
             for profile in &PROFILES {
                 profile.lock().clear();
             }
@@ -735,6 +740,14 @@ pub fn command(input: &[u8]) {
             ENABLED.store(false, Ordering::Release);
             switch_phase(0);
         }
+        "mode=full" => {
+            AWS_LC_PROFILE_ARMED.store(false, Ordering::Release);
+            AWS_LC_PROFILE_PID.store(0, Ordering::Relaxed);
+        }
+        "mode=aws" => {
+            AWS_LC_PROFILE_PID.store(0, Ordering::Relaxed);
+            AWS_LC_PROFILE_ARMED.store(true, Ordering::Release);
+        }
         "phase=setup" => {
             switch_phase(1);
             ENABLED.store(true, Ordering::Release);
@@ -749,6 +762,40 @@ pub fn command(input: &[u8]) {
         }
         _ => {}
     }
+}
+
+fn is_aws_lc_build_script(path: &str) -> bool {
+    path.contains("/build/aws-lc-sys-")
+        && (path.ends_with("/build-script-main") || path.ends_with("/build-script-build"))
+}
+
+/// Starts a clean profile window when Cargo enters the aws-lc-sys native build.
+///
+/// This hook is called only after execve has installed the new image, so a
+/// failed exec cannot leave the profiler enabled indefinitely.
+pub fn begin_aws_lc_build_script(path: &str, pid: u32) {
+    if !AWS_LC_PROFILE_ARMED.load(Ordering::Acquire) || !is_aws_lc_build_script(path) {
+        return;
+    }
+    command(b"reset");
+    AWS_LC_PROFILE_PID.store(pid, Ordering::Release);
+    command(b"phase=timed");
+    axhal::console::write_bytes(b"#### MOSS AWS-LC PROFILE START ####\n");
+}
+
+/// Stops the focused profile after the aws-lc-sys build script has completed
+/// all child compiler work and reached process exit.
+pub fn end_aws_lc_build_script(path: &str, pid: u32) {
+    if !is_aws_lc_build_script(path)
+        || AWS_LC_PROFILE_PID
+            .compare_exchange(pid, 0, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        || !ENABLED.swap(false, Ordering::AcqRel)
+    {
+        return;
+    }
+    switch_phase(0);
+    axhal::console::write_bytes(b"#### MOSS AWS-LC PROFILE READY ####\n");
 }
 
 fn write_stack(output: &mut String, stack: &StackTrace) {

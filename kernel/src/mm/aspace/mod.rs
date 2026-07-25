@@ -1,8 +1,8 @@
 use alloc::{collections::VecDeque, sync::Arc};
 use core::{
-    fmt,
+    fmt, mem,
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use axerrno::{AxError, AxResult, ax_bail};
@@ -11,6 +11,7 @@ use axhal::{
     paging::{MappingFlags, PageTable, PagingError},
     trap::PageFaultFlags,
 };
+pub(crate) use backend::{UnmapGather, init_frame_ref_table};
 use event_listener::{Event, listener};
 use kspin::SpinNoIrq;
 use memory_addr::{
@@ -254,7 +255,8 @@ pub(crate) enum AddrSpaceWriteOwner {
     ExitClear,
     ExecClear,
     FaultFallback,
-    Clone,
+    CloneParent,
+    CloneChild,
     FileEvict,
     Other,
 }
@@ -273,7 +275,8 @@ impl AddrSpaceWriteOwner {
             Self::ExitClear => ProfileEvent::AddrSpaceExitClearHold,
             Self::ExecClear => ProfileEvent::AddrSpaceExecClearHold,
             Self::FaultFallback => ProfileEvent::AddrSpaceFaultFallbackHold,
-            Self::Clone => ProfileEvent::AddrSpaceCloneHold,
+            Self::CloneParent => ProfileEvent::AddrSpaceCloneHold,
+            Self::CloneChild => ProfileEvent::AddrSpaceCloneChildHold,
             Self::FileEvict => ProfileEvent::AddrSpaceFileEvictHold,
             Self::Other => ProfileEvent::AddrSpaceOtherHold,
         }
@@ -349,7 +352,39 @@ struct AddrSpaceReclaim {
 }
 
 static RECLAIM_QUEUE: SpinNoIrq<VecDeque<AddrSpaceReclaim>> = SpinNoIrq::new(VecDeque::new());
-static RECLAIM_WORKER_RUNNING: AtomicBool = AtomicBool::new(false);
+static RECLAIM_WORKERS: AtomicUsize = AtomicUsize::new(0);
+const RECLAIM_WORKER_LIMIT: usize = axconfig::plat::CPU_NUM;
+
+fn start_reclaim_worker() {
+    loop {
+        let workers = RECLAIM_WORKERS.load(Ordering::Acquire);
+        if workers >= RECLAIM_WORKER_LIMIT || RECLAIM_QUEUE.lock().is_empty() {
+            return;
+        }
+        if RECLAIM_WORKERS
+            .compare_exchange_weak(workers, workers + 1, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            continue;
+        }
+
+        axtask::spawn(|| {
+            loop {
+                let request = { RECLAIM_QUEUE.lock().pop_front() };
+                let Some(request) = request else {
+                    RECLAIM_WORKERS.fetch_sub(1, Ordering::AcqRel);
+                    // An enqueue can race with the empty observation while all
+                    // existing workers are leaving. Recheck after publishing
+                    // the smaller worker count so that work cannot be stranded.
+                    start_reclaim_worker();
+                    return;
+                };
+                request.aspace.lock_profiled(request.owner).clear();
+            }
+        });
+        return;
+    }
+}
 
 /// Clears a dead address space outside the exit/execve critical path.
 ///
@@ -360,28 +395,7 @@ pub(crate) fn defer_address_space_reclaim(aspace: Arc<AddrSpaceLock>, owner: Add
     RECLAIM_QUEUE
         .lock()
         .push_back(AddrSpaceReclaim { aspace, owner });
-    if RECLAIM_WORKER_RUNNING.swap(true, Ordering::AcqRel) {
-        return;
-    }
-
-    axtask::spawn(|| {
-        loop {
-            let request = { RECLAIM_QUEUE.lock().pop_front() };
-            if let Some(request) = request {
-                request.aspace.lock_profiled(request.owner).clear();
-                continue;
-            }
-
-            RECLAIM_WORKER_RUNNING.store(false, Ordering::Release);
-            if RECLAIM_QUEUE.lock().is_empty()
-                || RECLAIM_WORKER_RUNNING
-                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                    .is_err()
-            {
-                return;
-            }
-        }
-    });
+    start_reclaim_worker();
 }
 
 impl AddrSpace {
@@ -752,7 +766,38 @@ impl AddrSpace {
 
     /// Removes all mappings in the address space.
     pub fn clear(&mut self) {
-        self.areas.clear(&mut self.pt).unwrap();
+        // Keep one page-table cursor and one deferred-owner gather across every
+        // VMA. Cow/File frames stay pinned until the shared shootdown, instead
+        // of forcing one remote flush at each VMA boundary.
+        let areas = mem::take(&mut self.areas);
+        let mut pt = self.pt.modify();
+        let mut gather = UnmapGather::new();
+        let mut result = Ok(());
+        for area in areas.iter() {
+            if let Err(err) = area
+                .backend()
+                .unmap_for_clear(area.va_range(), &mut pt, &mut gather)
+            {
+                result = Err(err);
+                break;
+            }
+        }
+        // This ordering is a lifetime requirement: stale translations must be
+        // invalid before either frame references or backend owners are dropped.
+        gather.finish(&mut pt);
+        pt.finish();
+        drop(pt);
+        match result {
+            Ok(()) => drop(areas),
+            Err(err) => {
+                // An impossible metadata/PTE disagreement can leave mappings
+                // which were not transferred to the gather. Leak their
+                // backend owners on the fatal path rather than freeing a frame
+                // that a stale or still-present PTE could reference.
+                mem::forget(areas);
+                panic!("failed to clear address space: {err}");
+            }
+        }
     }
 
     /// Checks whether an access to the specified memory region is valid.
@@ -1025,7 +1070,7 @@ impl AddrSpace {
         )?));
         let new_aspace_clone = new_aspace.clone();
 
-        let mut guard = new_aspace.lock_profiled(AddrSpaceWriteOwner::Clone);
+        let mut guard = new_aspace.lock_profiled(AddrSpaceWriteOwner::CloneChild);
 
         let mut self_modify = self.pt.modify();
         for area in self.areas.iter() {

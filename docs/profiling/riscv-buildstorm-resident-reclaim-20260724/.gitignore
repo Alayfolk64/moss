@@ -1,0 +1,6 @@
+# Large captures and reproducible intermediate files stay local.
+*.log
+*.bin
+*.elf
+*.folded
+run.json

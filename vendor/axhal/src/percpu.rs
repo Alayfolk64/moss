@@ -51,6 +51,18 @@ pub fn current_task_ptr<T>() -> *const T {
     }
 }
 
+/// Gets the current task pointer while migration is already disabled.
+///
+/// # Safety
+///
+/// The caller must keep either preemption or local IRQs disabled until the
+/// returned pointer has been consumed. This prevents migration between
+/// selecting this CPU's per-CPU area and reading the pointer.
+#[inline]
+pub unsafe fn current_task_ptr_migration_disabled<T>() -> *const T {
+    unsafe { CURRENT_TASK_PTR.read_current_raw() as _ }
+}
+
 /// Sets the pointer to the current task with preemption-safety.
 ///
 /// Preemption may be enabled when calling this function. This function will

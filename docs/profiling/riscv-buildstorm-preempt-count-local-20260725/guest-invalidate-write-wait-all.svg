@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="120" viewBox="0 0 1800 120">
+<rect width="1800" height="120" fill="#fafafa"/>
+<text x="900" y="48" text-anchor="middle" font-size="22">Moss guest invalidation write-lock wait - all</text>
+<text x="900" y="82" text-anchor="middle" font-size="16" fill="#555">No samples recorded</text>
+</svg>

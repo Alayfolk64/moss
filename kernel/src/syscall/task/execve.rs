@@ -302,6 +302,8 @@ fn execve_common(
     curr.set_name(loc.name());
 
     notify_fanotify_open_exec_path(&exec_path);
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    crate::profiler::begin_aws_lc_build_script(&exec_path, proc_data.proc.pid());
     *proc_data.exe_path.write() = exec_path;
     *proc_data.cmdline.write() = Arc::new(args);
 

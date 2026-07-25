@@ -46,6 +46,7 @@ RISC-V 镜像完整跑完 cagent、tg-xtask 预构建和正式 BuildStorm。结�
 
 采样结果与有效图表位于本目录。核心入口：
 
+- [exit/exec/clone 热点源码逐行逐词分析](./exit-exec-clone-code-analysis.md)
 - [预构建 CPU 火焰图](./guest-cpu-prebuild.svg)
 - [正式阶段 CPU 火焰图](./guest-cpu-timed.svg)
 - [预构建 workload off-CPU 火焰图](./guest-offcpu-workload-prebuild.svg)

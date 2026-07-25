@@ -63,8 +63,19 @@ impl kernel_guard::KernelGuardIf for KernelGuardIfImpl {
         }
     }
 
+    fn disable_preempt_irq_disabled() {
+        // Safety: NoPreemptIrqSave disables local IRQs before calling this
+        // hook, so the current task cannot migrate during the per-CPU read.
+        if let Some(curr) = unsafe { CurrentTask::try_get_migration_disabled() } {
+            curr.disable_preempt();
+        }
+    }
+
     fn enable_preempt() {
-        if let Some(curr) = current_may_uninit() {
+        // A preemption guard is still active here, so this task cannot migrate
+        // while its per-CPU pointer is read. Avoid taking a nested IRQ-save
+        // guard on every spin-lock release.
+        if let Some(curr) = unsafe { CurrentTask::try_get_migration_disabled() } {
             curr.enable_preempt(true);
         }
     }

@@ -161,6 +161,13 @@ impl SharedBackend {
         if self.pages.get(plan.page_index) != Some(paddr) {
             return Ok(FaultCommit::Stale);
         }
+        if plan.expected_paddr.is_none() {
+            return match pt.map_4k_concurrent(plan.vaddr, paddr, flags) {
+                Ok(()) => Ok(FaultCommit::Handled),
+                Err(PagingError::AlreadyMapped) => Ok(FaultCommit::Stale),
+                Err(err) => Err(err.into()),
+            };
+        }
 
         match pt.query(plan.vaddr) {
             Ok((_paddr, page_flags, PageSize::Size4K)) if page_flags.contains(access_flags) => {
@@ -173,13 +180,6 @@ impl SharedBackend {
                     Ok(FaultCommit::Handled)
                 } else {
                     Ok(FaultCommit::Stale)
-                }
-            }
-            Err(PagingError::NotMapped) if plan.expected_paddr.is_none() => {
-                match pt.map_4k_concurrent(plan.vaddr, paddr, flags) {
-                    Ok(()) => Ok(FaultCommit::Handled),
-                    Err(PagingError::AlreadyMapped) => Ok(FaultCommit::Stale),
-                    Err(err) => Err(err.into()),
                 }
             }
             _ => Ok(FaultCommit::Stale),
@@ -199,9 +199,16 @@ impl BackendOps for SharedBackend {
 
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         debug!("Shared::unmap: {:?}", range);
-        for vaddr in pages_in(range, self.pages.size)? {
+        let mut cursor = range.start;
+        while let Some((vaddr, _paddr, _flags, page_size)) =
+            pt.next_present_mapping(cursor, range.end)
+        {
+            if vaddr < range.start || vaddr >= range.end || page_size != self.pages.size {
+                return Err(AxError::BadAddress);
+            }
+            cursor = vaddr + page_size as usize;
             match pt.unmap(vaddr) {
-                Ok(_) | Err(PagingError::NotMapped) => {}
+                Ok(_) => {}
                 Err(err) => return Err(err.into()),
             }
         }

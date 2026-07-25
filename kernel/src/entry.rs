@@ -74,12 +74,17 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
 
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
+    // The allocator and platform RAM map are ready before this entry point.
+    // Build the direct anonymous-frame reference index before a user address
+    // space can allocate its first COW page.
+    crate::mm::init_frame_ref_table();
+
     // axruntime mounts rootfs before all secondary run queues are online.
     // From this point onward SMP is fully initialized, so block completions
     // may safely run independently of the faulting task.
     enable_async_block_io();
 
-    #[cfg(target_arch = "loongarch64")]
+    #[cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))]
     crate::mm::init_tlb_shootdown();
 
     #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]

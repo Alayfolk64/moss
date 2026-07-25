@@ -3,10 +3,12 @@
 use axalloc::{UsageKind, global_allocator};
 use memory_addr::{PAGE_SIZE_4K, PhysAddr, VirtAddr};
 use page_table_multiarch::PagingHandler;
-#[doc(no_inline)]
-pub use page_table_multiarch::{MappingFlags, PageSize, PagingError, PagingResult};
 #[cfg(target_arch = "loongarch64")]
 pub use page_table_multiarch::loongarch64::register_tlb_flush_handler;
+#[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
+pub use page_table_multiarch::riscv::register_tlb_flush_handler;
+#[doc(no_inline)]
+pub use page_table_multiarch::{MappingFlags, PageSize, PagingError, PagingResult};
 
 use crate::mem::{phys_to_virt, virt_to_phys};
 

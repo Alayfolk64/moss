@@ -536,6 +536,24 @@ pub struct CurrentTask(ManuallyDrop<AxTaskRef>);
 impl CurrentTask {
     pub(crate) fn try_get() -> Option<Self> {
         let ptr: *const super::AxTask = axhal::percpu::current_task_ptr();
+        Self::from_raw_ptr(ptr)
+    }
+
+    /// Gets the current task without taking another IRQ-save guard.
+    ///
+    /// # Safety
+    ///
+    /// The caller must keep either preemption or local IRQs disabled while
+    /// reading the per-CPU pointer and constructing the returned wrapper.
+    #[cfg(feature = "preempt")]
+    pub(crate) unsafe fn try_get_migration_disabled() -> Option<Self> {
+        let ptr: *const super::AxTask =
+            unsafe { axhal::percpu::current_task_ptr_migration_disabled() };
+        Self::from_raw_ptr(ptr)
+    }
+
+    #[inline]
+    fn from_raw_ptr(ptr: *const super::AxTask) -> Option<Self> {
         if !ptr.is_null() {
             Some(Self(unsafe { ManuallyDrop::new(AxTaskRef::from_raw(ptr)) }))
         } else {

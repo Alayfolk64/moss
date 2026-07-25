@@ -90,10 +90,92 @@ fn run_test_for<M: PagingMetaData<VirtAddr = VirtAddr>, PTE: GenericPTE>() -> Pa
     Ok(())
 }
 
+fn check_sparse_walk<M: PagingMetaData<VirtAddr = VirtAddr>, PTE: GenericPTE>() -> PagingResult<()>
+{
+    ALLOCATED.with_borrow_mut(|it| it.clear());
+
+    let mut table = PageTable64::<M, PTE, TrackPagingHandler<M>>::try_new()?;
+    {
+        let mut modify = table.modify();
+        modify.map(
+            VirtAddr::from_usize(0x4000),
+            PhysAddr::from_usize(0x1000_0000),
+            PageSize::Size4K,
+            MappingFlags::READ,
+        )?;
+        modify.map(
+            VirtAddr::from_usize(0x20_0000),
+            PhysAddr::from_usize(0x2000_0000),
+            PageSize::Size2M,
+            MappingFlags::READ | MappingFlags::WRITE,
+        )?;
+    }
+
+    let first = table
+        .next_present_mapping(VirtAddr::from_usize(0), VirtAddr::from_usize(0x40_0000))
+        .expect("first sparse mapping");
+    assert_eq!(first.0, VirtAddr::from_usize(0x4000));
+    assert_eq!(first.1, PhysAddr::from_usize(0x1000_0000));
+    assert_eq!(first.3, PageSize::Size4K);
+
+    let second = table
+        .next_present_mapping(first.0 + first.3 as usize, VirtAddr::from_usize(0x40_0000))
+        .expect("second sparse mapping");
+    assert_eq!(second.0, VirtAddr::from_usize(0x20_0000));
+    assert_eq!(second.1, PhysAddr::from_usize(0x2000_0000));
+    assert_eq!(second.3, PageSize::Size2M);
+
+    let overlapping = table
+        .next_present_mapping(
+            VirtAddr::from_usize(0x20_1000),
+            VirtAddr::from_usize(0x21_0000),
+        )
+        .expect("mapping overlapping the middle of a huge page");
+    assert_eq!(overlapping.0, VirtAddr::from_usize(0x20_0000));
+    assert_eq!(overlapping.3, PageSize::Size2M);
+
+    assert!(
+        table
+            .next_present_mapping(
+                VirtAddr::from_usize(0x5000),
+                VirtAddr::from_usize(0x20_0000),
+            )
+            .is_none()
+    );
+    assert!(
+        table
+            .next_present_mapping(
+                VirtAddr::from_usize(0x20_0000),
+                VirtAddr::from_usize(0x20_0000),
+            )
+            .is_none()
+    );
+    assert!(
+        table
+            .next_present_mapping(
+                second.0 + second.3 as usize,
+                VirtAddr::from_usize(0x40_0000),
+            )
+            .is_none()
+    );
+
+    drop(table);
+    assert_eq!(
+        ALLOCATED.with_borrow(|it| it.len()),
+        0,
+        "sparse walker leaked page-table frames"
+    );
+    Ok(())
+}
+
 #[test]
 #[cfg(any(target_arch = "x86_64", docsrs))]
 fn test_dealloc_x86() -> PagingResult<()> {
     run_test_for::<
+        page_table_multiarch::x86_64::X64PagingMetaData,
+        page_table_entry::x86_64::X64PTE,
+    >()?;
+    check_sparse_walk::<
         page_table_multiarch::x86_64::X64PagingMetaData,
         page_table_entry::x86_64::X64PTE,
     >()?;
@@ -111,6 +193,14 @@ fn test_dealloc_riscv() -> PagingResult<()> {
         page_table_multiarch::riscv::Sv48MetaData<VirtAddr>,
         page_table_entry::riscv::Rv64PTE,
     >()?;
+    check_sparse_walk::<
+        page_table_multiarch::riscv::Sv39MetaData<VirtAddr>,
+        page_table_entry::riscv::Rv64PTE,
+    >()?;
+    check_sparse_walk::<
+        page_table_multiarch::riscv::Sv48MetaData<VirtAddr>,
+        page_table_entry::riscv::Rv64PTE,
+    >()?;
     Ok(())
 }
 
@@ -121,6 +211,10 @@ fn test_dealloc_aarch64() -> PagingResult<()> {
         page_table_multiarch::aarch64::A64PagingMetaData,
         page_table_entry::aarch64::A64PTE,
     >()?;
+    check_sparse_walk::<
+        page_table_multiarch::aarch64::A64PagingMetaData,
+        page_table_entry::aarch64::A64PTE,
+    >()?;
     Ok(())
 }
 
@@ -128,6 +222,10 @@ fn test_dealloc_aarch64() -> PagingResult<()> {
 #[cfg(any(target_arch = "loongarch64", docsrs))]
 fn test_dealloc_loongarch64() -> PagingResult<()> {
     run_test_for::<
+        page_table_multiarch::loongarch64::LA64MetaData,
+        page_table_entry::loongarch64::LA64PTE,
+    >()?;
+    check_sparse_walk::<
         page_table_multiarch::loongarch64::LA64MetaData,
         page_table_entry::loongarch64::LA64PTE,
     >()?;

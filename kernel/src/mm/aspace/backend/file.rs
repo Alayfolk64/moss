@@ -16,7 +16,7 @@ use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
     AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
-    pages_in,
+    UnmapGather, pages_in,
 };
 use crate::mm::AddrSpaceWriteOwner;
 
@@ -314,66 +314,106 @@ impl FileBackend {
         if !Arc::ptr_eq(&self.0, &plan.identity) {
             return Ok(FaultCommit::Stale);
         }
-        if let Some(expected_paddr) = plan.expected_paddr {
-            match pt.query(plan.vaddr) {
-                Ok((_paddr, page_flags, PageSize::Size4K)) if page_flags.contains(access_flags) => {
-                    return Ok(FaultCommit::Handled);
-                }
-                Ok((paddr, page_flags, PageSize::Size4K))
-                    if paddr == expected_paddr
-                        && access_flags.contains(MappingFlags::WRITE)
-                        && !page_flags.contains(MappingFlags::WRITE) => {}
-                _ => return Ok(FaultCommit::Stale),
-            }
-
+        if plan.expected_paddr.is_none() {
             let page = plan.page.as_ref().ok_or(AxError::BadAddress)?;
-            let committed = self.0.cache.with_valid_page_ref(plan.pn, page, true, || {
-                pt.remap_4k_concurrent_if(plan.vaddr, expected_paddr, expected_paddr, flags)
-            });
+            let mapping_page = page.clone();
+            let write_fault = access_flags.contains(MappingFlags::WRITE);
+            let map_flags = if self.0.cache.in_memory() || write_fault {
+                flags
+            } else {
+                flags - MappingFlags::WRITE
+            };
+            let committed =
+                self.0
+                    .cache
+                    .with_valid_page_ref(plan.pn, page, write_fault, || {
+                        match pt.map_4k_concurrent(plan.vaddr, page.paddr(), map_flags) {
+                            Ok(()) => {
+                                self.0.mapped_pages.insert(plan.vaddr, mapping_page);
+                                Ok(true)
+                            }
+                            Err(PagingError::AlreadyMapped) => Ok(false),
+                            Err(err) => Err(AxError::from(err)),
+                        }
+                    });
             return match committed {
-                Some(Ok(true)) => Ok(FaultCommit::Handled),
+                Some(Ok(true)) => {
+                    plan.page = None;
+                    Ok(FaultCommit::Handled)
+                }
                 Some(Ok(false)) | None => Ok(FaultCommit::Stale),
-                Some(Err(err)) => Err(err.into()),
+                Some(Err(err)) => Err(err),
             };
         }
+
+        let expected_paddr = plan.expected_paddr.ok_or(AxError::BadAddress)?;
         match pt.query(plan.vaddr) {
             Ok((_paddr, page_flags, PageSize::Size4K)) if page_flags.contains(access_flags) => {
-                Ok(FaultCommit::Handled)
+                return Ok(FaultCommit::Handled);
             }
-            Ok(_) => Ok(FaultCommit::Stale),
-            Err(PagingError::NotMapped) => {
-                let page = plan.page.as_ref().ok_or(AxError::BadAddress)?;
-                let mapping_page = page.clone();
-                let write_fault = access_flags.contains(MappingFlags::WRITE);
-                let map_flags = if self.0.cache.in_memory() || write_fault {
-                    flags
-                } else {
-                    flags - MappingFlags::WRITE
-                };
-                let committed =
-                    self.0
-                        .cache
-                        .with_valid_page_ref(plan.pn, page, write_fault, || {
-                            match pt.map_4k_concurrent(plan.vaddr, page.paddr(), map_flags) {
-                                Ok(()) => {
-                                    self.0.mapped_pages.insert(plan.vaddr, mapping_page);
-                                    Ok(true)
-                                }
-                                Err(PagingError::AlreadyMapped) => Ok(false),
-                                Err(err) => Err(AxError::from(err)),
-                            }
-                        });
-                match committed {
-                    Some(Ok(true)) => {
-                        plan.page = None;
-                        Ok(FaultCommit::Handled)
-                    }
-                    Some(Ok(false)) | None => Ok(FaultCommit::Stale),
-                    Some(Err(err)) => Err(err),
+            Ok((paddr, page_flags, PageSize::Size4K))
+                if paddr == expected_paddr
+                    && access_flags.contains(MappingFlags::WRITE)
+                    && !page_flags.contains(MappingFlags::WRITE) => {}
+            _ => return Ok(FaultCommit::Stale),
+        }
+
+        let page = plan.page.as_ref().ok_or(AxError::BadAddress)?;
+        let committed = self.0.cache.with_valid_page_ref(plan.pn, page, true, || {
+            pt.remap_4k_concurrent_if(plan.vaddr, expected_paddr, expected_paddr, flags)
+        });
+        match committed {
+            Some(Ok(true)) => Ok(FaultCommit::Handled),
+            Some(Ok(false)) | None => Ok(FaultCommit::Stale),
+            Some(Err(err)) => Err(err.into()),
+        }
+    }
+}
+
+impl FileBackend {
+    pub(super) fn unmap_present_into(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut,
+        gather: &mut UnmapGather,
+    ) -> AxResult {
+        let mut cursor = range.start;
+        while let Some((vaddr, paddr, _flags, page_size)) =
+            pt.next_present_mapping(cursor, range.end)
+        {
+            if vaddr < range.start || vaddr >= range.end || page_size != PageSize::Size4K {
+                return Err(AxError::BadAddress);
+            }
+            cursor = vaddr + PAGE_SIZE_4K;
+
+            let Some(page) = self.0.mapped_pages.remove(vaddr) else {
+                return Err(AxError::BadAddress);
+            };
+            if page.paddr() != paddr {
+                self.0.mapped_pages.insert(vaddr, page);
+                return Err(AxError::BadAddress);
+            }
+
+            match pt.unmap(vaddr) {
+                Ok((unmapped, _, PageSize::Size4K)) if unmapped == paddr => {}
+                Ok(_) => {
+                    // The PTE has already been cleared, so keep the folio pin
+                    // rather than publishing an unowned replacement.
+                    self.0.mapped_pages.insert(vaddr, page);
+                    return Err(AxError::BadAddress);
+                }
+                Err(err) => {
+                    self.0.mapped_pages.insert(vaddr, page);
+                    return Err(err.into());
                 }
             }
-            Err(_) => Err(AxError::BadAddress),
+
+            // A stale remote translation must be gone before dropping the
+            // final folio reference and allowing its frame to be recycled.
+            gather.push_file(page, pt);
         }
+
+        Ok(())
     }
 }
 
@@ -387,18 +427,12 @@ impl BackendOps for FileBackend {
     }
 
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
-        for addr in pages_in(range, PageSize::Size4K)? {
-            match pt.unmap(addr) {
-                Ok(_) | Err(PagingError::NotMapped) => {
-                    self.0.mapped_pages.remove(addr);
-                }
-                Err(err) => {
-                    warn!("Failed to unmap page {:?}: {:?}", addr, err);
-                    return Err(err.into());
-                }
-            }
-        }
-        Ok(())
+        let mut gather = UnmapGather::new();
+        let result = self.unmap_present_into(range, pt, &mut gather);
+        // Run on success and failure so deferred folio pins always outlive
+        // every stale translation queued by the loop.
+        gather.finish(pt);
+        result
     }
 
     fn discard(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
@@ -409,17 +443,22 @@ impl BackendOps for FileBackend {
         &self,
         range: VirtAddrRange,
         new_flags: MappingFlags,
-        _pt: &mut PageTableMut,
+        pt: &mut PageTableMut,
     ) -> AxResult {
         self.check_flags(new_flags)?;
         if new_flags.contains(MappingFlags::WRITE) && !self.0.cache.in_memory() {
-            let start_page =
-                ((range.start - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
-            for (index, addr) in pages_in(range, PageSize::Size4K)?.enumerate() {
-                if self.0.mapped_pages.get(addr).is_none() {
+            let mut cursor = range.start;
+            while let Some((vaddr, _paddr, _flags, page_size)) =
+                pt.next_present_mapping(cursor, range.end)
+            {
+                if vaddr < range.start || vaddr >= range.end || page_size != PageSize::Size4K {
+                    return Err(AxError::BadAddress);
+                }
+                cursor = vaddr + PAGE_SIZE_4K;
+                if self.0.mapped_pages.get(vaddr).is_none() {
                     continue;
                 }
-                let pn = start_page + index as u32;
+                let pn = ((vaddr - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
                 self.0.cache.with_page(pn, |page| {
                     if let Some(page) = page {
                         page.mark_dirty();

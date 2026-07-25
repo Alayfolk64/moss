@@ -17,14 +17,19 @@ import re
 import signal
 import subprocess
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 
 PROFILE_SHARD_SIZE = 2_867_240
 PROFILE_CPU_COUNT = 8
 PROFILE_STATICS_SIZE = 56
+PHASE_STARTED_SIZE = 8
+SKIPPED_CPU_SIZE = 8
+PHASE_TOTALS_SIZE = 32
 MPROTECT_STATS_SIZE = 960
-READY_MARKER = b"#### MOSS GUEST PROFILE READY ####"
+RISCV_PHYS_VIRT_OFFSET = 0xFFFF_FFC0_0000_0000
+DEFAULT_READY_MARKER = "#### MOSS GUEST PROFILE READY ####"
 PANIC_MARKERS = (b"panicked at", b"Kernel panic", b"assertion failed")
 PROGRESS_RE = re.compile(
     rb"(?:"
@@ -39,6 +44,18 @@ PROGRESS_RE = re.compile(
 BUILDSTORM_END_MARKER = b"#### OS COMP TEST GROUP END buildstorm-glibc ####"
 
 
+@dataclass(frozen=True)
+class ProfilerSymbols:
+    profiles_address: int
+    profiles_size: int
+    phase_started_address: int
+    skipped_cpu_address: int
+    phase_totals_address: int
+    phase_totals_size: int
+    mprotect_stats_address: int
+    mprotect_stats_size: int
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--kernel", type=Path, default=Path("kernel-rv"))
@@ -46,8 +63,18 @@ def parse_args() -> argparse.Namespace:
         "--elf", type=Path, default=Path("kernel-rv.profile.elf")
     )
     parser.add_argument("--disk", type=Path, default=Path("sdcard-rv.img"))
+    parser.add_argument(
+        "--disk-format",
+        choices=("raw", "qcow2"),
+        default="raw",
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--gdb-port", type=int, default=1234)
+    parser.add_argument(
+        "--ready-marker",
+        default=DEFAULT_READY_MARKER,
+        help="console marker after which the stopped profile is captured",
+    )
     parser.add_argument(
         "--stall-seconds",
         type=int,
@@ -88,7 +115,7 @@ def require_file(path: Path) -> Path:
     return path
 
 
-def profiler_symbols(elf: Path) -> tuple[int, int, int, int, int]:
+def profiler_symbols(elf: Path) -> ProfilerSymbols:
     result = subprocess.run(
         ["rust-nm", "-S", str(elf)],
         text=True,
@@ -96,7 +123,9 @@ def profiler_symbols(elf: Path) -> tuple[int, int, int, int, int]:
         check=True,
     )
     profiles: tuple[int, int] | None = None
-    enabled: int | None = None
+    phase_started: tuple[int, int] | None = None
+    skipped_cpu: tuple[int, int] | None = None
+    phase_totals: tuple[int, int] | None = None
     mprotect_stats: tuple[int, int] | None = None
     for line in result.stdout.splitlines():
         fields = line.split()
@@ -105,11 +134,21 @@ def profiler_symbols(elf: Path) -> tuple[int, int, int, int, int]:
         address, size, _kind, name = fields[0], fields[1], fields[2], fields[3]
         if "starry_kernel8profiler8PROFILES" in name:
             profiles = (int(address, 16), int(size, 16))
-        elif "starry_kernel8profiler7ENABLED" in name:
-            enabled = int(address, 16)
+        elif "starry_kernel8profiler16PHASE_STARTED_NS" in name:
+            phase_started = (int(address, 16), int(size, 16))
+        elif "starry_kernel8profiler11SKIPPED_CPU" in name:
+            skipped_cpu = (int(address, 16), int(size, 16))
+        elif "starry_kernel8profiler14PHASE_TOTAL_NS" in name:
+            phase_totals = (int(address, 16), int(size, 16))
         elif "MPROTECT_STATS" in name:
             mprotect_stats = (int(address, 16), int(size, 16))
-    if profiles is None or enabled is None or mprotect_stats is None:
+    if (
+        profiles is None
+        or phase_started is None
+        or skipped_cpu is None
+        or phase_totals is None
+        or mprotect_stats is None
+    ):
         raise SystemExit("profiler symbols are missing from the kernel ELF")
     expected = PROFILE_SHARD_SIZE * PROFILE_CPU_COUNT
     if profiles[1] != expected:
@@ -121,7 +160,25 @@ def profiler_symbols(elf: Path) -> tuple[int, int, int, int, int]:
             f"unexpected MPROTECT_STATS size {mprotect_stats[1]}, "
             f"expected {MPROTECT_STATS_SIZE}"
         )
-    return profiles[0], profiles[1], enabled, mprotect_stats[0], mprotect_stats[1]
+    for name, symbol, expected_size in (
+        ("PHASE_STARTED_NS", phase_started, PHASE_STARTED_SIZE),
+        ("SKIPPED_CPU", skipped_cpu, SKIPPED_CPU_SIZE),
+        ("PHASE_TOTAL_NS", phase_totals, PHASE_TOTALS_SIZE),
+    ):
+        if symbol[1] != expected_size:
+            raise SystemExit(
+                f"unexpected {name} size {symbol[1]}, expected {expected_size}"
+            )
+    return ProfilerSymbols(
+        profiles_address=profiles[0],
+        profiles_size=profiles[1],
+        phase_started_address=phase_started[0],
+        skipped_cpu_address=skipped_cpu[0],
+        phase_totals_address=phase_totals[0],
+        phase_totals_size=phase_totals[1],
+        mprotect_stats_address=mprotect_stats[0],
+        mprotect_stats_size=mprotect_stats[1],
+    )
 
 
 def process_ticks(pid: int) -> int:
@@ -143,17 +200,33 @@ def dump_profile(
     elf: Path,
     out: Path,
     port: int,
-    profiles_address: int,
-    profiles_size: int,
-    statics_address: int,
-    mprotect_stats_address: int,
-    mprotect_stats_size: int,
+    symbols: ProfilerSymbols,
 ) -> None:
+    def physical_address(address: int) -> int:
+        if address < RISCV_PHYS_VIRT_OFFSET:
+            raise RuntimeError(f"kernel symbol is not in the direct map: {address:#x}")
+        return address - RISCV_PHYS_VIRT_OFFSET
+
+    profiles_address = physical_address(symbols.profiles_address)
+    phase_started_address = physical_address(symbols.phase_started_address)
+    skipped_cpu_address = physical_address(symbols.skipped_cpu_address)
+    phase_totals_address = physical_address(symbols.phase_totals_address)
+    mprotect_stats_address = physical_address(symbols.mprotect_stats_address)
     profiles = (out / "profiles.bin").resolve()
     statics = (out / "profile-statics.bin").resolve()
+    phase_started = (out / "phase-started.bin").resolve()
+    skipped_cpu = (out / "skipped-cpu.bin").resolve()
+    phase_totals = (out / "phase-totals.bin").resolve()
     mprotect_stats = (out / "mprotect-stats.bin").resolve()
     for attempt in range(1, 6):
-        for capture in (profiles, statics, mprotect_stats):
+        for capture in (
+            profiles,
+            statics,
+            phase_started,
+            skipped_cpu,
+            phase_totals,
+            mprotect_stats,
+        ):
             capture.unlink(missing_ok=True)
         command = [
             "gdb-multiarch",
@@ -165,20 +238,36 @@ def dump_profile(
             "-ex",
             f"target remote 127.0.0.1:{port}",
             "-ex",
+            "maintenance packet Qqemu.PhyMemMode:1",
+            "-ex",
             (
                 f"dump binary memory {profiles} "
-                f"{profiles_address:#x} {profiles_address + profiles_size:#x}"
+                f"{profiles_address:#x} "
+                f"{profiles_address + symbols.profiles_size:#x}"
             ),
             "-ex",
             (
-                f"dump binary memory {statics} "
-                f"{statics_address:#x} {statics_address + PROFILE_STATICS_SIZE:#x}"
+                f"dump binary memory {phase_started} "
+                f"{phase_started_address:#x} "
+                f"{phase_started_address + PHASE_STARTED_SIZE:#x}"
+            ),
+            "-ex",
+            (
+                f"dump binary memory {skipped_cpu} "
+                f"{skipped_cpu_address:#x} "
+                f"{skipped_cpu_address + SKIPPED_CPU_SIZE:#x}"
+            ),
+            "-ex",
+            (
+                f"dump binary memory {phase_totals} "
+                f"{phase_totals_address:#x} "
+                f"{phase_totals_address + symbols.phase_totals_size:#x}"
             ),
             "-ex",
             (
                 f"dump binary memory {mprotect_stats} "
                 f"{mprotect_stats_address:#x} "
-                f"{mprotect_stats_address + mprotect_stats_size:#x}"
+                f"{mprotect_stats_address + symbols.mprotect_stats_size:#x}"
             ),
             "-ex",
             "detach",
@@ -187,11 +276,20 @@ def dump_profile(
         if (
             result.returncode == 0
             and profile_locks_are_clear(profiles)
-            and statics.is_file()
-            and statics.stat().st_size == PROFILE_STATICS_SIZE
+            and phase_started.is_file()
+            and phase_started.stat().st_size == PHASE_STARTED_SIZE
+            and skipped_cpu.is_file()
+            and skipped_cpu.stat().st_size == SKIPPED_CPU_SIZE
+            and phase_totals.is_file()
+            and phase_totals.stat().st_size == PHASE_TOTALS_SIZE
             and mprotect_stats.is_file()
             and mprotect_stats.stat().st_size == MPROTECT_STATS_SIZE
         ):
+            compatible_statics = bytearray(PROFILE_STATICS_SIZE)
+            compatible_statics[8:16] = phase_started.read_bytes()
+            compatible_statics[16:24] = skipped_cpu.read_bytes()
+            compatible_statics[24:56] = phase_totals.read_bytes()
+            statics.write_bytes(compatible_statics)
             print(f"profile dump completed on attempt {attempt}", flush=True)
             return
         print(
@@ -218,6 +316,7 @@ def terminate_process_group(process: subprocess.Popen[bytes]) -> None:
 
 def main() -> None:
     args = parse_args()
+    ready_marker = args.ready_marker.encode()
     kernel = require_file(args.kernel)
     elf = require_file(args.elf)
     disk = require_file(args.disk)
@@ -226,13 +325,7 @@ def main() -> None:
     console_path = out / "console.log"
     metadata_path = out / "run.json"
 
-    (
-        profiles_address,
-        profiles_size,
-        statics_address,
-        mprotect_stats_address,
-        mprotect_stats_size,
-    ) = profiler_symbols(elf)
+    symbols = profiler_symbols(elf)
     qemu = [
         "qemu-system-riscv64",
         "-machine",
@@ -248,7 +341,7 @@ def main() -> None:
         "default",
         "-snapshot",
         "-drive",
-        f"file={disk},if=none,format=raw,id=x0",
+        f"file={disk},if=none,format={args.disk_format},id=x0",
         "-device",
         "virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0",
         "-no-reboot",
@@ -331,19 +424,17 @@ def main() -> None:
                 with console_path.open("rb") as source:
                     source.seek(size - tail_size)
                     tail = source.read()
-                if READY_MARKER in tail:
+                if ready_marker in tail:
                     status = "complete"
-                    reason = "guest completed BuildStorm and stopped the profiler"
+                    reason = (
+                        f"guest emitted the stopped-profile marker: {args.ready_marker}"
+                    )
                     print(f"ready marker after {now - started:.1f}s", flush=True)
                     dump_profile(
                         elf,
                         out,
                         args.gdb_port,
-                        profiles_address,
-                        profiles_size,
-                        statics_address,
-                        mprotect_stats_address,
-                        mprotect_stats_size,
+                        symbols,
                     )
                     break
                 if any(marker in tail for marker in PANIC_MARKERS):
@@ -354,11 +445,7 @@ def main() -> None:
                         elf,
                         out,
                         args.gdb_port,
-                        profiles_address,
-                        profiles_size,
-                        statics_address,
-                        mprotect_stats_address,
-                        mprotect_stats_size,
+                        symbols,
                     )
                     break
 
@@ -385,11 +472,7 @@ def main() -> None:
                         elf,
                         out,
                         args.gdb_port,
-                        profiles_address,
-                        profiles_size,
-                        statics_address,
-                        mprotect_stats_address,
-                        mprotect_stats_size,
+                        symbols,
                     )
                     break
                 if (
@@ -406,11 +489,7 @@ def main() -> None:
                         elf,
                         out,
                         args.gdb_port,
-                        profiles_address,
-                        profiles_size,
-                        statics_address,
-                        mprotect_stats_address,
-                        mprotect_stats_size,
+                        symbols,
                     )
                     break
                 if now - started >= args.timeout_seconds:
@@ -421,11 +500,7 @@ def main() -> None:
                         elf,
                         out,
                         args.gdb_port,
-                        profiles_address,
-                        profiles_size,
-                        statics_address,
-                        mprotect_stats_address,
-                        mprotect_stats_size,
+                        symbols,
                     )
                     break
                 print(
@@ -451,11 +526,15 @@ def main() -> None:
         "kernel": str(kernel),
         "elf": str(elf),
         "disk": str(disk),
-        "profiles_address": profiles_address,
-        "profiles_size": profiles_size,
-        "statics_address": statics_address,
-        "mprotect_stats_address": mprotect_stats_address,
-        "mprotect_stats_size": mprotect_stats_size,
+        "disk_format": args.disk_format,
+        "profiles_address": symbols.profiles_address,
+        "profiles_size": symbols.profiles_size,
+        "phase_started_address": symbols.phase_started_address,
+        "skipped_cpu_address": symbols.skipped_cpu_address,
+        "phase_totals_address": symbols.phase_totals_address,
+        "phase_totals_size": symbols.phase_totals_size,
+        "mprotect_stats_address": symbols.mprotect_stats_address,
+        "mprotect_stats_size": symbols.mprotect_stats_size,
         "cpu_samples": cpu_samples,
     }
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n")

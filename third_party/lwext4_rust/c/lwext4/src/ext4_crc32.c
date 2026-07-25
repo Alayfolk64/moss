@@ -166,6 +166,18 @@ static inline uint32_t crc32(uint32_t crc, const void *buf, uint32_t size,
 {
 	const uint8_t *p = (const uint8_t *)buf;
 
+	while (size >= 8) {
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+		size -= 8;
+	}
+
 	while (size--)
 		crc = tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
 

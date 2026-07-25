@@ -1,8 +1,9 @@
 //! Memory mapping backends.
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use axalloc::{UsageKind, global_allocator};
 use axerrno::{AxError, AxResult};
+use axfs::FolioPageRef;
 use axhal::{
     mem::{phys_to_virt, virt_to_phys},
     paging::{MappingFlags, PageSize, PageTable, PageTableMut},
@@ -17,7 +18,11 @@ mod linear;
 mod shared;
 
 pub use self::shared::SharedPages;
-pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan, shared::SharedFaultPlan};
+pub(crate) use self::{
+    cow::{CowFaultPlan, init_frame_ref_table},
+    file::FileFaultPlan,
+    shared::SharedFaultPlan,
+};
 use super::{AddrSpace, AddrSpaceLock};
 
 /// Result of the short, locked phase of a page fault.
@@ -93,6 +98,68 @@ fn pages_in(range: VirtAddrRange, align: PageSize) -> AxResult<DynPageIter<VirtA
     DynPageIter::new(range.start, range.end, align as usize).ok_or(AxError::InvalidInput)
 }
 
+/// Number of resident PTEs removed before one TLB flush and deferred release.
+///
+/// The gather counts actual mappings rather than virtual range size, so sparse
+/// address spaces do not reserve or flush empty pages.
+const UNMAP_GATHER_PAGES: usize = 8192;
+
+enum DeferredUnmapPage {
+    Anonymous {
+        paddr: PhysAddr,
+        page_size: PageSize,
+    },
+    File(FolioPageRef),
+}
+
+/// Physical-page owners waiting for the corresponding stale TLB entries to be
+/// invalidated.
+///
+/// A normal `munmap` creates one local gather. `AddrSpace::clear` shares one
+/// gather across all VMAs, avoiding a full remote TLB flush at every Cow/File
+/// VMA boundary while retaining a fixed memory bound.
+pub(crate) struct UnmapGather {
+    pages: Vec<DeferredUnmapPage>,
+}
+
+impl UnmapGather {
+    pub(crate) const fn new() -> Self {
+        Self { pages: Vec::new() }
+    }
+
+    fn push_anonymous(&mut self, paddr: PhysAddr, page_size: PageSize, pt: &mut PageTableMut) {
+        self.pages
+            .push(DeferredUnmapPage::Anonymous { paddr, page_size });
+        self.finish_if_full(pt);
+    }
+
+    fn push_file(&mut self, page: FolioPageRef, pt: &mut PageTableMut) {
+        self.pages.push(DeferredUnmapPage::File(page));
+        self.finish_if_full(pt);
+    }
+
+    fn finish_if_full(&mut self, pt: &mut PageTableMut) {
+        if self.pages.len() >= UNMAP_GATHER_PAGES {
+            self.finish(pt);
+        }
+    }
+
+    /// Invalidates every queued PTE before releasing the physical-page owners.
+    pub(crate) fn finish(&mut self, pt: &mut PageTableMut) {
+        // Always finish the page-table cursor, including an error that cleared
+        // a PTE before it could add an owner to the gather.
+        pt.finish();
+        for page in self.pages.drain(..) {
+            match page {
+                DeferredUnmapPage::Anonymous { paddr, page_size } => {
+                    cow::drop_referenced_frame(paddr, page_size);
+                }
+                DeferredUnmapPage::File(page) => drop(page),
+            }
+        }
+    }
+}
+
 type PopulateCallback = Box<dyn FnOnce(&mut AddrSpace)>;
 
 #[enum_dispatch]
@@ -163,6 +230,25 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Unmaps one VMA as part of destroying an entire address space.
+    ///
+    /// Cow and file backends transfer their PTE-owned references into the
+    /// address-space-wide gather. Backends without per-PTE ownership use their
+    /// normal unmap implementation while sharing the same page-table cursor.
+    pub(crate) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut,
+        gather: &mut UnmapGather,
+    ) -> AxResult {
+        match self {
+            Self::Cow(backend) => backend.unmap_present_into(range, pt, gather),
+            Self::File(backend) => backend.unmap_present_into(range, pt, gather),
+            Self::Linear(backend) => BackendOps::unmap(backend, range, pt),
+            Self::Shared(backend) => BackendOps::unmap(backend, range, pt),
+        }
+    }
+
     pub(crate) fn default_vma_kind(&self) -> (bool, bool, bool) {
         match self {
             Self::Linear(_) => (false, false, false),

@@ -39,9 +39,10 @@ EVENT_NAMES = {
     23: "aspace-exit-clear-write-hold",
     24: "aspace-exec-clear-write-hold",
     25: "aspace-fault-fallback-write-hold",
-    26: "aspace-clone-write-hold",
+    26: "aspace-clone-parent-write-hold",
     27: "aspace-file-evict-write-hold",
     28: "aspace-other-write-hold",
+    29: "aspace-clone-child-write-hold",
 }
 MPROTECT_PAGE_BUCKET_LABELS = (
     "0",
@@ -402,7 +403,7 @@ def main() -> None:
                 "top": top_rows(event_values),
             }
 
-        for event in range(18, 29):
+        for event in range(18, 30):
             label = EVENT_NAMES[event]
             event_values = wait_values[(phase, event)]
             folded = args.out / f"guest-{label}-{suffix}.folded"

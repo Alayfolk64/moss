@@ -5,7 +5,7 @@
     "README.md": "1acb4e15d29b148f10e65326846c680006e27290c7681c98adb62f093c319e9b",
     "src/lib.rs": "8cee1e1a14cdd0039d05db9268ba041f28750df7fb5927cf1f06f49b7fc93c80",
     "src/mutex.rs": "62af2668805f17329d9a76b3cab3cf6f5696102925a61b6d77ffea36bdda2de4",
-    "src/profile.rs": "20bdf69fc66eaa894dfd6c6a0370cbdb14459566d8a485a7eb23a4ffbd7e703f"
+    "src/profile.rs": "085ed0d084d9710c85c99fd4a1c0e303ab8072d2698fc692b3cd48c304ef172a"
   },
   "package": "e087fcacdf9adb81492b0e5b8051e9c0eaf275fa79894b53a3290586959d645a"
 }

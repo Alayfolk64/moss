@@ -75,6 +75,28 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         Ok((entry.paddr().add(off), entry.flags(), size))
     }
 
+    /// Finds the first present mapping that overlaps `[start, end)`.
+    ///
+    /// The walk follows existing page-table nodes and skips an absent entry's
+    /// entire address range. This makes sparse-range traversal proportional to
+    /// populated page-table nodes rather than to the number of 4-KiB virtual
+    /// pages in the range.
+    ///
+    /// The returned virtual address is the mapping base. Callers should advance
+    /// the next search by the returned [`PageSize`].
+    pub fn next_present_mapping(
+        &self,
+        start: M::VirtAddr,
+        end: M::VirtAddr,
+    ) -> Option<(M::VirtAddr, PhysAddr, MappingFlags, PageSize)> {
+        let start: usize = start.into();
+        let end: usize = end.into();
+        if start >= end {
+            return None;
+        }
+        self.next_present_in_table(self.root_paddr, 0, start, end)
+    }
+
     /// Gets a mutable reference to modify the page table.
     ///
     /// The TLB will be flushed automatically when the mutable reference is
@@ -109,6 +131,73 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
 
     fn load_entry(&self, table: PhysAddr, index: usize) -> PTE {
         PTE::from_bits(self.atomic_entry(table, index).load(Ordering::Acquire))
+    }
+
+    fn next_present_in_table(
+        &self,
+        table: PhysAddr,
+        level: usize,
+        start: usize,
+        end: usize,
+    ) -> Option<(M::VirtAddr, PhysAddr, MappingFlags, PageSize)> {
+        debug_assert!(level < M::LEVELS);
+        let shift = 12 + 9 * (M::LEVELS - level - 1);
+        let address_bits = usize::BITS as usize;
+        let span = (shift < address_bits).then(|| 1usize << shift);
+        let mut addr = start;
+
+        while addr < end {
+            // On a 32-bit host, the top level of Sv48 has a shift wider than
+            // `usize`. Every representable virtual address is then in entry 0.
+            let index = if shift < address_bits {
+                (addr >> shift) & (ENTRY_COUNT - 1)
+            } else {
+                0
+            };
+            let mapping_base = span.map_or(0, |span| addr & !(span - 1));
+            let entry_end = span.map_or(end, |span| {
+                mapping_base
+                    .checked_add(span)
+                    .unwrap_or(usize::MAX)
+                    .min(end)
+            });
+            let entry = self.load_entry(table, index);
+
+            if !entry.is_unused() {
+                if level + 1 == M::LEVELS || entry.is_huge() {
+                    if entry.is_present() {
+                        let span = span?;
+                        let page_size = match span {
+                            PAGE_SIZE_4K => PageSize::Size4K,
+                            0x20_0000 => PageSize::Size2M,
+                            0x4000_0000 => PageSize::Size1G,
+                            _ => {
+                                debug_assert!(false, "unsupported leaf page size: {span:#x}");
+                                return None;
+                            }
+                        };
+                        return Some((
+                            mapping_base.into(),
+                            entry.paddr(),
+                            entry.flags(),
+                            page_size,
+                        ));
+                    }
+                } else if let Ok(next_table) = self.next_table_paddr(entry) {
+                    if let Some(found) =
+                        self.next_present_in_table(next_table, level + 1, addr, entry_end)
+                    {
+                        return Some(found);
+                    }
+                }
+            }
+
+            if entry_end <= addr {
+                break;
+            }
+            addr = entry_end;
+        }
+        None
     }
 
     fn next_table<'a>(&self, entry: &PTE) -> PagingResult<&'a [PTE]> {
@@ -157,11 +246,7 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         Ok((p1e, PageSize::Size4K))
     }
 
-    fn next_table_atomic_or_create(
-        &self,
-        table: PhysAddr,
-        index: usize,
-    ) -> PagingResult<PhysAddr> {
+    fn next_table_atomic_or_create(&self, table: PhysAddr, index: usize) -> PagingResult<PhysAddr> {
         let slot = self.atomic_entry(table, index);
         loop {
             let current_bits = slot.load(Ordering::Acquire);
@@ -172,23 +257,15 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
 
             let new_table = Self::alloc_table()?;
             let new_bits = PTE::new_table(new_table).bits();
-            match slot.compare_exchange(
-                current_bits,
-                new_bits,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            match slot.compare_exchange(current_bits, new_bits, Ordering::AcqRel, Ordering::Acquire)
+            {
                 Ok(_) => return Ok(new_table),
                 Err(_) => H::dealloc_frame(new_table),
             }
         }
     }
 
-    fn leaf_entry_atomic(
-        &self,
-        vaddr: M::VirtAddr,
-        create: bool,
-    ) -> PagingResult<&AtomicUsize> {
+    fn leaf_entry_atomic(&self, vaddr: M::VirtAddr, create: bool) -> PagingResult<&AtomicUsize> {
         let addr: usize = vaddr.into();
         let next = |table, index| {
             if create {
@@ -229,6 +306,12 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
 
     /// Replaces one existing 4-KiB mapping if it still refers to
     /// `expected_paddr`. Competing faults resolve through the leaf PTE CAS.
+    ///
+    /// Replacing the physical frame or restricting an existing mapping needs
+    /// a system-wide TLB shootdown. Keeping the same frame while only adding
+    /// access permissions is safe with a local invalidation: remote CPUs can
+    /// retain only the older, more restrictive translation and will fault and
+    /// invalidate locally if they need the newly granted permission.
     pub fn remap_4k_concurrent_if(
         &self,
         vaddr: M::VirtAddr,
@@ -246,16 +329,19 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
             if old.paddr() != expected_paddr.align_down(PageSize::Size4K) {
                 return Ok(false);
             }
-            let new_bits =
-                PTE::new_page(target.align_down(PageSize::Size4K), flags, false).bits();
-            match slot.compare_exchange(
-                old_bits,
-                new_bits,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
+            let old_flags = old.flags();
+            let new_bits = PTE::new_page(target.align_down(PageSize::Size4K), flags, false).bits();
+            match slot.compare_exchange(old_bits, new_bits, Ordering::AcqRel, Ordering::Acquire) {
                 Ok(_) => {
-                    M::flush_tlb(Some(vaddr));
+                    let permissions =
+                        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE;
+                    let same_frame = old.paddr() == target.align_down(PageSize::Size4K);
+                    let same_attributes = (old_flags - permissions) == (flags - permissions);
+                    if same_frame && same_attributes && flags.contains(old_flags) {
+                        M::flush_tlb_local(Some(vaddr));
+                    } else {
+                        M::flush_tlb(Some(vaddr));
+                    }
                     return Ok(true);
                 }
                 Err(_) => continue,
@@ -611,33 +697,33 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
         size: usize,
         flags: MappingFlags,
     ) -> PagingResult {
-        let mut vaddr_usize: usize = vaddr.into();
-        let mut size = size;
+        let start: usize = vaddr.into();
+        let Some(end) = start.checked_add(size) else {
+            return Err(PagingError::NotAligned);
+        };
         trace!(
             "protect_region({:#x}) [{:#x}, {:#x}) {:?}",
             self.root_paddr(),
-            vaddr_usize,
-            vaddr_usize + size,
+            start,
+            end,
             flags,
         );
-        while size > 0 {
-            let vaddr = vaddr_usize.into();
-            let page_size = match self.protect(vaddr, flags) {
-                Ok(page_size) => {
-                    assert!(page_size.is_aligned(vaddr_usize));
-                    assert!(page_size as usize <= size);
 
-                    page_size
-                }
-                Err(PagingError::NotMapped) => PageSize::Size4K,
-                Err(e) => {
-                    error!("failed to protect page: {vaddr_usize:#x?}, {e:?}");
-                    return Err(e);
-                }
-            };
-
-            vaddr_usize += page_size as usize;
-            size -= page_size as usize;
+        let mut cursor = start;
+        while let Some((mapping, _paddr, _old_flags, page_size)) =
+            self.next_present_mapping(cursor.into(), end.into())
+        {
+            let mapping: usize = mapping.into();
+            self.protect(mapping.into(), flags).inspect_err(|e| {
+                error!("failed to protect page: {mapping:#x?}, {e:?}");
+            })?;
+            let next = mapping
+                .checked_add(page_size as usize)
+                .ok_or(PagingError::NotAligned)?;
+            if next <= cursor {
+                return Err(PagingError::NotAligned);
+            }
+            cursor = next;
         }
         Ok(())
     }

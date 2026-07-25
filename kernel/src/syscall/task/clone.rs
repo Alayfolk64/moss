@@ -211,10 +211,12 @@ impl CloneArgs {
                 old_proc_data.aspace()
             } else {
                 let old_aspace = old_proc_data.aspace();
-                let mut aspace = old_aspace.lock_profiled(AddrSpaceWriteOwner::Clone);
-                let aspace = aspace.try_clone()?;
+                let aspace = {
+                    let mut parent = old_aspace.lock_profiled(AddrSpaceWriteOwner::CloneParent);
+                    parent.try_clone()?
+                };
                 {
-                    let mut child_aspace = aspace.lock_profiled(AddrSpaceWriteOwner::Clone);
+                    let mut child_aspace = aspace.lock_profiled(AddrSpaceWriteOwner::CloneChild);
                     copy_from_kernel(&mut child_aspace)?;
                     crate::syscall::inherit_wipeonfork_ranges(
                         old_proc_data.proc.pid(),

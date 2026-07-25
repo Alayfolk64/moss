@@ -52,7 +52,7 @@ run_buildstorm() {
 
     if [ -w /proc/moss_profile ]; then
         sed -i \
-            -e '/OS COMP TEST GROUP START buildstorm-glibc/a echo reset > /proc/moss_profile; echo phase=setup > /proc/moss_profile' \
+            -e '/OS COMP TEST GROUP START buildstorm-glibc/a echo mode=full > /proc/moss_profile; echo reset > /proc/moss_profile; echo phase=setup > /proc/moss_profile' \
             -e '/----- pre-build tg-xtask/a echo phase=prebuild > /proc/moss_profile' \
             -e '/----- build arceos-helloworld/a echo phase=timed > /proc/moss_profile' \
             "$buildstorm_script"

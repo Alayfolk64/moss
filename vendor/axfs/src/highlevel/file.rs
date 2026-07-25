@@ -726,6 +726,28 @@ impl FolioPageRef {
     pub fn paddr(&self) -> PhysAddr {
         self.folio.paddr_at(self.page as usize)
     }
+
+    /// Zero-based position of this page inside its folio.
+    pub fn folio_page_offset(&self) -> usize {
+        self.page as usize
+    }
+
+    /// Number of base pages owned by the same folio.
+    pub fn folio_page_count(&self) -> usize {
+        self.folio.page_count()
+    }
+
+    /// Returns another base-page reference from the same pinned folio.
+    ///
+    /// The caller still has to validate the folio against its file address
+    /// space before publishing a PTE. This helper only avoids repeating the
+    /// sharded page-cache lookup for every sibling of an already loaded folio.
+    pub fn folio_page_ref(&self, page: usize) -> Option<Self> {
+        (page < self.folio.page_count()).then(|| Self {
+            folio: self.folio.clone(),
+            page: page as u8,
+        })
+    }
 }
 
 pub struct FolioPage<'a> {
@@ -1347,6 +1369,31 @@ impl CachedFile {
         }
         if mark_dirty && !self.in_memory() {
             state.dirty |= 1 << page.page;
+        }
+        drop(state);
+        Some(commit())
+    }
+
+    /// Runs one mapping commit for any number of pages in the same folio.
+    ///
+    /// Fault-around already pins the entire folio through `page`. Holding the
+    /// invalidation read side and validating its canonical cache entry once is
+    /// sufficient for all sibling references derived from that folio. This
+    /// avoids reacquiring the sleeping invalidation gate, sharded index and
+    /// folio-state lock for every 4-KiB PTE in a larger folio.
+    fn with_valid_folio_ref<R>(
+        &self,
+        page: &FolioPageRef,
+        commit: impl FnOnce() -> R,
+    ) -> Option<R> {
+        let _invalidate = self.shared().invalidate_lock.read();
+        let cached = self.lookup_folio(page.folio.index)?;
+        if !Arc::ptr_eq(&cached, &page.folio) {
+            return None;
+        }
+        let state = cached.state.lock();
+        if state.loading || !state.uptodate || state.truncated {
+            return None;
         }
         drop(state);
         Some(commit())
@@ -2424,6 +2471,19 @@ impl FileBackend {
         let pn = u32::try_from(offset / PAGE_SIZE as u64).ok()?;
         match self {
             Self::Cached(cached) => cached.with_valid_page_ref(pn, page, false, commit),
+            Self::Direct(_) => None,
+        }
+    }
+
+    /// Validates a pinned cached folio once and runs a short multi-page PTE
+    /// commit while truncate and destructive invalidation are excluded.
+    pub fn with_valid_folio_ref<R>(
+        &self,
+        page: &FolioPageRef,
+        commit: impl FnOnce() -> R,
+    ) -> Option<R> {
+        match self {
+            Self::Cached(cached) => cached.with_valid_folio_ref(page, commit),
             Self::Direct(_) => None,
         }
     }

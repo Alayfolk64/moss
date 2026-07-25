@@ -1,0 +1,3066 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="406" onload="init(evt)" viewBox="0 0 1800 406" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#e0e0ff" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="406.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Moss guest ext4 global-lock wait - timed</text>
+<text id="details" x="10.00" y="389" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="389" > </text>
+<g id="frames">
+<g >
+<title>-- (50,118 microseconds, 2.29%)</title><rect x="456.0" y="101" width="40.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="459.02" y="111.5" >--</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="149" width="1.4" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="536.42" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_faccessat2 (kernel/src/syscall/fs/stat.rs:381) (441 microseconds, 0.02%)</title><rect x="642.0" y="229" width="0.3" height="15.0" fill="rgb(127,127,244)" rx="2" ry="2" />
+<text  x="644.99" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::open_file (vendor/axfs-ng-vfs/src/mount.rs:391) (792 microseconds, 0.04%)</title><rect x="539.2" y="165" width="0.7" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="542.21" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (483 microseconds, 0.02%)</title><rect x="496.8" y="293" width="0.4" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="499.78" y="303.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:219) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="197" width="91.0" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="835.96" y="207.5" >starry_ker..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (16,260 microseconds, 0.74%)</title><rect x="442.5" y="277" width="13.2" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="445.50" y="287.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="149" width="4.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="830.88" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (1,686 microseconds, 0.08%)</title><rect x="1187.9" y="117" width="1.4" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="1190.94" y="127.5" ></text>
+</g>
+<g >
+<title>-- (48,047 microseconds, 2.20%)</title><rect x="10.0" y="69" width="39.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="13.00" y="79.5" >--</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="181" width="124.6" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="216.38" y="191.5" >axfs::highlevel..</text>
+</g>
+<g >
+<title>-- (24,313 microseconds, 1.11%)</title><rect x="1312.5" y="117" width="19.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1315.46" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (16,260 microseconds, 0.74%)</title><rect x="442.5" y="261" width="13.2" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="445.50" y="271.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::ResolveAtResult::stat (kernel/src/file/fs.rs:135) (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="213" width="32.0" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1335.24" y="223.5" >st..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="149" width="2.2" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="539.46" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="165" width="1.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="538.20" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="197" width="3.6" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="1367.17" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="245" width="40.8" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="459.02" y="255.5" >sta..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (281,848 microseconds, 12.88%)</title><rect x="924.0" y="181" width="229.2" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="927.02" y="191.5" >axfs_ng_vfs::mount::Location::..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="293" width="159.6" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="1633.43" y="303.5" >&lt;alloc::sync::Arc&lt;T,..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::creation_mode_and_owner (kernel/src/syscall/fs/fd_ops.rs:437) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="229" width="12.9" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="445.50" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (720 microseconds, 0.03%)</title><rect x="1153.2" y="149" width="0.6" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="1156.22" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="165" width="1.1" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="542.85" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (1,643 microseconds, 0.08%)</title><rect x="436.8" y="197" width="1.3" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="439.81" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (532 microseconds, 0.02%)</title><rect x="832.0" y="149" width="0.4" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="834.99" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open (kernel/src/syscall/fs/fd_ops.rs:218) (20,382 microseconds, 0.93%)</title><rect x="516.8" y="229" width="16.6" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="519.85" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (91,027 microseconds, 4.16%)</title><rect x="568.0" y="181" width="74.0" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="570.96" y="191.5" >axfs::hi..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (59,126 microseconds, 2.70%)</title><rect x="1558.4" y="165" width="48.1" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1561.38" y="175.5" >&lt;axf..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (792 microseconds, 0.04%)</title><rect x="539.2" y="101" width="0.7" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="542.21" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="149" width="5.3" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1182.52" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (1,643 microseconds, 0.08%)</title><rect x="436.8" y="213" width="1.3" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="439.81" y="223.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::unlink (vendor/axfs-ng-vfs/src/node/dir.rs:373) (59,126 microseconds, 2.70%)</title><rect x="1558.4" y="197" width="48.1" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1561.38" y="207.5" >axfs..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:567) (80,806 microseconds, 3.69%)</title><rect x="133.5" y="149" width="65.7" height="15.0" fill="rgb(113,113,233)" rx="2" ry="2" />
+<text  x="136.51" y="159.5" >axfs_ng..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="133" width="1.7" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1187.84" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="101" width="39.1" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="13.00" y="111.5" >axf..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_protected_symlink_follow (kernel/src/syscall/fs/fd_ops.rs:180) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="213" width="1.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="538.20" y="223.5" ></text>
+</g>
+<g >
+<title>-- (1,206 microseconds, 0.06%)</title><rect x="567.0" y="101" width="1.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="569.98" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="133" width="91.0" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="835.96" y="143.5" >axfs::high..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (532 microseconds, 0.02%)</title><rect x="832.0" y="197" width="0.4" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="834.99" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::metadata (vendor/axfs-ng-vfs/src/node/mod.rs:551) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="165" width="12.9" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="445.50" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:630) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="229" width="60.3" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="1234.04" y="239.5" >starry..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_protected_symlink_follow (kernel/src/syscall/fs/fd_ops.rs:180) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="213" width="13.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="424.10" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (16,260 microseconds, 0.74%)</title><rect x="442.5" y="245" width="13.2" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="445.50" y="255.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="293" width="40.8" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="459.02" y="303.5" >&lt;al..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="165" width="26.2" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="53.07" y="175.5" >a..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open (kernel/src/syscall/fs/fd_ops.rs:218) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="229" width="35.5" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="388.38" y="239.5" >sta..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup_fresh_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:233) (12,712 microseconds, 0.58%)</title><rect x="1539.2" y="181" width="10.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1542.19" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (792 microseconds, 0.04%)</title><rect x="539.2" y="197" width="0.7" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="542.21" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="149" width="8.1" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1158.91" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="101" width="4.1" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="830.88" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="149" width="3.6" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1367.17" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="117" width="1.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="511.09" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (351 microseconds, 0.02%)</title><rect x="541.0" y="133" width="0.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="543.97" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (595 microseconds, 0.03%)</title><rect x="436.8" y="117" width="0.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="439.81" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="117" width="3.6" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1367.17" y="127.5" ></text>
+</g>
+<g >
+<title>-- (1,059 microseconds, 0.05%)</title><rect x="1606.8" y="133" width="0.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1609.82" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:?) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="133" width="40.8" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="459.02" y="143.5" >axf..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:73) (60,805 microseconds, 2.78%)</title><rect x="1558.2" y="245" width="49.5" height="15.0" fill="rgb(107,107,228)" rx="2" ry="2" />
+<text  x="1561.23" y="255.5" >star..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="197" width="60.3" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="1234.04" y="207.5" >starry..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (993 microseconds, 0.05%)</title><rect x="1607.7" y="117" width="0.8" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1610.68" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::flush_metadata_cache_shared (vendor/axfs-ng-vfs/src/node/mod.rs:384) (1,059 microseconds, 0.05%)</title><rect x="1606.8" y="165" width="0.9" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1609.82" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::execve::sys_execve (kernel/src/syscall/task/execve.rs:132) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="229" width="26.2" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="53.07" y="239.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:211) (50,392 microseconds, 2.30%)</title><rect x="1291.3" y="245" width="40.9" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1294.26" y="255.5" >sta..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="69" width="35.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="388.38" y="79.5" >&lt;ax..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="133" width="32.0" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1335.24" y="143.5" >&lt;a..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="261" width="40.8" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="459.02" y="271.5" >sta..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="69" width="2.2" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="539.46" y="79.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (504 microseconds, 0.02%)</title><rect x="534.8" y="133" width="0.4" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="537.79" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (441 microseconds, 0.02%)</title><rect x="642.0" y="213" width="0.3" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="644.99" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::unlink (vendor/axfs/src/fs/ext4/inode.rs:360) (397 microseconds, 0.02%)</title><rect x="1606.5" y="181" width="0.3" height="15.0" fill="rgb(100,100,221)" rx="2" ry="2" />
+<text  x="1609.47" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (504 microseconds, 0.02%)</title><rect x="534.8" y="101" width="0.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="537.79" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::creation_mode_and_owner::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:439) (720 microseconds, 0.03%)</title><rect x="1153.2" y="197" width="0.6" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="1156.22" y="207.5" ></text>
+</g>
+<g >
+<title>-- (17,406 microseconds, 0.80%)</title><rect x="199.2" y="85" width="14.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="202.22" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (9,160 microseconds, 0.42%)</title><rect x="509.4" y="181" width="7.4" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="512.40" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (81,508 microseconds, 3.72%)</title><rect x="10.0" y="277" width="66.3" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" >&lt;alloc:..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="181" width="2.1" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1156.81" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (657 microseconds, 0.03%)</title><rect x="832.4" y="149" width="0.6" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="835.42" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (2,689 microseconds, 0.12%)</title><rect x="434.6" y="117" width="2.2" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="437.62" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::read_extents (vendor/axfs/src/fs/ext4/fs.rs:190) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="197" width="159.6" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1633.43" y="207.5" >axfs::fs::ext4::fs::..</text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::Inode::read_cached_at (vendor/axfs/src/fs/ext4/inode.rs:98) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="229" width="159.6" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1633.43" y="239.5" >axfs::fs::ext4::inod..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_getdents64 (kernel/src/syscall/fs/ctl.rs:564) (10,585 microseconds, 0.48%)</title><rect x="1549.6" y="229" width="8.6" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="1552.62" y="239.5" ></text>
+</g>
+<g >
+<title>-- (1,536 microseconds, 0.07%)</title><rect x="1186.7" y="101" width="1.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1189.69" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="133" width="4.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="441.15" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:572) (29,029 microseconds, 1.33%)</title><rect x="1155.9" y="229" width="23.6" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1158.91" y="239.5" >s..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="133" width="25.7" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="544.26" y="143.5" >a..</text>
+</g>
+<g >
+<title>-- (523 microseconds, 0.02%)</title><rect x="1627.4" y="149" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1630.40" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (70,239 microseconds, 3.21%)</title><rect x="385.4" y="293" width="57.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="388.38" y="303.5" >&lt;alloc..</text>
+</g>
+<g >
+<title>-- (24,617 microseconds, 1.12%)</title><rect x="338.0" y="117" width="20.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="341.03" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::execve::sys_execve (kernel/src/syscall/task/execve.rs:132) (33,608 microseconds, 1.54%)</title><rect x="358.0" y="229" width="27.4" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="361.05" y="239.5" >s..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="69" width="5.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1182.52" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="165" width="2.2" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="539.46" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="133" width="4.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="830.88" y="143.5" ></text>
+</g>
+<g >
+<title>-- (31,631 microseconds, 1.45%)</title><rect x="541.3" y="69" width="25.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="544.26" y="79.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (722 microseconds, 0.03%)</title><rect x="1153.2" y="213" width="0.6" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="1156.22" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (12,894 microseconds, 0.59%)</title><rect x="497.6" y="213" width="10.5" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="500.60" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="165" width="25.7" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="544.26" y="175.5" >a..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (22,883 microseconds, 1.05%)</title><rect x="1608.8" y="165" width="18.6" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1611.79" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:623) (792 microseconds, 0.04%)</title><rect x="539.2" y="229" width="0.7" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="542.21" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNodeOps::create_after_lookup (vendor/axfs-ng-vfs/src/node/dir.rs:92) (373 microseconds, 0.02%)</title><rect x="1228.3" y="117" width="0.3" height="15.0" fill="rgb(81,81,205)" rx="2" ry="2" />
+<text  x="1231.27" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="149" width="39.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="13.00" y="159.5" >axf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="117" width="5.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1182.52" y="127.5" ></text>
+</g>
+<g >
+<title>all (2,188,857 microseconds, 100%)</title><rect x="10.0" y="357" width="1780.0" height="15.0" fill="rgb(90,90,213)" rx="2" ry="2" />
+<text  x="13.00" y="367.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (657 microseconds, 0.03%)</title><rect x="832.4" y="133" width="0.6" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="835.42" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="69" width="14.9" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="519.85" y="79.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="85" width="13.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="424.10" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="165" width="4.1" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="830.88" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="85" width="1.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="538.20" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="149" width="91.0" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="835.96" y="159.5" >axfs::high..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="277" width="159.6" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="1633.43" y="287.5" >&lt;alloc::boxed::Box&lt;F..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="133" width="12.9" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="445.50" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::create (vendor/axfs/src/fs/ext4/inode.rs:338) (609 microseconds, 0.03%)</title><rect x="1532.5" y="133" width="0.5" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="1535.51" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (16,260 microseconds, 0.74%)</title><rect x="442.5" y="293" width="13.2" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="445.50" y="303.5" ></text>
+</g>
+<g >
+<title>-- (5,052 microseconds, 0.23%)</title><rect x="827.9" y="69" width="4.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="830.88" y="79.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="165" width="124.6" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="216.38" y="175.5" >axfs_ng_vfs::mo..</text>
+</g>
+<g >
+<title>-- (33,315 microseconds, 1.52%)</title><rect x="358.0" y="37" width="27.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="361.05" y="47.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (29,029 microseconds, 1.33%)</title><rect x="1155.9" y="197" width="23.6" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1158.91" y="207.5" >s..</text>
+</g>
+<g >
+<title>-- (1,048 microseconds, 0.05%)</title><rect x="437.3" y="53" width="0.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="440.29" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="69" width="1.1" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="542.85" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="117" width="91.0" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="835.96" y="127.5" >axfs::high..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::creation_mode_and_owner::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:439) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="197" width="12.9" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="445.50" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="101" width="25.7" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="544.26" y="111.5" >a..</text>
+</g>
+<g >
+<title>-- (351 microseconds, 0.02%)</title><rect x="541.0" y="101" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="543.97" y="111.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::metadata (vendor/axfs-ng-vfs/src/node/mod.rs:551) (4,546 microseconds, 0.21%)</title><rect x="1528.8" y="165" width="3.7" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="1531.81" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (595 microseconds, 0.03%)</title><rect x="436.8" y="133" width="0.5" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="439.81" y="143.5" ></text>
+</g>
+<g >
+<title>-- (7,303 microseconds, 0.33%)</title><rect x="1533.0" y="117" width="5.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1536.00" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="213" width="2.1" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1156.81" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="181" width="25.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="544.26" y="191.5" >a..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::rename::{{closure}} (vendor/axfs-ng-vfs/src/node/dir.rs:524) (767 microseconds, 0.04%)</title><rect x="1629.5" y="197" width="0.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1632.50" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::File::read (vendor/axfs/src/highlevel/file.rs:2701) (50,392 microseconds, 2.30%)</title><rect x="1291.3" y="197" width="40.9" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1294.26" y="207.5" >axf..</text>
+</g>
+<g >
+<title>-- (373 microseconds, 0.02%)</title><rect x="1228.3" y="85" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1231.27" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:245) (54,704 microseconds, 2.50%)</title><rect x="1186.6" y="181" width="44.4" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="1189.55" y="191.5" >axfs..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="133" width="0.8" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="440.29" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="165" width="1.4" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="536.42" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (202,454 microseconds, 9.25%)</title><rect x="1364.2" y="213" width="164.6" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1367.17" y="223.5" >starry_kernel::file::..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (9,160 microseconds, 0.42%)</title><rect x="509.4" y="197" width="7.4" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="512.40" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (504 microseconds, 0.02%)</title><rect x="534.8" y="149" width="0.4" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="537.79" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (504 microseconds, 0.02%)</title><rect x="534.8" y="117" width="0.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="537.79" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (12,674 microseconds, 0.58%)</title><rect x="497.6" y="165" width="10.3" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="500.60" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (1,729 microseconds, 0.08%)</title><rect x="539.9" y="213" width="1.4" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="542.85" y="223.5" ></text>
+</g>
+<g >
+<title>-- (592 microseconds, 0.03%)</title><rect x="133.5" y="69" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="136.51" y="79.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::flush_metadata_cache_shared (vendor/axfs-ng-vfs/src/node/mod.rs:384) (473 microseconds, 0.02%)</title><rect x="1629.7" y="165" width="0.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="1632.73" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (198,045 microseconds, 9.05%)</title><rect x="1367.8" y="181" width="161.0" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1370.76" y="191.5" >axfs::highlevel::fs:..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:406) (123,864 microseconds, 5.66%)</title><rect x="541.3" y="245" width="100.7" height="15.0" fill="rgb(95,95,217)" rx="2" ry="2" />
+<text  x="544.26" y="255.5" >starry_kerne..</text>
+</g>
+<g >
+<title>task:opt cgu.02 (50,118 microseconds, 2.29%)</title><rect x="456.0" y="309" width="40.8" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="459.02" y="319.5" >tas..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:623) (98,212 microseconds, 4.49%)</title><rect x="133.5" y="229" width="79.9" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="136.51" y="239.5" >starry_ke..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:?) (1,536 microseconds, 0.07%)</title><rect x="1186.7" y="133" width="1.2" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1189.69" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_readlinkat::{{closure}} (kernel/src/syscall/fs/ctl.rs:841) (12,674 microseconds, 0.58%)</title><rect x="497.6" y="197" width="10.3" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="500.60" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_mkdirat::{{closure}} (kernel/src/syscall/fs/ctl.rs:237) (7,303 microseconds, 0.33%)</title><rect x="1533.0" y="197" width="5.9" height="15.0" fill="rgb(113,113,232)" rx="2" ry="2" />
+<text  x="1536.00" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:?) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="149" width="20.0" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="341.03" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="69" width="1.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="536.42" y="79.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_renameat2 (kernel/src/syscall/fs/ctl.rs:1307) (26,226 microseconds, 1.20%)</title><rect x="1608.8" y="229" width="21.3" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1611.79" y="239.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:167) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="245" width="185.6" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="645.34" y="255.5" >starry_kernel::syscall::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:621) (2,104 microseconds, 0.10%)</title><rect x="1184.8" y="229" width="1.8" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="1187.84" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (12,674 microseconds, 0.58%)</title><rect x="497.6" y="133" width="10.3" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="500.60" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_renameat2 (kernel/src/syscall/fs/ctl.rs:1265) (378 microseconds, 0.02%)</title><rect x="1608.5" y="229" width="0.3" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="1611.48" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (4,546 microseconds, 0.21%)</title><rect x="1528.8" y="149" width="3.7" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="1531.81" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="165" width="2.1" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="1156.81" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::loader::load_user_app_from_location (kernel/src/mm/loader.rs:394) (33,608 microseconds, 1.54%)</title><rect x="358.0" y="213" width="27.4" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="361.05" y="223.5" >s..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (441 microseconds, 0.02%)</title><rect x="642.0" y="133" width="0.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="644.99" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (532 microseconds, 0.02%)</title><rect x="832.0" y="133" width="0.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="834.99" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (9,160 microseconds, 0.42%)</title><rect x="509.4" y="133" width="7.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="512.40" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="149" width="35.5" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="388.38" y="159.5" >axf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (595 microseconds, 0.03%)</title><rect x="436.8" y="165" width="0.5" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="439.81" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::rename (vendor/axfs-ng-vfs/src/node/dir.rs:519) (2,053 microseconds, 0.09%)</title><rect x="1627.8" y="197" width="1.7" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1630.83" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="69" width="8.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1158.91" y="79.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::unlink (vendor/axfs-ng-vfs/src/node/dir.rs:383) (1,059 microseconds, 0.05%)</title><rect x="1606.8" y="197" width="0.9" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1609.82" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::read_mapped (vendor/axfs/src/fs/ext4/fs.rs:245) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="213" width="159.6" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1633.43" y="223.5" >axfs::fs::ext4::fs::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_protected_symlink_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:181) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="181" width="5.3" height="15.0" fill="rgb(88,88,212)" rx="2" ry="2" />
+<text  x="1182.52" y="191.5" ></text>
+</g>
+<g >
+<title>-- (2,137 microseconds, 0.10%)</title><rect x="531.7" y="133" width="1.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="534.69" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::load_readahead_folio (vendor/axfs/src/highlevel/file.rs:1636) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="245" width="159.6" height="15.0" fill="rgb(114,114,233)" rx="2" ry="2" />
+<text  x="1633.43" y="255.5" >axfs::highlevel::fil..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="117" width="2.2" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="539.46" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::update_metadata (vendor/axfs/src/fs/ext4/inode.rs:176) (1,059 microseconds, 0.05%)</title><rect x="1606.8" y="149" width="0.9" height="15.0" fill="rgb(132,132,249)" rx="2" ry="2" />
+<text  x="1609.82" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (1,214,661 microseconds, 55.49%)</title><rect x="642.3" y="261" width="987.8" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="645.34" y="271.5" >starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67)</text>
+</g>
+<g >
+<title>-- (504 microseconds, 0.02%)</title><rect x="534.8" y="85" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="537.79" y="95.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (91,027 microseconds, 4.16%)</title><rect x="568.0" y="149" width="74.0" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="570.96" y="159.5" >axfs_ng_..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::rename (vendor/axfs/src/fs/ext4/inode.rs:371) (2,053 microseconds, 0.09%)</title><rect x="1627.8" y="181" width="1.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1630.83" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="165" width="14.9" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="519.85" y="175.5" ></text>
+</g>
+<g >
+<title>-- (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="37" width="60.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1234.04" y="47.5" >--</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="101" width="1.4" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="536.42" y="111.5" ></text>
+</g>
+<g >
+<title>-- (720 microseconds, 0.03%)</title><rect x="1153.2" y="117" width="0.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1156.22" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:245) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="181" width="40.8" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="459.02" y="191.5" >axf..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (7,303 microseconds, 0.33%)</title><rect x="1533.0" y="133" width="5.9" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1536.00" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="85" width="25.7" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="544.26" y="95.5" >&lt;..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (92,233 microseconds, 4.21%)</title><rect x="567.0" y="197" width="75.0" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="569.98" y="207.5" >axfs::hi..</text>
+</g>
+<g >
+<title>-- (1,612 microseconds, 0.07%)</title><rect x="508.1" y="69" width="1.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="511.09" y="79.5" ></text>
+</g>
+<g >
+<title>-- (9,160 microseconds, 0.42%)</title><rect x="509.4" y="101" width="7.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="512.40" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_statx (kernel/src/syscall/fs/stat.rs:349) (241,727 microseconds, 11.04%)</title><rect x="1332.2" y="229" width="196.6" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="1335.24" y="239.5" >starry_kernel::syscall::f..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (177,988 microseconds, 8.13%)</title><rect x="497.6" y="261" width="144.7" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="500.60" y="271.5" >starry_kernel::tas..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="85" width="1.7" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1187.84" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="165" width="1.3" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="511.09" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="213" width="52.5" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="79.28" y="223.5" >starr..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (70,239 microseconds, 3.21%)</title><rect x="385.4" y="261" width="57.1" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="388.38" y="271.5" >starry..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="133" width="1.4" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="536.42" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="117" width="1.4" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="536.42" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (622 microseconds, 0.03%)</title><rect x="538.7" y="181" width="0.5" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="541.70" y="191.5" ></text>
+</g>
+<g >
+<title>-- (111,976 microseconds, 5.12%)</title><rect x="833.0" y="53" width="91.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="835.96" y="63.5" >--</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="53" width="1.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="542.85" y="63.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_readlinkat::{{closure}} (kernel/src/syscall/fs/ctl.rs:841) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="197" width="185.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="645.34" y="207.5" >starry_kernel::syscall::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:50) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="245" width="20.0" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="341.03" y="255.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="117" width="14.9" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="519.85" y="127.5" ></text>
+</g>
+<g >
+<title>-- (2,689 microseconds, 0.12%)</title><rect x="434.6" y="101" width="2.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="437.62" y="111.5" ></text>
+</g>
+<g >
+<title>-- (5,195 microseconds, 0.24%)</title><rect x="438.1" y="117" width="4.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="441.15" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (2,137 microseconds, 0.10%)</title><rect x="531.7" y="181" width="1.7" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="534.69" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (504 microseconds, 0.02%)</title><rect x="534.8" y="181" width="0.4" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="537.79" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_no_follow (vendor/axfs/src/highlevel/fs.rs:156) (12,674 microseconds, 0.58%)</title><rect x="497.6" y="181" width="10.3" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="500.60" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::ResolveAtResult::stat (kernel/src/file/fs.rs:135) (657 microseconds, 0.03%)</title><rect x="832.4" y="213" width="0.6" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="835.42" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:623) (54,704 microseconds, 2.50%)</title><rect x="1186.6" y="229" width="44.4" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="1189.55" y="239.5" >star..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (993 microseconds, 0.05%)</title><rect x="1607.7" y="165" width="0.8" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1610.68" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::read_dir (vendor/axfs/src/fs/ext4/inode.rs:294) (10,585 microseconds, 0.48%)</title><rect x="1549.6" y="197" width="8.6" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="1552.62" y="207.5" ></text>
+</g>
+<g >
+<title>-- (1,686 microseconds, 0.08%)</title><rect x="1187.9" y="85" width="1.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1190.94" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (720 microseconds, 0.03%)</title><rect x="1153.2" y="133" width="0.6" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1156.22" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_fstatat (kernel/src/syscall/fs/stat.rs:92) (2,923 microseconds, 0.13%)</title><rect x="434.4" y="229" width="2.4" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="437.43" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::create (vendor/axfs/src/fs/ext4/inode.rs:338) (1,536 microseconds, 0.07%)</title><rect x="1186.7" y="117" width="1.2" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="1189.69" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="181" width="8.1" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="1158.91" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:501) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="245" width="26.2" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="53.07" y="255.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_getdents64 (kernel/src/syscall/fs/ctl.rs:558) (12,827 microseconds, 0.59%)</title><rect x="1539.2" y="229" width="10.4" height="15.0" fill="rgb(95,95,217)" rx="2" ry="2" />
+<text  x="1542.19" y="239.5" ></text>
+</g>
+<g >
+<title>-- (2,762 microseconds, 0.13%)</title><rect x="536.5" y="53" width="2.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="539.46" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="149" width="12.9" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="445.50" y="159.5" ></text>
+</g>
+<g >
+<title>task:collect2 (70,239 microseconds, 3.21%)</title><rect x="385.4" y="309" width="57.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="388.38" y="319.5" >task:c..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:412) (241,727 microseconds, 11.04%)</title><rect x="1332.2" y="245" width="196.6" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="1335.24" y="255.5" >starry_kernel::syscall::h..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="149" width="1.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="542.85" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="181" width="4.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="830.88" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="133" width="185.6" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="645.34" y="143.5" >&lt;axfs::fs::ext4::inode::..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (12,458 microseconds, 0.57%)</title><rect x="1528.8" y="213" width="10.1" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="1531.81" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (1,729 microseconds, 0.08%)</title><rect x="539.9" y="197" width="1.4" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="542.85" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (54,704 microseconds, 2.50%)</title><rect x="1186.6" y="213" width="44.4" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1189.55" y="223.5" >star..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="117" width="26.2" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="53.07" y="127.5" >a..</text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (380,092 microseconds, 17.36%)</title><rect x="76.3" y="293" width="309.1" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="79.28" y="303.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Cl..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="149" width="32.0" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="1335.24" y="159.5" >ax..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::cached_metadata (vendor/axfs/src/highlevel/file.rs:2327) (657 microseconds, 0.03%)</title><rect x="832.4" y="197" width="0.6" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="835.42" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::loader::load_user_app_from_location (kernel/src/mm/loader.rs:394) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="213" width="26.2" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="53.07" y="223.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_open_access (kernel/src/syscall/fs/fd_ops.rs:150) (3,384 microseconds, 0.15%)</title><rect x="536.5" y="213" width="2.7" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="539.46" y="223.5" ></text>
+</g>
+<g >
+<title>-- (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="85" width="15.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1167.01" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::start_readahead_workers::{{closure}} (vendor/axfs/src/highlevel/file.rs:896) (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="261" width="159.6" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1633.43" y="271.5" >axfs::highlevel::fil..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (334 microseconds, 0.02%)</title><rect x="496.9" y="213" width="0.3" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="499.90" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (1,214,661 microseconds, 55.49%)</title><rect x="642.3" y="277" width="987.8" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="645.34" y="287.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknow..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::open_file (vendor/axfs-ng-vfs/src/mount.rs:391) (54,704 microseconds, 2.50%)</title><rect x="1186.6" y="165" width="44.4" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="1189.55" y="175.5" >axfs..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::update_cached_metadata (vendor/axfs/src/highlevel/file.rs:2323) (7,303 microseconds, 0.33%)</title><rect x="1533.0" y="181" width="5.9" height="15.0" fill="rgb(136,136,251)" rx="2" ry="2" />
+<text  x="1536.00" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="197" width="13.3" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="424.10" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (3,032 microseconds, 0.14%)</title><rect x="1228.6" y="117" width="2.4" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="1231.57" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="213" width="4.3" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="441.15" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (1,214,661 microseconds, 55.49%)</title><rect x="642.3" y="293" width="987.8" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="645.34" y="303.5" >&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rust..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (198,045 microseconds, 9.05%)</title><rect x="1367.8" y="197" width="161.0" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="1370.76" y="207.5" >axfs::highlevel::fs:..</text>
+</g>
+<g >
+<title>-- (47,907 microseconds, 2.19%)</title><rect x="1189.3" y="101" width="39.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1192.31" y="111.5" >--</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="117" width="1.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="538.20" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="181" width="1.4" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="536.42" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_mount_open_constraints (kernel/src/syscall/fs/fd_ops.rs:249) (5,584 microseconds, 0.26%)</title><rect x="827.9" y="229" width="4.5" height="15.0" fill="rgb(87,87,210)" rx="2" ry="2" />
+<text  x="830.88" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="181" width="4.7" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="131.77" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="181" width="91.0" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="835.96" y="191.5" >axfs::high..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::create (vendor/axfs/src/fs/ext4/inode.rs:338) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="133" width="20.0" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="341.03" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="101" width="1.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="542.85" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_mkdirat::{{closure}} (kernel/src/syscall/fs/ctl.rs:235) (609 microseconds, 0.03%)</title><rect x="1532.5" y="197" width="0.5" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1535.51" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="69" width="91.0" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="835.96" y="79.5" >&lt;axfs::fs:..</text>
+</g>
+<g >
+<title>-- (18,245 microseconds, 0.83%)</title><rect x="516.8" y="53" width="14.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="519.85" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="101" width="8.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1158.91" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="181" width="15.5" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="1167.01" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (2,689 microseconds, 0.12%)</title><rect x="434.6" y="133" width="2.2" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="437.62" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="197" width="1.3" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="511.09" y="207.5" ></text>
+</g>
+<g >
+<title>-- (43,710 microseconds, 2.00%)</title><rect x="385.4" y="53" width="35.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="388.38" y="63.5" >--</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="181" width="2.2" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="539.46" y="191.5" ></text>
+</g>
+<g >
+<title>task:opt cgu.0 (483 microseconds, 0.02%)</title><rect x="496.8" y="309" width="0.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="499.78" y="319.5" ></text>
+</g>
+<g >
+<title>-- (80,214 microseconds, 3.66%)</title><rect x="134.0" y="101" width="65.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="136.99" y="111.5" >--</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (1,206 microseconds, 0.06%)</title><rect x="567.0" y="133" width="1.0" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="569.98" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="197" width="40.8" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="459.02" y="207.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (393,824 microseconds, 17.99%)</title><rect x="833.0" y="213" width="320.2" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="835.96" y="223.5" >starry_kernel::file::fs::with_fs (kernel/sr..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:431) (441 microseconds, 0.02%)</title><rect x="642.0" y="245" width="0.3" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="644.99" y="255.5" ></text>
+</g>
+<g >
+<title>-- (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="117" width="2.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1156.81" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="165" width="4.7" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="131.77" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (441 microseconds, 0.02%)</title><rect x="642.0" y="181" width="0.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="644.99" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="133" width="1.1" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="542.85" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:623) (334 microseconds, 0.02%)</title><rect x="496.9" y="229" width="0.3" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="499.90" y="239.5" ></text>
+</g>
+<g >
+<title>-- (622 microseconds, 0.03%)</title><rect x="538.7" y="85" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="541.70" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="117" width="35.5" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="388.38" y="127.5" >axf..</text>
+</g>
+<g >
+<title>-- (5,836 microseconds, 0.27%)</title><rect x="128.8" y="117" width="4.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="131.77" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="133" width="60.3" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1234.04" y="143.5" >axfs::..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="69" width="0.8" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="440.29" y="79.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="213" width="39.1" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_statx (kernel/src/syscall/fs/stat.rs:349) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="229" width="124.6" height="15.0" fill="rgb(106,106,227)" rx="2" ry="2" />
+<text  x="216.38" y="239.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>task:coordinator (16,260 microseconds, 0.74%)</title><rect x="442.5" y="309" width="13.2" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="445.50" y="319.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:59) (23,412 microseconds, 1.07%)</title><rect x="1539.2" y="245" width="19.0" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="1542.19" y="255.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="197" width="4.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="441.15" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="101" width="91.0" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="835.96" y="111.5" >axfs_ng_vf..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::metadata (vendor/axfs-ng-vfs/src/mount.rs:235) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="181" width="52.5" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="79.28" y="191.5" >axfs_..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="101" width="1.7" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1187.84" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (2,137 microseconds, 0.10%)</title><rect x="531.7" y="149" width="1.7" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="534.69" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::rename (vendor/axfs-ng-vfs/src/node/dir.rs:501) (22,883 microseconds, 1.05%)</title><rect x="1608.8" y="197" width="18.6" height="15.0" fill="rgb(112,112,232)" rx="2" ry="2" />
+<text  x="1611.79" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::create (vendor/axfs/src/fs/ext4/inode.rs:338) (80,214 microseconds, 3.66%)</title><rect x="134.0" y="117" width="65.2" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="136.99" y="127.5" >&lt;axfs::..</text>
+</g>
+<g >
+<title>-- (473 microseconds, 0.02%)</title><rect x="1629.7" y="133" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1632.73" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (378 microseconds, 0.02%)</title><rect x="1608.5" y="197" width="0.3" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1611.48" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (198,045 microseconds, 9.05%)</title><rect x="1367.8" y="165" width="161.0" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="1370.76" y="175.5" >axfs_ng_vfs::mount::..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="133" width="2.1" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1156.81" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (2,923 microseconds, 0.13%)</title><rect x="434.4" y="213" width="2.4" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="437.43" y="223.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:584) (17,406 microseconds, 0.80%)</title><rect x="199.2" y="149" width="14.2" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="202.22" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (2,689 microseconds, 0.12%)</title><rect x="434.6" y="197" width="2.2" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="437.62" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (49,278 microseconds, 2.25%)</title><rect x="10.0" y="245" width="40.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >sta..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup_fresh_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:233) (22,883 microseconds, 1.05%)</title><rect x="1608.8" y="181" width="18.6" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1611.79" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:?) (373 microseconds, 0.02%)</title><rect x="1228.3" y="133" width="0.3" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1231.27" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="117" width="15.5" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1167.01" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (3,384 microseconds, 0.15%)</title><rect x="536.5" y="197" width="2.7" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="539.46" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup_fresh_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:233) (47,907 microseconds, 2.19%)</title><rect x="1189.3" y="133" width="39.0" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1192.31" y="143.5" >axf..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:610) (3,032 microseconds, 0.14%)</title><rect x="1228.6" y="149" width="2.4" height="15.0" fill="rgb(138,138,254)" rx="2" ry="2" />
+<text  x="1231.57" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (2,104 microseconds, 0.10%)</title><rect x="1184.8" y="197" width="1.8" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="1187.84" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="117" width="1.7" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1187.84" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (81,508 microseconds, 3.72%)</title><rect x="10.0" y="261" width="66.3" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >starry_..</text>
+</g>
+<g >
+<title>-- (794 microseconds, 0.04%)</title><rect x="49.2" y="133" width="0.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="52.22" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_faccessat2 (kernel/src/syscall/fs/stat.rs:381) (1,643 microseconds, 0.08%)</title><rect x="436.8" y="229" width="1.3" height="15.0" fill="rgb(127,127,244)" rx="2" ry="2" />
+<text  x="439.81" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (1,686 microseconds, 0.08%)</title><rect x="1187.9" y="101" width="1.4" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1190.94" y="111.5" ></text>
+</g>
+<g >
+<title>-- (532 microseconds, 0.02%)</title><rect x="832.0" y="101" width="0.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="834.99" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="133" width="13.3" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="424.10" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::loader::resolve_dynamic_linker (kernel/src/mm/loader.rs:28) (33,608 microseconds, 1.54%)</title><rect x="358.0" y="181" width="27.4" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="361.05" y="191.5" >s..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (794 microseconds, 0.04%)</title><rect x="49.2" y="149" width="0.7" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="52.22" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (198,045 microseconds, 9.05%)</title><rect x="1367.8" y="133" width="161.0" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1370.76" y="143.5" >&lt;axfs::fs::ext4::ino..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:630) (1,729 microseconds, 0.08%)</title><rect x="539.9" y="229" width="1.4" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="542.85" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:?) (80,214 microseconds, 3.66%)</title><rect x="134.0" y="133" width="65.2" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="136.99" y="143.5" >axfs_ng..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="133" width="27.1" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="361.05" y="143.5" >a..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="69" width="1.7" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1187.84" y="79.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="101" width="1.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="538.20" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="181" width="14.9" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="519.85" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="149" width="185.6" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="645.34" y="159.5" >axfs_ng_vfs::node::dir::..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,643 microseconds, 0.08%)</title><rect x="436.8" y="181" width="1.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="439.81" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (378 microseconds, 0.02%)</title><rect x="1608.5" y="181" width="0.3" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1611.48" y="191.5" ></text>
+</g>
+<g >
+<title>-- (1,378 microseconds, 0.06%)</title><rect x="539.9" y="37" width="1.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="542.85" y="47.5" ></text>
+</g>
+<g >
+<title>-- (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="181" width="159.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1633.43" y="191.5" >--</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::metadata (vendor/axfs-ng-vfs/src/node/mod.rs:551) (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="165" width="32.0" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="1335.24" y="175.5" >ax..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (569,808 microseconds, 26.03%)</title><rect x="827.9" y="245" width="463.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="830.88" y="255.5" >starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod...</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::creation_mode_and_owner (kernel/src/syscall/fs/fd_ops.rs:437) (722 microseconds, 0.03%)</title><rect x="1153.2" y="229" width="0.6" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="1156.22" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:87) (27,597 microseconds, 1.26%)</title><rect x="1607.7" y="245" width="22.4" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1610.68" y="255.5" >s..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::metadata (vendor/axfs-ng-vfs/src/mount.rs:235) (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="181" width="32.0" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1335.24" y="191.5" >ax..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open (kernel/src/syscall/fs/fd_ops.rs:218) (393,824 microseconds, 17.99%)</title><rect x="833.0" y="229" width="320.2" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="835.96" y="239.5" >starry_kernel::syscall::fs::fd_ops::check_n..</text>
+</g>
+<g >
+<title>-- (4,546 microseconds, 0.21%)</title><rect x="1528.8" y="117" width="3.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1531.81" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="85" width="5.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1182.52" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_mount_open_constraints (kernel/src/syscall/fs/fd_ops.rs:251) (657 microseconds, 0.03%)</title><rect x="832.4" y="229" width="0.6" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="835.42" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (351 microseconds, 0.02%)</title><rect x="541.0" y="117" width="0.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="543.97" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="101" width="3.6" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1367.17" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="149" width="13.3" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="424.10" y="159.5" ></text>
+</g>
+<g >
+<title>-- (12,712 microseconds, 0.58%)</title><rect x="1539.2" y="149" width="10.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1542.19" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (380,092 microseconds, 17.36%)</title><rect x="76.3" y="277" width="309.1" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="79.28" y="287.5" >&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::fun..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="117" width="4.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="830.88" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::metadata (vendor/axfs-ng-vfs/src/mount.rs:235) (4,546 microseconds, 0.21%)</title><rect x="1528.8" y="181" width="3.7" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1531.81" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="101" width="27.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="361.05" y="111.5" >a..</text>
+</g>
+<g >
+<title>-- (2,053 microseconds, 0.09%)</title><rect x="1627.8" y="165" width="1.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1630.83" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::stat::sys_fstatat (kernel/src/syscall/fs/stat.rs:92) (123,864 microseconds, 5.66%)</title><rect x="541.3" y="229" width="100.7" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="544.26" y="239.5" >starry_kerne..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="149" width="4.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="441.15" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="165" width="185.6" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="645.34" y="175.5" >axfs_ng_vfs::mount::Loca..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="165" width="13.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="424.10" y="175.5" ></text>
+</g>
+<g >
+<title>-- (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="117" width="32.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1335.24" y="127.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="213" width="40.8" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="459.02" y="223.5" >sta..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="149" width="124.6" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="216.38" y="159.5" >axfs_ng_vfs::no..</text>
+</g>
+<g >
+<title>-- (16,402 microseconds, 0.75%)</title><rect x="421.1" y="37" width="13.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="424.10" y="47.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="197" width="25.7" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="544.26" y="207.5" >a..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="133" width="124.6" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="216.38" y="143.5" >&lt;axfs::fs::ext4..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="181" width="1.7" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="1187.84" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="85" width="26.2" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="53.07" y="95.5" >&lt;..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="197" width="39.1" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" >axf..</text>
+</g>
+<g >
+<title>-- (91,027 microseconds, 4.16%)</title><rect x="568.0" y="117" width="74.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="570.96" y="127.5" >--</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (9,160 microseconds, 0.42%)</title><rect x="509.4" y="117" width="7.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="512.40" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::rename (vendor/axfs-ng-vfs/src/node/dir.rs:502) (523 microseconds, 0.02%)</title><rect x="1627.4" y="197" width="0.4" height="15.0" fill="rgb(105,105,226)" rx="2" ry="2" />
+<text  x="1630.40" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_renameat2 (kernel/src/syscall/fs/ctl.rs:1257) (993 microseconds, 0.05%)</title><rect x="1607.7" y="229" width="0.8" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="1610.68" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (3,032 microseconds, 0.14%)</title><rect x="1228.6" y="101" width="2.4" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1231.57" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_protected_symlink_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:181) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="181" width="13.3" height="15.0" fill="rgb(88,88,212)" rx="2" ry="2" />
+<text  x="424.10" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_protected_symlink_follow (kernel/src/syscall/fs/fd_ops.rs:180) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="213" width="5.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1182.52" y="223.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (794 microseconds, 0.04%)</title><rect x="49.2" y="181" width="0.7" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="52.22" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::loader::load_user_app_from_source (kernel/src/mm/loader.rs:409) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="197" width="26.2" height="15.0" fill="rgb(120,120,239)" rx="2" ry="2" />
+<text  x="53.07" y="207.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (123,864 microseconds, 5.66%)</title><rect x="541.3" y="213" width="100.7" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="544.26" y="223.5" >starry_kerne..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="133" width="26.2" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="53.07" y="143.5" >a..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="117" width="27.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="361.05" y="127.5" >a..</text>
+</g>
+<g >
+<title>task:rustc (1,214,781 microseconds, 55.50%)</title><rect x="642.3" y="309" width="987.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="645.34" y="319.5" >task:rustc</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::update_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:574) (3,032 microseconds, 0.14%)</title><rect x="1228.6" y="133" width="2.4" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="1231.57" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="149" width="2.1" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1156.81" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (504 microseconds, 0.02%)</title><rect x="534.8" y="165" width="0.4" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="537.79" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (970 microseconds, 0.04%)</title><rect x="49.1" y="213" width="0.8" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="52.07" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="53" width="60.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1234.04" y="63.5" >&lt;axfs:..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_no_follow (vendor/axfs/src/highlevel/fs.rs:156) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="181" width="185.6" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="645.34" y="191.5" >axfs::highlevel::fs::FsC..</text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::Inode::read_cached_at (vendor/axfs/src/fs/ext4/inode.rs:98) (50,392 microseconds, 2.30%)</title><rect x="1291.3" y="165" width="40.9" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1294.26" y="175.5" >axf..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (334 microseconds, 0.02%)</title><rect x="496.9" y="197" width="0.3" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="499.90" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (622 microseconds, 0.03%)</title><rect x="538.7" y="149" width="0.5" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="541.70" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::create (vendor/axfs/src/fs/ext4/inode.rs:338) (373 microseconds, 0.02%)</title><rect x="1228.3" y="101" width="0.3" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="1231.27" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:50) (12,458 microseconds, 0.57%)</title><rect x="1528.8" y="245" width="10.1" height="15.0" fill="rgb(86,86,210)" rx="2" ry="2" />
+<text  x="1531.81" y="255.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::unlink (vendor/axfs-ng-vfs/src/node/dir.rs:380) (397 microseconds, 0.02%)</title><rect x="1606.5" y="197" width="0.3" height="15.0" fill="rgb(120,120,238)" rx="2" ry="2" />
+<text  x="1609.47" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_open_target_constraints (kernel/src/syscall/fs/fd_ops.rs:296) (2,184 microseconds, 0.10%)</title><rect x="533.4" y="213" width="1.8" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="536.42" y="223.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (177,988 microseconds, 8.13%)</title><rect x="497.6" y="293" width="144.7" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="500.60" y="303.5" >&lt;alloc::sync::Arc&lt;..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:501) (5,349 microseconds, 0.24%)</title><rect x="438.1" y="245" width="4.4" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="441.15" y="255.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="117" width="60.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1234.04" y="127.5" >axfs::..</text>
+</g>
+<g >
+<title>-- (1,546 microseconds, 0.07%)</title><rect x="535.2" y="37" width="1.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="538.20" y="47.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="133" width="4.7" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="131.77" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::metadata (vendor/axfs-ng-vfs/src/node/mod.rs:551) (657 microseconds, 0.03%)</title><rect x="832.4" y="165" width="0.6" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="835.42" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="85" width="91.0" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="835.96" y="95.5" >axfs_ng_vf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (9,160 microseconds, 0.42%)</title><rect x="509.4" y="165" width="7.4" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="512.40" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="165" width="5.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1182.52" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::creation_mode_and_owner::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:439) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="197" width="52.5" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="79.28" y="207.5" >starr..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="149" width="14.9" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="519.85" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::invalidate_inode_metadata_cache (vendor/axfs-ng-vfs/src/node/mod.rs:264) (767 microseconds, 0.04%)</title><rect x="1629.5" y="181" width="0.6" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="1632.50" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="213" width="124.6" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="216.38" y="223.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::rename (vendor/axfs-ng-vfs/src/mount.rs:381) (26,226 microseconds, 1.20%)</title><rect x="1608.8" y="213" width="21.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1611.79" y="223.5" >a..</text>
+</g>
+<g >
+<title>-- (10,585 microseconds, 0.48%)</title><rect x="1549.6" y="181" width="8.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1552.62" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::update_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:574) (17,406 microseconds, 0.80%)</title><rect x="199.2" y="133" width="14.2" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="202.22" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="165" width="3.6" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1367.17" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (2,137 microseconds, 0.10%)</title><rect x="531.7" y="165" width="1.7" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="534.69" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (40,789 microseconds, 1.86%)</title><rect x="508.1" y="245" width="33.2" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="511.09" y="255.5" >st..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="101" width="35.5" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="388.38" y="111.5" >axf..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::metadata (vendor/axfs-ng-vfs/src/mount.rs:235) (720 microseconds, 0.03%)</title><rect x="1153.2" y="181" width="0.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="1156.22" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (523 microseconds, 0.02%)</title><rect x="1627.4" y="165" width="0.4" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1630.40" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (91,027 microseconds, 4.16%)</title><rect x="568.0" y="165" width="74.0" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="570.96" y="175.5" >axfs_ng_..</text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::read_mapped (vendor/axfs/src/fs/ext4/fs.rs:232) (26,079 microseconds, 1.19%)</title><rect x="1291.3" y="149" width="21.2" height="15.0" fill="rgb(130,130,246)" rx="2" ry="2" />
+<text  x="1294.26" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (47,907 microseconds, 2.19%)</title><rect x="1189.3" y="117" width="39.0" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1192.31" y="127.5" >&lt;ax..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:567) (1,706 microseconds, 0.08%)</title><rect x="1186.6" y="149" width="1.3" height="15.0" fill="rgb(113,113,233)" rx="2" ry="2" />
+<text  x="1189.55" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::create (vendor/axfs-ng-vfs/src/mount.rs:354) (609 microseconds, 0.03%)</title><rect x="1532.5" y="181" width="0.5" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="1535.51" y="191.5" ></text>
+</g>
+<g >
+<title>-- (22,883 microseconds, 1.05%)</title><rect x="1608.8" y="149" width="18.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1611.79" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="85" width="14.9" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="519.85" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (2,689 microseconds, 0.12%)</title><rect x="434.6" y="165" width="2.2" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="437.62" y="175.5" ></text>
+</g>
+<g >
+<title>-- (378 microseconds, 0.02%)</title><rect x="1608.5" y="165" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1611.48" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:608) (373 microseconds, 0.02%)</title><rect x="1228.3" y="149" width="0.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1231.27" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (1,206 microseconds, 0.06%)</title><rect x="567.0" y="165" width="1.0" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="569.98" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:412) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="245" width="124.6" height="15.0" fill="rgb(118,118,237)" rx="2" ry="2" />
+<text  x="216.38" y="255.5" >starry_kernel::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_mkdirat (kernel/src/syscall/fs/ctl.rs:191) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="229" width="20.0" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="341.03" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="149" width="26.2" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="53.07" y="159.5" >a..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="213" width="185.6" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="645.34" y="223.5" >starry_kernel::file::fs:..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="53" width="1.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="538.20" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="149" width="52.5" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="79.28" y="159.5" >axfs_..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::update_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:574) (7,303 microseconds, 0.33%)</title><rect x="1533.0" y="165" width="5.9" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="1536.00" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="85" width="60.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1234.04" y="95.5" >axfs_n..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="101" width="14.9" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="519.85" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="85" width="4.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="830.88" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:219) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="197" width="14.9" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="519.85" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="181" width="39.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="13.00" y="191.5" >axf..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::update_metadata (vendor/axfs/src/fs/ext4/inode.rs:176) (592 microseconds, 0.03%)</title><rect x="133.5" y="85" width="0.5" height="15.0" fill="rgb(132,132,249)" rx="2" ry="2" />
+<text  x="136.51" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="277" width="40.8" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="459.02" y="287.5" >&lt;al..</text>
+</g>
+<g >
+<title>guest-wait:ext4-global-lock-wait (2,188,857 microseconds, 100.00%)</title><rect x="10.0" y="341" width="1780.0" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="13.00" y="351.5" >guest-wait:ext4-global-lock-wait</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="181" width="35.5" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="388.38" y="191.5" >axf..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:501) (33,608 microseconds, 1.54%)</title><rect x="358.0" y="245" width="27.4" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="361.05" y="255.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_open_target_constraints (kernel/src/syscall/fs/fd_ops.rs:296) (29,029 microseconds, 1.33%)</title><rect x="1155.9" y="213" width="23.6" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="1158.91" y="223.5" >s..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:167) (12,894 microseconds, 0.59%)</title><rect x="497.6" y="245" width="10.5" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="500.60" y="255.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="149" width="27.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="361.05" y="159.5" >a..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (111,976 microseconds, 5.12%)</title><rect x="833.0" y="165" width="91.0" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="835.96" y="175.5" >axfs::high..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="85" width="2.2" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="539.46" y="95.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (532 microseconds, 0.02%)</title><rect x="832.0" y="117" width="0.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="834.99" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::metadata (vendor/axfs-ng-vfs/src/mount.rs:235) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="181" width="12.9" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="445.50" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="197" width="4.7" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="131.77" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::metadata (vendor/axfs-ng-vfs/src/node/mod.rs:551) (720 microseconds, 0.03%)</title><rect x="1153.2" y="165" width="0.6" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="1156.22" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::loader::resolve_dynamic_linker (kernel/src/mm/loader.rs:28) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="181" width="26.2" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="53.07" y="191.5" >s..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="165" width="27.1" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="361.05" y="175.5" >a..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (281,848 microseconds, 12.88%)</title><rect x="924.0" y="165" width="229.2" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="927.02" y="175.5" >axfs_ng_vfs::node::dir::DirNod..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="85" width="39.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="13.00" y="95.5" >&lt;ax..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open (kernel/src/syscall/fs/fd_ops.rs:218) (970 microseconds, 0.04%)</title><rect x="49.1" y="229" width="0.8" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="52.07" y="239.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (12,712 microseconds, 0.58%)</title><rect x="1539.2" y="165" width="10.3" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1542.19" y="175.5" ></text>
+</g>
+<g >
+<title>task:riscv64-linux-gn (177,988 microseconds, 8.13%)</title><rect x="497.6" y="309" width="144.7" height="15.0" fill="rgb(85,85,209)" rx="2" ry="2" />
+<text  x="500.60" y="319.5" >task:riscv64-linux..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (2,184 microseconds, 0.10%)</title><rect x="533.4" y="197" width="1.8" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="536.42" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (622 microseconds, 0.03%)</title><rect x="538.7" y="133" width="0.5" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="541.70" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::update_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:574) (792 microseconds, 0.04%)</title><rect x="539.2" y="133" width="0.7" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="542.21" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (792 microseconds, 0.04%)</title><rect x="539.2" y="213" width="0.7" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="542.21" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:620) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="229" width="1.3" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="538.20" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="117" width="13.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="424.10" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (17,406 microseconds, 0.80%)</title><rect x="199.2" y="117" width="14.2" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="202.22" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="117" width="39.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="13.00" y="127.5" >axf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="133" width="8.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1158.91" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (351 microseconds, 0.02%)</title><rect x="541.0" y="149" width="0.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="543.97" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="165" width="1.7" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1187.84" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="213" width="60.3" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1234.04" y="223.5" >starry..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="101" width="15.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1167.01" y="111.5" ></text>
+</g>
+<g >
+<title>-- (1,680 microseconds, 0.08%)</title><rect x="533.4" y="53" width="1.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="536.42" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (1,206 microseconds, 0.06%)</title><rect x="567.0" y="149" width="1.0" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="569.98" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:620) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="229" width="5.3" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="1182.52" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:584) (792 microseconds, 0.04%)</title><rect x="539.2" y="149" width="0.7" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="542.21" y="159.5" ></text>
+</g>
+<g >
+<title>-- (595 microseconds, 0.03%)</title><rect x="436.8" y="101" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="439.81" y="111.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="85" width="0.8" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="440.29" y="95.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::open_file (vendor/axfs-ng-vfs/src/mount.rs:391) (98,212 microseconds, 4.49%)</title><rect x="133.5" y="165" width="79.9" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="136.51" y="175.5" >axfs_ng_v..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::io::read_file_like (kernel/src/syscall/fs/io.rs:82) (50,392 microseconds, 2.30%)</title><rect x="1291.3" y="229" width="40.9" height="15.0" fill="rgb(134,134,250)" rx="2" ry="2" />
+<text  x="1294.26" y="239.5" >sta..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (177,988 microseconds, 8.13%)</title><rect x="497.6" y="277" width="144.7" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="500.60" y="287.5" >&lt;alloc::boxed::Box..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::invalidate_inode_metadata_cache (vendor/axfs-ng-vfs/src/node/mod.rs:264) (1,059 microseconds, 0.05%)</title><rect x="1606.8" y="181" width="0.9" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="1609.82" y="191.5" ></text>
+</g>
+<g >
+<title>task:unknown (196,227 microseconds, 8.96%)</title><rect x="1630.4" y="309" width="159.6" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1633.43" y="319.5" >task:unknown</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:219) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="197" width="35.5" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="388.38" y="207.5" >sta..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (17,406 microseconds, 0.80%)</title><rect x="199.2" y="101" width="14.2" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="202.22" y="111.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (351 microseconds, 0.02%)</title><rect x="541.0" y="165" width="0.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="543.97" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (532 microseconds, 0.02%)</title><rect x="832.0" y="165" width="0.4" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="834.99" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_mkdirat::{{closure}} (kernel/src/syscall/fs/ctl.rs:194) (4,546 microseconds, 0.21%)</title><rect x="1528.8" y="197" width="3.7" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="1531.81" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::create (vendor/axfs-ng-vfs/src/mount.rs:354) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="181" width="20.0" height="15.0" fill="rgb(93,93,216)" rx="2" ry="2" />
+<text  x="341.03" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (794 microseconds, 0.04%)</title><rect x="49.2" y="165" width="0.7" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="52.22" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (792 microseconds, 0.04%)</title><rect x="539.2" y="117" width="0.7" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="542.21" y="127.5" ></text>
+</g>
+<g >
+<title>-- (32,230 microseconds, 1.47%)</title><rect x="50.1" y="69" width="26.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="53.07" y="79.5" >--</text>
+</g>
+<g >
+<title>-- (228,156 microseconds, 10.42%)</title><rect x="642.3" y="117" width="185.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="645.34" y="127.5" >--</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::update_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:574) (1,686 microseconds, 0.08%)</title><rect x="1187.9" y="133" width="1.4" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="1190.94" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:406) (2,923 microseconds, 0.13%)</title><rect x="434.4" y="245" width="2.4" height="15.0" fill="rgb(95,95,217)" rx="2" ry="2" />
+<text  x="437.43" y="255.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (281,848 microseconds, 12.88%)</title><rect x="924.0" y="149" width="229.2" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="927.02" y="159.5" >&lt;axfs::fs::ext4::inode::Inode ..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::with_page_or_insert_impl (vendor/axfs/src/highlevel/file.rs:1468) (50,392 microseconds, 2.30%)</title><rect x="1291.3" y="181" width="40.9" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1294.26" y="191.5" >axf..</text>
+</g>
+<g >
+<title>starry_kernel::mm::loader::load_user_app_from_source (kernel/src/mm/loader.rs:409) (33,608 microseconds, 1.54%)</title><rect x="358.0" y="197" width="27.4" height="15.0" fill="rgb(120,120,239)" rx="2" ry="2" />
+<text  x="361.05" y="207.5" >s..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (993 microseconds, 0.05%)</title><rect x="1607.7" y="181" width="0.8" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1610.68" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:621) (3,384 microseconds, 0.15%)</title><rect x="536.5" y="229" width="2.7" height="15.0" fill="rgb(96,96,218)" rx="2" ry="2" />
+<text  x="539.46" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (441 microseconds, 0.02%)</title><rect x="642.0" y="197" width="0.3" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="644.99" y="207.5" ></text>
+</g>
+<g >
+<title>task:cargo (380,092 microseconds, 17.36%)</title><rect x="76.3" y="309" width="309.1" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="79.28" y="319.5" >task:cargo</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (622 microseconds, 0.03%)</title><rect x="538.7" y="165" width="0.5" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="541.70" y="175.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::is_unlinked (vendor/axfs-ng-vfs/src/mount.rs:189) (12,712 microseconds, 0.58%)</title><rect x="1539.2" y="213" width="10.3" height="15.0" fill="rgb(82,82,206)" rx="2" ry="2" />
+<text  x="1542.19" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="213" width="20.0" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="341.03" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="149" width="15.5" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1167.01" y="159.5" ></text>
+</g>
+<g >
+<title>-- (15,852 microseconds, 0.72%)</title><rect x="442.5" y="117" width="12.9" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="445.50" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="117" width="8.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1158.91" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (15,852 microseconds, 0.72%)</title><rect x="442.5" y="213" width="12.9" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="445.50" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="101" width="13.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="424.10" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_mkdirat::{{closure}} (kernel/src/syscall/fs/ctl.rs:235) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="197" width="20.0" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="341.03" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:620) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="229" width="13.3" height="15.0" fill="rgb(104,104,225)" rx="2" ry="2" />
+<text  x="424.10" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="165" width="8.1" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1158.91" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (5,584 microseconds, 0.26%)</title><rect x="827.9" y="213" width="4.5" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="830.88" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:431) (1,643 microseconds, 0.08%)</title><rect x="436.8" y="245" width="1.3" height="15.0" fill="rgb(111,111,230)" rx="2" ry="2" />
+<text  x="439.81" y="255.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:224) (794 microseconds, 0.04%)</title><rect x="49.2" y="197" width="0.7" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="52.22" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:593) (47,907 microseconds, 2.19%)</title><rect x="1189.3" y="149" width="39.0" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1192.31" y="159.5" >axf..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (622 microseconds, 0.03%)</title><rect x="538.7" y="117" width="0.5" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="541.70" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="101" width="2.2" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="539.46" y="111.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::unlink (vendor/axfs-ng-vfs/src/mount.rs:387) (60,616 microseconds, 2.77%)</title><rect x="1558.4" y="213" width="49.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1561.38" y="223.5" >axfs..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="133" width="1.3" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="538.20" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="117" width="1.1" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="542.85" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="69" width="60.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1234.04" y="79.5" >axfs_n..</text>
+</g>
+<g >
+<title>-- (64,539 microseconds, 2.95%)</title><rect x="76.3" y="117" width="52.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="79.28" y="127.5" >--</text>
+</g>
+<g >
+<title>-- (59,126 microseconds, 2.70%)</title><rect x="1558.4" y="149" width="48.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1561.38" y="159.5" >--</text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:243) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="181" width="1.1" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="542.85" y="191.5" ></text>
+</g>
+<g >
+<title>-- (281,848 microseconds, 12.88%)</title><rect x="924.0" y="133" width="229.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="927.02" y="143.5" >--</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="133" width="3.6" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="1367.17" y="143.5" ></text>
+</g>
+<g >
+<title>-- (153,280 microseconds, 7.00%)</title><rect x="213.4" y="117" width="124.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="216.38" y="127.5" >--</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_mount_open_constraints (kernel/src/syscall/fs/fd_ops.rs:249) (10,772 microseconds, 0.49%)</title><rect x="508.1" y="229" width="8.7" height="15.0" fill="rgb(87,87,210)" rx="2" ry="2" />
+<text  x="511.09" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="149" width="1.7" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1187.84" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create (vendor/axfs-ng-vfs/src/node/dir.rs:448) (24,617 microseconds, 1.12%)</title><rect x="338.0" y="165" width="20.0" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="341.03" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (532 microseconds, 0.02%)</title><rect x="832.0" y="181" width="0.4" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="834.99" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="117" width="0.8" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="440.29" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::open_file (vendor/axfs-ng-vfs/src/mount.rs:391) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="165" width="40.8" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="459.02" y="175.5" >axf..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::read_dir (vendor/axfs-ng-vfs/src/node/dir.rs:349) (10,585 microseconds, 0.48%)</title><rect x="1549.6" y="213" width="8.6" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1552.62" y="223.5" ></text>
+</g>
+<g >
+<title>-- (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="85" width="3.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1367.17" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="133" width="5.3" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="1182.52" y="143.5" ></text>
+</g>
+<g >
+<title>-- (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="37" width="5.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1182.52" y="47.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (198,045 microseconds, 9.05%)</title><rect x="1367.8" y="149" width="161.0" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="1370.76" y="159.5" >axfs_ng_vfs::node::d..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:256) (351 microseconds, 0.02%)</title><rect x="541.0" y="181" width="0.3" height="15.0" fill="rgb(132,132,248)" rx="2" ry="2" />
+<text  x="543.97" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (60,324 microseconds, 2.76%)</title><rect x="385.4" y="245" width="49.0" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="388.38" y="255.5" >star..</text>
+</g>
+<g >
+<title>-- (609 microseconds, 0.03%)</title><rect x="1532.5" y="117" width="0.5" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1535.51" y="127.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="53" width="27.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="361.05" y="63.5" >&lt;..</text>
+</g>
+<g >
+<title>-- (26,079 microseconds, 1.19%)</title><rect x="1291.3" y="133" width="21.2" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1294.26" y="143.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:570) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="229" width="4.7" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="131.77" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="197" width="2.1" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="1156.81" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::read_mapped (vendor/axfs/src/fs/ext4/fs.rs:245) (24,313 microseconds, 1.11%)</title><rect x="1312.5" y="149" width="19.7" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1315.46" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (622 microseconds, 0.03%)</title><rect x="538.7" y="101" width="0.5" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="541.70" y="111.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (993 microseconds, 0.05%)</title><rect x="1607.7" y="133" width="0.8" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="1610.68" y="143.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (4,546 microseconds, 0.21%)</title><rect x="1528.8" y="133" width="3.7" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="1531.81" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::metadata (vendor/axfs-ng-vfs/src/mount.rs:235) (657 microseconds, 0.03%)</title><rect x="832.4" y="181" width="0.6" height="15.0" fill="rgb(139,139,254)" rx="2" ry="2" />
+<text  x="835.42" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:245) (334 microseconds, 0.02%)</title><rect x="496.9" y="181" width="0.3" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="499.90" y="191.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::create (vendor/axfs/src/fs/ext4/inode.rs:338) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="117" width="40.8" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="459.02" y="127.5" >&lt;ax..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="165" width="39.1" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" >axf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:95) (441 microseconds, 0.02%)</title><rect x="642.0" y="165" width="0.3" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="644.99" y="175.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="85" width="1.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="511.09" y="95.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="117" width="25.7" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="544.26" y="127.5" >a..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="149" width="1.3" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="538.20" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_mkdirat (kernel/src/syscall/fs/ctl.rs:191) (12,458 microseconds, 0.57%)</title><rect x="1528.8" y="229" width="10.1" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="1531.81" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (1,680 microseconds, 0.08%)</title><rect x="533.4" y="85" width="1.4" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="536.42" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="165" width="15.5" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="1167.01" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="165" width="35.5" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="388.38" y="175.5" >axf..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:584) (1,686 microseconds, 0.08%)</title><rect x="1187.9" y="149" width="1.4" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1190.94" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="149" width="1.3" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="511.09" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:429) (592 microseconds, 0.03%)</title><rect x="133.5" y="133" width="0.5" height="15.0" fill="rgb(97,97,219)" rx="2" ry="2" />
+<text  x="136.51" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="181" width="4.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="441.15" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::read_extents (vendor/axfs/src/fs/ext4/fs.rs:190) (24,313 microseconds, 1.11%)</title><rect x="1312.5" y="133" width="19.7" height="15.0" fill="rgb(99,99,221)" rx="2" ry="2" />
+<text  x="1315.46" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="101" width="60.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1234.04" y="111.5" >axfs::..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (12,674 microseconds, 0.58%)</title><rect x="497.6" y="149" width="10.3" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="500.60" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="85" width="8.1" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="1158.91" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:570) (2,585 microseconds, 0.12%)</title><rect x="1153.8" y="229" width="2.1" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="1156.81" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup_fresh_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:233) (59,126 microseconds, 2.70%)</title><rect x="1558.4" y="181" width="48.1" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1561.38" y="191.5" >axfs..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (380,092 microseconds, 17.36%)</title><rect x="76.3" y="261" width="309.1" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="79.28" y="271.5" >starry_kernel::task::user::new_user_task:..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:243) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="181" width="60.3" height="15.0" fill="rgb(103,103,224)" rx="2" ry="2" />
+<text  x="1234.04" y="191.5" >axfs::..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:623) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="229" width="40.8" height="15.0" fill="rgb(80,80,205)" rx="2" ry="2" />
+<text  x="459.02" y="239.5" >sta..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (18,245 microseconds, 0.83%)</title><rect x="516.8" y="133" width="14.9" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="519.85" y="143.5" ></text>
+</g>
+<g >
+<title>-- (993 microseconds, 0.05%)</title><rect x="1607.7" y="85" width="0.8" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1610.68" y="95.5" ></text>
+</g>
+<g >
+<title>phase:timed (2,188,857 microseconds, 100.00%)</title><rect x="10.0" y="325" width="1780.0" height="15.0" fill="rgb(123,123,241)" rx="2" ry="2" />
+<text  x="13.00" y="335.5" >phase:timed</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup_fresh (vendor/axfs-ng-vfs/src/node/dir.rs:323) (12,712 microseconds, 0.58%)</title><rect x="1539.2" y="197" width="10.3" height="15.0" fill="rgb(102,102,223)" rx="2" ry="2" />
+<text  x="1542.19" y="207.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create (vendor/axfs-ng-vfs/src/node/dir.rs:448) (609 microseconds, 0.03%)</title><rect x="1532.5" y="165" width="0.5" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="1535.51" y="175.5" ></text>
+</g>
+<g >
+<title>-- (792 microseconds, 0.04%)</title><rect x="539.2" y="85" width="0.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="542.21" y="95.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_protected_symlink_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:181) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="181" width="1.3" height="15.0" fill="rgb(88,88,212)" rx="2" ry="2" />
+<text  x="538.20" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (483 microseconds, 0.02%)</title><rect x="496.8" y="245" width="0.4" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="499.78" y="255.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:224) (281,848 microseconds, 12.88%)</title><rect x="924.0" y="197" width="229.2" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="927.02" y="207.5" >starry_kernel::syscall::fs::fd..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="85" width="27.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="361.05" y="95.5" >a..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::metadata (vendor/axfs-ng-vfs/src/node/mod.rs:551) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="165" width="52.5" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="79.28" y="175.5" >axfs_..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="213" width="35.5" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="388.38" y="223.5" >sta..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::sys_openat (kernel/src/syscall/fs/fd_ops.rs:572) (2,184 microseconds, 0.10%)</title><rect x="533.4" y="229" width="1.8" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="536.42" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="85" width="35.5" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="388.38" y="95.5" >axf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="133" width="1.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="511.09" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (1,206 microseconds, 0.06%)</title><rect x="567.0" y="181" width="1.0" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="569.98" y="191.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="149" width="0.8" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="440.29" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="53" width="13.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="424.10" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (2,689 microseconds, 0.12%)</title><rect x="434.6" y="149" width="2.2" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="437.62" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::open_file (vendor/axfs-ng-vfs/src/node/dir.rs:567) (50,118 microseconds, 2.29%)</title><rect x="456.0" y="149" width="40.8" height="15.0" fill="rgb(113,113,233)" rx="2" ry="2" />
+<text  x="459.02" y="159.5" >axf..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_renameat2::{{closure}} (kernel/src/syscall/fs/ctl.rs:1257) (993 microseconds, 0.05%)</title><rect x="1607.7" y="213" width="0.8" height="15.0" fill="rgb(138,138,253)" rx="2" ry="2" />
+<text  x="1610.68" y="223.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="101" width="1.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="511.09" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_nosymfollow_mount_open::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:224) (2,137 microseconds, 0.10%)</title><rect x="531.7" y="197" width="1.7" height="15.0" fill="rgb(135,135,251)" rx="2" ry="2" />
+<text  x="534.69" y="207.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:145) (5,052 microseconds, 0.23%)</title><rect x="827.9" y="197" width="4.1" height="15.0" fill="rgb(108,108,228)" rx="2" ry="2" />
+<text  x="830.88" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (98,212 microseconds, 4.49%)</title><rect x="133.5" y="197" width="79.9" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="136.51" y="207.5" >starry_ke..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (1,206 microseconds, 0.06%)</title><rect x="567.0" y="117" width="1.0" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="569.98" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_unlinkat (kernel/src/syscall/fs/ctl.rs:707) (60,616 microseconds, 2.77%)</title><rect x="1558.4" y="229" width="49.3" height="15.0" fill="rgb(106,106,226)" rx="2" ry="2" />
+<text  x="1561.38" y="239.5" >star..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (4,409 microseconds, 0.20%)</title><rect x="1364.2" y="181" width="3.6" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1367.17" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (20,382 microseconds, 0.93%)</title><rect x="516.8" y="213" width="16.6" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="519.85" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_readlinkat (kernel/src/syscall/fs/ctl.rs:840) (228,156 microseconds, 10.42%)</title><rect x="642.3" y="229" width="185.6" height="15.0" fill="rgb(127,127,244)" rx="2" ry="2" />
+<text  x="645.34" y="239.5" >starry_kernel::syscall::..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::flush_metadata_cache_shared (vendor/axfs-ng-vfs/src/node/mod.rs:384) (592 microseconds, 0.03%)</title><rect x="133.5" y="101" width="0.5" height="15.0" fill="rgb(107,107,227)" rx="2" ry="2" />
+<text  x="136.51" y="111.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::file::FileNodeOps&gt;::read_at (vendor/axfs/src/fs/ext4/inode.rs:247) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="53" width="5.3" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="1182.52" y="63.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="149" width="60.3" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="1234.04" y="159.5" >axfs::..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::update_metadata (vendor/axfs/src/fs/ext4/inode.rs:176) (473 microseconds, 0.02%)</title><rect x="1629.7" y="149" width="0.4" height="15.0" fill="rgb(132,132,249)" rx="2" ry="2" />
+<text  x="1632.73" y="159.5" ></text>
+</g>
+<g >
+<title>&lt;alloc::sync::Arc&lt;T,A&gt; as core::clone::Clone&gt;::clone (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:2226) (81,508 microseconds, 3.72%)</title><rect x="10.0" y="293" width="66.3" height="15.0" fill="rgb(89,89,212)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" >&lt;alloc:..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="133" width="39.1" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="13.00" y="143.5" >axf..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve (vendor/axfs/src/highlevel/fs.rs:147) (153,280 microseconds, 7.00%)</title><rect x="213.4" y="197" width="124.6" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="216.38" y="207.5" >axfs::highlevel..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (483 microseconds, 0.02%)</title><rect x="496.8" y="277" width="0.4" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="499.78" y="287.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (993 microseconds, 0.05%)</title><rect x="1607.7" y="197" width="0.8" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1610.68" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::handle_syscall (kernel/src/syscall/mod.rs:195) (168,587 microseconds, 7.70%)</title><rect x="76.3" y="245" width="137.1" height="15.0" fill="rgb(116,116,235)" rx="2" ry="2" />
+<text  x="79.28" y="255.5" >starry_kernel::sy..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (16,402 microseconds, 0.75%)</title><rect x="421.1" y="69" width="13.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="424.10" y="79.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (91,027 microseconds, 4.16%)</title><rect x="568.0" y="133" width="74.0" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="570.96" y="143.5" >&lt;axfs::f..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_parent (vendor/axfs/src/highlevel/fs.rs:167) (74,050 microseconds, 3.38%)</title><rect x="1231.0" y="165" width="60.3" height="15.0" fill="rgb(122,122,240)" rx="2" ry="2" />
+<text  x="1234.04" y="175.5" >axfs::..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (31,631 microseconds, 1.45%)</title><rect x="541.3" y="149" width="25.7" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="544.26" y="159.5" >a..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (19,065 microseconds, 0.87%)</title><rect x="1164.0" y="133" width="15.5" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="1167.01" y="143.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::raw_metadata (vendor/axfs-ng-vfs/src/node/mod.rs:489) (7,303 microseconds, 0.33%)</title><rect x="1533.0" y="149" width="5.9" height="15.0" fill="rgb(123,123,240)" rx="2" ry="2" />
+<text  x="1536.00" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_mount_open_constraints (kernel/src/syscall/fs/fd_ops.rs:249) (48,047 microseconds, 2.20%)</title><rect x="10.0" y="229" width="39.1" height="15.0" fill="rgb(87,87,210)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" >sta..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:95) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="165" width="0.8" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="440.29" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (vendor/axfs/src/highlevel/fs.rs:91) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="101" width="5.3" height="15.0" fill="rgb(119,119,237)" rx="2" ry="2" />
+<text  x="1182.52" y="111.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::create_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:?) (609 microseconds, 0.03%)</title><rect x="1532.5" y="149" width="0.5" height="15.0" fill="rgb(121,121,239)" rx="2" ry="2" />
+<text  x="1535.51" y="159.5" ></text>
+</g>
+<g >
+<title>-- (397 microseconds, 0.02%)</title><rect x="1606.5" y="165" width="0.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1609.47" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (2,689 microseconds, 0.12%)</title><rect x="434.6" y="181" width="2.2" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="437.62" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (33,315 microseconds, 1.52%)</title><rect x="358.0" y="69" width="27.1" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="361.05" y="79.5" >a..</text>
+</g>
+<g >
+<title>&lt;alloc::boxed::Box&lt;F,A&gt; as core::ops::function::FnOnce&lt;Args&gt;&gt;::call_once (/home/wuxun/.rustup/toolchains/nightly-2025-05-20-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/boxed.rs:1966) (70,239 microseconds, 3.21%)</title><rect x="385.4" y="277" width="57.1" height="15.0" fill="rgb(117,117,236)" rx="2" ry="2" />
+<text  x="388.38" y="287.5" >&lt;alloc..</text>
+</g>
+<g >
+<title>starry_kernel::task::user::new_user_task::{{closure}} (kernel/src/task/user.rs:67) (483 microseconds, 0.02%)</title><rect x="496.8" y="261" width="0.4" height="15.0" fill="rgb(115,115,234)" rx="2" ry="2" />
+<text  x="499.78" y="271.5" ></text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::NodeOps&gt;::metadata (vendor/axfs/src/fs/ext4/inode.rs:154) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="133" width="52.5" height="15.0" fill="rgb(124,124,242)" rx="2" ry="2" />
+<text  x="79.28" y="143.5" >&lt;axfs..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:245) (98,212 microseconds, 4.49%)</title><rect x="133.5" y="181" width="79.9" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="136.51" y="191.5" >axfs::hig..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::ctl::sys_readlinkat (kernel/src/syscall/fs/ctl.rs:840) (12,894 microseconds, 0.59%)</title><rect x="497.6" y="229" width="10.5" height="15.0" fill="rgb(127,127,244)" rx="2" ry="2" />
+<text  x="500.60" y="239.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::creation_mode_and_owner (kernel/src/syscall/fs/fd_ops.rs:437) (64,539 microseconds, 2.95%)</title><rect x="76.3" y="229" width="52.5" height="15.0" fill="rgb(83,83,207)" rx="2" ry="2" />
+<text  x="79.28" y="239.5" >starr..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup (vendor/axfs-ng-vfs/src/node/dir.rs:299) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="149" width="4.7" height="15.0" fill="rgb(100,100,222)" rx="2" ry="2" />
+<text  x="131.77" y="159.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::lookup_no_follow (vendor/axfs-ng-vfs/src/mount.rs:328) (378 microseconds, 0.02%)</title><rect x="1608.5" y="213" width="0.3" height="15.0" fill="rgb(136,136,252)" rx="2" ry="2" />
+<text  x="1611.48" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (2,762 microseconds, 0.13%)</title><rect x="536.5" y="133" width="2.2" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="539.46" y="143.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:99) (993 microseconds, 0.05%)</title><rect x="1607.7" y="149" width="0.8" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="1610.68" y="159.5" ></text>
+</g>
+<g >
+<title>-- (2,046 microseconds, 0.09%)</title><rect x="1184.8" y="53" width="1.7" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1187.84" y="63.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::cached_metadata (vendor/axfs/src/highlevel/file.rs:2327) (39,273 microseconds, 1.79%)</title><rect x="1332.2" y="197" width="32.0" height="15.0" fill="rgb(126,126,243)" rx="2" ry="2" />
+<text  x="1335.24" y="207.5" >ax..</text>
+</g>
+<g >
+<title>-- (198,045 microseconds, 9.05%)</title><rect x="1367.8" y="117" width="161.0" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1370.76" y="127.5" >--</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::dir::DirNode::lookup_fresh_for_mutation (vendor/axfs-ng-vfs/src/node/dir.rs:233) (523 microseconds, 0.02%)</title><rect x="1627.4" y="181" width="0.4" height="15.0" fill="rgb(125,125,242)" rx="2" ry="2" />
+<text  x="1630.40" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (1,048 microseconds, 0.05%)</title><rect x="437.3" y="101" width="0.8" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="440.29" y="111.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="165" width="4.3" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="441.15" y="175.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (vendor/axfs/src/highlevel/fs.rs:120) (441 microseconds, 0.02%)</title><rect x="642.0" y="149" width="0.3" height="15.0" fill="rgb(125,125,243)" rx="2" ry="2" />
+<text  x="644.99" y="159.5" ></text>
+</g>
+<g >
+<title>-- (3,032 microseconds, 0.14%)</title><rect x="1228.6" y="85" width="2.4" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1231.57" y="95.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::open_file (vendor/axfs-ng-vfs/src/mount.rs:391) (334 microseconds, 0.02%)</title><rect x="496.9" y="165" width="0.3" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="499.90" y="175.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (5,836 microseconds, 0.27%)</title><rect x="128.8" y="213" width="4.7" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="131.77" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="197" width="1.3" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="538.20" y="207.5" ></text>
+</g>
+<g >
+<title>-- (657 microseconds, 0.03%)</title><rect x="832.4" y="117" width="0.6" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="835.42" y="127.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (vendor/axfs/src/highlevel/fs.rs:100) (43,710 microseconds, 2.00%)</title><rect x="385.4" y="133" width="35.5" height="15.0" fill="rgb(128,128,245)" rx="2" ry="2" />
+<text  x="388.38" y="143.5" >axf..</text>
+</g>
+<g >
+<title>task:build-script-bui (81,508 microseconds, 3.72%)</title><rect x="10.0" y="309" width="66.3" height="15.0" fill="rgb(133,133,249)" rx="2" ry="2" />
+<text  x="13.00" y="319.5" >task:bu..</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (32,230 microseconds, 1.47%)</title><rect x="50.1" y="101" width="26.2" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="53.07" y="111.5" >a..</text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow::{{closure}} (kernel/src/syscall/fs/fd_ops.rs:460) (54,704 microseconds, 2.50%)</title><rect x="1186.6" y="197" width="44.4" height="15.0" fill="rgb(135,135,250)" rx="2" ry="2" />
+<text  x="1189.55" y="207.5" >star..</text>
+</g>
+<g >
+<title>&lt;axfs::fs::ext4::inode::Inode as axfs_ng_vfs::node::dir::DirNodeOps&gt;::lookup (vendor/axfs/src/fs/ext4/inode.rs:316) (993 microseconds, 0.05%)</title><rect x="1607.7" y="101" width="0.8" height="15.0" fill="rgb(82,82,207)" rx="2" ry="2" />
+<text  x="1610.68" y="111.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::open_with_create_follow (kernel/src/syscall/fs/fd_ops.rs:460) (98,212 microseconds, 4.49%)</title><rect x="133.5" y="213" width="79.9" height="15.0" fill="rgb(129,129,246)" rx="2" ry="2" />
+<text  x="136.51" y="223.5" >starry_ke..</text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (vendor/axfs/src/highlevel/fs.rs:137) (1,612 microseconds, 0.07%)</title><rect x="508.1" y="181" width="1.3" height="15.0" fill="rgb(98,98,220)" rx="2" ry="2" />
+<text  x="511.09" y="191.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (595 microseconds, 0.03%)</title><rect x="436.8" y="149" width="0.5" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="439.81" y="159.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::task::execve::sys_execve (kernel/src/syscall/task/execve.rs:130) (5,195 microseconds, 0.24%)</title><rect x="438.1" y="229" width="4.3" height="15.0" fill="rgb(92,92,215)" rx="2" ry="2" />
+<text  x="441.15" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::invalidate_inode_metadata_cache (vendor/axfs-ng-vfs/src/node/mod.rs:264) (592 microseconds, 0.03%)</title><rect x="133.5" y="117" width="0.5" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="136.51" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (9,160 microseconds, 0.42%)</title><rect x="509.4" y="149" width="7.4" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="512.40" y="159.5" ></text>
+</g>
+<g >
+<title>-- (12,674 microseconds, 0.58%)</title><rect x="497.6" y="117" width="10.3" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="500.60" y="127.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::read_link (vendor/axfs-ng-vfs/src/node/mod.rs:786) (1,546 microseconds, 0.07%)</title><rect x="535.2" y="69" width="1.3" height="15.0" fill="rgb(91,91,214)" rx="2" ry="2" />
+<text  x="538.20" y="79.5" ></text>
+</g>
+<g >
+<title>-- (9,964 microseconds, 0.46%)</title><rect x="1155.9" y="53" width="8.1" height="15.0" fill="rgb(160,160,160)" rx="2" ry="2" />
+<text  x="1158.91" y="63.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::read_link (vendor/axfs-ng-vfs/src/mount.rs:123) (1,378 microseconds, 0.06%)</title><rect x="539.9" y="85" width="1.1" height="15.0" fill="rgb(84,84,208)" rx="2" ry="2" />
+<text  x="542.85" y="95.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::OpenOptions::open (vendor/axfs/src/highlevel/file.rs:245) (792 microseconds, 0.04%)</title><rect x="539.2" y="181" width="0.7" height="15.0" fill="rgb(88,88,211)" rx="2" ry="2" />
+<text  x="542.21" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::check_open_access (kernel/src/syscall/fs/fd_ops.rs:150) (2,104 microseconds, 0.10%)</title><rect x="1184.8" y="213" width="1.8" height="15.0" fill="rgb(109,109,229)" rx="2" ry="2" />
+<text  x="1187.84" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::file::fs::with_fs (kernel/src/file/fs.rs:112) (6,549 microseconds, 0.30%)</title><rect x="1179.5" y="197" width="5.3" height="15.0" fill="rgb(95,95,218)" rx="2" ry="2" />
+<text  x="1182.52" y="207.5" ></text>
+</g>
+<g >
+<title>&lt;starry_kernel::file::fs::File as starry_kernel::file::FileLike&gt;::read (kernel/src/file/fs.rs:332) (50,392 microseconds, 2.30%)</title><rect x="1291.3" y="213" width="40.9" height="15.0" fill="rgb(81,81,206)" rx="2" ry="2" />
+<text  x="1294.26" y="223.5" >&lt;st..</text>
+</g>
+<g >
+<title>starry_kernel::file::fs::resolve_at::{{closure}} (kernel/src/file/fs.rs:190) (10,772 microseconds, 0.49%)</title><rect x="508.1" y="213" width="8.7" height="15.0" fill="rgb(94,94,216)" rx="2" ry="2" />
+<text  x="511.09" y="223.5" ></text>
+</g>
+</g>
+</svg>

@@ -89,6 +89,7 @@ impl Rv64PTE {
 }
 
 impl GenericPTE for Rv64PTE {
+    #[inline]
     fn from_bits(bits: usize) -> Self {
         Self(bits as u64)
     }
@@ -100,6 +101,7 @@ impl GenericPTE for Rv64PTE {
     fn new_table(paddr: PhysAddr) -> Self {
         Self(PTEFlags::V.bits() as u64 | ((paddr.as_usize() >> 2) as u64 & Self::PHYS_ADDR_MASK))
     }
+    #[inline]
     fn paddr(&self) -> PhysAddr {
         PhysAddr::from(((self.0 & Self::PHYS_ADDR_MASK) << 2) as usize)
     }
@@ -116,15 +118,19 @@ impl GenericPTE for Rv64PTE {
         self.0 = (self.0 & Self::PHYS_ADDR_MASK) | flags.bits() as u64;
     }
 
+    #[inline]
     fn bits(self) -> usize {
         self.0 as usize
     }
+    #[inline]
     fn is_unused(&self) -> bool {
         self.0 == 0
     }
+    #[inline]
     fn is_present(&self) -> bool {
         PTEFlags::from_bits_truncate(self.0 as usize).contains(PTEFlags::V)
     }
+    #[inline]
     fn is_huge(&self) -> bool {
         PTEFlags::from_bits_truncate(self.0 as usize).intersects(PTEFlags::R | PTEFlags::X)
     }

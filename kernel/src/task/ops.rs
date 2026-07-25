@@ -322,6 +322,10 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         }
     }
     thr.set_exit();
+    #[cfg(all(feature = "guest-profile", target_arch = "riscv64"))]
+    if last_thread {
+        crate::profiler::end_aws_lc_build_script(&thr.proc_data.exe_path.read(), process.pid());
+    }
 }
 
 fn to_user_hz_ticks(micros: u128) -> u64 {
