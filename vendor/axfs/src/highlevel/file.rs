@@ -2045,8 +2045,7 @@ impl CachedFile {
     }
 
     fn memory_watermarks() -> (usize, usize) {
-        let allocator = global_allocator();
-        let total = allocator.used_pages() + allocator.available_pages();
+        let total = global_allocator().total_pages();
         let minimum = MIN_FREE_MEMORY_BYTES / PAGE_SIZE;
         let low = (total / FREE_MEMORY_LOW_DIVISOR).max(minimum).min(total);
         let target = (total / FREE_MEMORY_TARGET_DIVISOR).max(low).min(total);
