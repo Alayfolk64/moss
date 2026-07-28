@@ -53,6 +53,7 @@ repository.workspace = true
 [features]
 default = []
 guest-profile = ["starry-kernel/guest-profile"]
+fault-repro-trace = ["starry-kernel/fault-repro-trace"]
 qemu = [
     "axfeat/defplat",
     "axfeat/bus-pci",

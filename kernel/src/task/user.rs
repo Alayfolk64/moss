@@ -66,6 +66,19 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 match reason {
                     ReturnReason::Syscall => handle_syscall(&mut uctx),
                     ReturnReason::PageFault(addr, flags) => {
+                        #[cfg(feature = "fault-repro-trace")]
+                        let trace_repro = crate::mm::is_page_fault_repro_address(addr);
+                        #[cfg(feature = "fault-repro-trace")]
+                        if trace_repro {
+                            warn!(
+                                "[PFTRACE 05] task-dispatch name={} pid={} tid={} \
+                                 ReturnReason::PageFault(addr={addr:#x}, flags={flags:?}) ip={:#x}",
+                                curr.name(),
+                                thr.proc_data.proc.pid(),
+                                curr.id().as_u64(),
+                                uctx.ip(),
+                            );
+                        }
                         let fault_signal = {
                             let aspace_ref = thr.proc_data.aspace();
                             if crate::syscall::is_mmap_sigbus_fault(
@@ -74,40 +87,51 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                                 flags,
                             ) {
                                 Some(Signo::SIGBUS)
-                            } else if crate::mm::AddrSpace::handle_page_fault_concurrent(
-                                &aspace_ref,
-                                addr,
-                                flags,
-                            ) {
-                                None
                             } else {
-                                let mut aspace =
-                                    aspace_ref.lock_profiled(crate::mm::AddrSpaceWriteOwner::Other);
-                                if crate::syscall::try_growdown_fault(
-                                    thr.proc_data.proc.pid(),
-                                    &mut aspace,
+                                let handled = crate::mm::AddrSpace::handle_page_fault_concurrent(
+                                    &aspace_ref,
                                     addr,
                                     flags,
-                                ) {
+                                );
+                                #[cfg(feature = "fault-repro-trace")]
+                                if trace_repro && handled {
+                                    warn!(
+                                        "[PFTRACE 10] fault-handler-return handled=true; \
+                                         resume_same_ip={:#x} (faulting store will be retried)",
+                                        uctx.ip(),
+                                    );
+                                }
+                                if handled {
                                     None
                                 } else {
-                                    let signo = if aspace.is_accessible_fault(addr, flags) {
-                                        Signo::SIGBUS
+                                    let mut aspace = aspace_ref
+                                        .lock_profiled(crate::mm::AddrSpaceWriteOwner::Other);
+                                    if crate::syscall::try_growdown_fault(
+                                        thr.proc_data.proc.pid(),
+                                        &mut aspace,
+                                        addr,
+                                        flags,
+                                    ) {
+                                        None
                                     } else {
-                                        Signo::SIGSEGV
-                                    };
-                                    log_user_fault_mapping(&aspace, "address", addr);
-                                    log_user_fault_mapping(
-                                        &aspace,
-                                        "instruction",
-                                        VirtAddr::from_usize(uctx.ip()),
-                                    );
-                                    log_user_fault_mapping(
-                                        &aspace,
-                                        "stack",
-                                        VirtAddr::from_usize(uctx.sp()),
-                                    );
-                                    Some(signo)
+                                        let signo = if aspace.is_accessible_fault(addr, flags) {
+                                            Signo::SIGBUS
+                                        } else {
+                                            Signo::SIGSEGV
+                                        };
+                                        log_user_fault_mapping(&aspace, "address", addr);
+                                        log_user_fault_mapping(
+                                            &aspace,
+                                            "instruction",
+                                            VirtAddr::from_usize(uctx.ip()),
+                                        );
+                                        log_user_fault_mapping(
+                                            &aspace,
+                                            "stack",
+                                            VirtAddr::from_usize(uctx.sp()),
+                                        );
+                                        Some(signo)
+                                    }
                                 }
                             }
                         };
@@ -179,8 +203,7 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 }
 
                 let check_signal = !unblock_next_signal();
-                let signal_pending =
-                    check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();
+                let signal_pending = check_signal && thr.signal.has_deliverable_signal();
                 // Blocking syscalls keep a task on its previous run queue. Rebalance at
                 // the user-return boundary, where no syscall lock or CPU-local kernel
                 // state is held, so a busy CPU cannot retain all frequently-woken tasks.

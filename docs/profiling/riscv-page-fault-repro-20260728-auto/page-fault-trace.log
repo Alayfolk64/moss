@@ -1,0 +1,15 @@
+[USER] calling glibc mmap: private anonymous, populate=false
+[  1.508749 4:34 starry_kernel::syscall::mm::mmap:398] [PFTRACE 02] syscall-enter name=pf-repro pid=34 mmap(addr=0x3000000000, len=0x1000, prot=MmapProt(READ | WRITE), flags=MmapFlags(PRIVATE | FIXED_NOREPLACE | ANONYMOUS), fd=-1, offset=0)
+[  1.510004 4:34 starry_kernel::syscall::mm::mmap:589] [PFTRACE 03] syscall-return mmap=0x3000000000; vma=private-anonymous backend=Cow populate=false pte_after_mmap=Err(NotMapped)
+[USER] mmap returned 0x3000000000; executing first store now
+[  1.510514 4:34 axcpu::riscv::uspace:79] [PFTRACE 04] riscv-trap cause=StorePageFault scause=15 stval=0x3000000000 sepc=0x1043c
+[  1.510756 4:34 starry_kernel::task::user:73] [PFTRACE 05] task-dispatch name=pf-repro pid=34 tid=34 ReturnReason::PageFault(addr=VA:0x3000000000, flags=WRITE | USER) ip=0x1043c
+[  1.511250 4:34 starry_kernel::mm::aspace::backend::cow:735] [PFTRACE 06] prepare-fault vma_backend=Cow pte=NotMapped backing=anonymous access=WRITE | USER resolution=missing-page-plan
+[  1.511563 4:34 starry_kernel::mm::aspace::backend::cow:436] [PFTRACE 07] execute-plan source=none backing=anonymous action=allocate-and-zero size=0x1000
+[  1.511988 4:34 starry_kernel::mm::aspace::backend::cow:445] [PFTRACE 08] execute-plan-complete zeroed_frame=PA:0x9bdac000 (still not visible in page table)
+[  1.512355 4:34 starry_kernel::mm::aspace::backend::cow:555] [PFTRACE 09] commit-pte va=VA:0x3000000000 pa=PA:0x9bdac000 flags=READ | WRITE | USER result=installed
+[  1.512622 4:34 starry_kernel::mm::aspace:1043] [PFTRACE 09.5] commit-visible; flush_tlb(va=VA:0x3000000000) then retry user access
+[  1.512893 4:34 starry_kernel::task::user:98] [PFTRACE 10] fault-handler-return handled=true; resume_same_ip=0x1043c (faulting store will be retried)
+[USER] first store returned; byte=0x5a
+starry:~# echo${IFS}PF_REPRO_EXIT=$?
+PF_REPRO_EXIT=0

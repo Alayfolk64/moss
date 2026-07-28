@@ -1,20 +1,19 @@
+use alloc::sync::Arc;
 use core::{
     alloc::Layout,
     mem::offset_of,
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use alloc::sync::Arc;
 use axcpu::uspace::UserContext;
 use kspin::SpinNoIrq;
 use starry_vm::VmMutPtr;
 
+use super::ProcessSignalManager;
 use crate::{
     DefaultSignalAction, PendingSignals, SignalAction, SignalActionFlags, SignalDisposition,
     SignalInfo, SignalOSAction, SignalSet, SignalStack, Signo, arch::UContext,
 };
-
-use super::ProcessSignalManager;
 
 struct SignalFrame {
     ucontext: UContext,
@@ -192,6 +191,20 @@ impl ThreadSignalManager {
             return None;
         }
         self.check_signals_slow(uctx, restore_blocked)
+    }
+
+    /// Returns whether an unblocked signal is currently pending.
+    ///
+    /// Most user-return boundaries have no signal work.  Avoid taking the
+    /// pending and blocked locks unless either the thread or its process has
+    /// published that a signal may be pending.
+    pub fn has_deliverable_signal(&self) -> bool {
+        if !self.possibly_has_signal.load(Ordering::Acquire)
+            && !self.proc.possibly_has_signal.load(Ordering::Acquire)
+        {
+            return false;
+        }
+        !(self.pending() & !self.blocked()).is_empty()
     }
 
     /// Restores the signal frame. Called by `sigreturn`.

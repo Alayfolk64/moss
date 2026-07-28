@@ -95,6 +95,15 @@ pub trait PagingMetaData: Sync + Send {
     fn flush_tlb_local(vaddr: Option<Self::VirtAddr>) {
         Self::flush_tlb(vaddr);
     }
+
+    /// Flushes translations belonging to one page-table root.
+    ///
+    /// Architectures without address-space-aware shootdown support may ignore
+    /// `root_paddr` and fall back to [`Self::flush_tlb`].
+    fn flush_tlb_for(root_paddr: PhysAddr, vaddr: Option<Self::VirtAddr>) {
+        let _ = root_paddr;
+        Self::flush_tlb(vaddr);
+    }
 }
 
 /// The low-level **OS-dependent** helpers that must be provided for

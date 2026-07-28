@@ -17,7 +17,10 @@ use core::{
 };
 
 use axpoll::PollSet;
-use axsync::{Mutex, spin::SpinNoIrq};
+use axsync::{
+    Mutex,
+    spin::{SpinIrq, SpinNoIrq},
+};
 use axtask::{TaskExt, TaskInner, WaitQueue};
 use extern_trait::extern_trait;
 use scope_local::{ActiveScope, Scope};
@@ -161,7 +164,7 @@ pub struct Thread {
     accessing_user_memory: AtomicBool,
 
     /// Restartable-sequence registration for this thread.
-    rseq: SpinNoIrq<Option<RseqRegistration>>,
+    rseq: SpinIrq<Option<RseqRegistration>>,
 
     /// Self exit event
     pub exit_event: Arc<PollSet>,
@@ -180,7 +183,7 @@ impl Thread {
             exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),
             accessing_user_memory: AtomicBool::new(false),
-            rseq: SpinNoIrq::new(None),
+            rseq: SpinIrq::new(None),
             exit_event: Arc::default(),
         })
     }

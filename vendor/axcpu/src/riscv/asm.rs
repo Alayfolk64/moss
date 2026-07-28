@@ -3,13 +3,41 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use memory_addr::{PhysAddr, VirtAddr};
-use riscv::asm;
-use riscv::register::{satp, sstatus, stvec};
+use riscv::{
+    asm,
+    register::{satp, sstatus, stvec},
+};
 
 // RISC-V uses one SATP register for both kernel and user mappings. Keep the
 // kernel root separately so a kernel task created while a user task is current
 // does not inherit that user's address space.
 static KERNEL_PAGE_TABLE_ROOT: AtomicUsize = AtomicUsize::new(0);
+
+/// Callback invoked immediately before the current CPU installs a page-table
+/// root. The operating system uses it to track which address space is active
+/// on each CPU.
+pub type PageTableSwitchHandler = fn(PhysAddr);
+
+static PAGE_TABLE_SWITCH_HANDLER: AtomicUsize = AtomicUsize::new(0);
+
+/// Installs the page-table switch callback.
+///
+/// Returns `false` if a callback was installed already.
+pub fn register_page_table_switch_handler(handler: PageTableSwitchHandler) -> bool {
+    PAGE_TABLE_SWITCH_HANDLER
+        .compare_exchange(0, handler as usize, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+#[inline]
+fn notify_page_table_switch(root_paddr: PhysAddr) {
+    let handler = PAGE_TABLE_SWITCH_HANDLER.load(Ordering::Acquire);
+    if handler != 0 {
+        // SAFETY: only `register_page_table_switch_handler` writes this value.
+        let handler = unsafe { core::mem::transmute::<usize, PageTableSwitchHandler>(handler) };
+        handler(root_paddr);
+    }
+}
 
 /// Allows the current CPU to respond to interrupts.
 #[inline]
@@ -85,6 +113,12 @@ pub fn read_kernel_page_table() -> PhysAddr {
 /// This function is unsafe as it changes the virtual memory address space.
 #[inline]
 pub unsafe fn write_user_page_table(root_paddr: PhysAddr) {
+    // Publish the destination first. A concurrent shootdown may include this
+    // CPU before SATP changes, which is harmless: every real root change is
+    // followed by a local full flush in TaskContext::switch_to or execve.
+    // Publishing only after SATP changed would create a window in which the
+    // new address space was active but absent from its shootdown set.
+    notify_page_table_switch(root_paddr);
     unsafe { satp::set(satp::Mode::Sv39, 0, root_paddr.as_usize() >> 12) };
 }
 

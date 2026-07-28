@@ -1038,6 +1038,13 @@ impl AddrSpace {
 
             match committed {
                 Ok(FaultCommit::Handled) => {
+                    #[cfg(feature = "fault-repro-trace")]
+                    if crate::mm::is_page_fault_repro_address(vaddr) {
+                        warn!(
+                            "[PFTRACE 09.5] commit-visible; flush_tlb(va={vaddr:#x}) then retry \
+                             user access",
+                        );
+                    }
                     axhal::asm::flush_tlb(Some(vaddr));
                     synchronize_executable_fault(access_flags);
                     return true;

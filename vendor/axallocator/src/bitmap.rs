@@ -35,6 +35,7 @@ pub struct BitmapPageAllocator<const PAGE_SIZE: usize> {
     base: usize,
     total_pages: usize,
     used_pages: usize,
+    next_contiguous_search: usize,
     inner: BitAllocUsed,
 }
 
@@ -45,6 +46,7 @@ impl<const PAGE_SIZE: usize> BitmapPageAllocator<PAGE_SIZE> {
             base: 0,
             total_pages: 0,
             used_pages: 0,
+            next_contiguous_search: 0,
             inner: BitAllocUsed::DEFAULT,
         }
     }
@@ -73,6 +75,7 @@ impl<const PAGE_SIZE: usize> BaseAllocator for BitmapPageAllocator<PAGE_SIZE> {
         let start_idx = start / PAGE_SIZE;
 
         self.inner.insert(start_idx..start_idx + self.total_pages);
+        self.next_contiguous_search = start_idx;
     }
 
     fn add_memory(&mut self, _start: usize, _size: usize) -> AllocResult {
@@ -98,10 +101,20 @@ impl<const PAGE_SIZE: usize> PageAllocator for BitmapPageAllocator<PAGE_SIZE> {
         let align_log2 = align_pow2.trailing_zeros() as usize;
         match num_pages.cmp(&1) {
             core::cmp::Ordering::Equal => self.inner.alloc().map(|idx| idx * PAGE_SIZE + self.base),
-            core::cmp::Ordering::Greater => self
-                .inner
-                .alloc_contiguous(None, num_pages, align_log2)
-                .map(|idx| idx * PAGE_SIZE + self.base),
+            core::cmp::Ordering::Greater => {
+                let mut result = self.inner.alloc_contiguous_from(
+                    self.next_contiguous_search,
+                    num_pages,
+                    align_log2,
+                );
+                if result.is_none() && self.next_contiguous_search != 0 {
+                    result = self.inner.alloc_contiguous(None, num_pages, align_log2);
+                }
+                if let Some(idx) = result {
+                    self.next_contiguous_search = idx.saturating_add(num_pages);
+                }
+                result.map(|idx| idx * PAGE_SIZE + self.base)
+            }
             _ => return Err(AllocError::InvalidParam),
         }
         .ok_or(AllocError::NoMemory)
@@ -152,6 +165,9 @@ impl<const PAGE_SIZE: usize> PageAllocator for BitmapPageAllocator<PAGE_SIZE> {
             _ => false,
         } {
             self.used_pages -= num_pages;
+            if self.used_pages == 0 {
+                self.next_contiguous_search = self.inner.next(0).unwrap_or(0);
+            }
         }
     }
 
@@ -333,5 +349,26 @@ mod tests {
 
             i += 1;
         }
+    }
+
+    #[test]
+    fn test_contiguous_next_fit_and_wrap() {
+        let mut allocator = BitmapPageAllocator::<PAGE_SIZE>::new();
+        allocator.init(PAGE_SIZE, PAGE_SIZE * 16);
+
+        let first = allocator.alloc_pages(4, PAGE_SIZE * 4).unwrap();
+        let second = allocator.alloc_pages(4, PAGE_SIZE * 4).unwrap();
+        let third = allocator.alloc_pages(4, PAGE_SIZE * 4).unwrap();
+        assert_eq!(
+            (first, second, third),
+            (PAGE_SIZE * 4, PAGE_SIZE * 8, PAGE_SIZE * 12)
+        );
+
+        allocator.dealloc_pages(first, 4);
+        assert_eq!(
+            allocator.alloc_pages(4, PAGE_SIZE * 4).unwrap(),
+            first,
+            "search must wrap only after the tail has no aligned block"
+        );
     }
 }

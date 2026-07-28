@@ -340,7 +340,7 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
                     if same_frame && same_attributes && flags.contains(old_flags) {
                         M::flush_tlb_local(Some(vaddr));
                     } else {
-                        M::flush_tlb(Some(vaddr));
+                        M::flush_tlb_for(self.root_paddr(), Some(vaddr));
                     }
                     return Ok(true);
                 }
@@ -764,11 +764,11 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
             ToFlush::None => {}
             ToFlush::Addresses(addrs) => {
                 for vaddr in addrs.iter() {
-                    M::flush_tlb(Some(*vaddr));
+                    M::flush_tlb_for(self.inner.root_paddr(), Some(*vaddr));
                 }
             }
             ToFlush::Full => {
-                M::flush_tlb(None);
+                M::flush_tlb_for(self.inner.root_paddr(), None);
             }
         }
         self.flush = ToFlush::None;

@@ -65,6 +65,31 @@ impl PerCpuPageCache {
         }
     }
 
+    /// Takes a cached page without entering a refill or drain path.
+    ///
+    /// The caller may use an IRQ-only lock because this path neither schedules
+    /// nor acquires the global page allocator. Configuration and misses are
+    /// deliberately left to [`Self::allocate`], whose caller also disables
+    /// preemption across nested allocator locks.
+    #[inline]
+    pub(crate) fn try_allocate(
+        &mut self,
+        total_pages: usize,
+        cpu_count: usize,
+        kind: UsageKind,
+    ) -> Option<usize> {
+        if self.configured_total_pages != total_pages
+            || self.configured_cpu_count != cpu_count.max(1)
+            || self.heads[kind as usize] == 0
+        {
+            return None;
+        }
+
+        self.free_count >>= 1;
+        self.pop(kind)
+    }
+
+    #[inline]
     pub(crate) fn allocate(
         &mut self,
         allocator: &GlobalAllocator,
@@ -72,17 +97,28 @@ impl PerCpuPageCache {
         cpu_count: usize,
         kind: UsageKind,
     ) -> Option<usize> {
-        self.update_limits(allocator, total_pages, cpu_count);
+        if self.configured_total_pages != total_pages
+            || self.configured_cpu_count != cpu_count.max(1)
+        {
+            self.update_limits(allocator, total_pages, cpu_count);
+        }
         self.free_count >>= 1;
 
         if let Some(page) = self.pop(kind) {
             return Some(page);
         }
 
+        self.refill_and_pop(allocator, kind)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn refill_and_pop(&mut self, allocator: &GlobalAllocator, kind: UsageKind) -> Option<usize> {
         self.refill(allocator, kind);
         self.pop(kind)
     }
 
+    #[inline]
     fn pop(&mut self, kind: UsageKind) -> Option<usize> {
         let index = kind as usize;
         let page = self.heads[index];

@@ -177,18 +177,69 @@ fn frame_refs() -> &'static FrameRefTable {
         .expect("frame reference table is not initialized")
 }
 
+struct FilePageShard {
+    inline: Option<(VirtAddr, FolioPageRef)>,
+    overflow: BTreeMap<VirtAddr, FolioPageRef>,
+}
+
+impl FilePageShard {
+    fn new() -> Self {
+        Self {
+            inline: None,
+            overflow: BTreeMap::new(),
+        }
+    }
+
+    fn get(&self, vaddr: &VirtAddr) -> Option<&FolioPageRef> {
+        if let Some((inline_addr, page)) = self.inline.as_ref()
+            && inline_addr == vaddr
+        {
+            return Some(page);
+        }
+        self.overflow.get(vaddr)
+    }
+
+    fn insert(&mut self, vaddr: VirtAddr, page: FolioPageRef) {
+        match self.inline.as_mut() {
+            None => {
+                debug_assert!(self.overflow.is_empty());
+                self.inline = Some((vaddr, page));
+            }
+            Some((inline_addr, inline_page)) if *inline_addr == vaddr => {
+                *inline_page = page;
+            }
+            Some(_) => {
+                self.overflow.insert(vaddr, page);
+            }
+        }
+    }
+
+    fn remove(&mut self, vaddr: &VirtAddr) -> Option<FolioPageRef> {
+        if self
+            .inline
+            .as_ref()
+            .is_some_and(|(inline_addr, _)| inline_addr == vaddr)
+        {
+            let (_, page) = self.inline.take()?;
+            self.inline = self.overflow.pop_first();
+            return Some(page);
+        }
+        self.overflow.remove(vaddr)
+    }
+}
+
 struct FilePageRefs {
-    shards: [Mutex<BTreeMap<VirtAddr, FolioPageRef>>; FILE_PAGE_SHARDS],
+    shards: [Mutex<FilePageShard>; FILE_PAGE_SHARDS],
 }
 
 impl FilePageRefs {
     fn new() -> Self {
         Self {
-            shards: [const { Mutex::new(BTreeMap::new()) }; FILE_PAGE_SHARDS],
+            shards: core::array::from_fn(|_| Mutex::new(FilePageShard::new())),
         }
     }
 
-    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, FolioPageRef>> {
+    fn shard(&self, vaddr: VirtAddr) -> &Mutex<FilePageShard> {
         let page = vaddr.as_usize() / memory_addr::PAGE_SIZE_4K;
         &self.shards[page % FILE_PAGE_SHARDS]
     }
@@ -222,7 +273,10 @@ pub struct CowBackend {
     identity: Arc<()>,
     /// Cached file pages mapped directly into this address space. Keeping the
     /// reference here pins the frame even after it leaves the file-cache LRU.
-    file_pages: Arc<FilePageRefs>,
+    ///
+    /// Anonymous mappings leave this as `None` and avoid allocating an empty
+    /// 64-shard ownership table.
+    file_pages: Option<Arc<FilePageRefs>>,
 }
 
 impl Clone for CowBackend {
@@ -377,7 +431,23 @@ impl CowFaultPlan {
             };
             file.read_at(&mut &mut buf[start..start + max_read], fault_file_start)?;
         } else {
-            self.frame = Some(alloc_referenced_frame(true, self.size)?);
+            #[cfg(feature = "fault-repro-trace")]
+            if crate::mm::is_page_fault_repro_address(self.vaddr) {
+                warn!(
+                    "[PFTRACE 07] execute-plan source=none backing=anonymous \
+                     action=allocate-and-zero size={:#x}",
+                    self.size as usize,
+                );
+            }
+            let frame = alloc_referenced_frame(true, self.size)?;
+            #[cfg(feature = "fault-repro-trace")]
+            if crate::mm::is_page_fault_repro_address(self.vaddr) {
+                warn!(
+                    "[PFTRACE 08] execute-plan-complete zeroed_frame={frame:#x} (still not \
+                     visible in page table)",
+                );
+            }
+            self.frame = Some(frame);
         }
         Ok(())
     }
@@ -424,6 +494,9 @@ impl CowBackend {
             let Some((file, ..)) = plan.file.as_ref() else {
                 return Ok(FaultCommit::Stale);
             };
+            let Some(file_page_refs) = self.file_pages.as_ref() else {
+                return Ok(FaultCommit::Stale);
+            };
             let pages = core::mem::take(&mut plan.file_pages);
             let validation_page = pages
                 .iter()
@@ -442,7 +515,7 @@ impl CowBackend {
                     // The leaf CAS is both the commit-time absence check and
                     // the installation. A separate query would repeat the
                     // complete page-table walk on every successful fault.
-                    let mut file_pages = self.file_pages.shard(addr).lock();
+                    let mut file_pages = file_page_refs.shard(addr).lock();
                     match pt.map_4k_concurrent(addr, page.paddr(), flags - MappingFlags::WRITE) {
                         Ok(()) => {
                             file_pages.insert(addr, mapping_page);
@@ -476,7 +549,17 @@ impl CowBackend {
 
         let frame = plan.frame.ok_or(AxError::BadAddress)?;
         match pt.map_4k_concurrent(plan.vaddr, frame, flags) {
-            Ok(()) => plan.frame = None,
+            Ok(()) => {
+                #[cfg(feature = "fault-repro-trace")]
+                if crate::mm::is_page_fault_repro_address(plan.vaddr) {
+                    warn!(
+                        "[PFTRACE 09] commit-pte va={:#x} pa={frame:#x} flags={flags:?} \
+                         result=installed",
+                        plan.vaddr,
+                    );
+                }
+                plan.frame = None;
+            }
             Err(PagingError::AlreadyMapped) => return Ok(FaultCommit::Stale),
             Err(err) => return Err(err.into()),
         }
@@ -491,7 +574,10 @@ impl CowBackend {
             file: self.file.clone(),
             has_mappings: Arc::new(AtomicBool::new(false)),
             identity: Arc::new(()),
-            file_pages: Arc::new(FilePageRefs::new()),
+            file_pages: self
+                .file_pages
+                .as_ref()
+                .map(|_| Arc::new(FilePageRefs::new())),
         }
     }
 
@@ -529,6 +615,7 @@ impl CowBackend {
         gather: &mut UnmapGather,
     ) -> AxResult {
         let mut cursor = range.start;
+        let file_page_refs = self.file_pages.as_deref();
 
         while let Some((vaddr, paddr, _flags, page_size)) =
             pt.next_present_mapping(cursor, range.end)
@@ -540,14 +627,12 @@ impl CowBackend {
 
             // Resolve the ownership record before clearing the PTE. On an
             // error the mapping remains intact and no frame reference is lost.
-            let file_page = if self.file.is_some() {
-                self.file_pages.remove(vaddr)
-            } else {
-                None
-            };
+            let file_page = file_page_refs.and_then(|pages| pages.remove(vaddr));
             if let Some(page) = file_page.as_ref() {
                 if page.paddr() != paddr {
-                    self.file_pages.insert(vaddr, page.clone());
+                    file_page_refs
+                        .expect("file page reference table disappeared")
+                        .insert(vaddr, page.clone());
                     return Err(AxError::BadAddress);
                 }
             } else if frame_refs().count(paddr).is_none() {
@@ -563,14 +648,18 @@ impl CowBackend {
                         // record is unknown. The wrapper still flushes the PTE
                         // that `unmap` cleared before returning this error.
                         if let Some(page) = file_page {
-                            self.file_pages.insert(vaddr, page);
+                            file_page_refs
+                                .expect("file page reference table disappeared")
+                                .insert(vaddr, page);
                         }
                         return Err(AxError::BadAddress);
                     }
                 }
                 Err(_) => {
                     if let Some(page) = file_page {
-                        self.file_pages.insert(vaddr, page);
+                        file_page_refs
+                            .expect("file page reference table disappeared")
+                            .insert(vaddr, page);
                     }
                     return Err(AxError::BadAddress);
                 }
@@ -608,11 +697,7 @@ impl CowBackend {
                     && access_flags.contains(MappingFlags::WRITE)
                     && !page_flags.contains(MappingFlags::WRITE)
                 {
-                    let file_page = if self.file.is_some() {
-                        self.file_pages.get(vaddr)
-                    } else {
-                        None
-                    };
+                    let file_page = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr));
                     let source = if let Some(page) = file_page {
                         if page.paddr() != paddr {
                             return FaultPreparation::Fallback;
@@ -644,18 +729,32 @@ impl CowBackend {
                     FaultPreparation::Fallback
                 }
             }
-            Err(PagingError::NotMapped) => FaultPreparation::Cow(CowFaultPlan {
-                identity: self.identity.clone(),
-                vaddr,
-                mapping_start: self.start,
-                area_range,
-                size: self.size,
-                file: self.file.clone(),
-                access_flags,
-                frame: None,
-                file_pages: Vec::new(),
-                source: None,
-            }),
+            Err(PagingError::NotMapped) => {
+                #[cfg(feature = "fault-repro-trace")]
+                if crate::mm::is_page_fault_repro_address(vaddr) {
+                    warn!(
+                        "[PFTRACE 06] prepare-fault vma_backend=Cow pte=NotMapped backing={} \
+                         access={access_flags:?} resolution=missing-page-plan",
+                        if self.file.is_some() {
+                            "file"
+                        } else {
+                            "anonymous"
+                        },
+                    );
+                }
+                FaultPreparation::Cow(CowFaultPlan {
+                    identity: self.identity.clone(),
+                    vaddr,
+                    mapping_start: self.start,
+                    area_range,
+                    size: self.size,
+                    file: self.file.clone(),
+                    access_flags,
+                    frame: None,
+                    file_pages: Vec::new(),
+                    source: None,
+                })
+            }
             Err(_) => FaultPreparation::Fallback,
         }
     }
@@ -709,7 +808,10 @@ impl CowBackend {
                         }
                         CowFaultSource::File(_) => {
                             let frame = plan.frame.ok_or(AxError::BadAddress)?;
-                            let mut file_pages = self.file_pages.shard(plan.vaddr).lock();
+                            let Some(file_page_refs) = self.file_pages.as_ref() else {
+                                return Ok(FaultCommit::Stale);
+                            };
+                            let mut file_pages = file_page_refs.shard(plan.vaddr).lock();
                             let Some(mapped_page) = file_pages.get(&plan.vaddr) else {
                                 return Ok(FaultCommit::Stale);
                             };
@@ -824,21 +926,22 @@ impl CowBackend {
         // End the map guard before allocating or changing the page table.  In
         // particular, the error paths below must be able to put the pin back
         // without recursively locking `file_pages`.
-        let file_page = if self.file.is_some() {
-            self.file_pages.remove(vaddr)
-        } else {
-            None
-        };
+        let file_page_refs = self.file_pages.as_deref();
+        let file_page = file_page_refs.and_then(|pages| pages.remove(vaddr));
         if let Some(page) = file_page {
             if page.paddr() != paddr {
-                self.file_pages.insert(vaddr, page);
+                file_page_refs
+                    .expect("file page reference table disappeared")
+                    .insert(vaddr, page);
                 return Err(AxError::BadAddress);
             }
 
             let new_frame = match self.alloc_new_frame(false) {
                 Ok(frame) => frame,
                 Err(err) => {
-                    self.file_pages.insert(vaddr, page);
+                    file_page_refs
+                        .expect("file page reference table disappeared")
+                        .insert(vaddr, page);
                     return Err(err);
                 }
             };
@@ -851,7 +954,9 @@ impl CowBackend {
             }
             if let Err(err) = pt.remap(vaddr, new_frame, flags) {
                 self.drop_new_frame(new_frame);
-                self.file_pages.insert(vaddr, page);
+                file_page_refs
+                    .expect("file page reference table disappeared")
+                    .insert(vaddr, page);
                 return Err(err.into());
             }
             pt.finish();
@@ -975,7 +1080,7 @@ impl BackendOps for CowBackend {
 
             // A clean page mapped directly from the file folio can be rebuilt
             // by the child's first fault. Do not copy its PTE or pin here.
-            if let Some(page) = self.file.as_ref().and_then(|_| self.file_pages.get(vaddr)) {
+            if let Some(page) = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr)) {
                 if page.paddr() != paddr || page_flags.contains(MappingFlags::WRITE) {
                     new_backend
                         .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
@@ -1009,7 +1114,7 @@ impl Backend {
             file: Some((file, file_start, file_end)),
             has_mappings: Arc::new(AtomicBool::new(false)),
             identity: Arc::new(()),
-            file_pages: Arc::new(FilePageRefs::new()),
+            file_pages: Some(Arc::new(FilePageRefs::new())),
         })
     }
 
@@ -1020,7 +1125,7 @@ impl Backend {
             file: None,
             has_mappings: Arc::new(AtomicBool::new(false)),
             identity: Arc::new(()),
-            file_pages: Arc::new(FilePageRefs::new()),
+            file_pages: None,
         })
     }
 }

@@ -1,0 +1,14 @@
+# Large local captures and reproducible intermediate files.
+*.log
+*.bin
+*.elf
+*.folded
+run.json
+
+# Repro executables are rebuilt from docs/examples/page-fault-repro.
+riscv-page-fault-repro-*/pf-repro
+
+# Keep the compact page-fault evidence used by the walkthrough.
+!riscv-page-fault-repro-*/moss-console.clean.log
+!riscv-page-fault-repro-*/page-fault-trace.log
+!riscv-page-fault-repro-*/qemu-user-smoke.log

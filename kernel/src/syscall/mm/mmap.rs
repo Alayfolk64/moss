@@ -388,6 +388,20 @@ pub fn sys_mmap(
         return Err(AxError::InvalidInput);
     }
     let is_shared = is_shared_mapping(map_type);
+    #[cfg(feature = "fault-repro-trace")]
+    let trace_repro = addr == crate::mm::PAGE_FAULT_REPRO_ADDRESS
+        && length == PageSize::Size4K as usize
+        && map_type == MmapFlags::PRIVATE
+        && map_flags.contains(MmapFlags::ANONYMOUS);
+    #[cfg(feature = "fault-repro-trace")]
+    if trace_repro {
+        warn!(
+            "[PFTRACE 02] syscall-enter name={} pid={} mmap(addr={addr:#x}, len={length:#x}, \
+             prot={permission_flags:?}, flags={map_flags:?}, fd={fd}, offset={offset})",
+            curr.name(),
+            pid,
+        );
+    }
     if length == 0 {
         if !map_flags.contains(MmapFlags::ANONYMOUS) {
             if fd < 0 {
@@ -570,6 +584,16 @@ pub fn sys_mmap(
             map_flags.contains(MmapFlags::LOCKED),
         ),
     )?;
+    #[cfg(feature = "fault-repro-trace")]
+    if trace_repro {
+        warn!(
+            "[PFTRACE 03] syscall-return mmap={:#x}; vma=private-anonymous backend=Cow \
+             populate={} pte_after_mmap={:?}",
+            start.as_usize(),
+            populate,
+            aspace.page_table().query(start),
+        );
+    }
     if map_flags.contains(MmapFlags::LOCKED) {
         MMAP_LOCKED_BYTES.fetch_add(length, Ordering::Relaxed);
     }

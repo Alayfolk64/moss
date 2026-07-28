@@ -1,5 +1,7 @@
 //! Memory mapping backends.
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
+#[cfg(target_arch = "riscv64")]
+use core::arch::asm;
 
 use axalloc::{UsageKind, global_allocator};
 use axerrno::{AxError, AxResult};
@@ -11,6 +13,8 @@ use axhal::{
 use enum_dispatch::enum_dispatch;
 use memory_addr::{DynPageIter, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 use memory_set::MappingBackend;
+#[cfg(target_arch = "riscv64")]
+use spin::Once;
 
 mod cow;
 mod file;
@@ -50,6 +54,78 @@ fn divide_page(size: usize, page_size: PageSize) -> usize {
     size >> (page_size as usize).trailing_zeros()
 }
 
+#[cfg(target_arch = "riscv64")]
+fn cboz_block_size() -> Option<usize> {
+    static CBOZ_BLOCK_SIZE: Once<Option<usize>> = Once::new();
+
+    *CBOZ_BLOCK_SIZE.call_once(|| {
+        let fdt = axhal::dtb::get_fdt()?;
+        let mut block_size = None;
+        let mut cpu_count = 0;
+
+        for cpu in fdt.all_nodes().filter(|node| {
+            node.find_property("device_type")
+                .is_some_and(|property| property.str() == "cpu")
+        }) {
+            let has_zicboz = cpu
+                .find_property("riscv,isa-extensions")
+                .is_some_and(|property| property.str_list().any(|extension| extension == "zicboz"));
+            if !has_zicboz {
+                return None;
+            }
+
+            let cpu_block_size = cpu.find_property("riscv,cboz-block-size")?.u32() as usize;
+            if !cpu_block_size.is_power_of_two() || cpu_block_size > PAGE_SIZE_4K {
+                return None;
+            }
+            if block_size.is_some_and(|size| size != cpu_block_size) {
+                return None;
+            }
+
+            block_size = Some(cpu_block_size);
+            cpu_count += 1;
+        }
+
+        (cpu_count != 0).then_some(block_size).flatten()
+    })
+}
+
+/// Clears a frame before it becomes visible through a user page table.
+///
+/// The fixed RISC-V QEMU target advertises Zicboz and its cache-block size in
+/// the device tree. Like Linux `clear_page`, use `cbo.zero` only after
+/// validating that every CPU supports one common block size. Other platforms,
+/// malformed device trees and unsuitable alignments retain the byte-accurate
+/// fallback.
+unsafe fn zero_fresh_frame(frame: PhysAddr, size: usize) {
+    let start = phys_to_virt(frame).as_usize();
+
+    #[cfg(target_arch = "riscv64")]
+    if let Some(block_size) = cboz_block_size()
+        && start.is_multiple_of(block_size)
+        && size.is_multiple_of(block_size)
+    {
+        let end = start.checked_add(size).expect("frame range overflow");
+        let mut addr = start;
+        while addr < end {
+            // CBO.ZERO is encoded as a MISC-MEM I-type instruction with
+            // funct3=2 and imm=4. The generic encoding keeps the kernel target
+            // at rv64gc while runtime DT validation gates its execution.
+            unsafe {
+                asm!(
+                    ".insn i 0x0f, 2, x0, {addr}, 4",
+                    addr = in(reg) addr,
+                    options(nostack)
+                )
+            };
+            addr += block_size;
+        }
+        return;
+    }
+
+    unsafe { core::ptr::write_bytes(start as *mut u8, 0, size) };
+}
+
 fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     let page_size = size as usize;
     let num_pages = page_size / PAGE_SIZE_4K;
@@ -73,7 +149,7 @@ fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
         virt_to_phys(vaddr)
     };
     if zeroed {
-        unsafe { core::ptr::write_bytes(phys_to_virt(frame).as_mut_ptr(), 0, page_size) };
+        unsafe { zero_fresh_frame(frame, page_size) };
     }
     Ok(frame)
 }

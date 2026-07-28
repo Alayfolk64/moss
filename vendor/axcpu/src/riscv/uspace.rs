@@ -73,10 +73,21 @@ impl UserContext {
                 Trap::Exception(E::LoadPageFault) => {
                     ReturnReason::PageFault(va!(stval), PageFaultFlags::READ | PageFaultFlags::USER)
                 }
-                Trap::Exception(E::StorePageFault) => ReturnReason::PageFault(
-                    va!(stval),
-                    PageFaultFlags::WRITE | PageFaultFlags::USER,
-                ),
+                Trap::Exception(E::StorePageFault) => {
+                    #[cfg(feature = "fault-repro-trace")]
+                    if stval & !(memory_addr::PAGE_SIZE_4K - 1) == 0x30_0000_0000 {
+                        warn!(
+                            "[PFTRACE 04] riscv-trap cause=StorePageFault scause={} \
+                             stval={stval:#x} sepc={:#x}",
+                            scause.bits(),
+                            self.sepc,
+                        );
+                    }
+                    ReturnReason::PageFault(
+                        va!(stval),
+                        PageFaultFlags::WRITE | PageFaultFlags::USER,
+                    )
+                }
                 Trap::Exception(E::InstructionPageFault) => ReturnReason::PageFault(
                     va!(stval),
                     PageFaultFlags::EXECUTE | PageFaultFlags::USER,

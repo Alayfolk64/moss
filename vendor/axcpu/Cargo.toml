@@ -62,6 +62,7 @@ targets = [
 arm-el2 = []
 default = []
 fp-simd = []
+fault-repro-trace = []
 profile = []
 tls = []
 uspace = []

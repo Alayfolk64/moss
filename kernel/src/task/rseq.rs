@@ -123,7 +123,8 @@ impl Thread {
     }
 
     pub fn inherit_rseq_from(&self, parent: &Thread) {
-        *self.rseq.lock() = *parent.rseq.lock();
+        let registration = *parent.rseq.lock();
+        *self.rseq.lock() = registration;
     }
 
     /// Updates the user ABI before returning to user mode and restarts an

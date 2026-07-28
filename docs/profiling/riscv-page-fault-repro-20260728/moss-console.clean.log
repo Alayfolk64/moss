@@ -1,0 +1,102 @@
+
+OpenSBI v1.8
+   ____                    _____ ____ _____
+  / __ \                  / ____|  _ \_   _|
+ | |  | |_ __   ___ _ __ | (___ | |_) || |
+ | |  | | '_ \ / _ \ '_ \ \___ \|  _ < | |
+ | |__| | |_) |  __/ | | |____) | |_) || |_
+  \____/| .__/ \___|_| |_|_____/|____/_____|
+        | |
+        |_|
+
+Platform Name               : riscv-virtio,qemu
+Platform Features           : medeleg
+Platform HART Count         : 8
+Platform HART Protection    : pmp
+Platform IPI Device         : aclint-mswi
+Platform Timer Device       : aclint-mtimer @ 10000000Hz
+Platform Console Device     : uart8250
+Platform HSM Device         : ---
+Platform PMU Device         : ---
+Platform Reboot Device      : syscon-reboot
+Platform Shutdown Device    : syscon-poweroff
+Platform Suspend Device     : ---
+Platform CPPC Device        : ---
+Firmware Base               : 0x80000000
+Firmware Size               : 407 KB
+Firmware RW Offset          : 0x40000
+Firmware RW Size            : 151 KB
+Firmware Heap Offset        : 0x55000
+Firmware Heap Size          : 67 KB (total), 1 KB (reserved), 13 KB (used), 52 KB (free)
+Firmware Scratch Size       : 4096 B (total), 1464 B (used), 2632 B (free)
+Runtime SBI Version         : 3.0
+Standard SBI Extensions     : ipi,pmu,srst,sse,hsm,rfnc,fwft,time,base,legacy,dbcn,dbtr
+Experimental SBI Extensions : none
+
+Domain0 Name                : root
+Domain0 Boot HART           : 0
+Domain0 HARTs               : 0*,1*,2*,3*,4*,5*,6*,7*
+Domain0 Region00            : 0x0000000080000000-0x000000008003ffff M: (F,R,X) S/U: ()
+Domain0 Region01            : 0x0000000080040000-0x000000008007ffff M: (F,R,W) S/U: ()
+Domain0 Region02            : 0x0000000000100000-0x0000000000100fff M: (I,R,W) S/U: (R,W)
+Domain0 Region03            : 0x0000000010000000-0x0000000010000fff M: (I,R,W) S/U: (R,W)
+Domain0 Region04            : 0x0000000002000000-0x000000000200ffff M: (I,R,W) S/U: ()
+Domain0 Region05            : 0x000000000c400000-0x000000000c5fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region06            : 0x000000000c000000-0x000000000c3fffff M: (I,R,W) S/U: (R,W)
+Domain0 Region07            : 0x0000000000000000-0xffffffffffffffff M: () S/U: (R,W,X)
+Domain0 Next Address        : 0x0000000080200000
+Domain0 Next Arg1           : 0x000000027fe00000
+Domain0 Next Mode           : S-mode
+Domain0 SysReset            : yes
+Domain0 SysSuspend          : yes
+
+Boot HART ID                : 0
+Boot HART Domain            : root
+Boot HART Priv Version      : v1.12
+Boot HART Base ISA          : rv64imafdch
+Boot HART ISA Extensions    : sstc,zicntr,zihpm,zicboz,zicbom,sdtrig,svadu
+Boot HART PMP Count         : 16
+Boot HART PMP Granularity   : 2 bits
+Boot HART PMP Address Bits  : 54
+Boot HART MHPM Info         : 16 (0x0007fff8)
+Boot HART Debug Triggers    : 2 triggers
+Boot HART MIDELEG           : 0x0000000000001666
+Boot HART MEDELEG           : 0x0000000000f4b509
+
+       d8888                            .d88888b.   .d8888b.
+      d88888                           d88P" "Y88b d88P  Y88b
+     d88P888                           888     888 Y88b.
+    d88P 888 888d888  .d8888b  .d88b.  888     888  "Y888b.
+   d88P  888 888P"   d88P"    d8P  Y8b 888     888     "Y88b.
+  d88P   888 888     888      88888888 888     888       "888
+ d8888888888 888     Y88b.    Y8b.     Y88b. .d88P Y88b  d88P
+d88P     888 888      "Y8888P  "Y8888   "Y88888P"   "Y8888P"
+
+arch = riscv64
+platform = riscv64-qemu-virt
+target = riscv64gc-unknown-none-elf
+build_mode = release
+log_level = warn
+backtrace = true
+smp = 8
+
+Boot at 2026-07-28 08:25:14.002102200 UTC
+
+Entering interactive shell...
+starry:~# /root/pf-repro
+[USER] calling glibc mmap: private anonymous, populate=false
+[ 14.999839 4:34 starry_kernel::syscall::mm::mmap:398] [PFTRACE 02] syscall-enter name=pf-repro pid=34 mmap(addr=0x3000000000, len=0x1000, prot=MmapProt(READ | WRITE), flags=MmapFlags(PRIVATE | FIXED_NOREPLACE | ANONYMOUS), fd=-1, offset=0)
+[ 15.001729 4:34 starry_kernel::syscall::mm::mmap:589] [PFTRACE 03] syscall-return mmap=0x3000000000; vma=private-anonymous backend=Cow populate=false pte_after_mmap=Err(NotMapped)
+[USER] mmap returned 0x3000000000; executing first store now
+[ 15.002536 4:34 axcpu::riscv::uspace:79] [PFTRACE 04] riscv-trap cause=StorePageFault scause=15 stval=0x3000000000 sepc=0x1043c
+[ 15.002891 4:34 starry_kernel::task::user:73] [PFTRACE 05] task-dispatch name=pf-repro pid=34 tid=34 ReturnReason::PageFault(addr=VA:0x3000000000, flags=WRITE | USER) ip=0x1043c
+[ 15.003613 4:34 starry_kernel::mm::aspace::backend::cow:735] [PFTRACE 06] prepare-fault vma_backend=Cow pte=NotMapped backing=anonymous access=WRITE | USER resolution=missing-page-plan
+[ 15.004065 4:34 starry_kernel::mm::aspace::backend::cow:436] [PFTRACE 07] execute-plan source=none backing=anonymous action=allocate-and-zero size=0x1000
+[ 15.004675 4:34 starry_kernel::mm::aspace::backend::cow:445] [PFTRACE 08] execute-plan-complete zeroed_frame=PA:0x9bdef000 (still not visible in page table)
+[ 15.005273 4:34 starry_kernel::mm::aspace::backend::cow:555] [PFTRACE 09] commit-pte va=VA:0x3000000000 pa=PA:0x9bdef000 flags=READ | WRITE | USER result=installed
+[ 15.005674 4:34 starry_kernel::mm::aspace:1043] [PFTRACE 09.5] commit-visible; flush_tlb(va=VA:0x3000000000) then retry user access
+[ 15.006011 4:34 starry_kernel::task::user:98] [PFTRACE 10] fault-handler-return handled=true; resume_same_ip=0x1043c (faulting store will be retried)
+[USER] first store returned; byte=0x5a
+starry:~# echo${IFS}PF_REPRO_EXIT=$?
+PF_REPRO_EXIT=0
+starry:~# QEMU: Terminated

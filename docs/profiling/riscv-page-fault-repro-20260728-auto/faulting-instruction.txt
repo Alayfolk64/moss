@@ -1,0 +1,22 @@
+0000000000010434 <first_store.constprop.0>:
+   10434:	478d                	li	a5,3
+   10436:	1792                	slli	a5,a5,0x24
+   10438:	05a00713          	li	a4,90
+   1043c:	00e78023          	sb	a4,0(a5)
+   10440:	8082                	ret
+   104a2:	f93ff0ef          	jal	ra,10434 <first_store.constprop.0>
+   104a6:	0004c703          	lbu	a4,0(s1)
+   104aa:	05a00793          	li	a5,90
+   104ae:	00f70763          	beq	a4,a5,104bc <_start+0x7a>
+   104b2:	45cd                	li	a1,19
+   104b4:	04040513          	addi	a0,s0,64
+   104b8:	f69ff0ef          	jal	ra,10420 <fail>
+   104bc:	02700613          	li	a2,39
+   104c0:	0c040593          	addi	a1,s0,192
+   104c4:	4505                	li	a0,1
+   104c6:	f3bff0ef          	jal	ra,10400 <write@plt>
+   104ca:	6585                	lui	a1,0x1
+   104cc:	8526                	mv	a0,s1
+   104ce:	f13ff0ef          	jal	ra,103e0 <munmap@plt>
+   104d2:	4501                	li	a0,0
+   104d4:	f1dff0ef          	jal	ra,103f0 <_exit@plt>
