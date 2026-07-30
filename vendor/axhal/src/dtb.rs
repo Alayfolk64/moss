@@ -35,6 +35,11 @@ pub fn get_fdt() -> Option<&'static Fdt<'static>> {
     CACHED_FDT.init_once(init_fdt()).as_ref()
 }
 
+/// Returns the physical byte range occupied by the boot device tree.
+pub fn physical_range() -> Option<(usize, usize)> {
+    Some((get_bootarg(), get_fdt()?.total_size()))
+}
+
 /// Get the bootargs chosen from the device tree.
 pub fn get_chosen_bootargs() -> Option<&'static str> {
     static CACHED_BOOTARGS: LazyInit<Option<&'static str>> = LazyInit::new();

@@ -53,6 +53,24 @@ pub fn init() {
         }
     };
 
+    // QEMU places the RISC-V DTB near the end of the configured guest RAM.
+    // That address may lie beyond the platform's build-time RAM capacity, but
+    // the cached FDT continues to reference it after the fine-grained kernel
+    // page table replaces the temporary boot mapping. Keep the complete DTB
+    // mapped and, when it lies inside managed RAM, out of the allocator.
+    #[cfg(target_arch = "riscv64")]
+    let dtb_range = crate::dtb::physical_range().map(|(start, size)| {
+        let end = start.checked_add(size).expect("DTB range overflow");
+        let aligned_start = start & !(PAGE_SIZE_4K - 1);
+        let aligned_end = end
+            .checked_add(PAGE_SIZE_4K - 1)
+            .expect("DTB range overflow")
+            & !(PAGE_SIZE_4K - 1);
+        (aligned_start, aligned_end - aligned_start)
+    });
+    #[cfg(not(target_arch = "riscv64"))]
+    let dtb_range = None;
+
     // Push regions in kernel image
     push(PhysMemRegion {
         paddr: virt_to_phys(addr_of_sym!(_stext).into()),
@@ -92,6 +110,9 @@ pub fn init() {
     for &(start, size) in reserved_phys_ram_ranges() {
         push(PhysMemRegion::new_reserved(start, size, "reserved"));
     }
+    if let Some((start, size)) = dtb_range {
+        push(PhysMemRegion::new_reserved(start, size, "device tree"));
+    }
 
     // Combine kernel image range and reserved ranges
     let kernel_start = virt_to_phys(addr_of_sym!(_skernel).into()).as_usize();
@@ -100,6 +121,7 @@ pub fn init() {
         .iter()
         .cloned()
         .chain(core::iter::once((kernel_start, kernel_size))) // kernel image range is also reserved
+        .chain(dtb_range)
         .collect::<Vec<_, MAX_REGIONS>>();
 
     // Remove all reserved ranges from RAM ranges, and push the remaining as free memory
