@@ -59,7 +59,7 @@ ifeq ($(DWARF),y)
   ax_feat += dwarf
 endif
 
-ifeq ($(shell test $(SMP) -gt 1; echo $$?),0)
+ifeq ($(shell test $(CPU_CAPACITY) -gt 1; echo $$?),0)
   lib_feat += smp
 endif
 

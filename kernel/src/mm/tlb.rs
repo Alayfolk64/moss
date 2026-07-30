@@ -39,7 +39,7 @@ mod riscv64 {
             axhal::asm::flush_tlb(vaddr);
         }
 
-        let cpu_num = axconfig::plat::CPU_NUM;
+        let cpu_num = axhal::cpu_num();
         let mask_width = usize::BITS as usize;
         let (start, size) = vaddr.map_or((0, usize::MAX), |addr| (addr.as_usize(), PAGE_SIZE_4K));
 
@@ -79,7 +79,7 @@ fn flush_tlb_on_all_cpus(root_paddr: axhal::mem::PhysAddr, vaddr: Option<VirtAdd
 pub fn init() {
     #[cfg(target_arch = "riscv64")]
     assert!(
-        axconfig::plat::CPU_NUM == 1 || sbi_rt::probe_extension(sbi_rt::Fence).is_available(),
+        axhal::cpu_num() == 1 || sbi_rt::probe_extension(sbi_rt::Fence).is_available(),
         "RISC-V SMP requires the SBI RFENCE extension"
     );
 

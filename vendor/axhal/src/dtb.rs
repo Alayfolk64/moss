@@ -1,7 +1,7 @@
 //! DTB (Device Tree Blob) related functionality.
 use core::ptr::NonNull;
 
-use fdt_parser::Fdt;
+use fdt_parser::{Fdt, Status};
 use lazyinit::LazyInit;
 
 static BOOTARG: LazyInit<usize> = LazyInit::new();
@@ -50,4 +50,21 @@ pub fn get_chosen_bootargs() -> Option<&'static str> {
     }
 
     *CACHED_BOOTARGS.init_once(init_bootargs())
+}
+
+/// Returns the number of available CPU nodes declared by the boot device tree.
+///
+/// A missing `status` property means available according to the device-tree
+/// specification. Explicitly disabled CPUs are not counted.
+pub fn cpu_count() -> Option<usize> {
+    let count = get_fdt()?
+        .find_nodes("/cpus/cpu")
+        .filter(|node| node.status() != Some(Status::Disabled))
+        .filter(|node| {
+            node.find_property("device_type")
+                .is_none_or(|property| property.str() == "cpu")
+        })
+        .count();
+
+    (count != 0).then_some(count)
 }

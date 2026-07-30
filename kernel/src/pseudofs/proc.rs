@@ -59,7 +59,7 @@ const DUMMY_CPUINFO: &str = indoc! {"
 
 fn proc_stat() -> String {
     let mut stat = String::from("cpu  0 0 0 0 0 0 0 0 0 0\n");
-    for cpu_id in 0..axconfig::plat::CPU_NUM {
+    for cpu_id in 0..axhal::cpu_num() {
         stat.push_str(&format!("cpu{cpu_id} 0 0 0 0 0 0 0 0 0 0\n"));
     }
     stat.push_str("intr 0\nctxt 0\nbtime 0\nprocesses 0\nprocs_running 1\nprocs_blocked 0\n");

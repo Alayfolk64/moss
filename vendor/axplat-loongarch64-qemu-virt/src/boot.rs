@@ -2,8 +2,8 @@ use axplat::mem::{Aligned4K, pa, va};
 use page_table_entry::{GenericPTE, MappingFlags, loongarch64::LA64PTE};
 
 use crate::config::plat::{
-    BOOT_STACK_SIZE, HIGH_MEMORY_BASE, LOW_MEMORY_SIZE, PHYS_BOOT_OFFSET, PHYS_MEMORY_SIZE,
-    PHYS_VIRT_OFFSET,
+    BOOT_STACK_SIZE, FDT_PADDR, HIGH_MEMORY_BASE, LOW_MEMORY_SIZE, PHYS_BOOT_OFFSET,
+    PHYS_MEMORY_SIZE, PHYS_VIRT_OFFSET,
 };
 
 const L1_BLOCK_SIZE: usize = 1 << 30;
@@ -120,7 +120,7 @@ unsafe extern "C" fn _start() -> ! {
         add.d       $sp, $sp, $t0
 
         csrrd       $a0, 0x20           # cpuid
-        li.d        $a1, 0              # TODO: parse dtb
+        li.d        $a1, {fdt_paddr}    # QEMU virt generated DTB
         la.abs      $t0, {entry}
         li.d        $ra, 0
         jirl        $zero, $t0, 0",
@@ -130,6 +130,7 @@ unsafe extern "C" fn _start() -> ! {
 
         boot_stack = sym BOOT_STACK,
         boot_stack_size = const BOOT_STACK_SIZE,
+        fdt_paddr = const FDT_PADDR,
         enable_fp_simd = sym enable_fp_simd,
         init_boot_page_table = sym init_boot_page_table,
         init_mmu = sym init_mmu,

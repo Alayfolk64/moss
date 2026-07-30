@@ -45,7 +45,7 @@ pub fn run_on_all_cpus(callback: impl Fn() + Send + Sync + 'static) {
         remote_completed.fetch_add(1, Ordering::Release);
     });
 
-    while completed.load(Ordering::Acquire) < axconfig::plat::CPU_NUM {
+    while completed.load(Ordering::Acquire) < axhal::cpu_num() {
         spin_loop();
     }
 }

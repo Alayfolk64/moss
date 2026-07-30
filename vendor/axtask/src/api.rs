@@ -112,7 +112,7 @@ pub fn current() -> CurrentTask {
 
 /// Initializes the task scheduler (for the primary CPU).
 pub fn init_scheduler() {
-    init_scheduler_with_cpu_num(axconfig::plat::CPU_NUM);
+    init_scheduler_with_cpu_num(axhal::cpu_num());
 }
 
 /// Initializes the task scheduler with cpu_num (for the primary CPU).

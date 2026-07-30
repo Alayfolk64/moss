@@ -120,6 +120,37 @@ pub fn init_early(cpu_id: usize, arg: usize) {
     axplat::init::init_early(cpu_id, arg);
 }
 
+/// Returns the number of CPUs available at runtime.
+///
+/// The device tree is authoritative. `axconfig::plat::CPU_NUM` is only the
+/// build-time capacity for fixed-size per-CPU storage.
+pub fn cpu_num() -> usize {
+    #[cfg(feature = "smp")]
+    {
+        use lazyinit::LazyInit;
+
+        static CPU_NUM: LazyInit<usize> = LazyInit::new();
+        if let Some(cpu_num) = CPU_NUM.get() {
+            return *cpu_num;
+        }
+
+        let capacity = axconfig::plat::CPU_NUM;
+        let detected = dtb::cpu_count().unwrap_or(capacity);
+        let cpu_num = detected.min(capacity).max(1);
+        if detected > capacity {
+            warn!(
+                "device tree declares {detected} CPUs, but build capacity is {capacity}; \
+                 only {capacity} CPUs will be used"
+            );
+        }
+        *CPU_NUM.init_once(cpu_num)
+    }
+    #[cfg(not(feature = "smp"))]
+    {
+        1
+    }
+}
+
 macro_rules! addr_of_sym {
     ($e:ident) => {
         $e as *const () as usize

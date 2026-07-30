@@ -353,12 +353,11 @@ struct AddrSpaceReclaim {
 
 static RECLAIM_QUEUE: SpinNoIrq<VecDeque<AddrSpaceReclaim>> = SpinNoIrq::new(VecDeque::new());
 static RECLAIM_WORKERS: AtomicUsize = AtomicUsize::new(0);
-const RECLAIM_WORKER_LIMIT: usize = axconfig::plat::CPU_NUM;
 
 fn start_reclaim_worker() {
     loop {
         let workers = RECLAIM_WORKERS.load(Ordering::Acquire);
-        if workers >= RECLAIM_WORKER_LIMIT || RECLAIM_QUEUE.lock().is_empty() {
+        if workers >= axhal::cpu_num() || RECLAIM_QUEUE.lock().is_empty() {
             return;
         }
         if RECLAIM_WORKERS

@@ -247,7 +247,7 @@ impl IrqIf for IrqIfImpl {
             IpiTarget::Current { cpu_id } => {
                 SBI_IPI_CALLS.fetch_add(1, Ordering::Relaxed);
                 SBI_IPI_UNICASTS.fetch_add(1, Ordering::Relaxed);
-                let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << cpu_id, 0));
+                let res = sbi_rt::send_ipi(HartMask::from_mask_base(1, cpu_id));
                 if res.is_err() {
                     warn!("send_ipi failed: {res:?}");
                 }
@@ -255,7 +255,7 @@ impl IrqIf for IrqIfImpl {
             IpiTarget::Other { cpu_id } => {
                 SBI_IPI_CALLS.fetch_add(1, Ordering::Relaxed);
                 SBI_IPI_UNICASTS.fetch_add(1, Ordering::Relaxed);
-                let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << cpu_id, 0));
+                let res = sbi_rt::send_ipi(HartMask::from_mask_base(1, cpu_id));
                 if res.is_err() {
                     warn!("send_ipi failed: {res:?}");
                 }

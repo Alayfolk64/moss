@@ -540,7 +540,16 @@ impl DirNodeOps for MemoryNode {
 
 impl Drop for MemoryNode {
     fn drop(&mut self) {
-        if let NodeContent::Dir(dir) = &self.inode.content {
+        // A MemoryNode is only a handle to an inode.  Lookups may create
+        // multiple handles for the same directory, so dropping an arbitrary
+        // handle must not remove the directory's contents.
+        //
+        // An unlinked, empty directory has only its synthetic "." link left.
+        // Reclaim "." and ".." when the last handle goes away; clearing them
+        // earlier would make a still-linked directory appear empty.
+        let reclaim_dir =
+            self.inode.metadata.lock().nlink == 1 && Arc::strong_count(&self.inode) == 2;
+        if reclaim_dir && let NodeContent::Dir(dir) = &self.inode.content {
             dir.entries.lock().clear();
         }
         release_inode(&self.fs, &self.inode, 0);

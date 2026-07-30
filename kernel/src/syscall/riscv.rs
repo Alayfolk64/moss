@@ -166,21 +166,21 @@ fn load_cpu_mask(cpus: *const u8, cpu_set_size: usize) -> AxResult<alloc::vec::V
 }
 
 fn kernel_cpu_mask_size() -> usize {
-    axconfig::plat::CPU_NUM.div_ceil(usize::BITS as usize) * size_of::<usize>()
+    axhal::cpu_num().div_ceil(usize::BITS as usize) * size_of::<usize>()
 }
 
 fn mask_has_online_cpu(mask: &[u8]) -> bool {
-    (0..axconfig::plat::CPU_NUM).any(|cpu| mask_bit_is_set(mask, cpu))
+    (0..axhal::cpu_num()).any(|cpu| mask_bit_is_set(mask, cpu))
 }
 
 fn fill_online_cpu_mask(mask: &mut [u8]) {
-    for cpu in 0..axconfig::plat::CPU_NUM.min(mask.len() * 8) {
+    for cpu in 0..axhal::cpu_num().min(mask.len() * 8) {
         mask[cpu / 8] |= 1 << (cpu % 8);
     }
 }
 
 fn remove_offline_cpus(mask: &mut [u8]) {
-    for cpu in axconfig::plat::CPU_NUM..mask.len() * 8 {
+    for cpu in axhal::cpu_num()..mask.len() * 8 {
         mask[cpu / 8] &= !(1 << (cpu % 8));
     }
 }

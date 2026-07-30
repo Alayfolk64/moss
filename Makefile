@@ -16,6 +16,9 @@ export BLK := y
 export NET := n
 export VSOCK := n
 export MEM := 8G
+# Build-time capacity for per-CPU areas and other fixed-size storage.  The
+# number of CPUs brought online is detected from the QEMU device tree.
+export CPU_CAPACITY ?= 256
 export SMP ?= 8
 export ICOUNT := n
 export BUS := mmio

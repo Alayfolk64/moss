@@ -107,28 +107,30 @@ pub(crate) fn current_run_queue<G: BaseGuard>() -> CurrentRunQueueRef<'static, G
 /// This function will panic if `cpu_mask` is empty, indicating that there are no available CPUs for task execution.
 ///
 #[cfg(feature = "smp")]
-// The modulo operation is safe here because `axconfig::plat::CPU_NUM` is always greater than 1 with "smp" enabled.
+// The modulo operation is safe because scheduler initialization publishes at
+// least one active CPU before tasks can be selected.
 #[allow(clippy::modulo_one)]
 #[inline]
 fn select_run_queue_index(cpumask: AxCpuMask, preferred_cpu: Option<usize>) -> usize {
     static RUN_QUEUE_INDEX: AtomicUsize = AtomicUsize::new(0);
 
     assert!(!cpumask.is_empty(), "No available CPU for task execution");
+    let cpu_num = crate::api::active_cpu_count();
 
     if let Some(cpu_id) = preferred_cpu
-        && cpu_id < axconfig::plat::CPU_NUM
+        && cpu_id < cpu_num
         && cpumask.get(cpu_id)
         && RUN_QUEUE_READY[cpu_id].load(Ordering::Acquire)
     {
         return cpu_id;
     }
 
-    let start = RUN_QUEUE_INDEX.fetch_add(1, Ordering::Relaxed) % axconfig::plat::CPU_NUM;
+    let start = RUN_QUEUE_INDEX.fetch_add(1, Ordering::Relaxed) % cpu_num;
     let mut selected = None;
     let mut minimum_load = usize::MAX;
 
-    for offset in 0..axconfig::plat::CPU_NUM {
-        let cpu_id = (start + offset) % axconfig::plat::CPU_NUM;
+    for offset in 0..cpu_num {
+        let cpu_id = (start + offset) % cpu_num;
         if cpumask.get(cpu_id) && RUN_QUEUE_READY[cpu_id].load(Ordering::Acquire) {
             let load = unsafe { RUN_QUEUES[cpu_id].assume_init_ref().load() };
             if load < minimum_load {
@@ -139,7 +141,7 @@ fn select_run_queue_index(cpumask: AxCpuMask, preferred_cpu: Option<usize>) -> u
     }
 
     selected.unwrap_or_else(|| {
-        (0..axconfig::plat::CPU_NUM)
+        (0..cpu_num)
             .find(|&cpu_id| cpumask.get(cpu_id))
             .expect("No available CPU for task execution")
     })
@@ -733,7 +735,7 @@ pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
 pub(crate) fn migrate_entry_to(migrated_task: AxTaskRef, target_cpu: usize) {
     let cpumask = migrated_task.cpumask();
     assert!(
-        target_cpu < axconfig::plat::CPU_NUM && cpumask.get(target_cpu),
+        target_cpu < crate::api::active_cpu_count() && cpumask.get(target_cpu),
         "invalid migration target {target_cpu}"
     );
 

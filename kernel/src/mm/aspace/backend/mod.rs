@@ -134,7 +134,7 @@ fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
             global_allocator()
                 .alloc_page_cached(
                     axhal::percpu::this_cpu_id(),
-                    axconfig::plat::CPU_NUM,
+                    axhal::cpu_num(),
                     UsageKind::VirtMem,
                 )
                 .map_err(|_| AxError::NoMemory)?,
@@ -159,7 +159,7 @@ fn dealloc_frame(frame: PhysAddr, align: PageSize) {
     if align == PageSize::Size4K {
         global_allocator().dealloc_page_cached(
             axhal::percpu::this_cpu_id(),
-            axconfig::plat::CPU_NUM,
+            axhal::cpu_num(),
             vaddr.as_usize(),
             UsageKind::VirtMem,
         );

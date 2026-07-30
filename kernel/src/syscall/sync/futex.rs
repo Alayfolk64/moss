@@ -100,7 +100,7 @@ pub fn sys_futex(
             // released. On SMP, the waiter normally belongs to another run
             // queue, so yielding this CPU only disturbs an unrelated task.
             // Keep the immediate handoff only for single-CPU builds.
-            if count != 0 && axconfig::plat::CPU_NUM == 1 {
+            if count != 0 && axhal::cpu_num() == 1 {
                 axtask::yield_now();
             }
             Ok(count as _)

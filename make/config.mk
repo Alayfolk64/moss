@@ -24,21 +24,34 @@ else
   SMP_KEY := plat.max-cpu-num
 endif
 
-ifneq ($(SMP),)
-  ifeq ($(SMP_KEY),)
-    $(error "Neither `plat.max-cpu-num` nor `plat.cpu-num` is defined in the platform configuration file")
-  endif
-  config_args += -w '$(SMP_KEY)=$(SMP)'
-else
-  ifeq ($(SMP_KEY),plat.max-cpu-num)
-    SMP := $(PLAT_MAX_CPU_NUM)
+ifeq ($(SMP_KEY),)
+  $(error "Neither `plat.max-cpu-num` nor `plat.cpu-num` is defined in the platform configuration file")
+endif
+
+# `CPU_CAPACITY` sizes compile-time per-CPU storage, while `SMP` controls how
+# many CPUs QEMU exposes at runtime. Keep the historical behavior for callers
+# that do not specify a separate capacity.
+ifeq ($(CPU_CAPACITY),)
+  ifneq ($(SMP),)
+    CPU_CAPACITY := $(SMP)
   else
-    SMP := $(PLAT_CPU_NUM)
+  ifeq ($(SMP_KEY),plat.max-cpu-num)
+      CPU_CAPACITY := $(PLAT_MAX_CPU_NUM)
+  else
+      CPU_CAPACITY := $(PLAT_CPU_NUM)
   endif
-  ifeq ($(SMP),)
+  endif
+endif
+
+ifeq ($(CPU_CAPACITY),)
     $(error "Neither `plat.max-cpu-num` nor `plat.cpu-num` is defined in the platform configuration file, \
       this option must be specified even for platforms with runtime CPU detection.")
-  endif
+endif
+
+config_args += -w '$(SMP_KEY)=$(CPU_CAPACITY)'
+
+ifeq ($(SMP),)
+  SMP := $(CPU_CAPACITY)
 endif
 
 

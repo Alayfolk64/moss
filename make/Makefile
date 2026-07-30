@@ -4,9 +4,9 @@
 #     - `MYPLAT`: Package name of the target platform crate.
 #     - `PLAT_CONFIG`: Path to the platform configuration file.
 #     - `SMP`: Override maximum CPU number specified in the platform config. For
-#       statically configured platforms, this is also the number of CPUs to boot
-#       and for platforms with runtime CPU detection, this is the upper limit of
-#       CPUs.
+#       QEMU, this is the number of CPUs exposed in the device tree.
+#     - `CPU_CAPACITY`: Build-time upper bound for per-CPU storage. Runtime CPU
+#       detection may bring any number of CPUs online up to this bound.
 #     - `MODE`: Build mode: release, debug
 #     - `LOG:` Logging level: warn, error, info, debug, trace
 #     - `V`: Verbose level: (empty), 1, 2
@@ -41,6 +41,7 @@ ARCH ?= x86_64
 MYPLAT ?=
 PLAT_CONFIG ?=
 SMP ?=
+CPU_CAPACITY ?=
 MODE ?= release
 LOG ?= warn
 V ?=
