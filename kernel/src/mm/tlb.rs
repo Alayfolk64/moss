@@ -1,11 +1,32 @@
-use axhal::mem::VirtAddr;
+#[cfg(target_arch = "loongarch64")]
+mod loongarch64 {
+    use core::sync::atomic::{AtomicUsize, Ordering};
+
+    use axhal::mem::{PhysAddr, VirtAddr};
+
+    static ACTIVE_PAGE_TABLE_ROOTS: [AtomicUsize; axconfig::plat::CPU_NUM] =
+        [const { AtomicUsize::new(0) }; axconfig::plat::CPU_NUM];
+
+    pub(super) fn note_page_table_switch(root_paddr: PhysAddr) {
+        let cpu = axhal::percpu::this_cpu_id();
+        ACTIVE_PAGE_TABLE_ROOTS[cpu].store(root_paddr.as_usize(), Ordering::Release);
+    }
+
+    pub(super) fn flush_tlb_on_active_cpus(root_paddr: PhysAddr, vaddr: Option<VirtAddr>) {
+        let root = root_paddr.as_usize();
+        let flush_all_roots = root == 0;
+
+        crate::ipi::run_on_selected_cpus(
+            move |cpu| {
+                flush_all_roots || ACTIVE_PAGE_TABLE_ROOTS[cpu].load(Ordering::Acquire) == root
+            },
+            move || axhal::asm::flush_tlb(vaddr),
+        );
+    }
+}
 
 #[cfg(target_arch = "loongarch64")]
-fn flush_tlb_on_all_cpus(vaddr: Option<VirtAddr>) {
-    crate::ipi::run_on_all_cpus(move || {
-        axhal::asm::flush_tlb(vaddr);
-    });
-}
+use loongarch64::{flush_tlb_on_active_cpus as flush_tlb_on_all_cpus, note_page_table_switch};
 
 #[cfg(target_arch = "riscv64")]
 mod riscv64 {
@@ -69,7 +90,7 @@ mod riscv64 {
 use riscv64::{flush_tlb_on_active_cpus, note_page_table_switch};
 
 #[cfg(target_arch = "riscv64")]
-fn flush_tlb_on_all_cpus(root_paddr: axhal::mem::PhysAddr, vaddr: Option<VirtAddr>) {
+fn flush_tlb_on_all_cpus(root_paddr: axhal::mem::PhysAddr, vaddr: Option<axhal::mem::VirtAddr>) {
     // RISC-V page faults run with S-mode interrupts disabled. SBI RFENCE is
     // synchronous in firmware and therefore does not depend on target CPUs
     // taking a supervisor IPI while the caller waits.
@@ -84,6 +105,15 @@ pub fn init() {
     );
 
     #[cfg(target_arch = "riscv64")]
+    {
+        note_page_table_switch(axhal::asm::read_user_page_table());
+        assert!(
+            axcpu::asm::register_page_table_switch_handler(note_page_table_switch),
+            "page-table switch handler is already installed"
+        );
+    }
+
+    #[cfg(target_arch = "loongarch64")]
     {
         note_page_table_switch(axhal::asm::read_user_page_table());
         assert!(

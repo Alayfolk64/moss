@@ -24,6 +24,9 @@ use crate::{
     mm::aspace::{AddrSpace, Backend},
 };
 
+#[cfg(target_arch = "loongarch64")]
+const HWCAP_LOONGARCH_UAL: usize = 1 << 2;
+
 fn resolve_dynamic_linker(path: &str) -> AxResult<Location> {
     if let Ok(loc) = FS_CONTEXT.lock().resolve(path) {
         return Ok(loc);
@@ -337,6 +340,10 @@ impl ElfLoader {
         let mut auxv = elf
             .aux_vector(PAGE_SIZE_4K, ldso.map(|elf| elf.base()))
             .collect::<Vec<_>>();
+        // Linux user programs use AT_HWCAP to decide whether unaligned loads and
+        // stores are usable. Moss provides that behavior through trap emulation.
+        #[cfg(target_arch = "loongarch64")]
+        auxv.push(AuxEntry::new(AuxType::HWCAP, HWCAP_LOONGARCH_UAL));
         auxv.push(AuxEntry::new(AuxType::RSEQ_FEATURE_SIZE, 28));
         auxv.push(AuxEntry::new(AuxType::RSEQ_ALIGN, 32));
 

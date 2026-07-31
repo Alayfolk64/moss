@@ -13,7 +13,7 @@
     "src/aarch64/user_copy.S": "c39ce5e7849233fc5dd306957eb648942877febb973b8df653e6064e6288ce4f",
     "src/aarch64/uspace.rs": "9074990a8ca934f5d16289f9ffe39328dd933297e10ef8e65b150d6faf70c898",
     "src/lib.rs": "6cc4061efe80804f90d707d22087c3afccc59ec206ff9e64d9634361bd4726d0",
-    "src/loongarch64/asm.rs": "14af3357579f025c7ee867e70e39e14518f93d96976ce77a46935b1c76286a4f",
+    "src/loongarch64/asm.rs": "ac7188c3beb1561c786558c06f36bba7a42f6f18cd877486b7211984cae1820c",
     "src/loongarch64/context.rs": "d9af23756ad25e9f507b650b265015d0a93d9a517ef31ec47688d8dd810ebe88",
     "src/loongarch64/init.rs": "6dca6512cb8eabb95839f865167f89d11fbbc57c5d0a68e2a4029b9746b29831",
     "src/loongarch64/macros.rs": "b1cf597af56125a64b08311779e8cb40a0b3e9b99a58171ba53dcba3efb598bd",

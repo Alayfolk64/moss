@@ -26,6 +26,53 @@ impl Drop for BroadcastGuard {
     }
 }
 
+/// Runs a callback on the CPUs accepted by `selected` and waits until all
+/// selected callbacks have completed.
+///
+/// The predicate is evaluated synchronously while migration is disabled. A
+/// target CPU may leave the selected state after the decision, which only
+/// causes a harmless extra callback. Callers that track page-table activity
+/// must publish a newly selected state before installing it and flush locally
+/// after installation, so a CPU entering after the decision cannot be missed.
+pub fn run_on_selected_cpus(
+    mut selected: impl FnMut(usize) -> bool,
+    callback: impl Fn() + Send + Sync + 'static,
+) {
+    assert!(
+        axhal::asm::irqs_enabled(),
+        "synchronous IPI selection requires interrupts to be enabled"
+    );
+
+    let _preempt_guard = kernel_guard::NoPreempt::new();
+    let _broadcast_guard = BroadcastGuard::acquire();
+    let mut targets = [false; axconfig::plat::CPU_NUM];
+    let mut target_count = 0;
+    for cpu in 0..axhal::cpu_num() {
+        if selected(cpu) {
+            targets[cpu] = true;
+            target_count += 1;
+        }
+    }
+    if target_count == 0 {
+        return;
+    }
+
+    let callback = Arc::new(callback);
+    let completed = Arc::new(AtomicUsize::new(0));
+    let remote_completed = completed.clone();
+    axipi::run_on_each_cpu(move || {
+        let cpu = axhal::percpu::this_cpu_id();
+        if targets[cpu] {
+            callback();
+            remote_completed.fetch_add(1, Ordering::Release);
+        }
+    });
+
+    while completed.load(Ordering::Acquire) < target_count {
+        spin_loop();
+    }
+}
+
 /// Runs a callback on every CPU and waits until all callbacks have completed.
 pub fn run_on_all_cpus(callback: impl Fn() + Send + Sync + 'static) {
     assert!(

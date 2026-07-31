@@ -5,7 +5,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use memory_addr::VirtAddr;
+use memory_addr::{PhysAddr, VirtAddr};
 use page_table_entry::loongarch64::LA64PTE;
 
 use crate::{PageTable64, PageTable64Mut, PagingMetaData};
@@ -15,7 +15,7 @@ use crate::{PageTable64, PageTable64Mut, PagingMetaData};
 pub struct LA64MetaData;
 
 /// Callback used to flush LoongArch TLBs on every active CPU.
-pub type TlbFlushHandler = fn(Option<VirtAddr>);
+pub type TlbFlushHandler = fn(PhysAddr, Option<VirtAddr>);
 
 static TLB_FLUSH_HANDLER: AtomicUsize = AtomicUsize::new(0);
 
@@ -84,13 +84,27 @@ impl PagingMetaData for LA64MetaData {
         } else {
             // SAFETY: only `register_tlb_flush_handler` writes this value.
             let handler = unsafe { core::mem::transmute::<usize, TlbFlushHandler>(handler) };
-            handler(vaddr);
+            // A zero root marks callers that cannot identify an address
+            // space. The OS handler must conservatively flush every CPU.
+            handler(0usize.into(), vaddr);
         }
     }
 
     #[inline]
     fn flush_tlb_local(vaddr: Option<VirtAddr>) {
         flush_tlb_current(vaddr);
+    }
+
+    #[inline]
+    fn flush_tlb_for(root_paddr: PhysAddr, vaddr: Option<VirtAddr>) {
+        let handler = TLB_FLUSH_HANDLER.load(Ordering::Acquire);
+        if handler == 0 {
+            flush_tlb_current(vaddr);
+        } else {
+            // SAFETY: only `register_tlb_flush_handler` writes this value.
+            let handler = unsafe { core::mem::transmute::<usize, TlbFlushHandler>(handler) };
+            handler(root_paddr, vaddr);
+        }
     }
 }
 

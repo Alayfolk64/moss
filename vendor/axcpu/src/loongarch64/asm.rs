@@ -1,9 +1,38 @@
 //! Wrapper functions for assembly instructions.
 
-use core::arch::asm;
+use core::{
+    arch::asm,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use loongArch64::register::{crmd, ecfg, eentry, pgdh, pgdl};
 use memory_addr::{PhysAddr, VirtAddr};
+
+/// Callback invoked immediately before the current CPU installs a user
+/// page-table root. The operating system uses it to track which address space
+/// is active on each CPU.
+pub type PageTableSwitchHandler = fn(PhysAddr);
+
+static PAGE_TABLE_SWITCH_HANDLER: AtomicUsize = AtomicUsize::new(0);
+
+/// Installs the page-table switch callback.
+///
+/// Returns `false` if a callback was installed already.
+pub fn register_page_table_switch_handler(handler: PageTableSwitchHandler) -> bool {
+    PAGE_TABLE_SWITCH_HANDLER
+        .compare_exchange(0, handler as usize, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+#[inline]
+fn notify_page_table_switch(root_paddr: PhysAddr) {
+    let handler = PAGE_TABLE_SWITCH_HANDLER.load(Ordering::Acquire);
+    if handler != 0 {
+        // SAFETY: only `register_page_table_switch_handler` writes this value.
+        let handler = unsafe { core::mem::transmute::<usize, PageTableSwitchHandler>(handler) };
+        handler(root_paddr);
+    }
+}
 
 /// Allows the current CPU to respond to interrupts.
 #[inline]
@@ -63,6 +92,11 @@ pub fn read_kernel_page_table() -> PhysAddr {
 ///
 /// This function is unsafe as it changes the virtual memory address space.
 pub unsafe fn write_user_page_table(root_paddr: PhysAddr) {
+    // Publish the destination before PGDL changes. If a shootdown races with
+    // this switch, including this CPU early is harmless; publishing it late
+    // could miss a CPU already using the new address space. Every root switch
+    // is followed by a local full flush.
+    notify_page_table_switch(root_paddr);
     pgdl::set_base(root_paddr.as_usize() as _);
 }
 
