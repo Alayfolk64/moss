@@ -335,7 +335,16 @@ impl AddrSpace {
         let area = MemoryArea::new(start, size, flags, backend);
         self.areas.map(area, &mut self.pt, false)?;
         if populate {
-            self.populate_area(start, size, flags)?;
+            if let Err(err) = self.populate_area(start, size, flags) {
+                // `MemorySet::map` has already published the VMA, and a
+                // backend may have populated a prefix before reporting an
+                // error.  A failed mmap must leave neither the area nor those
+                // PTE/frame/listener side effects behind.
+                self.areas
+                    .unmap(start, size, &mut self.pt)
+                    .expect("failed to roll back partially populated mapping");
+                return Err(err);
+            }
         }
         Ok(())
     }
@@ -484,6 +493,28 @@ impl AddrSpace {
     /// 改权限，比如只读改成可读写
     pub fn protect(&mut self, start: VirtAddr, size: usize, flags: MappingFlags) -> AxResult {
         self.validate_region(start, size)?;
+
+        if flags.contains(MappingFlags::WRITE) {
+            let end = start + size;
+            for area in self.areas.iter() {
+                let overlap_start = area.start().max(start);
+                let overlap_end = area.end().min(end);
+                if overlap_start < overlap_end
+                    && area
+                        .backend()
+                        .file_length_change_in_progress(VirtAddrRange::new(
+                            overlap_start,
+                            overlap_end,
+                        ))
+                {
+                    // A shrink callback may be between its global Protect and
+                    // Apply phases.  Do not re-grant WRITE until the marker is
+                    // cleared, or a fork-shared frame could be modified while
+                    // another address space zeros its partial-EOF tail.
+                    return Err(AxError::WouldBlock);
+                }
+            }
+        }
 
         self.areas
             .protect(start, size, |_| Some(flags), &mut self.pt)?;
@@ -670,6 +701,7 @@ impl AddrSpace {
                     return false;
                 }
                 area.backend().prepare_fault(
+                    aspace,
                     vaddr,
                     area.va_range(),
                     area.flags(),
@@ -695,9 +727,20 @@ impl AddrSpace {
                 }
                 FaultPreparation::Fallback => break,
                 FaultPreparation::Cow(mut plan) => {
-                    if let Err(err) = plan.execute() {
-                        warn!("Failed to prepare private page for {vaddr:?}: {err}");
-                        return false;
+                    match plan.execute() {
+                        Ok(()) => {}
+                        Err(AxError::WouldBlock) => {
+                            // A file truncate published its affected range after
+                            // this fault sampled the old EOF. Retry only after
+                            // dropping the address-space read lock (already done
+                            // above), so truncate can finish its PTE/TLB barrier.
+                            yield_now();
+                            continue;
+                        }
+                        Err(err) => {
+                            warn!("Failed to prepare private page for {vaddr:?}: {err}");
+                            return false;
+                        }
                     }
 
                     let guard = aspace.read();

@@ -100,10 +100,10 @@ pub trait BackendOps {
     fn on_protect(
         &self,
         _range: VirtAddrRange,
-        _new_flags: MappingFlags,
+        new_flags: MappingFlags,
         _pt: &mut PageTableMut,
-    ) -> AxResult {
-        Ok(())
+    ) -> AxResult<MappingFlags> {
+        Ok(new_flags)
     }
 
     /// Populate a memory region and return how many pages now satisfy
@@ -150,6 +150,7 @@ pub enum Backend {
 impl Backend {
     pub(crate) fn prepare_fault(
         &self,
+        aspace: &Arc<AddrSpaceLock>,
         vaddr: VirtAddr,
         area_range: VirtAddrRange,
         flags: MappingFlags,
@@ -157,9 +158,26 @@ impl Backend {
         pt: &PageTable,
     ) -> FaultPreparation {
         match self {
-            Self::Cow(backend) => backend.prepare_fault(vaddr, area_range, flags, access_flags, pt),
+            Self::Cow(backend) => {
+                backend.prepare_fault(aspace, vaddr, area_range, flags, access_flags, pt)
+            }
             Self::File(backend) => backend.prepare_fault(vaddr),
             _ => FaultPreparation::Fallback,
+        }
+    }
+
+    /// Installs the truncate observer before a private file mapping can be
+    /// populated without going through the normal fault preparation path.
+    pub(crate) fn attach_private_file_mapping(&self, aspace: &Arc<AddrSpaceLock>) {
+        if let Self::Cow(backend) = self {
+            backend.ensure_length_listener(aspace);
+        }
+    }
+
+    pub(crate) fn file_length_change_in_progress(&self, range: VirtAddrRange) -> bool {
+        match self {
+            Self::Cow(backend) => backend.file_length_change_in_progress(range),
+            _ => false,
         }
     }
 
@@ -214,10 +232,13 @@ impl MappingBackend for Backend {
     ) -> bool {
         let range = VirtAddrRange::from_start_size(start, size);
         let mut cursor = pt.modify();
-        if let Err(err) = BackendOps::on_protect(self, range, new_flags, &mut cursor) {
-            warn!("Failed to protect area: {:?}", err);
-            return false;
-        }
-        cursor.protect_region(start, size, new_flags).is_ok()
+        let pte_flags = match BackendOps::on_protect(self, range, new_flags, &mut cursor) {
+            Ok(flags) => flags,
+            Err(err) => {
+                warn!("Failed to protect area: {:?}", err);
+                return false;
+            }
+        };
+        cursor.protect_region(start, size, pte_flags).is_ok()
     }
 }

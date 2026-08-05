@@ -23,6 +23,7 @@ use spin::RwLock;
 use starry_signal::Signo;
 
 use super::{
+    NAMESPACE_TRANSACTION,
     fanotify::{
         check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
         notify_fanotify_fd_close, notify_fanotify_open,
@@ -558,6 +559,7 @@ pub fn sys_openat(
     if flags_u32 & __O_TMPFILE != 0 {
         return Err(AxError::OperationNotSupported);
     }
+    let namespace_transaction = (flags_u32 & O_CREAT != 0).then(|| NAMESPACE_TRANSACTION.lock());
 
     let mode = mode & !current().as_thread().proc_data.umask();
     let ids = (sys_geteuid()? as u32, sys_getegid()? as u32);
@@ -581,12 +583,16 @@ pub fn sys_openat(
             check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
             match open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32) {
                 Ok(result) => {
-                    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                    let created = flags_u32 & O_CREAT != 0 && !existed_before_create;
+                    if created {
                         record_created_file(dirfd, path.as_str(), mode, ids)?;
+                    }
+                    drop(namespace_transaction);
+                    if created {
                         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
                     }
                     let fd = add_to_fd(result, flags_u32)?;
-                    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                    if created {
                         notify_fanotify_create(dirfd, &path, false);
                     }
                     return Ok(fd as isize);
@@ -602,10 +608,13 @@ pub fn sys_openat(
 
         if !existed_before_create {
             record_created_file(dirfd, path.as_str(), mode, ids)?;
+        }
+        let result = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)?;
+        drop(namespace_transaction);
+        if !existed_before_create {
             notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         }
-        let fd = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)
-            .and_then(|it| add_to_fd(it, flags_u32))?;
+        let fd = add_to_fd(result, flags_u32)?;
         if !existed_before_create {
             notify_fanotify_create(dirfd, &path, false);
         }
@@ -618,13 +627,15 @@ pub fn sys_openat(
     if flags_u32 & O_CREAT != 0 && !existed_before_create {
         let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
         record_created_file(dirfd, path.as_str(), mode, ids)?;
+        drop(namespace_transaction);
         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         let fd = add_to_fd(result, flags as _)?;
         notify_fanotify_create(dirfd, &path, false);
         return Ok(fd as isize);
     }
-    let fd = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)
-        .and_then(|it| add_to_fd(it, flags as _))?;
+    let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
+    drop(namespace_transaction);
+    let fd = add_to_fd(result, flags as _)?;
     Ok(fd as isize)
 }
 

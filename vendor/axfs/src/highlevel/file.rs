@@ -9,7 +9,7 @@ use core::sync::atomic::AtomicU8;
 use core::{
     num::NonZeroUsize,
     ops::Range,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::Context,
     time::Duration,
 };
@@ -407,6 +407,15 @@ impl PageEviction {
     }
 }
 
+/// Ordered phases of a private-mapping EOF-shrink callback.  Every observer
+/// completes `Protect` before any observer receives `Apply`, establishing a
+/// cross-address-space write/TLB barrier for fork-shared anonymous frames.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileLengthChangePhase {
+    Protect,
+    Apply,
+}
+
 struct CachedFileShared {
     page_cache: Mutex<LruCache<u32, PageCache>>,
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
@@ -423,6 +432,21 @@ struct CachedFileShared {
     /// Only one thread can append to the file at a time, while multiple writers
     /// are permitted.
     append_lock: RwLock<()>,
+    /// Range whose cached pages are being revoked for an EOF change.  It is
+    /// published before the first writeback and remains visible until the
+    /// backing EOF and cache state have both committed (or rolled back).
+    length_change: Mutex<Option<Range<u64>>>,
+    /// Monotonic identity of the file-length state.  Unlike the transient
+    /// marker above, this also detects a complete shrink-then-regrow cycle
+    /// between a private fault's file read and PTE commit.
+    length_generation: AtomicUsize,
+    /// MAP_PRIVATE mappings keep anonymous frames which are no longer tied to
+    /// page-cache eviction.  A successful shrink must still revoke their PTEs
+    /// beyond the new EOF before the length-change transaction becomes
+    /// invisible to faults.
+    length_change_listeners:
+        Mutex<BTreeMap<usize, Arc<dyn Fn(Range<u64>, FileLengthChangePhase) + Send + Sync>>>,
+    next_length_change_listener: AtomicUsize,
 }
 
 impl CachedFileShared {
@@ -437,6 +461,10 @@ impl CachedFileShared {
             cache_op: Mutex::new(()),
             writeback_op: Mutex::new(()),
             append_lock: RwLock::new(()),
+            length_change: Mutex::new(None),
+            length_generation: AtomicUsize::new(0),
+            length_change_listeners: Mutex::new(BTreeMap::new()),
+            next_length_change_listener: AtomicUsize::new(1),
         }
     }
 
@@ -449,7 +477,22 @@ impl CachedFileShared {
             cache_op: Mutex::new(()),
             writeback_op: Mutex::new(()),
             append_lock: RwLock::new(()),
+            length_change: Mutex::new(None),
+            length_generation: AtomicUsize::new(0),
+            length_change_listeners: Mutex::new(BTreeMap::new()),
+            next_length_change_listener: AtomicUsize::new(1),
         }
+    }
+}
+
+struct LengthChangeGuard<'a> {
+    shared: &'a CachedFileShared,
+}
+
+impl Drop for LengthChangeGuard<'_> {
+    fn drop(&mut self) {
+        let old = self.shared.length_change.lock().take();
+        debug_assert!(old.is_some(), "length-change guard lost its range");
     }
 }
 
@@ -460,6 +503,8 @@ struct CachedFileRecord {
     location: Location,
     shared: Arc<CachedFileShared>,
     in_memory: bool,
+    removed: AtomicBool,
+    active_handles: AtomicUsize,
 }
 
 static FILE_CACHES: spin::Lazy<RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>> =
@@ -468,13 +513,19 @@ static FILE_CACHES: spin::Lazy<RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecor
 pub struct CachedFile {
     inner: Location,
     record: Arc<CachedFileRecord>,
+    /// Whether this counted reference belongs to an open file/mmap user.
+    /// Internal registry snapshots are counted too, but only run last-reference
+    /// cleanup for records which have already been removed from the namespace.
+    tracked: bool,
 }
 
 impl Clone for CachedFile {
     fn clone(&self) -> Self {
+        self.record.active_handles.fetch_add(1, Ordering::Relaxed);
         Self {
             inner: self.inner.clone(),
             record: self.record.clone(),
+            tracked: self.tracked,
         }
     }
 }
@@ -497,52 +548,92 @@ impl CachedFile {
         (fs_ptr as *const () as usize, location.inode())
     }
 
-    fn record_from_global_cache(location: &Location, in_memory: bool) -> Arc<CachedFileRecord> {
-        let key = Self::file_cache_key(location);
-        let mut caches = FILE_CACHES.write();
-        caches
-            .entry(key)
-            .or_insert_with(|| {
-                let shared = if in_memory {
-                    Arc::new(CachedFileShared::new_unbounded())
-                } else {
-                    Arc::new(CachedFileShared::new())
-                };
-                Arc::new(CachedFileRecord {
-                    key,
-                    location: location.clone(),
-                    shared,
-                    in_memory,
-                })
-            })
-            .clone()
-    }
-
     pub fn get_or_create(location: Location) -> Self {
         let in_memory = location.filesystem().name() == "tmpfs";
+        let key = Self::file_cache_key(&location);
 
-        let mut guard = location.user_data();
-        let record = if let Some(record) = guard.get::<FileUserData>().and_then(|it| it.get()) {
-            record
-        } else {
-            let record = Self::record_from_global_cache(&location, in_memory);
-            guard.insert(FileUserData::Weak(Arc::downgrade(&record)));
-            record
-        };
-        drop(guard);
+        // `user_data -> FILE_CACHES` is the registry lock order used by both
+        // lookup and removal.  A weak pointer is usable only while the same
+        // record is still the current global entry; otherwise a removal racing
+        // this lookup could split one inode into two cache/lock domains.
+        let mut user_data = location.user_data();
+        let mut caches = FILE_CACHES.write();
+        let weak_record = user_data.get::<FileUserData>().and_then(|it| it.get());
+        let record = weak_record
+            .filter(|record| {
+                caches
+                    .get(&key)
+                    .is_some_and(|current| Arc::ptr_eq(current, record))
+            })
+            .unwrap_or_else(|| {
+                caches
+                    .entry(key)
+                    .or_insert_with(|| {
+                        let shared = if in_memory {
+                            Arc::new(CachedFileShared::new_unbounded())
+                        } else {
+                            Arc::new(CachedFileShared::new())
+                        };
+                        Arc::new(CachedFileRecord {
+                            key,
+                            location: location.clone(),
+                            shared,
+                            in_memory,
+                            removed: AtomicBool::new(false),
+                            active_handles: AtomicUsize::new(0),
+                        })
+                    })
+                    .clone()
+            });
+        user_data.insert(FileUserData::Weak(Arc::downgrade(&record)));
+        // Publish the user before releasing the registry locks. A concurrent
+        // finalizer therefore cannot retire the record between lookup and the
+        // handle becoming visible.
+        record.active_handles.fetch_add(1, Ordering::Relaxed);
+        drop(caches);
+        drop(user_data);
 
         Self {
             inner: location,
             record,
+            tracked: true,
         }
     }
 
-    fn get_existing(location: &Location) -> Option<Self> {
-        let key = Self::file_cache_key(location);
-        FILE_CACHES.read().get(&key).cloned().map(|record| Self {
-            inner: location.clone(),
-            record,
-        })
+    fn remove_global_record_if_unused(&self) -> bool {
+        self.remove_global_record_with_active_count(0)
+    }
+
+    fn remove_global_record_if_only_snapshot(&self) -> bool {
+        debug_assert!(!self.tracked);
+        self.remove_global_record_with_active_count(1)
+    }
+
+    fn remove_global_record_with_active_count(&self, expected_active: usize) -> bool {
+        // Match `get_or_create`'s registry order. Holding `user_data` prevents
+        // a new tracked handle from being published between the active-user
+        // check and global removal. Registry snapshots increment the same
+        // counter before releasing FILE_CACHES' read side.
+        let mut user_data = self.inner.user_data();
+        let mut caches = FILE_CACHES.write();
+        let is_current = caches
+            .get(&self.record.key)
+            .is_some_and(|current| Arc::ptr_eq(current, &self.record));
+        if !is_current
+            || self.record.active_handles.load(Ordering::Acquire) != expected_active
+        {
+            return false;
+        }
+
+        caches.remove(&self.record.key);
+        if user_data
+            .get::<FileUserData>()
+            .and_then(|it| it.get())
+            .is_some_and(|record| Arc::ptr_eq(&record, &self.record))
+        {
+            user_data.remove::<FileUserData>();
+        }
+        true
     }
 
     pub fn ptr_eq(&self, other: &Self) -> bool {
@@ -559,12 +650,6 @@ impl CachedFile {
 
     fn shared(&self) -> &CachedFileShared {
         self.record.shared.as_ref()
-    }
-
-    fn page_range(range: Range<u64>) -> Range<u32> {
-        let start = (range.start / PAGE_SIZE as u64) as u32;
-        let end = range.end.div_ceil(PAGE_SIZE as u64) as u32;
-        start..end
     }
 
     pub fn len(&self) -> VfsResult<u64> {
@@ -587,10 +672,6 @@ impl CachedFile {
         self.inner().grow_cached_len(len, !self.in_memory())
     }
 
-    fn set_cached_len(&self, len: u64, dirty: bool) -> VfsResult<()> {
-        self.inner().set_cached_len(len, dirty)
-    }
-
     fn commit_len(&self) -> VfsResult<u64> {
         let len = self.len()?;
         if !self.in_memory() {
@@ -604,9 +685,103 @@ impl CachedFile {
     }
 
     fn from_record(record: &Arc<CachedFileRecord>) -> Self {
+        // Callers must invoke this while holding FILE_CACHES for reading.  The
+        // increment is then published before a finalizer can acquire the write
+        // side and retire the registry entry.
+        record.active_handles.fetch_add(1, Ordering::Relaxed);
         Self {
             inner: record.location.clone(),
             record: record.clone(),
+            tracked: false,
+        }
+    }
+
+    fn get_existing(key: FileCacheKey) -> Option<Self> {
+        let caches = FILE_CACHES.read();
+        caches.get(&key).map(Self::from_record)
+    }
+
+    fn begin_length_change(&self, range: Range<u64>) -> LengthChangeGuard<'_> {
+        let _cache_guard = self.shared().cache_op.lock();
+        let mut active = self.shared().length_change.lock();
+        assert!(active.is_none(), "overlapping file length changes");
+        self.shared()
+            .length_generation
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
+                generation.checked_add(1)
+            })
+            .expect("file length generation exhausted");
+        *active = Some(range);
+        LengthChangeGuard {
+            shared: self.shared(),
+        }
+    }
+
+    fn length_change_blocks_page(&self, pn: u32) -> bool {
+        self.shared()
+            .length_change
+            .lock()
+            .as_ref()
+            .is_some_and(|range| Self::page_overlaps_range(pn, range))
+    }
+
+    /// Takes one coherent snapshot of the transient marker and persistent
+    /// generation.  `None` means the requested page is currently covered by a
+    /// length-change transaction and must not be read or committed.
+    fn length_generation_for_page(&self, pn: u32) -> Option<usize> {
+        let active = self.shared().length_change.lock();
+        if active
+            .as_ref()
+            .is_some_and(|range| Self::page_overlaps_range(pn, range))
+        {
+            None
+        } else {
+            Some(self.shared().length_generation.load(Ordering::Acquire))
+        }
+    }
+
+    fn add_length_change_listener<F>(&self, listener: F) -> usize
+    where
+        F: Fn(Range<u64>, FileLengthChangePhase) + Send + Sync + 'static,
+    {
+        let handle = self
+            .shared()
+            .next_length_change_listener
+            .fetch_add(1, Ordering::Relaxed);
+        assert_ne!(handle, 0, "file length-change listener handles exhausted");
+        let previous = self
+            .shared()
+            .length_change_listeners
+            .lock()
+            .insert(handle, Arc::new(listener));
+        assert!(previous.is_none(), "duplicate file length-change listener");
+        handle
+    }
+
+    fn remove_length_change_listener(&self, handle: usize) {
+        let removed = self
+            .shared()
+            .length_change_listeners
+            .lock()
+            .remove(&handle);
+        debug_assert!(removed.is_some(), "unknown file length-change listener");
+    }
+
+    fn notify_length_change_listeners(&self, range: Range<u64>) {
+        // Listener destruction removes itself from this table.  Snapshot the
+        // callbacks so an address-space teardown cannot deadlock on the list.
+        let listeners = self
+            .shared()
+            .length_change_listeners
+            .lock()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        for listener in &listeners {
+            listener(range.clone(), FileLengthChangePhase::Protect);
+        }
+        for listener in listeners {
+            listener(range.clone(), FileLengthChangePhase::Apply);
         }
     }
 
@@ -1036,6 +1211,9 @@ impl CachedFile {
 
     pub fn with_page<R>(&self, pn: u32, f: impl FnOnce(Option<&mut PageCache>) -> R) -> R {
         let _cache_guard = self.shared().cache_op.lock();
+        if self.length_change_blocks_page(pn) {
+            return f(None);
+        }
         let mut pending = self.shared().pending_evictions.lock();
         if pending.get(&pn).is_some_and(|entry| !entry.reusable) {
             return f(None);
@@ -1072,11 +1250,13 @@ impl CachedFile {
     /// lock and retry instead of remapping that frame during this interval.
     pub fn page_eviction_in_progress(&self, pn: u32) -> bool {
         let _cache_guard = self.shared().cache_op.lock();
-        self.shared()
-            .pending_evictions
-            .lock()
-            .get(&pn)
-            .is_some_and(|entry| !entry.reusable)
+        self.length_change_blocks_page(pn)
+            || self
+                .shared()
+                .pending_evictions
+                .lock()
+                .get(&pn)
+                .is_some_and(|entry| !entry.reusable)
     }
 
     fn with_page_or_insert_impl<R>(
@@ -1095,14 +1275,14 @@ impl CachedFile {
             let _ = self.retry_pending_normal_evictions();
             let (result, eviction) = {
                 let cache_guard = self.shared().cache_op.lock();
-                let pending_blocks_access = wait_for_pending
-                    && self
-                        .shared()
-                        .pending_evictions
-                        .lock()
-                        .get(&pn)
-                        .is_some_and(|entry| !entry.reusable);
-                if pending_blocks_access {
+                let transaction_blocks_access = self.length_change_blocks_page(pn);
+                let pending_blocks_access = self
+                    .shared()
+                    .pending_evictions
+                    .lock()
+                    .get(&pn)
+                    .is_some_and(|entry| !entry.reusable);
+                if wait_for_pending && (transaction_blocks_access || pending_blocks_access) {
                     // Do not wait while holding `cache_op`: the writeback owner
                     // needs it to restore or retire this exact token.  Once the
                     // current owner releases `writeback_op`, retry any lifecycle
@@ -1111,6 +1291,9 @@ impl CachedFile {
                     let _writeback_guard = self.shared().writeback_op.lock();
                     self.retry_pending_evictions()?;
                     continue;
+                }
+                if transaction_blocks_access || pending_blocks_access {
+                    return Err(VfsError::WouldBlock);
                 }
 
                 let mut guard = self.shared().page_cache.lock();
@@ -1144,15 +1327,18 @@ impl CachedFile {
             };
             return match result {
                 Ok(value) => match finish_result {
-                    Ok(()) | Err(VfsError::WouldBlock) => {
-                        // A busy address space leaves this reusable replacement in
-                        // `pending_evictions`.  The frame is still pinned and later
-                        // operations retry it, so ordinary file I/O must not fail
-                        // merely because a mapping lock could not be acquired
-                        // without creating an ABBA cycle.
+                    Ok(()) => Ok(value),
+                    Err(err) => {
+                        // The callback has already consumed input or copied data
+                        // into the target page.  A failure while retiring an
+                        // unrelated displaced page must not turn that completed
+                        // operation into an error which the caller may retry.
+                        // The failed page remains pinned and dirty in
+                        // `pending_evictions`, so a later operation can retry the
+                        // writeback without losing data.
+                        warn!("Deferred displaced-page writeback failed: {err:?}");
                         Ok(value)
                     }
-                    Err(err) => Err(err),
                 },
                 Err(err) => Err(err),
             };
@@ -1178,6 +1364,16 @@ impl CachedFile {
         f: impl FnOnce(&mut PageCache) -> R,
     ) -> VfsResult<(R, Option<PageEviction>)> {
         let _cache_guard = self.shared().cache_op.lock();
+        if self.length_change_blocks_page(pn) {
+            return Err(VfsError::WouldBlock);
+        }
+        // Recheck EOF at the same serialization point as insertion. A fault
+        // may have sampled the old length before waiting behind truncate;
+        // without this check it could map a fully out-of-range page after the
+        // shorter EOF was already committed.
+        if u64::from(pn) * PAGE_SIZE as u64 >= self.len()? {
+            return Err(VfsError::Io);
+        }
         let mut guard = self.shared().page_cache.lock();
         let file = self.inner().entry().as_file()?;
         let (page, evicted) = self.page_or_insert(file, &mut guard, pn)?;
@@ -1213,6 +1409,7 @@ impl CachedFile {
     }
 
     pub fn read_at(&self, mut dst: impl Write + IoBufMut, offset: u64) -> VfsResult<usize> {
+        let _append_guard = self.shared().append_lock.read();
         let len = self.len()?;
         let end = (offset + dst.remaining_mut() as u64).min(len);
         if end <= offset {
@@ -1262,6 +1459,9 @@ impl CachedFile {
             // operation.  Otherwise a cached writer could create a newer dirty
             // page after our miss but before the disk read.
             let _cache_guard = self.shared().cache_op.lock();
+            if self.length_change_blocks_page(pn) {
+                return Err(VfsError::WouldBlock);
+            }
             let mut cache = self.shared().page_cache.lock();
             if let Some(page) = cache.get_mut(&pn) {
                 dst.write(&page.data()[range.clone()])?;
@@ -1292,6 +1492,7 @@ impl CachedFile {
     }
 
     pub fn readahead(&self, offset: u64, count: usize) -> VfsResult<()> {
+        let _append_guard = self.shared().append_lock.read();
         if count == 0 || self.in_memory() {
             return Ok(());
         }
@@ -1329,11 +1530,20 @@ impl CachedFile {
             let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
             let len = range_end - range_start;
 
-            let mut guard = self.shared().page_cache.lock();
-            if let Some(page) = guard.get_mut(&pn) {
-                dst.write(&page.data()[range_start..range_end])?;
-            } else {
-                dst.write(&ZERO_PAGE[range_start..range_end])?;
+            loop {
+                let cache_guard = self.shared().cache_op.lock();
+                if self.length_change_blocks_page(pn) {
+                    drop(cache_guard);
+                    let _writeback_guard = self.shared().writeback_op.lock();
+                    continue;
+                }
+                let mut guard = self.shared().page_cache.lock();
+                if let Some(page) = guard.get_mut(&pn) {
+                    dst.write(&page.data()[range_start..range_end])?;
+                } else {
+                    dst.write(&ZERO_PAGE[range_start..range_end])?;
+                }
+                break;
             }
             read += len;
             page_offset = 0;
@@ -1356,7 +1566,11 @@ impl CachedFile {
             if end <= DEFERRED_FILE_LEN_THRESHOLD {
                 let file = self.inner().entry().as_file()?;
                 file.set_len(end)?;
-                self.set_cached_len(end, false)?;
+                // Backing EOF has committed.  Update an existing cache
+                // infallibly; if another thread invalidated it, the next
+                // lookup reads the new backing metadata instead of recreating
+                // an old cached EOF through a fallible second operation.
+                self.inner().set_cached_len_if_present(end);
             } else {
                 self.grow_cached_len(end)?;
             }
@@ -1394,7 +1608,7 @@ impl CachedFile {
         let file = self.inner().entry().as_file()?;
         if end > self.len()? {
             file.set_len(end)?;
-            self.set_cached_len(end, false)?;
+            self.inner().set_cached_len_if_present(end);
         }
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
@@ -1441,60 +1655,187 @@ impl CachedFile {
             .map(|written| (written, len + written as u64))
     }
 
-    pub fn set_len(&self, len: u64) -> VfsResult<()> {
-        let _writeback_guard = self.shared().writeback_op.lock();
-        let evictions = {
-            // A pending dirty page may be absent from the LRU after an earlier
-            // I/O failure.  Drain under the cache serialization point before
-            // changing EOF so no concurrent replacement can appear between
-            // the pending scan and this length update.
-            let _cache_guard = self.lock_cache_after_draining_pending()?;
-            let file = self.inner().entry().as_file()?;
-            let old_len = self.len()?;
-            file.set_len(len)?;
-            self.set_cached_len(len, false)?;
+    /// Restores transactionally detached pages while `cache_op` is held.
+    /// Concurrent activity may have filled the freed LRU slots while PTE
+    /// callbacks ran, so any displaced page starts its own pinned lifecycle.
+    fn restore_detached_pages_locked(
+        &self,
+        pages: Vec<(u32, PageCache)>,
+    ) -> Vec<PageEviction> {
+        let mut cache = self.shared().page_cache.lock();
+        let mut displaced = Vec::new();
+        for (pn, page) in pages {
+            debug_assert!(!cache.contains(&pn));
+            if cache.len() == cache.cap().get()
+                && let Some(entry) = cache.pop_lru()
+            {
+                displaced.push(entry);
+            }
+            cache.put(pn, page);
+        }
+        drop(cache);
+        displaced
+            .into_iter()
+            .map(|(pn, page)| self.begin_evicted_page(pn, page, true, false))
+            .collect()
+    }
 
-            let old_last_page = (old_len / PAGE_SIZE as u64) as u32;
-            let removed = if old_len < len {
-                let page_start = old_last_page as u64 * PAGE_SIZE as u64;
-                let old_page_offset = (old_len - page_start) as usize;
-                let new_page_offset = (len - page_start).min(PAGE_SIZE as u64) as usize;
-                let mut guard = self.shared().page_cache.lock();
-                if let Some(page) = guard.get_mut(&old_last_page) {
-                    page.data()[old_page_offset..new_page_offset].fill(0);
-                }
-                Vec::new()
-            } else if old_len > len {
-                // For truncating, remove all pages beyond the new length.
-                let first_invalid_page = len.div_ceil(PAGE_SIZE as u64) as u32;
-                let mut guard = self.shared().page_cache.lock();
-                let keys = guard
-                    .iter()
-                    .map(|(k, _)| *k)
-                    .filter(|it| *it >= first_invalid_page)
-                    .collect::<Vec<_>>();
-                let mut removed = Vec::new();
-                for pn in keys {
-                    if let Some(mut page) = guard.pop(&pn) {
-                        // Don't write back pages since they're discarded.
-                        page.dirty = false;
-                        removed.push((pn, page));
-                    }
-                }
-                removed
-            } else {
-                Vec::new()
-            };
-            removed
-                .into_iter()
+    /// Detaches every cached page overlapping `range`, revokes all exact PTEs
+    /// and returns the still-owned frames with writeback/cache serialization
+    /// held. No backing-file mutation has happened yet. If a listener fails,
+    /// the original frames are restored before the error is returned.
+    fn lock_pages_for_len_change(
+        &self,
+        range: Range<u64>,
+    ) -> VfsResult<(
+        MutexGuard<'_, ()>,
+        MutexGuard<'_, ()>,
+        Vec<(u32, PageCache)>,
+    )> {
+        let writeback_guard = self.shared().writeback_op.lock();
+        self.writeback_dirty_pages_in_range_locked(&range)?;
+
+        let cache_guard = self.lock_cache_after_draining_pending()?;
+        let evictions = {
+            let mut cache = self.shared().page_cache.lock();
+            let keys = cache
+                .iter()
+                .map(|(pn, _)| *pn)
+                .filter(|pn| Self::page_overlaps_range(*pn, &range))
+                .collect::<Vec<_>>();
+            keys.into_iter()
+                .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
                 .map(|(pn, page)| self.begin_evicted_page(pn, page, false, false))
                 .collect::<Vec<_>>()
         };
-        for eviction in evictions {
-            // Truncate owns `writeback_op` and no address-space lock.  Wait for
-            // transient mmap activity so EOF cannot change while a detached,
-            // non-reusable page is left behind with `WouldBlock`.
-            self.finish_evicted_page_with_wait(eviction, true)?;
+        if evictions.is_empty() {
+            return Ok((writeback_guard, cache_guard, Vec::new()));
+        }
+        drop(cache_guard);
+
+        let mut mappings_invalidated = true;
+        for eviction in &evictions {
+            mappings_invalidated = self.notify_evict_listeners_except(
+                eviction.pn,
+                eviction.paddr,
+                None,
+                true,
+            ) && mappings_invalidated;
+        }
+
+        let cache_guard = self.shared().cache_op.lock();
+        let pages = {
+            let mut pending = self.shared().pending_evictions.lock();
+            evictions
+                .iter()
+                .map(|eviction| {
+                    let entry = pending
+                        .remove(&eviction.pn)
+                        .expect("length-change eviction token disappeared");
+                    assert!(
+                        Self::eviction_matches(&entry, *eviction),
+                        "length-change eviction token changed generation"
+                    );
+                    (eviction.pn, entry.page)
+                })
+                .collect::<Vec<_>>()
+        };
+
+        if mappings_invalidated {
+            return Ok((writeback_guard, cache_guard, pages));
+        }
+
+        let displaced = self.restore_detached_pages_locked(pages);
+        drop(cache_guard);
+        for eviction in displaced {
+            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
+                warn!("Failed to finish rollback page displacement: {err:?}");
+            }
+        }
+        Err(VfsError::WouldBlock)
+    }
+
+    pub fn set_len(&self, len: u64) -> VfsResult<()> {
+        let _append_guard = self.shared().append_lock.write();
+        let old_len = self.len()?;
+        if old_len == len {
+            let _writeback_guard = self.shared().writeback_op.lock();
+            let _cache_guard = self.lock_cache_after_draining_pending()?;
+            self.inner().entry().as_file()?.set_len(len)?;
+            self.inner().set_cached_len_if_present(len);
+            return Ok(());
+        }
+
+        let affected_start = if old_len > len {
+            len / PAGE_SIZE as u64 * PAGE_SIZE as u64
+        } else {
+            old_len / PAGE_SIZE as u64 * PAGE_SIZE as u64
+        };
+        let affected_end = if old_len > len {
+            u64::MAX
+        } else {
+            affected_start.saturating_add(PAGE_SIZE as u64)
+        };
+        // Publish the whole affected range before the first dirty writeback.
+        // Faults which sampled the old EOF then retry outside their address-
+        // space lock, and ordinary cache users wait behind `writeback_op`.
+        let _length_change_guard =
+            self.begin_length_change(affected_start..affected_end);
+        let file = self.inner().entry().as_file()?;
+        let (_writeback_guard, cache_guard, pages) =
+            self.lock_pages_for_len_change(affected_start..affected_end)?;
+
+        if let Err(err) = file.set_len(len) {
+            let displaced = self.restore_detached_pages_locked(pages);
+            drop(cache_guard);
+            for eviction in displaced {
+                if let Err(finish_err) = self.finish_evicted_page_with_wait(eviction, true) {
+                    warn!("Failed to finish set_len rollback displacement: {finish_err:?}");
+                }
+            }
+            return Err(err);
+        }
+
+        // The backing operation above is the irreversible commit point.
+        // Never follow it with a fallible metadata-cache creation: update the
+        // cache only if it still exists, otherwise leave it absent so future
+        // EOF validation reads the committed backing length.
+        self.inner().set_cached_len_if_present(len);
+        let mut restore = Vec::new();
+        if old_len > len {
+            let partial_pn = (len / PAGE_SIZE as u64) as u32;
+            let partial_offset = (len % PAGE_SIZE as u64) as usize;
+            for (pn, mut page) in pages {
+                if partial_offset != 0 && pn == partial_pn {
+                    page.data()[partial_offset..].fill(0);
+                    page.dirty = false;
+                    restore.push((pn, page));
+                }
+            }
+        } else {
+            let zero_start = (old_len % PAGE_SIZE as u64) as usize;
+            let zero_end = (len - affected_start).min(PAGE_SIZE as u64) as usize;
+            for (pn, mut page) in pages {
+                page.data()[zero_start..zero_end].fill(0);
+                restore.push((pn, page));
+            }
+        }
+
+        let displaced = self.restore_detached_pages_locked(restore);
+        drop(cache_guard);
+        if old_len > len {
+            // Two-phase private-map callbacks first revoke WRITE in every
+            // address space, then preserve the partial page's private prefix,
+            // zero its tail, and unmap pages wholly beyond the new EOF.
+            self.notify_length_change_listeners(len..old_len);
+        }
+        for eviction in displaced {
+            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
+                // EOF already changed. Keep the displaced page centrally pinned
+                // for retry instead of turning a committed truncate into a
+                // caller-visible error which might be retried.
+                warn!("Deferred set_len page displacement failed: {err:?}");
+            }
         }
         Ok(())
     }
@@ -1592,12 +1933,10 @@ impl CachedFile {
         }
     }
 
-    fn writeback_dirty_pages_in_range(&self, range: Range<u64>) -> VfsResult<()> {
+    fn writeback_dirty_pages_in_range_locked(&self, range: &Range<u64>) -> VfsResult<()> {
         if self.in_memory() || range.start >= range.end {
             return Ok(());
         }
-        let _writeback_guard = self.shared().writeback_op.lock();
-        let page_range = Self::page_range(range);
         let evictions = {
             // Include dirty pages which an earlier writeback left pending and
             // exclude a new replacement from appearing before the LRU scan.
@@ -1605,9 +1944,7 @@ impl CachedFile {
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
                 .iter()
-                .filter(|(pn, page)| {
-                    **pn >= page_range.start && **pn < page_range.end && page.dirty
-                })
+                .filter(|(pn, page)| Self::page_overlaps_range(**pn, range) && page.dirty)
                 .map(|(pn, _)| *pn)
                 .collect::<Vec<_>>();
             keys.into_iter()
@@ -1618,36 +1955,76 @@ impl CachedFile {
         self.finish_sync_evictions(evictions)
     }
 
-    fn invalidate_clean_pages_in_range(&self, range: Range<u64>) {
-        if self.in_memory() || range.start >= range.end {
-            return;
-        }
-        let page_range = Self::page_range(range);
-        let evictions = {
-            let _cache_guard = self.shared().cache_op.lock();
-            let mut cache = self.shared().page_cache.lock();
-            let mut removed = Vec::new();
-            let keys = cache
+    fn page_overlaps_range(pn: u32, range: &Range<u64>) -> bool {
+        let page_start = u64::from(pn) * PAGE_SIZE as u64;
+        page_start < range.end && page_start.saturating_add(PAGE_SIZE as u64) > range.start
+    }
+
+    /// Flushes dirty cached data in `range` and returns with both direct-I/O
+    /// serialization locks held.  The final dirty recheck is made while
+    /// `cache_op` is held, closing the gap in which a cached writer or a new
+    /// writable mmap fault could otherwise race the backing-file operation.
+    fn lock_direct_read_range(
+        &self,
+        range: Range<u64>,
+    ) -> VfsResult<(MutexGuard<'_, ()>, MutexGuard<'_, ()>)> {
+        let writeback_guard = self.shared().writeback_op.lock();
+        loop {
+            self.writeback_dirty_pages_in_range_locked(&range)?;
+            let cache_guard = self.lock_cache_after_draining_pending()?;
+            let dirty = self
+                .shared()
+                .page_cache
+                .lock()
                 .iter()
-                .map(|(pn, _)| *pn)
-                .filter(|pn| *pn >= page_range.start && *pn < page_range.end)
-                .collect::<Vec<_>>();
-            for pn in keys {
-                if let Some(page) = cache.pop(&pn) {
-                    removed.push((pn, page));
-                }
+                .any(|(pn, page)| Self::page_overlaps_range(*pn, &range) && page.dirty);
+            if !dirty {
+                return Ok((writeback_guard, cache_guard));
             }
-            removed
-                .into_iter()
-                .map(|(pn, mut page)| {
-                    page.dirty = false;
-                    self.begin_evicted_page(pn, page, false, false)
-                })
-                .collect::<Vec<_>>()
-        };
-        for eviction in evictions {
-            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
-                warn!("Failed to invalidate cached page: {err:?}");
+            drop(cache_guard);
+        }
+    }
+
+    /// Returns with no cached or pending page overlapping `range`, while
+    /// holding the same locks across the following direct write.  Clean pages
+    /// are invalidated before the backing file is changed, so no stale mmap
+    /// translation or post-write dirty-bit clearing window is possible.
+    fn lock_direct_write_range(
+        &self,
+        range: Range<u64>,
+    ) -> VfsResult<(MutexGuard<'_, ()>, MutexGuard<'_, ()>)> {
+        let writeback_guard = self.shared().writeback_op.lock();
+        loop {
+            self.writeback_dirty_pages_in_range_locked(&range)?;
+            let cache_guard = self.lock_cache_after_draining_pending()?;
+            let evictions = {
+                let mut cache = self.shared().page_cache.lock();
+                if cache
+                    .iter()
+                    .any(|(pn, page)| Self::page_overlaps_range(*pn, &range) && page.dirty)
+                {
+                    drop(cache);
+                    drop(cache_guard);
+                    continue;
+                }
+
+                let keys = cache
+                    .iter()
+                    .map(|(pn, _)| *pn)
+                    .filter(|pn| Self::page_overlaps_range(*pn, &range))
+                    .collect::<Vec<_>>();
+                keys.into_iter()
+                    .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
+                    .map(|(pn, page)| self.begin_evicted_page(pn, page, false, false))
+                    .collect::<Vec<_>>()
+            };
+
+            if evictions.is_empty() {
+                return Ok((writeback_guard, cache_guard));
+            }
+            drop(cache_guard);
+            for eviction in evictions {
+                self.finish_evicted_page_with_wait(eviction, true)?;
             }
         }
     }
@@ -1681,14 +2058,7 @@ impl CachedFile {
     }
 
     fn remove_unused_global_record(&self, discard_metadata: bool) {
-        let mut caches = FILE_CACHES.write();
-        if Arc::strong_count(&self.record) == 2
-            && caches
-                .get(&self.record.key)
-                .is_some_and(|record| Arc::ptr_eq(record, &self.record))
-        {
-            caches.remove(&self.record.key);
-            self.inner.user_data().remove::<FileUserData>();
+        if self.remove_global_record_if_unused() {
             if discard_metadata {
                 self.inner.discard_metadata_cache();
             } else {
@@ -1698,39 +2068,33 @@ impl CachedFile {
     }
 
     fn prune_inactive_file_caches(retain_key: FileCacheKey) {
-        let inactive = FILE_CACHES
-            .read()
-            .iter()
-            .filter(|(key, record)| {
-                **key != retain_key && !record.in_memory && Arc::strong_count(record) == 1
-            })
-            .map(|(key, record)| (*key, record.clone()))
-            .collect::<Vec<_>>();
+        let inactive = {
+            let caches = FILE_CACHES.read();
+            caches
+                .iter()
+                .filter(|(key, record)| {
+                    **key != retain_key
+                        && !record.in_memory
+                        && record.active_handles.load(Ordering::Acquire) == 0
+                })
+                .map(|(key, record)| (*key, Self::from_record(record)))
+                .collect::<Vec<_>>()
+        };
         let inactive_after_current_drop = inactive.len() + 1;
         if inactive_after_current_drop <= MAX_RETAINED_FILE_CACHE_RECORDS {
             return;
         }
 
-        for (key, record) in inactive
+        for (_, cached) in inactive
             .into_iter()
             .take(inactive_after_current_drop - MAX_RETAINED_FILE_CACHE_RECORDS)
         {
-            let cached = Self::from_record(&record);
             if let Err(err) = cached.drop_cached_pages() {
                 warn!("Failed to prune inactive file cache: {err:?}");
                 continue;
             }
-            drop(cached);
-
-            let mut caches = FILE_CACHES.write();
-            if Arc::strong_count(&record) == 2
-                && caches
-                    .get(&key)
-                    .is_some_and(|current| Arc::ptr_eq(current, &record))
-            {
-                caches.remove(&key);
-                record.location.user_data().remove::<FileUserData>();
-                record.location.invalidate_metadata_cache();
+            if cached.remove_global_record_if_only_snapshot() {
+                cached.inner.invalidate_metadata_cache();
             }
         }
     }
@@ -1805,7 +2169,35 @@ impl CachedFile {
 
 impl Drop for CachedFile {
     fn drop(&mut self) {
-        if self.in_memory() || Arc::strong_count(&self.record) != 2 {
+        let previous = self.record.active_handles.fetch_sub(1, Ordering::AcqRel);
+        assert!(previous > 0, "CachedFile active-handle counter underflow");
+        if previous != 1 {
+            return;
+        }
+
+        if self.record.removed.load(Ordering::Acquire) {
+            if !self.in_memory()
+                && let Err(err) = self
+                    .writeback_dirty_pages_in_cache()
+                    .and_then(|_| self.commit_atime())
+            {
+                warn!("Failed to write back removed file cache: {err:?}");
+                return;
+            }
+            if self.remove_global_record_if_unused() {
+                if self.in_memory() {
+                    self.discard_cached_pages();
+                }
+                self.inner.discard_metadata_cache();
+            }
+            return;
+        }
+
+        if !self.tracked {
+            return;
+        }
+
+        if self.in_memory() {
             return;
         }
 
@@ -1824,49 +2216,54 @@ impl Drop for CachedFile {
 }
 
 pub fn sync_global_file_caches() -> VfsResult<()> {
-    let records = FILE_CACHES.read().values().cloned().collect::<Vec<_>>();
-    for record in records {
-        if record.in_memory {
+    let cached_files = {
+        let caches = FILE_CACHES.read();
+        caches
+            .values()
+            .map(CachedFile::from_record)
+            .collect::<Vec<_>>()
+    };
+    for cached in cached_files {
+        if cached.in_memory() {
             continue;
         }
-        CachedFile::from_record(&record).sync(false)?;
+        cached.sync(false)?;
     }
     flush_inode_metadata_caches(false)?;
     Ok(())
 }
 
 pub fn drop_global_file_caches() -> VfsResult<()> {
-    let records = FILE_CACHES.read().values().cloned().collect::<Vec<_>>();
-    for record in records {
-        if record.in_memory {
+    let cached_files = {
+        let caches = FILE_CACHES.read();
+        caches
+            .values()
+            .map(CachedFile::from_record)
+            .collect::<Vec<_>>()
+    };
+    for cached in cached_files {
+        if cached.in_memory() {
             continue;
         }
-        CachedFile::from_record(&record).drop_cached_pages()?;
+        cached.drop_cached_pages()?;
     }
     Ok(())
 }
 
 pub fn drop_file_caches_by_device(device: u64) -> VfsResult<()> {
-    let records = FILE_CACHES
-        .read()
-        .iter()
-        .filter(|(_, record)| record.location.mountpoint().device() == device)
-        .map(|(key, record)| (*key, record.clone()))
-        .collect::<Vec<_>>();
+    let cached_files = {
+        let caches = FILE_CACHES.read();
+        caches
+            .values()
+            .filter(|record| record.location.mountpoint().device() == device)
+            .map(CachedFile::from_record)
+            .collect::<Vec<_>>()
+    };
 
-    for (_, record) in &records {
-        CachedFile::from_record(record).drop_cached_pages()?;
-    }
-
-    let mut caches = FILE_CACHES.write();
-    for (key, record) in records {
-        if caches
-            .get(&key)
-            .is_some_and(|current| Arc::ptr_eq(current, &record))
-        {
-            caches.remove(&key);
-            record.location.user_data().remove::<FileUserData>();
-            record.location.invalidate_metadata_cache();
+    for cached in cached_files {
+        cached.drop_cached_pages()?;
+        if cached.remove_global_record_if_only_snapshot() {
+            cached.inner.invalidate_metadata_cache();
         }
     }
     Ok(())
@@ -1874,52 +2271,66 @@ pub fn drop_file_caches_by_device(device: u64) -> VfsResult<()> {
 
 pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     let key = CachedFile::file_cache_key(location);
-    let Some(record) = FILE_CACHES.read().get(&key).cloned() else {
+    let Some(cached) = CachedFile::get_existing(key) else {
         location.invalidate_metadata_cache();
         return Ok(());
     };
-    debug_assert_eq!(record.key, key);
-    if record.in_memory {
-        FILE_CACHES.write().remove(&key);
-        location.user_data().remove::<FileUserData>();
-        location.invalidate_metadata_cache();
-        return Ok(());
+    debug_assert_eq!(cached.record.key, key);
+    if cached.in_memory() {
+        // tmpfs has no backing device: this canonical record owns the file
+        // contents even when no descriptor currently holds a CachedFile.
+        // Invalidating metadata must never retire its pages while it remains
+        // linked in the namespace.
+    } else {
+        cached.drop_cached_pages()?;
+        let _ = cached.remove_global_record_if_only_snapshot();
     }
-    CachedFile::from_record(&record).drop_cached_pages()?;
-    FILE_CACHES.write().remove(&key);
-    location.user_data().remove::<FileUserData>();
     location.invalidate_metadata_cache();
     Ok(())
 }
 
 pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<()> {
     let key = CachedFile::file_cache_key(location);
-    let Some(record) = FILE_CACHES.read().get(&key).cloned() else {
-        location.discard_metadata_cache();
+    let Some(cached) = CachedFile::get_existing(key) else {
+        // Preparation precedes the namespace mutation and must remain
+        // rollback-safe if unlink/rename later fails.
+        location.invalidate_metadata_cache();
         return Ok(());
     };
 
-    debug_assert_eq!(record.key, key);
-    if Arc::strong_count(&record) == 2 {
-        CachedFile::from_record(&record).discard_cached_pages();
-        FILE_CACHES.write().remove(&key);
-        location.user_data().remove::<FileUserData>();
-        location.discard_metadata_cache();
-        return Ok(());
+    debug_assert_eq!(cached.record.key, key);
+    if !cached.in_memory() {
+        cached.drop_cached_pages()?;
     }
-
-    if record.in_memory {
-        FILE_CACHES.write().remove(&key);
-        location.user_data().remove::<FileUserData>();
-        location.invalidate_metadata_cache();
-        return Ok(());
-    }
-
-    CachedFile::from_record(&record).drop_cached_pages()?;
-    FILE_CACHES.write().remove(&key);
-    location.user_data().remove::<FileUserData>();
+    // This is the prepare half and runs before the namespace mutation.  Keep
+    // the canonical record intact until unlink/rename has actually succeeded;
+    // otherwise an open in the gap, or a failed unlink, could observe an empty
+    // replacement record (catastrophic for tmpfs, whose pages are the data).
     location.invalidate_metadata_cache();
     Ok(())
+}
+
+/// Commits cache retirement after unlink or replacement has succeeded.
+pub fn finalize_removed_file_cache(location: &Location) {
+    let key = CachedFile::file_cache_key(location);
+    let Some(cached) = CachedFile::get_existing(key) else {
+        location.discard_metadata_cache();
+        return;
+    };
+
+    debug_assert_eq!(cached.record.key, key);
+    cached.record.removed.store(true, Ordering::Release);
+    if cached.remove_global_record_if_only_snapshot() {
+        if cached.in_memory() {
+            cached.discard_cached_pages();
+        }
+        location.discard_metadata_cache();
+    } else {
+        // Existing open files and mmap backends keep the record and its pages.
+        // Their last CachedFile::drop observes `removed` and performs final
+        // retirement, avoiding both split lock domains and tmpfs leaks.
+        location.invalidate_metadata_cache();
+    }
 }
 
 pub fn cached_file_len(location: &Location) -> Option<u64> {
@@ -1954,6 +2365,20 @@ pub enum FileBackend {
     Direct(Location),
 }
 
+/// Owns one file-length callback for the lifetime of a private mapping.
+/// Dropping the last mapping clone unregisters it before releasing the cached
+/// inode handle.
+pub struct FileLengthChangeListener {
+    cached: CachedFile,
+    handle: usize,
+}
+
+impl Drop for FileLengthChangeListener {
+    fn drop(&mut self) {
+        self.cached.remove_length_change_listener(self.handle);
+    }
+}
+
 impl FileBackend {
     pub(crate) fn new_direct(location: Location) -> Self {
         Self::Direct(location)
@@ -1969,12 +2394,18 @@ impl FileBackend {
             Self::Direct(loc) => {
                 let start = offset;
                 let len = dst.remaining_mut();
-                if len > 0
-                    && let Some(cached) = CachedFile::get_existing(loc)
-                {
-                    cached
-                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
-                }
+                // Direct and cached handles must join the same inode lock
+                // domain even when this is the first operation to create it.
+                // A lookup-only fast path would race a concurrent first mmap
+                // or cached open between the lookup and backing-file I/O.
+                let cached = CachedFile::get_or_create(loc.clone());
+                let _direct_io_guards = if len > 0 {
+                    Some(cached.lock_direct_read_range(
+                        start..start.saturating_add(len as u64),
+                    )?)
+                } else {
+                    None
+                };
                 dst.read_from(&mut axio::read_fn(|buf| {
                     loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {
                         offset += *read as u64;
@@ -1988,22 +2419,54 @@ impl FileBackend {
     /// invokes an mmap eviction listener.
     pub fn read_at_no_evict(
         &self,
-        mut dst: impl Write + IoBufMut,
-        mut offset: u64,
+        dst: impl Write + IoBufMut,
+        offset: u64,
     ) -> VfsResult<usize> {
         match self {
             Self::Cached(cached) => cached.read_at_no_evict(dst, offset),
             Self::Direct(loc) => {
-                if let Some(cached) = CachedFile::get_existing(loc) {
-                    return cached.read_at_no_evict(dst, offset);
-                }
-                dst.read_from(&mut axio::read_fn(|buf| {
-                    loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {
-                        offset += *read as u64;
-                    })
-                }))
+                // Join the inode cache domain before the lookup.  Otherwise a
+                // concurrent first cached writer could create a dirty page
+                // after a `get_existing` miss and before the backing read.
+                CachedFile::get_or_create(loc.clone()).read_at_no_evict(dst, offset)
             }
         }
+    }
+
+    /// Returns true while truncate is changing the page containing `offset`.
+    /// Fault code uses this as the prepare/commit generation barrier.
+    pub fn length_change_in_progress(&self, offset: u64) -> bool {
+        let cached = match self {
+            Self::Cached(cached) => cached.clone(),
+            Self::Direct(location) => CachedFile::get_or_create(location.clone()),
+        };
+        let pn = (offset / PAGE_SIZE as u64) as u32;
+        cached.length_change_blocks_page(pn)
+    }
+
+    /// Returns a stable file-length generation when the page containing
+    /// `offset` is not being changed.  A fault must compare this value again
+    /// after reading and before publishing its PTE.
+    pub fn length_change_generation(&self, offset: u64) -> Option<usize> {
+        let cached = match self {
+            Self::Cached(cached) => cached.clone(),
+            Self::Direct(location) => CachedFile::get_or_create(location.clone()),
+        };
+        let pn = (offset / PAGE_SIZE as u64) as u32;
+        cached.length_generation_for_page(pn)
+    }
+
+    /// Registers an observer for complete file pages invalidated by shrink.
+    pub fn add_length_change_listener<F>(&self, listener: F) -> FileLengthChangeListener
+    where
+        F: Fn(Range<u64>, FileLengthChangePhase) + Send + Sync + 'static,
+    {
+        let cached = match self {
+            Self::Cached(cached) => cached.clone(),
+            Self::Direct(location) => CachedFile::get_or_create(location.clone()),
+        };
+        let handle = cached.add_length_change_listener(listener);
+        FileLengthChangeListener { cached, handle }
     }
 
     pub fn write_at(&self, mut src: impl Read + IoBuf, mut offset: u64) -> VfsResult<usize> {
@@ -2012,13 +2475,15 @@ impl FileBackend {
             Self::Direct(loc) => {
                 let start = offset;
                 let len = src.remaining();
-                let cached = CachedFile::get_existing(loc);
-                if len > 0
-                    && let Some(cached) = cached.as_ref()
-                {
-                    cached
-                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
-                }
+                let cached = CachedFile::get_or_create(loc.clone());
+                let _append_guard = cached.shared().append_lock.read();
+                let _direct_io_guards = if len > 0 {
+                    Some(cached.lock_direct_write_range(
+                        start..start.saturating_add(len as u64),
+                    )?)
+                } else {
+                    None
+                };
                 let result = src.write_to(&mut axio::write_fn(|buf| {
                     loc.entry()
                         .as_file()?
@@ -2029,9 +2494,6 @@ impl FileBackend {
                 }));
                 if offset > start {
                     loc.grow_cached_len_if_present(offset);
-                    if let Some(cached) = cached {
-                        cached.invalidate_clean_pages_in_range(start..offset);
-                    }
                 }
                 let written = result?;
                 Ok(written)
@@ -2075,10 +2537,10 @@ impl FileBackend {
         match self {
             Self::Cached(cached) => cached.append(src),
             Self::Direct(loc) => {
-                let cached = CachedFile::get_existing(loc);
-                if let Some(cached) = cached.as_ref() {
-                    cached.sync(true)?;
-                }
+                let cached = CachedFile::get_or_create(loc.clone());
+                let _append_guard = cached.shared().append_lock.write();
+                let _direct_io_guards = cached.lock_direct_write_range(0..u64::MAX)?;
+                loc.entry().as_file()?.sync(true)?;
                 let mut start = None;
                 let mut end = 0;
                 let result = src.write_to(&mut axio::write_fn(|buf| {
@@ -2090,11 +2552,8 @@ impl FileBackend {
                         n
                     })
                 }));
-                if let Some(start) = start {
+                if start.is_some() {
                     loc.set_cached_len_if_present(end);
-                    if let Some(cached) = cached {
-                        cached.invalidate_clean_pages_in_range(start..end);
-                    }
                 }
                 let written = result?;
                 Ok((written, end))
@@ -2119,18 +2578,10 @@ impl FileBackend {
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         match self {
             Self::Cached(cached) => cached.set_len(len),
-            Self::Direct(loc) => {
-                let cached = CachedFile::get_existing(loc);
-                if let Some(cached) = cached.as_ref() {
-                    cached.sync(true)?;
-                }
-                loc.entry().as_file()?.set_len(len)?;
-                loc.set_cached_len(len, false)?;
-                if let Some(cached) = cached {
-                    cached.drop_cached_pages()?;
-                }
-                Ok(())
-            }
+            // Truncate must publish the same length-change transaction and
+            // notify MAP_PRIVATE observers regardless of the descriptor's
+            // O_DIRECT mode.
+            Self::Direct(loc) => CachedFile::get_or_create(loc.clone()).set_len(len),
         }
     }
 }

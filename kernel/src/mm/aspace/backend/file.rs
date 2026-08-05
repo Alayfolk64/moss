@@ -261,8 +261,9 @@ impl BackendOps for FileBackend {
         _range: VirtAddrRange,
         new_flags: MappingFlags,
         _pt: &mut PageTableMut,
-    ) -> AxResult {
-        self.check_flags(new_flags)
+    ) -> AxResult<MappingFlags> {
+        self.check_flags(new_flags)?;
+        Ok(new_flags)
     }
 
     fn populate(

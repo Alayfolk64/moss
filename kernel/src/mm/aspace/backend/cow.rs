@@ -1,20 +1,25 @@
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{
+    collections::BTreeMap,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use core::{
     slice,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
 use axerrno::{AxError, AxResult};
-use axfs::FileBackend;
+use axfs::{FileBackend, FileLengthChangeListener, FileLengthChangePhase};
 use axhal::{
     mem::phys_to_virt,
     paging::{MappingFlags, PageSize, PageTable, PageTableMut, PagingError},
 };
+use axsync::Mutex;
 use kspin::SpinNoIrq;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
-    AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
+    AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
     alloc_frame, dealloc_frame, finish_unmap_before_reclaim, pages_in,
 };
 
@@ -85,6 +90,7 @@ pub struct CowBackend {
     file: Option<(FileBackend, u64, Option<u64>)>,
     mapped_pages: AtomicUsize,
     identity: Arc<()>,
+    length_listener: Arc<Mutex<Option<FileLengthChangeListener>>>,
 }
 
 impl Clone for CowBackend {
@@ -95,8 +101,66 @@ impl Clone for CowBackend {
             file: self.file.clone(),
             mapped_pages: AtomicUsize::new(self.mapped_pages.load(Ordering::Relaxed)),
             identity: self.identity.clone(),
+            length_listener: self.length_listener.clone(),
         }
     }
+}
+
+fn file_page_offset(mapping_start: VirtAddr, vaddr: VirtAddr, file_start: u64) -> u64 {
+    file_start + vaddr.as_usize().saturating_sub(mapping_start.as_usize()) as u64
+}
+
+/// Returns the destination offset, file offset and exact number of bytes which
+/// belong to this file-backed page.  `Some(file_end)` denotes an ELF segment:
+/// pages after that segment's file data are valid zero-filled BSS.  Ordinary
+/// mmap passes `None`, so a page at or beyond the current EOF is a fault.
+fn file_read_window(
+    file: &FileBackend,
+    mapping_start: VirtAddr,
+    vaddr: VirtAddr,
+    mapping_file_start: u64,
+    file_end: Option<u64>,
+    page_len: usize,
+) -> AxResult<(usize, u64, usize)> {
+    let dst_start = mapping_start.as_usize().saturating_sub(vaddr.as_usize());
+    assert!(dst_start < page_len);
+    let fault_file_start = file_page_offset(mapping_start, vaddr, mapping_file_start);
+
+    if file_end.is_some_and(|end| fault_file_start >= end) {
+        return Ok((dst_start, fault_file_start, 0));
+    }
+    let readable_end = file_end.unwrap_or(u64::MAX).min(file.len()?);
+    if fault_file_start >= readable_end {
+        return Err(AxError::BadAddress);
+    }
+    let read_len = readable_end
+        .saturating_sub(fault_file_start)
+        .min((page_len - dst_start) as u64) as usize;
+    Ok((dst_start, fault_file_start, read_len))
+}
+
+fn read_file_window_exact(
+    file: &FileBackend,
+    buf: &mut [u8],
+    dst_start: usize,
+    file_start: u64,
+    read_len: usize,
+    no_evict: bool,
+) -> AxResult {
+    let mut filled = 0;
+    while filled < read_len {
+        let dst = &mut &mut buf[dst_start + filled..dst_start + read_len];
+        let read = if no_evict {
+            file.read_at_no_evict(dst, file_start + filled as u64)?
+        } else {
+            file.read_at(dst, file_start + filled as u64)?
+        };
+        if read == 0 || read > read_len - filled {
+            return Err(AxError::Io);
+        }
+        filled += read;
+    }
+    Ok(())
 }
 
 enum CowFaultSource {
@@ -120,21 +184,39 @@ pub(crate) struct CowFaultPlan {
     mapping_start: VirtAddr,
     size: PageSize,
     file: Option<(FileBackend, u64, Option<u64>)>,
+    file_length_generation: Option<usize>,
     frame: Option<PhysAddr>,
     source: Option<CowFaultSource>,
 }
 
 impl CowFaultPlan {
+    fn file_length_is_current(&self) -> bool {
+        let Some(generation) = self.file_length_generation else {
+            return true;
+        };
+        let Some((file, mapping_file_start, _)) = &self.file else {
+            return false;
+        };
+        let offset = file_page_offset(self.mapping_start, self.vaddr, *mapping_file_start);
+        file.length_change_generation(offset) == Some(generation)
+    }
+
     pub(crate) fn execute(&mut self) -> AxResult {
-        if let Some(source) = &self.source {
+        if let Some(source) = self.source.as_ref().map(CowFaultSource::paddr) {
+            if !self.file_length_is_current() {
+                return Err(AxError::WouldBlock);
+            }
             let frame = alloc_referenced_frame(false, self.size)?;
             self.frame = Some(frame);
             unsafe {
                 core::ptr::copy_nonoverlapping(
-                    phys_to_virt(source.paddr()).as_ptr(),
+                    phys_to_virt(source).as_ptr(),
                     phys_to_virt(frame).as_mut_ptr(),
                     self.size as _,
                 );
+            }
+            if !self.file_length_is_current() {
+                return Err(AxError::WouldBlock);
             }
             return Ok(());
         }
@@ -145,21 +227,26 @@ impl CowFaultPlan {
             let buf = unsafe {
                 slice::from_raw_parts_mut(phys_to_virt(frame).as_mut_ptr(), self.size as _)
             };
-            let start = self
-                .mapping_start
-                .as_usize()
-                .saturating_sub(self.vaddr.as_usize());
-            assert!(start < self.size as usize);
-
-            let fault_file_start = *mapping_file_start
-                + self
-                    .vaddr
-                    .as_usize()
-                    .saturating_sub(self.mapping_start.as_usize()) as u64;
-            let max_read = file_end
-                .map_or(u64::MAX, |end| end.saturating_sub(fault_file_start))
-                .min((buf.len() - start) as u64) as usize;
-            file.read_at(&mut &mut buf[start..start + max_read], fault_file_start)?;
+            let (start, fault_file_start, read_len) = file_read_window(
+                file,
+                self.mapping_start,
+                self.vaddr,
+                *mapping_file_start,
+                *file_end,
+                buf.len(),
+            )?;
+            if read_len != 0 {
+                let generation = self.file_length_generation.ok_or(AxError::BadAddress)?;
+                if file.length_change_generation(fault_file_start) != Some(generation) {
+                    return Err(AxError::WouldBlock);
+                }
+            }
+            read_file_window_exact(file, buf, start, fault_file_start, read_len, false)?;
+            if read_len != 0
+                && file.length_change_generation(fault_file_start) != self.file_length_generation
+            {
+                return Err(AxError::WouldBlock);
+            }
         }
         Ok(())
     }
@@ -191,13 +278,156 @@ fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
 }
 
 impl CowBackend {
-    fn clone_for_fork(&self) -> Self {
-        Self {
+    fn clone_for_fork(&self, new_aspace: &Arc<AddrSpaceLock>) -> Self {
+        let backend = Self {
             start: self.start,
             size: self.size,
             file: self.file.clone(),
             mapped_pages: AtomicUsize::new(0),
             identity: Arc::new(()),
+            length_listener: Arc::new(Mutex::new(None)),
+        };
+        backend.ensure_length_listener(new_aspace);
+        backend
+    }
+
+    pub(super) fn ensure_length_listener(&self, aspace: &Arc<AddrSpaceLock>) {
+        let Some((file, ..)) = &self.file else {
+            return;
+        };
+        let mut slot = self.length_listener.lock();
+        if slot.is_some() {
+            return;
+        }
+
+        let weak_aspace = Arc::downgrade(aspace);
+        let weak_identity: Weak<()> = Arc::downgrade(&self.identity);
+        *slot = Some(file.add_length_change_listener(move |range, phase| {
+            let (Some(aspace), Some(identity)) = (weak_aspace.upgrade(), weak_identity.upgrade())
+            else {
+                return;
+            };
+            let mut guard = aspace.lock();
+            let AddrSpace { areas, pt, .. } = &mut *guard;
+            for area in areas.iter() {
+                let Backend::Cow(backend) = area.backend() else {
+                    continue;
+                };
+                if Arc::ptr_eq(&backend.identity, &identity) {
+                    backend.invalidate_file_pages(area.va_range(), range.clone(), phase, pt);
+                }
+            }
+        }));
+    }
+
+    fn file_page_is_current(&self, vaddr: VirtAddr, generation: Option<usize>) -> AxResult<bool> {
+        let Some((file, mapping_file_start, file_end)) = &self.file else {
+            return Ok(true);
+        };
+        let offset = file_page_offset(self.start, vaddr, *mapping_file_start);
+        if file_end.is_some_and(|end| offset >= end) {
+            return Ok(true);
+        }
+        if let Some(generation) = generation {
+            if file.length_change_generation(offset) != Some(generation) {
+                return Err(AxError::WouldBlock);
+            }
+        } else if file.length_change_in_progress(offset) {
+            return Err(AxError::WouldBlock);
+        }
+        Ok(offset < file.len()?)
+    }
+
+    fn file_page_change_in_progress(&self, vaddr: VirtAddr) -> bool {
+        let Some((file, mapping_file_start, file_end)) = &self.file else {
+            return false;
+        };
+        let offset = file_page_offset(self.start, vaddr, *mapping_file_start);
+        !file_end.is_some_and(|end| offset >= end) && file.length_change_in_progress(offset)
+    }
+
+    pub(super) fn file_length_change_in_progress(&self, range: VirtAddrRange) -> bool {
+        pages_in(range, self.size)
+            .is_ok_and(|mut pages| pages.any(|vaddr| self.file_page_change_in_progress(vaddr)))
+    }
+
+    fn invalidate_file_pages(
+        &self,
+        area_range: VirtAddrRange,
+        file_range: core::ops::Range<u64>,
+        phase: FileLengthChangePhase,
+        pt: &mut PageTable,
+    ) {
+        let Some((_, mapping_file_start, file_end)) = &self.file else {
+            return;
+        };
+        let Ok(pages) = pages_in(area_range, self.size) else {
+            return;
+        };
+        let mut removed = Vec::new();
+        let mut protected = false;
+        let mut modify = pt.modify();
+        for vaddr in pages {
+            let offset = file_page_offset(self.start, vaddr, *mapping_file_start);
+            let dst_start = self.start.as_usize().saturating_sub(vaddr.as_usize());
+            let mapped_end = offset
+                .saturating_add((self.size as usize - dst_start) as u64)
+                .min(file_end.unwrap_or(u64::MAX));
+            if offset >= file_range.end || mapped_end <= file_range.start {
+                continue;
+            }
+
+            match modify.query(vaddr) {
+                Ok((frame, flags, page_size)) => {
+                    assert_eq!(page_size, self.size);
+                    if file_range.start <= offset {
+                        if phase == FileLengthChangePhase::Apply {
+                            match modify.unmap(vaddr) {
+                                Ok((frame, _, page_size)) => {
+                                    assert_eq!(page_size, self.size);
+                                    removed.push(frame);
+                                }
+                                Err(err) => panic!(
+                                    "failed to revoke truncated private page {vaddr:?}: {err:?}"
+                                ),
+                            }
+                        }
+                    } else if phase == FileLengthChangePhase::Protect {
+                        // The file layer invokes Protect for every listener
+                        // before any Apply callback.  Removing WRITE and
+                        // finishing this address space's remote TLB barrier
+                        // contributes to that global fork-shared-frame fence.
+                        modify
+                            .protect(vaddr, flags - MappingFlags::WRITE)
+                            .unwrap_or_else(|err| {
+                                panic!("failed to protect partial private page {vaddr:?}: {err:?}")
+                            });
+                        protected = true;
+                    } else {
+                        // All listeners have already completed Protect, so no
+                        // address space may retain a writable translation to
+                        // this possibly fork-shared frame.  Preserve the
+                        // private prefix and zero only bytes after the new EOF.
+                        let zero_from = dst_start + (file_range.start - offset) as usize;
+                        let data = unsafe {
+                            slice::from_raw_parts_mut(
+                                phys_to_virt(frame).as_mut_ptr(),
+                                self.size as usize,
+                            )
+                        };
+                        data[zero_from..].fill(0);
+                    }
+                }
+                Err(PagingError::NotMapped) => {}
+                Err(err) => panic!("failed to inspect truncated private page {vaddr:?}: {err:?}"),
+            }
+        }
+        if protected || !removed.is_empty() {
+            finish_unmap_before_reclaim(&mut modify);
+        }
+        for frame in removed {
+            drop_referenced_frame(frame, self.size);
+            self.dec_mapped_pages();
         }
     }
 
@@ -226,16 +456,35 @@ impl CowBackend {
 
     pub(crate) fn prepare_fault(
         &self,
+        aspace: &Arc<AddrSpaceLock>,
         vaddr: VirtAddr,
         _area_range: VirtAddrRange,
         _flags: MappingFlags,
         access_flags: MappingFlags,
         pt: &PageTable,
     ) -> FaultPreparation {
+        self.ensure_length_listener(aspace);
         if self.size != PageSize::Size4K {
             return FaultPreparation::Fallback;
         }
         let vaddr = vaddr.align_down(self.size as usize);
+        if self.file_page_change_in_progress(vaddr) {
+            return FaultPreparation::Retry;
+        }
+        let file_length_generation = match &self.file {
+            Some((file, mapping_file_start, file_end)) => {
+                let offset = file_page_offset(self.start, vaddr, *mapping_file_start);
+                if file_end.is_some_and(|end| offset >= end) {
+                    None
+                } else {
+                    let Some(generation) = file.length_change_generation(offset) else {
+                        return FaultPreparation::Retry;
+                    };
+                    Some(generation)
+                }
+            }
+            None => None,
+        };
         match pt.query(vaddr) {
             Ok((paddr, page_flags, page_size)) => {
                 if page_size == self.size && page_flags.contains(access_flags) {
@@ -272,7 +521,8 @@ impl CowBackend {
                             vaddr,
                             mapping_start: self.start,
                             size: self.size,
-                            file: None,
+                            file: self.file.clone(),
+                            file_length_generation,
                             frame: None,
                             source: Some(CowFaultSource::Anonymous(paddr)),
                         });
@@ -287,6 +537,7 @@ impl CowBackend {
                 mapping_start: self.start,
                 size: self.size,
                 file: self.file.clone(),
+                file_length_generation,
                 frame: None,
                 source: None,
             }),
@@ -304,6 +555,12 @@ impl CowBackend {
     ) -> AxResult<FaultCommit> {
         if !Arc::ptr_eq(&self.identity, &plan.identity) || self.size != plan.size {
             return Ok(FaultCommit::Stale);
+        }
+        match self.file_page_is_current(plan.vaddr, plan.file_length_generation) {
+            Ok(true) => {}
+            Ok(false) => return Err(AxError::BadAddress),
+            Err(AxError::WouldBlock) => return Ok(FaultCommit::Stale),
+            Err(err) => return Err(err),
         }
 
         match pt.query(plan.vaddr) {
@@ -366,22 +623,49 @@ impl CowBackend {
             let buf = unsafe {
                 slice::from_raw_parts_mut(phys_to_virt(frame).as_mut_ptr(), self.size as _)
             };
-            // vaddr can be smaller than self.start (at most 1 page) due to
-            // non-aligned mappings, we need to keep the gap clean.
-            let start = self.start.as_usize().saturating_sub(vaddr.as_usize());
-            assert!(start < self.size as _);
-
-            let file_start =
-                *file_start + vaddr.as_usize().saturating_sub(self.start.as_usize()) as u64;
-            let max_read = file_end
-                .map_or(u64::MAX, |end| end.saturating_sub(file_start))
-                .min((buf.len() - start) as u64) as usize;
-
-            if let Err(err) =
-                file.read_at_no_evict(&mut &mut buf[start..start + max_read], file_start)
-            {
+            let (start, file_start, read_len) = match file_read_window(
+                file,
+                self.start,
+                vaddr,
+                *file_start,
+                *file_end,
+                buf.len(),
+            ) {
+                Ok(window) => window,
+                Err(err) => {
+                    self.drop_new_frame(frame);
+                    return Err(err);
+                }
+            };
+            let generation = if read_len == 0 {
+                None
+            } else {
+                let Some(generation) = file.length_change_generation(file_start) else {
+                    self.drop_new_frame(frame);
+                    return Err(AxError::WouldBlock);
+                };
+                Some(generation)
+            };
+            if let Err(err) = read_file_window_exact(file, buf, start, file_start, read_len, true) {
                 self.drop_new_frame(frame);
                 return Err(err);
+            }
+            if let Some(generation) = generation
+                && file.length_change_generation(file_start) != Some(generation)
+            {
+                self.drop_new_frame(frame);
+                return Err(AxError::WouldBlock);
+            }
+            match self.file_page_is_current(vaddr, generation) {
+                Ok(true) => {}
+                Ok(false) => {
+                    self.drop_new_frame(frame);
+                    return Err(AxError::BadAddress);
+                }
+                Err(err) => {
+                    self.drop_new_frame(frame);
+                    return Err(err);
+                }
             }
         }
         if let Err(err) = pt.map(vaddr, frame, self.size, flags) {
@@ -529,6 +813,18 @@ impl BackendOps for CowBackend {
         result
     }
 
+    fn on_protect(
+        &self,
+        _range: VirtAddrRange,
+        new_flags: MappingFlags,
+        _pt: &mut PageTableMut,
+    ) -> AxResult<MappingFlags> {
+        // The VMA records the requested WRITE permission, but an existing COW
+        // PTE must remain read-only.  Its next write fault either upgrades a
+        // uniquely owned frame or copies a shared frame before granting WRITE.
+        Ok(new_flags - MappingFlags::WRITE)
+    }
+
     fn populate(
         &self,
         range: VirtAddrRange,
@@ -567,9 +863,9 @@ impl BackendOps for CowBackend {
         flags: MappingFlags,
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<AddrSpaceLock>,
+        new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
-        let new_backend = self.clone_for_fork();
+        let new_backend = self.clone_for_fork(new_aspace);
         // Forking untouched lazy COW regions is common (e.g. fork14). In that
         // case, there is nothing in page tables to duplicate.
         if self.mapped_pages.load(Ordering::Relaxed) == 0 {
@@ -579,6 +875,15 @@ impl BackendOps for CowBackend {
         let cow_flags = flags - MappingFlags::WRITE;
 
         for vaddr in pages_in(range, self.size)? {
+            // Registration above and this marker check close both sides of the
+            // truncate snapshot race.  If truncate snapshotted before the
+            // child listener was inserted, its marker is still visible and no
+            // PTE is copied.  If it starts after this check, the snapshot
+            // contains the child listener, whose callback waits for the child
+            // address-space lock and revokes the copied PTE after area install.
+            if self.file_page_change_in_progress(vaddr) {
+                return Err(AxError::WouldBlock);
+            }
             // Copy data from old memory area to new memory area.
             match old_pt.query(vaddr) {
                 Ok((paddr, _, page_size)) => {
@@ -624,6 +929,7 @@ impl Backend {
             file: Some((file, file_start, file_end)),
             mapped_pages: AtomicUsize::new(0),
             identity: Arc::new(()),
+            length_listener: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -634,6 +940,7 @@ impl Backend {
             file: None,
             mapped_pages: AtomicUsize::new(0),
             identity: Arc::new(()),
+            length_listener: Arc::new(Mutex::new(None)),
         })
     }
 }

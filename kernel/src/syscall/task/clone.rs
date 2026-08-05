@@ -214,8 +214,21 @@ impl CloneArgs {
                 old_proc_data.aspace()
             } else {
                 let old_aspace = old_proc_data.aspace();
-                let mut aspace = old_aspace.lock();
-                let aspace = aspace.try_clone()?;
+                let aspace = loop {
+                    let mut parent = old_aspace.lock();
+                    match parent.try_clone() {
+                        Ok(aspace) => break aspace,
+                        Err(AxError::WouldBlock) => {
+                            // A file shrink may have snapshotted mmap listeners
+                            // before this child registered its own callback.
+                            // Release the parent lock so truncate can finish,
+                            // then rebuild the child from a coherent PTE set.
+                            drop(parent);
+                            yield_now();
+                        }
+                        Err(err) => return Err(err),
+                    }
+                };
                 {
                     let mut child_aspace = aspace.lock();
                     copy_from_kernel(&mut child_aspace)?;

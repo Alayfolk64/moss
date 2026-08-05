@@ -645,8 +645,7 @@ pub fn sys_mmap(
                                 return Err(AxError::NoSuchDevice);
                             }
                             DeviceMmap::ReadOnly => {
-                                let end = backend.len().ok();
-                                Backend::new_cow(start, page_size, backend, offset as u64, end)
+                                Backend::new_cow(start, page_size, backend, offset as u64, None)
                             }
                             DeviceMmap::Physical(mut range) => {
                                 range.start += offset;
@@ -673,8 +672,7 @@ pub fn sys_mmap(
                 // Private mapping from a file
                 let inner = file.inner();
                 let backend = inner.backend()?.clone();
-                let end = backend.len().ok();
-                Backend::new_cow(start, page_size, backend, offset as u64, end)
+                Backend::new_cow(start, page_size, backend, offset as u64, None)
             } else {
                 Backend::new_alloc(start, page_size)
             }
@@ -683,6 +681,7 @@ pub fn sys_mmap(
     };
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
+    backend.attach_private_file_mapping(&aspace_ref);
     aspace.map(start, length, permission_flags.into(), populate, backend)?;
     record_mmap(
         pid,

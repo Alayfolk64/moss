@@ -67,5 +67,6 @@ version = "0.10"
 features = [
     "lazy",
     "mutex",
+    "rwlock",
 ]
 default-features = false
