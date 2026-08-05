@@ -81,6 +81,7 @@ axfs = { path = "vendor/axfs" }
 axmm = { path = "vendor/axmm" }
 axruntime = { path = "vendor/axruntime" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
+memory_set = { path = "vendor/memory_set" }
 page_table_entry = { path = "vendor/page_table_entry" }
 page_table_multiarch = { path = "vendor/page_table_multiarch" }
 lwext4_rust = { path = "third_party/lwext4_rust" }

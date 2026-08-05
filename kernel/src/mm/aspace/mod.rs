@@ -16,7 +16,7 @@ use event_listener::{Event, listener};
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
-use memory_set::{MemoryArea, MemorySet};
+use memory_set::{MappingError, MemoryArea, MemorySet, ProtectStats};
 
 const WRITER_LOCKED: usize = 1;
 const ONE_READER: usize = 2;
@@ -167,10 +167,86 @@ fn synchronize_executable_fault(access_flags: PageFaultFlags) {
     let _ = access_flags;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct VmaMetadata {
+    user_flags: MappingFlags,
+    may_flags: MappingFlags,
+    shared: bool,
+    file_backed: bool,
+    anonymous: bool,
+    locked: bool,
+}
+
+impl VmaMetadata {
+    fn access_flags() -> MappingFlags {
+        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE
+    }
+
+    fn unrestricted(user_flags: MappingFlags, backend: &Backend) -> Self {
+        let (shared, file_backed, anonymous) = backend.default_vma_kind();
+        Self {
+            user_flags: user_flags & Self::access_flags(),
+            may_flags: Self::access_flags(),
+            shared,
+            file_backed,
+            anonymous,
+            locked: false,
+        }
+    }
+
+    pub(crate) fn mmap(
+        user_flags: MappingFlags,
+        may_flags: MappingFlags,
+        shared: bool,
+        file_backed: bool,
+        anonymous: bool,
+        locked: bool,
+    ) -> Self {
+        Self {
+            user_flags: user_flags & Self::access_flags(),
+            may_flags: may_flags & Self::access_flags(),
+            shared,
+            file_backed,
+            anonymous,
+            locked,
+        }
+    }
+
+    pub(crate) const fn shared(&self) -> bool {
+        self.shared
+    }
+    pub(crate) const fn file_backed(&self) -> bool {
+        self.file_backed
+    }
+    pub(crate) const fn anonymous(&self) -> bool {
+        self.anonymous
+    }
+    pub(crate) const fn locked(&self) -> bool {
+        self.locked
+    }
+    pub(crate) const fn user_flags(&self) -> MappingFlags {
+        self.user_flags
+    }
+
+    fn permits(&self, flags: MappingFlags) -> bool {
+        self.may_flags.contains(flags & Self::access_flags())
+    }
+
+    fn with_user_flags(mut self, flags: MappingFlags) -> Self {
+        self.user_flags = flags & Self::access_flags();
+        self
+    }
+
+    fn for_fork(mut self) -> Self {
+        self.locked = false;
+        self
+    }
+}
+
 /// The virtual memory address space.
 pub struct AddrSpace {
     va_range: VirtAddrRange,
-    areas: MemorySet<Backend>,
+    areas: MemorySet<Backend, VmaMetadata>,
     pt: PageTable,
 }
 
@@ -290,7 +366,7 @@ impl AddrSpace {
         self.areas.find_free_area(hint, size, limit, align)
     }
 
-    pub fn find_area(&self, vaddr: VirtAddr) -> Option<&MemoryArea<Backend>> {
+    pub(crate) fn find_area(&self, vaddr: VirtAddr) -> Option<&MemoryArea<Backend, VmaMetadata>> {
         self.areas.find(vaddr)
     }
 
@@ -316,7 +392,9 @@ impl AddrSpace {
         }
 
         let offset = start_vaddr.as_usize() as isize - start_paddr.as_usize() as isize;
-        let area = MemoryArea::new(start_vaddr, size, flags, Backend::new_linear(offset));
+        let backend = Backend::new_linear(offset);
+        let metadata = VmaMetadata::unrestricted(flags, &backend);
+        let area = MemoryArea::new_with_metadata(start_vaddr, size, flags, backend, metadata);
         self.areas.map(area, &mut self.pt, false)?;
         Ok(())
     }
@@ -330,9 +408,22 @@ impl AddrSpace {
         populate: bool,
         backend: Backend,
     ) -> AxResult {
+        let metadata = VmaMetadata::unrestricted(flags, &backend);
+        self.map_with_metadata(start, size, flags, populate, backend, metadata)
+    }
+
+    pub(crate) fn map_with_metadata(
+        &mut self,
+        start: VirtAddr,
+        size: usize,
+        flags: MappingFlags,
+        populate: bool,
+        backend: Backend,
+        metadata: VmaMetadata,
+    ) -> AxResult {
         self.validate_region(start, size)?;
 
-        let area = MemoryArea::new(start, size, flags, backend);
+        let area = MemoryArea::new_with_metadata(start, size, flags, backend, metadata);
         self.areas.map(area, &mut self.pt, false)?;
         if populate {
             if let Err(err) = self.populate_area(start, size, flags) {
@@ -491,7 +582,13 @@ impl AddrSpace {
     /// Returns an error if the address range is out of the address space or not
     /// aligned.
     /// 改权限，比如只读改成可读写
-    pub fn protect(&mut self, start: VirtAddr, size: usize, flags: MappingFlags) -> AxResult {
+    pub fn protect(
+        &mut self,
+        start: VirtAddr,
+        size: usize,
+        flags: MappingFlags,
+        user_flags: MappingFlags,
+    ) -> AxResult<ProtectStats> {
         self.validate_region(start, size)?;
 
         if flags.contains(MappingFlags::WRITE) {
@@ -516,15 +613,95 @@ impl AddrSpace {
             }
         }
 
-        self.areas
-            .protect(start, size, |_| Some(flags), &mut self.pt)?;
+        let access_flags = VmaMetadata::access_flags();
+        let requested = flags & access_flags;
+        let requested_user = user_flags & access_flags;
+        let stats = self.areas.protect(
+            start,
+            size,
+            |area| {
+                if !area.metadata().permits(requested_user) {
+                    return Err(MappingError::PermissionDenied);
+                }
+                let new_flags = (area.flags() - access_flags) | requested;
+                let new_metadata = area.metadata().with_user_flags(requested_user);
+                Ok(
+                    (new_flags != area.flags() || new_metadata != *area.metadata())
+                        .then_some((new_flags, new_metadata)),
+                )
+            },
+            |left, right| {
+                left.flags() == right.flags()
+                    && left.metadata() == right.metadata()
+                    && left.backend().merge_compatible(right.backend())
+            },
+            &mut self.pt,
+        )?;
 
         // `mprotect` changes permissions in an address space which sibling
         // threads may currently execute on other CPUs.
         #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
         crate::mm::flush_tlb_on_all_cpus(self.page_table_root(), None);
 
-        Ok(())
+        Ok(stats)
+    }
+
+    pub(crate) fn locked_bytes_in_range(&self, start: VirtAddr, size: usize) -> usize {
+        let Some(end) = start.checked_add(size) else {
+            return 0;
+        };
+        self.areas
+            .iter()
+            .filter(|area| area.metadata().locked())
+            .map(|area| {
+                area.end()
+                    .min(end)
+                    .as_usize()
+                    .saturating_sub(area.start().max(start).as_usize())
+            })
+            .sum()
+    }
+
+    pub(crate) fn locked_bytes(&self) -> usize {
+        self.areas
+            .iter()
+            .filter(|area| area.metadata().locked())
+            .map(|area| area.size())
+            .sum()
+    }
+
+    pub(crate) fn range_is_private_anonymous(&self, start: VirtAddr, size: usize) -> bool {
+        self.range_metadata_matches(start, size, |metadata| {
+            !metadata.shared() && metadata.anonymous()
+        })
+    }
+
+    pub(crate) fn range_is_shared_file(&self, start: VirtAddr, size: usize) -> bool {
+        self.range_metadata_matches(start, size, |metadata| {
+            metadata.shared() && metadata.file_backed()
+        })
+    }
+
+    fn range_metadata_matches(
+        &self,
+        start: VirtAddr,
+        size: usize,
+        predicate: impl Fn(&VmaMetadata) -> bool,
+    ) -> bool {
+        let Some(end) = start.checked_add(size) else {
+            return false;
+        };
+        let mut cursor = start;
+        while cursor < end {
+            let Some(area) = self.areas.find(cursor) else {
+                return false;
+            };
+            if !predicate(area.metadata()) {
+                return false;
+            }
+            cursor = area.end().min(end);
+        }
+        true
     }
 
     /// Removes all mappings in the address space.
@@ -818,7 +995,13 @@ impl AddrSpace {
                 &new_aspace_clone,
             )?;
 
-            let new_area = MemoryArea::new(area.start(), area.size(), area.flags(), new_backend);
+            let new_area = MemoryArea::new_with_metadata(
+                area.start(),
+                area.size(),
+                area.flags(),
+                new_backend,
+                area.metadata().for_fork(),
+            );
             let aspace = guard.deref_mut();
             aspace.areas.map(new_area, &mut aspace.pt, false)?;
         }
@@ -837,7 +1020,7 @@ impl AddrSpace {
     ///
     /// This is required for `procfs` to generate `/proc/pid/maps`.
     /// Exposing internal state for system introspection is a standard practice.
-    pub fn areas(&self) -> impl Iterator<Item = &MemoryArea<Backend>> {
+    pub(crate) fn areas(&self) -> impl Iterator<Item = &MemoryArea<Backend, VmaMetadata>> {
         self.areas.iter()
     }
 }

@@ -172,6 +172,10 @@ impl FileBackendInner {
 #[derive(Clone)]
 pub struct FileBackend(Arc<FileBackendInner>);
 impl FileBackend {
+    pub(super) fn merge_compatible(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     pub(crate) fn prepare_fault(&self, vaddr: VirtAddr) -> FaultPreparation {
         let page = ((vaddr.align_down_4k() - self.0.start) / PAGE_SIZE_4K) as u32;
         let Some(pn) = self.0.offset_page.checked_add(page) else {

@@ -266,7 +266,13 @@ impl AddrSpace {
         self.validate_region(start, size)?;
 
         self.areas
-            .protect(start, size, |_| Some(flags), &mut self.pt)?;
+            .protect(
+                start,
+                size,
+                |area| Ok((area.flags() != flags).then_some((flags, ()))),
+                |_, _| false,
+                &mut self.pt,
+            )?;
 
         Ok(())
     }

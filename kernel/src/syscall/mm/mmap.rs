@@ -12,7 +12,7 @@ use starry_vm::{vm_load, vm_write_slice};
 
 use crate::{
     file::{File, FileLike},
-    mm::{AddrSpace, Backend, SharedPages},
+    mm::{AddrSpace, Backend, SharedPages, VmaMetadata},
     pseudofs::{Device, DeviceMmap},
     syscall::{fs::memfd_write_sealed, notify_inotify_file},
     task::AsThread,
@@ -55,6 +55,20 @@ impl From<MmapProt> for MappingFlags {
         }
         flags
     }
+}
+
+fn user_mapping_flags(prot: MmapProt) -> MappingFlags {
+    let mut flags = MappingFlags::empty();
+    if prot.contains(MmapProt::READ) {
+        flags |= MappingFlags::READ;
+    }
+    if prot.contains(MmapProt::WRITE) {
+        flags |= MappingFlags::WRITE;
+    }
+    if prot.contains(MmapProt::EXEC) {
+        flags |= MappingFlags::EXECUTE;
+    }
+    flags
 }
 
 bitflags::bitflags! {
@@ -112,18 +126,6 @@ struct WipeOnForkArea {
     end: usize,
 }
 
-#[derive(Clone, Copy)]
-struct MapRecord {
-    pid: u32,
-    start: usize,
-    end: usize,
-    prot: MmapProt,
-    shared: bool,
-    file_backed: bool,
-    write_sealed: bool,
-    locked: bool,
-}
-
 struct SigbusArea {
     pid: u32,
     start: usize,
@@ -133,7 +135,6 @@ struct SigbusArea {
 static MMAP_LOCKED_BYTES: AtomicUsize = AtomicUsize::new(0);
 static GROW_DOWN_AREAS: Mutex<Vec<GrowdownArea>> = Mutex::new(Vec::new());
 static WIPEONFORK_AREAS: Mutex<Vec<WipeOnForkArea>> = Mutex::new(Vec::new());
-static MMAP_RECORDS: Mutex<Vec<MapRecord>> = Mutex::new(Vec::new());
 static SIGBUS_AREAS: Mutex<Vec<SigbusArea>> = Mutex::new(Vec::new());
 
 fn is_shared_mapping(map_type: MmapFlags) -> bool {
@@ -184,20 +185,10 @@ pub fn is_mmap_sigbus_fault(pid: u32, addr: VirtAddr, access_flags: MappingFlags
         })
 }
 
-pub fn mmap_proc_maps(pid: u32, aspace: &crate::mm::AddrSpace) -> String {
-    let records = MMAP_RECORDS.lock();
+pub fn mmap_proc_maps(_pid: u32, aspace: &crate::mm::AddrSpace) -> String {
     let mut out = String::new();
     for area in aspace.areas() {
-        let flags = area.flags();
-        let record = records.iter().rev().find(|record| {
-            record.pid == pid
-                && record.start == area.start().as_usize()
-                && record.end >= area.end().as_usize()
-        });
-        let prot = record
-            .map(|record| record.prot)
-            .unwrap_or_else(|| prot_from_mapping_flags(flags));
-        let shared = record.is_some_and(|record| record.shared);
+        let prot = prot_from_mapping_flags(area.metadata().user_flags());
         out += &format!(
             "{:x}-{:x} {}{}{}{} 00000000 00:00 0\n",
             area.start().as_usize(),
@@ -217,7 +208,7 @@ pub fn mmap_proc_maps(pid: u32, aspace: &crate::mm::AddrSpace) -> String {
             } else {
                 '-'
             },
-            if shared { 's' } else { 'p' },
+            if area.metadata().shared() { 's' } else { 'p' },
         );
     }
     out
@@ -237,105 +228,8 @@ fn prot_from_mapping_flags(flags: MappingFlags) -> MmapProt {
     prot
 }
 
-fn recorded_prot(pid: u32, start: usize, length: usize) -> Option<MmapProt> {
+fn forget_mmap_aux(pid: u32, start: usize, length: usize) {
     let end = start + length;
-    MMAP_RECORDS.lock().iter().rev().find_map(|record| {
-        (record.pid == pid && record.start <= start && record.end >= end).then_some(record.prot)
-    })
-}
-
-fn record_mmap(
-    pid: u32,
-    start: usize,
-    length: usize,
-    prot: MmapProt,
-    shared: bool,
-    file_backed: bool,
-    write_sealed: bool,
-    locked: bool,
-) {
-    MMAP_RECORDS.lock().push(MapRecord {
-        pid,
-        start,
-        end: start + length,
-        prot,
-        shared,
-        file_backed,
-        write_sealed,
-        locked,
-    });
-}
-
-fn update_mmap_prot(pid: u32, start: usize, length: usize, prot: MmapProt) {
-    let end = start + length;
-    let mut records = MMAP_RECORDS.lock();
-    let mut updated = Vec::with_capacity(records.len() + 2);
-
-    for record in records.drain(..) {
-        if record.pid != pid || record.end <= start || record.start >= end {
-            updated.push(record);
-            continue;
-        }
-
-        if record.start < start {
-            updated.push(MapRecord {
-                end: start,
-                ..record
-            });
-        }
-
-        updated.push(MapRecord {
-            start: record.start.max(start),
-            end: record.end.min(end),
-            prot,
-            ..record
-        });
-
-        if record.end > end {
-            updated.push(MapRecord {
-                start: end,
-                ..record
-            });
-        }
-    }
-
-    *records = updated;
-}
-
-fn overlap_len(a_start: usize, a_end: usize, b_start: usize, b_end: usize) -> usize {
-    a_end.min(b_end).saturating_sub(a_start.max(b_start))
-}
-
-fn forget_mmap(pid: u32, start: usize, length: usize) -> usize {
-    let end = start + length;
-    let mut locked_bytes = 0;
-    let mut records = MMAP_RECORDS.lock();
-    let mut updated = Vec::with_capacity(records.len());
-
-    for record in records.drain(..) {
-        if record.pid != pid || record.end <= start || record.start >= end {
-            updated.push(record);
-            continue;
-        }
-
-        if record.locked {
-            locked_bytes += overlap_len(record.start, record.end, start, end);
-        }
-        if record.start < start {
-            updated.push(MapRecord {
-                end: start,
-                ..record
-            });
-        }
-        if record.end > end {
-            updated.push(MapRecord {
-                start: end,
-                ..record
-            });
-        }
-    }
-    *records = updated;
-
     SIGBUS_AREAS
         .lock()
         .retain(|area| area.pid != pid || area.end <= start || area.start >= end);
@@ -343,41 +237,15 @@ fn forget_mmap(pid: u32, start: usize, length: usize) -> usize {
         .lock()
         .retain(|area| area.pid != pid || area.high <= start || area.low >= end);
     remove_wipeonfork_range(pid, start, length);
-    locked_bytes
 }
 
-pub fn release_process_mmap_resources(pid: u32) {
-    let mut locked_bytes = 0;
-    {
-        let mut records = MMAP_RECORDS.lock();
-        records.retain(|record| {
-            if record.pid == pid {
-                if record.locked {
-                    locked_bytes += record.end.saturating_sub(record.start);
-                }
-                false
-            } else {
-                true
-            }
-        });
-    }
+pub fn release_process_mmap_resources(pid: u32, locked_bytes: usize) {
     if locked_bytes != 0 {
         sub_locked_bytes(locked_bytes);
     }
     SIGBUS_AREAS.lock().retain(|area| area.pid != pid);
     GROW_DOWN_AREAS.lock().retain(|area| area.pid != pid);
     WIPEONFORK_AREAS.lock().retain(|area| area.pid != pid);
-}
-
-fn is_recorded_private_anonymous(pid: u32, start: usize, length: usize) -> bool {
-    let end = start + length;
-    MMAP_RECORDS.lock().iter().rev().any(|record| {
-        record.pid == pid
-            && !record.shared
-            && !record.file_backed
-            && record.start <= start
-            && record.end >= end
-    })
 }
 
 fn add_wipeonfork_range(pid: u32, start: usize, length: usize) {
@@ -438,29 +306,6 @@ pub fn inherit_wipeonfork_ranges(
     }
 
     Ok(())
-}
-
-fn is_recorded_shared_file(pid: u32, start: usize, length: usize) -> bool {
-    let end = start + length;
-    MMAP_RECORDS.lock().iter().rev().any(|record| {
-        record.pid == pid
-            && record.shared
-            && record.file_backed
-            && record.start <= start
-            && record.end >= end
-    })
-}
-
-fn is_recorded_write_sealed_shared_file(pid: u32, start: usize, length: usize) -> bool {
-    let end = start + length;
-    MMAP_RECORDS.lock().iter().rev().any(|record| {
-        record.pid == pid
-            && record.shared
-            && record.file_backed
-            && record.write_sealed
-            && record.start <= start
-            && record.end >= end
-    })
 }
 
 fn force_sigbus_on_write(pid: u32, start: usize, length: usize) {
@@ -573,8 +418,9 @@ pub fn sys_mmap(
             return Err(AxError::NoMemory);
         }
         if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
+            let locked_bytes = aspace.locked_bytes_in_range(dst_addr, length);
             aspace.unmap(dst_addr, length)?;
-            let locked_bytes = forget_mmap(pid, dst_addr.as_usize(), length);
+            forget_mmap_aux(pid, dst_addr.as_usize(), length);
             if locked_bytes != 0 {
                 sub_locked_bytes(locked_bytes);
             }
@@ -623,6 +469,19 @@ pub fn sys_mmap(
     let write_sealed = file
         .as_ref()
         .is_some_and(|file| is_shared && memfd_write_sealed(file));
+    let mut may_flags = MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE;
+    if is_shared
+        && file
+            .as_ref()
+            .is_some_and(|file| !file.inner().flags().contains(FileFlags::WRITE))
+    {
+        may_flags -= MappingFlags::WRITE;
+    }
+    if write_sealed {
+        // Linux records this invariant in VM_MAYWRITE at mmap time. A later
+        // mprotect can reject the upgrade by inspecting only this VMA.
+        may_flags -= MappingFlags::WRITE;
+    }
 
     let backend = match map_type {
         MmapFlags::SHARED | MmapFlags::SHARED_VALIDATE => {
@@ -682,17 +541,21 @@ pub fn sys_mmap(
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
     backend.attach_private_file_mapping(&aspace_ref);
-    aspace.map(start, length, permission_flags.into(), populate, backend)?;
-    record_mmap(
-        pid,
-        start.as_usize(),
+    aspace.map_with_metadata(
+        start,
         length,
-        permission_flags,
-        is_shared,
-        file_backed,
-        write_sealed,
-        map_flags.contains(MmapFlags::LOCKED),
-    );
+        permission_flags.into(),
+        populate,
+        backend,
+        VmaMetadata::mmap(
+            user_mapping_flags(permission_flags),
+            may_flags,
+            is_shared,
+            file_backed,
+            !file_backed,
+            map_flags.contains(MmapFlags::LOCKED),
+        ),
+    )?;
     if map_flags.contains(MmapFlags::LOCKED) {
         MMAP_LOCKED_BYTES.fetch_add(length, Ordering::Relaxed);
     }
@@ -735,8 +598,9 @@ pub fn sys_munmap(addr: usize, length: usize) -> AxResult<isize> {
     if !aspace.contains_range(start_addr, length) {
         return Err(AxError::InvalidInput);
     }
+    let locked_bytes = aspace.locked_bytes_in_range(start_addr, length);
     aspace.unmap(start_addr, length)?;
-    let locked_bytes = forget_mmap(pid, addr, length);
+    forget_mmap_aux(pid, addr, length);
     if locked_bytes != 0 {
         sub_locked_bytes(locked_bytes);
     }
@@ -750,23 +614,21 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
     };
     debug!("sys_mprotect <= addr: {addr:#x}, length: {length:x}, prot: {permission_flags:?}");
 
-    if permission_flags.contains(MmapProt::GROWDOWN | MmapProt::GROWSUP) {
+    if permission_flags.intersects(MmapProt::GROWDOWN | MmapProt::GROWSUP) {
         return Err(AxError::InvalidInput);
     }
 
     let curr = current();
-    let pid = curr.as_thread().proc_data.proc.pid();
+    let length = align_up_4k(length);
     let aspace_ref = curr.as_thread().proc_data.aspace();
     let mut aspace = aspace_ref.lock();
-    let length = align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
-    if permission_flags.contains(MmapProt::WRITE)
-        && is_recorded_write_sealed_shared_file(pid, addr, length)
-    {
-        return Err(AxError::from(LinuxError::EPERM));
-    }
-    aspace.protect(start_addr, length, permission_flags.into())?;
-    update_mmap_prot(pid, addr, length, permission_flags);
+    aspace.protect(
+        start_addr,
+        length,
+        permission_flags.into(),
+        user_mapping_flags(permission_flags),
+    )?;
 
     Ok(0)
 }
@@ -803,9 +665,11 @@ pub fn sys_mremap(
     let old_size = align_up_4k(old_size);
     let new_size = align_up_4k(new_size);
 
-    let old_flags = aspace.find_area(addr).ok_or(AxError::NoMemory)?.flags();
-    let old_prot = recorded_prot(pid, addr.as_usize(), old_size)
-        .unwrap_or_else(|| prot_from_mapping_flags(old_flags));
+    let (old_flags, old_user_flags) = {
+        let old_area = aspace.find_area(addr).ok_or(AxError::NoMemory)?;
+        (old_area.flags(), old_area.metadata().user_flags())
+    };
+    let old_prot = prot_from_mapping_flags(old_user_flags);
 
     if fixed {
         let src_start = addr.as_usize();
@@ -834,8 +698,11 @@ pub fn sys_mremap(
 
     if new_size <= old_size {
         if old_size > new_size {
+            let removed_start = addr + new_size;
+            let removed_len = old_size - new_size;
+            let locked_bytes = aspace.locked_bytes_in_range(removed_start, removed_len);
             aspace.unmap(addr + new_size, old_size - new_size)?;
-            let locked_bytes = forget_mmap(pid, addr.as_usize() + new_size, old_size - new_size);
+            forget_mmap_aux(pid, addr.as_usize() + new_size, old_size - new_size);
             if locked_bytes != 0 {
                 sub_locked_bytes(locked_bytes);
             }
@@ -845,7 +712,7 @@ pub fn sys_mremap(
 
     let extra_start = addr + old_size;
     let extra_len = new_size - old_size;
-    let old_shared_file = is_recorded_shared_file(pid, addr.as_usize(), old_size);
+    let old_shared_file = aspace.range_is_shared_file(addr, old_size);
     if aspace
         .find_free_area(
             extra_start,
@@ -855,27 +722,25 @@ pub fn sys_mremap(
         )
         .is_some()
     {
-        aspace.map(
+        aspace.map_with_metadata(
             extra_start,
             extra_len,
             old_flags,
             false,
             Backend::new_alloc(extra_start, PageSize::Size4K),
+            VmaMetadata::mmap(
+                old_user_flags,
+                MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE,
+                false,
+                false,
+                true,
+                false,
+            ),
         )?;
         if old_shared_file {
             force_sigbus_on_write(pid, addr.as_usize(), old_size);
             aspace.zap_pages(addr, old_size)?;
         }
-        record_mmap(
-            pid,
-            extra_start.as_usize(),
-            extra_len,
-            old_prot,
-            false,
-            false,
-            false,
-            false,
-        );
         return Ok(addr.as_usize() as isize);
     }
 
@@ -920,18 +785,16 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
     if !aspace.can_access_range(start, length, MappingFlags::USER) {
         return Err(AxError::NoMemory);
     }
-    drop(aspace);
-
     match advice {
         MADV_WIPEONFORK => {
-            if !is_recorded_private_anonymous(pid, addr, length) {
+            if !aspace.range_is_private_anonymous(start, length) {
                 return Err(AxError::InvalidInput);
             }
             add_wipeonfork_range(pid, addr, length);
         }
         MADV_KEEPONFORK => remove_wipeonfork_range(pid, addr, length),
         MADV_FREE => {
-            if !is_recorded_private_anonymous(pid, addr, length) {
+            if !aspace.range_is_private_anonymous(start, length) {
                 return Err(AxError::InvalidInput);
             }
         }

@@ -234,12 +234,12 @@ fn test_protect() {
     let mut set = MockMemorySet::new();
     let mut pt = [0; MAX_ADDR];
     let update_flags = |new_flags: MockFlags| {
-        move |old_flags: MockFlags| -> Option<MockFlags> {
-            if (old_flags & 0x7) == (new_flags & 0x7) {
-                return None;
+        move |area: &MemoryArea<MockBackend>| {
+            if (area.flags() & 0x7) == (new_flags & 0x7) {
+                return Ok(None);
             }
-            let flags = (new_flags & 0x7) | (old_flags & !0x7);
-            Some(flags)
+            let flags = (new_flags & 0x7) | (area.flags() & !0x7);
+            Ok(Some((flags, ())))
         }
     };
 
@@ -253,24 +253,38 @@ fn test_protect() {
     }
     assert_eq!(set.len(), 8);
 
-    // Protect [0xc00, 0x2400), [0x2c00, 0x4400), [0x4c00, 0x6400), ...
-    // The areas are split into two areas.
+    // A protection range containing an unmapped hole must be rejected before
+    // any VMA or page-table entry is changed.
+    assert_err!(
+        set.protect(
+            0xc00.into(),
+            0x1800,
+            update_flags(0x1),
+            |_, _| false,
+            &mut pt
+        ),
+        NotMapped
+    );
+    assert_eq!(set.len(), 8);
+
+    // Protect the right-hand quarter of every mapped area. Each area is split
+    // into two VMAs without crossing the unmapped gaps between them.
     for start in (0..MAX_ADDR).step_by(0x2000) {
-        assert_ok!(set.protect((start + 0xc00).into(), 0x1800, update_flags(0x1), &mut pt));
+        assert_ok!(set.protect(
+            (start + 0xc00).into(),
+            0x400,
+            update_flags(0x1),
+            |_, _| false,
+            &mut pt
+        ));
     }
     dump_memory_set(&set);
-    assert_eq!(set.len(), 23);
+    assert_eq!(set.len(), 16);
 
     for area in set.iter() {
         let off = area.start().align_offset_4k();
-        if area.start().as_usize() == 0 {
+        if off == 0 {
             assert_eq!(area.size(), 0xc00);
-            assert_eq!(area.flags(), 0x7);
-        } else if off == 0 {
-            assert_eq!(area.size(), 0x400);
-            assert_eq!(area.flags(), 0x1);
-        } else if off == 0x400 {
-            assert_eq!(area.size(), 0x800);
             assert_eq!(area.flags(), 0x7);
         } else if off == 0xc00 {
             assert_eq!(area.size(), 0x400);
@@ -281,21 +295,21 @@ fn test_protect() {
     // Protect [0x800, 0x900), [0x2800, 0x2900), [0x4800, 0x4900), ...
     // The areas are split into three areas.
     for start in (0..MAX_ADDR).step_by(0x2000) {
-        assert_ok!(set.protect((start + 0x800).into(), 0x100, update_flags(0x13), &mut pt));
+        assert_ok!(set.protect(
+            (start + 0x800).into(),
+            0x100,
+            update_flags(0x13),
+            |_, _| false,
+            &mut pt
+        ));
     }
     dump_memory_set(&set);
-    assert_eq!(set.len(), 39);
+    assert_eq!(set.len(), 32);
 
     for area in set.iter() {
         let off = area.start().align_offset_4k();
-        if area.start().as_usize() == 0 {
+        if off == 0 {
             assert_eq!(area.size(), 0x800);
-            assert_eq!(area.flags(), 0x7);
-        } else if off == 0 {
-            assert_eq!(area.size(), 0x400);
-            assert_eq!(area.flags(), 0x1);
-        } else if off == 0x400 {
-            assert_eq!(area.size(), 0x400);
             assert_eq!(area.flags(), 0x7);
         } else if off == 0x800 {
             assert_eq!(area.size(), 0x100);
@@ -311,9 +325,15 @@ fn test_protect() {
 
     // Test skip [0x880, 0x900), [0x2880, 0x2900), [0x4880, 0x4900), ...
     for start in (0..MAX_ADDR).step_by(0x2000) {
-        assert_ok!(set.protect((start + 0x880).into(), 0x80, update_flags(0x3), &mut pt));
+        assert_ok!(set.protect(
+            (start + 0x880).into(),
+            0x80,
+            update_flags(0x3),
+            |_, _| false,
+            &mut pt
+        ));
     }
-    assert_eq!(set.len(), 39);
+    assert_eq!(set.len(), 32);
 
     // Unmap all areas.
     assert_ok!(set.unmap(0.into(), MAX_ADDR, &mut pt));
@@ -321,6 +341,98 @@ fn test_protect() {
     for &e in &pt[0..MAX_ADDR] {
         assert_eq!(e, 0);
     }
+}
+
+#[test]
+fn test_protect_fast_path_and_merge() {
+    let mut set = MockMemorySet::new();
+    let mut pt = [0; MAX_ADDR];
+    assert_ok!(set.map(
+        MemoryArea::new(0x1000.into(), 0x1000, 0x7, MockBackend),
+        &mut pt,
+        false,
+    ));
+
+    let change_to = |flags| {
+        move |area: &MemoryArea<MockBackend>| {
+            Ok((area.flags() != flags).then_some((flags, ())))
+        }
+    };
+    let merge_same = |left: &MemoryArea<MockBackend>, right: &MemoryArea<MockBackend>| {
+        left.flags() == right.flags()
+    };
+
+    let first = set
+        .protect(
+            0x1400.into(),
+            0x800,
+            change_to(0x1),
+            merge_same,
+            &mut pt,
+        )
+        .unwrap();
+    assert_eq!(first.changed, 1);
+    assert_eq!(first.split, 2);
+    assert_eq!(first.merged, 0);
+    assert_eq!(set.len(), 3);
+
+    let no_op = set
+        .protect(
+            0x1500.into(),
+            0x100,
+            change_to(0x1),
+            merge_same,
+            &mut pt,
+        )
+        .unwrap();
+    assert_eq!(no_op.changed, 0);
+    assert_eq!(no_op.unchanged, 1);
+    assert_eq!(no_op.visited, 0);
+    assert_eq!(no_op.split, 0);
+    assert_eq!(set.len(), 3);
+
+    let restored = set
+        .protect(
+            0x1400.into(),
+            0x800,
+            change_to(0x7),
+            merge_same,
+            &mut pt,
+        )
+        .unwrap();
+    assert_eq!(restored.changed, 1);
+    assert_eq!(restored.merged, 2);
+    assert_eq!(set.len(), 1);
+
+    let before = pt;
+    assert_err!(
+        set.protect(
+            0x800.into(),
+            0x1000,
+            change_to(0x1),
+            merge_same,
+            &mut pt,
+        ),
+        NotMapped
+    );
+    assert_eq!(pt, before);
+
+    // A backend failure must not remove or split the original VMA.
+    pt[0x1000] = 0;
+    assert_err!(
+        set.protect(
+            0x1000.into(),
+            0x100,
+            change_to(0x1),
+            merge_same,
+            &mut pt,
+        ),
+        BadState
+    );
+    assert_eq!(set.len(), 1);
+    let area = set.find(0x1000.into()).unwrap();
+    assert_eq!(area.va_range(), va_range!(0x1000..0x2000));
+    assert_eq!(area.flags(), 0x7);
 }
 
 #[test]

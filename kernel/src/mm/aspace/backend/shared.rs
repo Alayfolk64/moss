@@ -75,6 +75,10 @@ impl SharedBackend {
         &self.pages
     }
 
+    pub(super) fn merge_compatible(&self, other: &Self) -> bool {
+        self.start == other.start && Arc::ptr_eq(&self.pages, &other.pages)
+    }
+
     fn page_index(&self, start: VirtAddr) -> usize {
         debug_assert!(start.is_aligned(self.pages.size));
         divide_page(start - self.start, self.pages.size)
