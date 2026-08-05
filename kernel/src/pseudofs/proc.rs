@@ -66,6 +66,15 @@ fn proc_stat() -> String {
     stat
 }
 
+fn proc_uptime() -> String {
+    let uptime = axhal::time::monotonic_time();
+    format!(
+        "{}.{:02} 0.00\n",
+        uptime.as_secs(),
+        uptime.subsec_millis() / 10
+    )
+}
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -984,6 +993,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     root.add(
         "stat",
         SimpleFile::new_regular(fs.clone(), || Ok(proc_stat())),
+    );
+    root.add(
+        "uptime",
+        SimpleFile::new_regular(fs.clone(), || Ok(proc_uptime())),
     );
     root.add(
         "meminfo2",
