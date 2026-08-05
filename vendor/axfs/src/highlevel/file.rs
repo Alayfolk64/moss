@@ -22,7 +22,7 @@ use axfs_ng_vfs::{
 use axhal::mem::{PhysAddr, VirtAddr, virt_to_phys};
 use axio::{SeekFrom, prelude::*};
 use axpoll::{IoEvents, Pollable};
-use axsync::Mutex;
+use axsync::{Mutex, MutexGuard};
 use intrusive_collections::{LinkedList, LinkedListAtomicLink, intrusive_adapter};
 use lru::LruCache;
 use spin::RwLock;
@@ -845,6 +845,14 @@ impl CachedFile {
         if !mappings_invalidated {
             return Err(VfsError::WouldBlock);
         }
+        // This entry point can be called while an mmap population owns an
+        // address-space lock, so waiting behind fsync would create an ABBA
+        // cycle.  Opportunistic completion is still serialized when the lock
+        // is immediately available; otherwise the pinned token is retried by
+        // the next non-address-space owner.
+        let Some(_writeback_guard) = self.shared().writeback_op.try_lock() else {
+            return Err(VfsError::WouldBlock);
+        };
         // A caller which owns one address-space lock must not block while a
         // restored page displaces another cache entry: another listener could
         // own its address space in the opposite order.
@@ -915,7 +923,31 @@ impl CachedFile {
     }
 
     fn retry_pending_normal_evictions(&self) -> VfsResult<()> {
+        // This opportunistic path may be entered while mmap population owns an
+        // address-space lock, so it must never wait behind fsync (which can be
+        // waiting for that same address space).  If the serialization lock is
+        // immediately available, owning it closes the dirty-token visibility
+        // gap with fsync/truncate while the token is detached for writeback.
+        let Some(_writeback_guard) = self.shared().writeback_op.try_lock() else {
+            return Ok(());
+        };
         self.retry_pending_evictions_matching(false)
+    }
+
+    /// Returns with `cache_op` held only after every pending token visible at
+    /// the same serialization point has completed.  The caller must already
+    /// own `writeback_op`; this closes the scan-then-lock gap where ordinary
+    /// cache insertion could otherwise create a dirty pending page between an
+    /// fsync/truncate pending scan and its LRU scan.
+    fn lock_cache_after_draining_pending(&self) -> VfsResult<MutexGuard<'_, ()>> {
+        loop {
+            self.retry_pending_evictions()?;
+            let cache_guard = self.shared().cache_op.lock();
+            if self.shared().pending_evictions.lock().is_empty() {
+                return Ok(cache_guard);
+            }
+            drop(cache_guard);
+        }
     }
 
     fn page_or_insert<'a>(
@@ -1411,12 +1443,12 @@ impl CachedFile {
 
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         let _writeback_guard = self.shared().writeback_op.lock();
-        // A pending dirty page may be absent from the LRU after an earlier I/O
-        // failure.  Finish or report that lifecycle before changing EOF, so it
-        // cannot later be restored with stale bytes beyond the new length.
-        self.retry_pending_evictions()?;
         let evictions = {
-            let _cache_guard = self.shared().cache_op.lock();
+            // A pending dirty page may be absent from the LRU after an earlier
+            // I/O failure.  Drain under the cache serialization point before
+            // changing EOF so no concurrent replacement can appear between
+            // the pending scan and this length update.
+            let _cache_guard = self.lock_cache_after_draining_pending()?;
             let file = self.inner().entry().as_file()?;
             let old_len = self.len()?;
             file.set_len(len)?;
@@ -1565,13 +1597,11 @@ impl CachedFile {
             return Ok(());
         }
         let _writeback_guard = self.shared().writeback_op.lock();
-        // Include dirty pages which an earlier writeback left in the pending
-        // table.  They are authoritative even though an LRU-only scan cannot
-        // see them.
-        self.retry_pending_evictions()?;
         let page_range = Self::page_range(range);
         let evictions = {
-            let _cache_guard = self.shared().cache_op.lock();
+            // Include dirty pages which an earlier writeback left pending and
+            // exclude a new replacement from appearing before the LRU scan.
+            let _cache_guard = self.lock_cache_after_draining_pending()?;
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
                 .iter()
@@ -1714,9 +1744,8 @@ impl CachedFile {
         // fsync waits here and then retries any dirty pending page left by an
         // I/O failure instead of incorrectly reporting success from an empty
         // LRU scan.
-        self.retry_pending_evictions()?;
         let evictions = {
-            let _cache_guard = self.shared().cache_op.lock();
+            let _cache_guard = self.lock_cache_after_draining_pending()?;
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
                 .iter()
@@ -1736,9 +1765,8 @@ impl CachedFile {
             return Ok(());
         }
         let _writeback_guard = self.shared().writeback_op.lock();
-        self.retry_pending_evictions()?;
         let evictions = {
-            let _cache_guard = self.shared().cache_op.lock();
+            let _cache_guard = self.lock_cache_after_draining_pending()?;
             let mut cache = self.shared().page_cache.lock();
             let mut removed = Vec::new();
             while let Some((pn, page)) = cache.pop_lru() {
