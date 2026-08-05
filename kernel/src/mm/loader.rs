@@ -17,7 +17,7 @@ use ouroboros::self_referencing;
 use uluru::LRUCache;
 
 use crate::{
-    config::{USER_SPACE_BASE, USER_SPACE_SIZE},
+    config::{USER_HEAP_BASE, USER_INTERP_BASE, USER_SPACE_BASE, USER_SPACE_SIZE},
     mm::aspace::{AddrSpace, Backend},
 };
 
@@ -106,6 +106,52 @@ fn mapping_flags(flags: xmas_elf::program::Flags) -> MappingFlags {
         mapping_flags |= MappingFlags::EXECUTE;
     }
     mapping_flags
+}
+
+fn elf_load_layout(entry: &ElfCacheEntry) -> AxResult<(usize, usize)> {
+    let mut image_end = 0usize;
+    let mut image_align = PAGE_SIZE_4K;
+
+    for ph in entry
+        .borrow_elf()
+        .ph
+        .iter()
+        .filter(|ph| ph.get_type() == Ok(xmas_elf::program::Type::Load))
+    {
+        let segment_end = (ph.virtual_addr as usize)
+            .checked_add(ph.mem_size as usize)
+            .ok_or(AxError::InvalidExecutable)?;
+        image_end = image_end.max(segment_end);
+
+        let alignment = ph.align as usize;
+        if alignment.is_power_of_two() {
+            image_align = image_align.max(alignment);
+        }
+    }
+
+    let image_size = image_end
+        .checked_add(image_align - 1)
+        .map(|end| end & !(image_align - 1))
+        .filter(|size| *size != 0)
+        .ok_or(AxError::InvalidExecutable)?;
+    Ok((image_size, image_align))
+}
+
+fn find_interpreter_base(uspace: &AddrSpace, entry: &ElfCacheEntry) -> AxResult<usize> {
+    let (image_size, image_align) = elf_load_layout(entry)?;
+    let search_range = memory_addr::VirtAddrRange::new(
+        VirtAddr::from_usize(USER_SPACE_BASE),
+        VirtAddr::from_usize(USER_HEAP_BASE),
+    );
+    uspace
+        .find_free_area(
+            VirtAddr::from_usize(USER_INTERP_BASE),
+            image_size,
+            search_range,
+            image_align,
+        )
+        .map(VirtAddr::as_usize)
+        .ok_or(AxError::NoMemory)
 }
 
 /// Map the elf file to the user address space.
@@ -272,9 +318,12 @@ impl ElfLoader {
         uspace.clear();
         map_trampoline(uspace)?;
 
-        let elf = map_elf(uspace, crate::config::USER_SPACE_BASE, elf)?;
+        let elf = map_elf(uspace, USER_SPACE_BASE, elf)?;
         let ldso = ldso
-            .map(|elf| map_elf(uspace, crate::config::USER_INTERP_BASE, elf))
+            .map(|entry| {
+                let base = find_interpreter_base(uspace, entry)?;
+                map_elf(uspace, base, entry)
+            })
             .transpose()?;
 
         let entry = VirtAddr::from_usize(
