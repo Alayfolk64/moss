@@ -540,7 +540,6 @@ pub fn sys_mmap(
     };
 
     let populate = map_flags.contains(MmapFlags::POPULATE);
-    backend.attach_private_file_mapping(&aspace_ref);
     aspace.map_with_metadata(
         start,
         length,
