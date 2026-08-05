@@ -6,7 +6,8 @@ use kspin::SpinNoIrq;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
-    AddrSpaceLock, Backend, BackendOps, alloc_frame, dealloc_frame, divide_page, pages_in,
+    AddrSpaceLock, Backend, BackendOps, alloc_frame, dealloc_frame, divide_page,
+    finish_unmap_before_reclaim, pages_in,
 };
 
 pub struct SharedPages {
@@ -92,13 +93,17 @@ impl BackendOps for SharedBackend {
 
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         debug!("Shared::unmap: {:?}", range);
-        for vaddr in pages_in(range, self.pages.size)? {
-            match pt.unmap(vaddr) {
-                Ok(_) | Err(PagingError::NotMapped) => {}
-                Err(err) => return Err(err.into()),
+        let result = (|| {
+            for vaddr in pages_in(range, self.pages.size)? {
+                match pt.unmap(vaddr) {
+                    Ok(_) | Err(PagingError::NotMapped) => {}
+                    Err(err) => return Err(err.into()),
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })();
+        finish_unmap_before_reclaim(pt);
+        result
     }
 
     fn populate(

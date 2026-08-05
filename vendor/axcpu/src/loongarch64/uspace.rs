@@ -50,9 +50,11 @@ impl UserContext {
         let badi = badi::read().inst();
 
         let ret = match estat.cause() {
-            Trap::Interrupt(_) => {
-                let irq_num: usize = estat.is().trailing_zeros() as usize;
-                handle_trap!(IRQ, irq_num);
+            Trap::Interrupt(interrupt) => {
+                // Keep dispatch consistent with the priority decision made by
+                // `Estat::cause`; in particular, do not hide an IPI behind a
+                // simultaneously pending lower-numbered timer interrupt.
+                handle_trap!(IRQ, interrupt as usize);
                 ReturnReason::Interrupt
             }
             Trap::Exception(Exception::Syscall) => {

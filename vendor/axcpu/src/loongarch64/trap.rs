@@ -89,9 +89,11 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame) {
         Trap::Exception(Exception::AddressNotAligned) => unsafe {
             tf.emulate_unaligned().unwrap();
         },
-        Trap::Interrupt(_) => {
-            let irq_num: usize = estat.is().trailing_zeros() as usize;
-            handle_trap!(IRQ, irq_num);
+        Trap::Interrupt(interrupt) => {
+            // `Estat::cause` selects the highest-priority pending interrupt.
+            // Dispatch that same vector; using `trailing_zeros` here could
+            // instead service a lower-priority timer and starve an IPI.
+            handle_trap!(IRQ, interrupt as usize);
         }
         trap => {
             panic!(

@@ -74,9 +74,12 @@ axfeat.workspace = true
 starry-kernel.workspace = true
 
 [patch.crates-io]
+axcpu = { path = "vendor/axcpu" }
 axhal = { path = "vendor/axhal" }
 axplat = { path = "vendor/axplat" }
 axfs = { path = "vendor/axfs" }
+axmm = { path = "vendor/axmm" }
+axruntime = { path = "vendor/axruntime" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
 page_table_entry = { path = "vendor/page_table_entry" }
 page_table_multiarch = { path = "vendor/page_table_multiarch" }

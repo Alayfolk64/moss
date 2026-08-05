@@ -117,7 +117,7 @@ impl axdriver::dyn_drivers::klib::IoMapIf for IoMapIfImpl {
     }
 }
 
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 static INITED_CPUS: AtomicUsize = AtomicUsize::new(0);
 
@@ -127,53 +127,29 @@ use axdriver::prelude::{BaseDriverOps, BlockDriverOps};
 use alloc::vec::Vec;
 
 #[cfg(feature = "fs")]
-static RUNTIME_BLOCK_DEVS_LOCK: AtomicBool = AtomicBool::new(false);
-#[cfg(feature = "fs")]
-static mut RUNTIME_BLOCK_DEVS: Option<Vec<Option<axdriver::AxBlockDevice>>> = None;
-
-#[cfg(feature = "fs")]
-fn lock_runtime_block_devs() {
-    while RUNTIME_BLOCK_DEVS_LOCK
-        .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-        .is_err()
-    {
-        core::hint::spin_loop();
-    }
-}
-
-#[cfg(feature = "fs")]
-fn unlock_runtime_block_devs() {
-    RUNTIME_BLOCK_DEVS_LOCK.store(false, Ordering::Release);
-}
+static RUNTIME_BLOCK_DEVS: spin::Mutex<Option<Vec<Option<axdriver::AxBlockDevice>>>> =
+    spin::Mutex::new(None);
 
 #[cfg(feature = "fs")]
 fn set_runtime_block_devices(slots: Vec<Option<axdriver::AxBlockDevice>>) {
-    lock_runtime_block_devs();
-    unsafe {
-        RUNTIME_BLOCK_DEVS = Some(slots);
-    }
-    unlock_runtime_block_devs();
+    *RUNTIME_BLOCK_DEVS.lock() = Some(slots);
 }
 
 #[cfg(feature = "fs")]
 pub fn runtime_block_device_count() -> usize {
-    lock_runtime_block_devs();
-    let count = unsafe { RUNTIME_BLOCK_DEVS.as_ref().map_or(0, |it| it.len()) };
-    unlock_runtime_block_devs();
-    count
+    RUNTIME_BLOCK_DEVS
+        .lock()
+        .as_ref()
+        .map_or(0, |slots| slots.len())
 }
 
 #[cfg(feature = "fs")]
 pub fn take_runtime_block_device(slot_idx: usize) -> Option<axdriver::AxBlockDevice> {
-    lock_runtime_block_devs();
-    let dev = unsafe {
-        RUNTIME_BLOCK_DEVS
-            .as_mut()
-            .and_then(|slots| slots.get_mut(slot_idx))
-            .and_then(Option::take)
-    };
-    unlock_runtime_block_devs();
-    dev
+    RUNTIME_BLOCK_DEVS
+        .lock()
+        .as_mut()
+        .and_then(|slots| slots.get_mut(slot_idx))
+        .and_then(Option::take)
 }
 
 fn is_init_ok() -> bool {

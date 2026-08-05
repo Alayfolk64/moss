@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, sync::Arc};
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::{
     slice,
     sync::atomic::{AtomicUsize, Ordering},
@@ -15,7 +15,7 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
     AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
-    alloc_frame, dealloc_frame, pages_in,
+    alloc_frame, dealloc_frame, finish_unmap_before_reclaim, pages_in,
 };
 
 struct FrameRefCnt(usize);
@@ -246,18 +246,21 @@ impl CowBackend {
                 {
                     // Concurrent replacement of an existing COW mapping needs
                     // a synchronous remote TLB invalidation before releasing
-                    // the old PTE reference. RISC-V has that primitive here;
-                    // other architectures keep the exclusive path.
-                    #[cfg(not(target_arch = "riscv64"))]
+                    // the old PTE reference. Other architectures keep the
+                    // exclusive path until they provide that primitive.
+                    #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]
                     return FaultPreparation::Fallback;
 
-                    #[cfg(target_arch = "riscv64")]
+                    #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
                     {
                         let Some(frame_ref) = FRAME_TABLE.lock().get_frame_ref(paddr) else {
                             return FaultPreparation::Fallback;
                         };
                         let mut frame_ref = frame_ref.lock();
-                        if frame_ref.0 == 1 {
+                        // A zero count means the last PTE reference already
+                        // removed this frame from the lifetime protocol. It
+                        // must never be resurrected after physical reuse.
+                        if frame_ref.0 <= 1 {
                             return FaultPreparation::Fallback;
                         }
                         let Some(count) = frame_ref.0.checked_add(1) else {
@@ -321,8 +324,8 @@ impl CowBackend {
                         return Ok(FaultCommit::Stale);
                     }
                     // The leaf CAS replaced the physical frame. Before the
-                    // old PTE reference can be released, every RISC-V hart
-                    // must stop using a possibly cached translation to it.
+                    // old PTE reference can be released, every CPU running
+                    // this root must stop using a cached translation to it.
                     #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
                     crate::mm::flush_tlb_on_all_cpus(pt.root_paddr(), Some(plan.vaddr));
                     // Drop the reference formerly owned by this PTE. The
@@ -374,7 +377,9 @@ impl CowBackend {
                 .map_or(u64::MAX, |end| end.saturating_sub(file_start))
                 .min((buf.len() - start) as u64) as usize;
 
-            if let Err(err) = file.read_at(&mut &mut buf[start..start + max_read], file_start) {
+            if let Err(err) =
+                file.read_at_no_evict(&mut &mut buf[start..start + max_read], file_start)
+            {
                 self.drop_new_frame(frame);
                 return Err(err);
             }
@@ -501,21 +506,27 @@ impl BackendOps for CowBackend {
 
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         debug!("Cow::unmap: {range:?}");
-        for addr in pages_in(range, self.size)? {
-            if let Ok((frame, _flags, page_size)) = pt.unmap(addr) {
-                assert_eq!(page_size, self.size);
-                let frame_ref = FRAME_TABLE
-                    .lock()
-                    .get_frame_ref(frame)
-                    .ok_or(AxError::BadAddress)?;
-                let mut frame_ref = frame_ref.lock();
-                frame_ref.drop_frame(frame, self.size);
-                self.dec_mapped_pages();
-            } else {
-                // Deallocation is needn't if the page is not allocated.
+        let mut removed = Vec::new();
+        let result = (|| {
+            for addr in pages_in(range, self.size)? {
+                match pt.unmap(addr) {
+                    Ok((frame, _flags, page_size)) => {
+                        assert_eq!(page_size, self.size);
+                        removed.push(frame);
+                    }
+                    Err(PagingError::NotMapped) => {}
+                    Err(err) => return Err(err.into()),
+                }
             }
+            Ok(())
+        })();
+
+        finish_unmap_before_reclaim(pt);
+        for frame in removed {
+            drop_referenced_frame(frame, self.size);
+            self.dec_mapped_pages();
         }
-        Ok(())
+        result
     }
 
     fn populate(

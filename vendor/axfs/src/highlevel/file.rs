@@ -5,8 +5,14 @@ use alloc::{
     vec::Vec,
 };
 #[cfg(feature = "times")]
-use core::sync::atomic::{AtomicU8, Ordering};
-use core::{num::NonZeroUsize, ops::Range, task::Context, time::Duration};
+use core::sync::atomic::AtomicU8;
+use core::{
+    num::NonZeroUsize,
+    ops::Range,
+    sync::atomic::{AtomicUsize, Ordering},
+    task::Context,
+    time::Duration,
+};
 
 use axalloc::{UsageKind, global_allocator};
 use axfs_ng_vfs::{
@@ -357,17 +363,63 @@ impl Drop for PageCache {
 }
 
 struct EvictListener {
-    listener: Box<dyn Fn(u32, &PageCache) + Send + Sync>,
+    listener: Arc<dyn Fn(u32, PhysAddr, bool) -> bool + Send + Sync>,
+    owner: Option<usize>,
     link: LinkedListAtomicLink,
 }
 
 intrusive_adapter!(EvictListenerAdapter = Box<EvictListener>: EvictListener { link: LinkedListAtomicLink });
 
+struct PendingEviction {
+    /// Distinguishes repeated detach/restore lifecycles of the same page and
+    /// physical frame.  A delayed completion token may only finish the exact
+    /// lifecycle which created it.
+    generation: usize,
+    page: PageCache,
+    /// A normal cache replacement can be cancelled if this page is accessed
+    /// again before invalidation finishes.  Truncate/invalidate/discard pages
+    /// must not be resurrected.
+    reusable: bool,
+    /// True until every registered mapping has removed this exact physical
+    /// page and completed its remote TLB invalidation.
+    needs_invalidation: bool,
+    /// Dirty pages detached by sync are put back into the authoritative LRU
+    /// after mappings have been revoked and final writeback has completed.
+    restore_after_writeback: bool,
+}
+
+/// Stable identity for a page detached from the LRU but still pinned by the
+/// file cache until all mappings and final writeback have completed.
+#[derive(Clone, Copy)]
+pub struct PageEviction {
+    pn: u32,
+    paddr: PhysAddr,
+    generation: usize,
+}
+
+impl PageEviction {
+    pub const fn page_number(self) -> u32 {
+        self.pn
+    }
+
+    pub const fn paddr(self) -> PhysAddr {
+        self.paddr
+    }
+}
+
 struct CachedFileShared {
     page_cache: Mutex<LruCache<u32, PageCache>>,
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
+    /// Pages whose mappings could not all be invalidated immediately.  Keeping
+    /// the frames here prevents stale PTEs from becoming use-after-free aliases.
+    pending_evictions: Mutex<BTreeMap<u32, PendingEviction>>,
+    next_eviction_generation: AtomicUsize,
     /// Keeps detached pages from being reloaded by the same inode operation.
     cache_op: Mutex<()>,
+    /// Serializes complete dirty-page synchronization lifecycles.  In
+    /// particular, a second fsync must not observe an empty LRU while the first
+    /// fsync still owns dirty pages in `pending_evictions`.
+    writeback_op: Mutex<()>,
     /// Only one thread can append to the file at a time, while multiple writers
     /// are permitted.
     append_lock: RwLock<()>,
@@ -380,7 +432,10 @@ impl CachedFileShared {
                 NonZeroUsize::new(DEFAULT_LOCAL_FILE_CACHE_PAGES).unwrap(),
             )),
             evict_listeners: Mutex::new(LinkedList::default()),
+            pending_evictions: Mutex::new(BTreeMap::new()),
+            next_eviction_generation: AtomicUsize::new(1),
             cache_op: Mutex::new(()),
+            writeback_op: Mutex::new(()),
             append_lock: RwLock::new(()),
         }
     }
@@ -389,7 +444,10 @@ impl CachedFileShared {
         Self {
             page_cache: Mutex::new(LruCache::unbounded()),
             evict_listeners: Mutex::new(LinkedList::default()),
+            pending_evictions: Mutex::new(BTreeMap::new()),
+            next_eviction_generation: AtomicUsize::new(1),
             cache_op: Mutex::new(()),
+            writeback_op: Mutex::new(()),
             append_lock: RwLock::new(()),
         }
     }
@@ -554,10 +612,23 @@ impl CachedFile {
 
     pub fn add_evict_listener<F>(&self, listener: F) -> usize
     where
-        F: Fn(u32, &PageCache) + Send + Sync + 'static,
+        F: Fn(u32) + Send + Sync + 'static,
+    {
+        self.add_evict_listener_checked(usize::MAX, move |pn, _, _| {
+            listener(pn);
+            true
+        })
+    }
+
+    /// Registers an eviction listener that confirms page-table removal and
+    /// synchronous remote TLB invalidation for the exact physical page.
+    pub fn add_evict_listener_checked<F>(&self, owner: usize, listener: F) -> usize
+    where
+        F: Fn(u32, PhysAddr, bool) -> bool + Send + Sync + 'static,
     {
         let pointer = Box::new(EvictListener {
-            listener: Box::new(listener),
+            listener: Arc::new(listener),
+            owner: (owner != usize::MAX).then_some(owner),
             link: LinkedListAtomicLink::new(),
         });
         let handle = pointer.as_ref() as *const EvictListener as usize;
@@ -571,36 +642,280 @@ impl CachedFile {
         cursor.remove();
     }
 
-    fn notify_evict_listeners(&self, pn: u32, page: &PageCache) {
-        for listener in self.shared().evict_listeners.lock().iter() {
-            (listener.listener)(pn, page);
-        }
-    }
-
-    fn writeback_page(
-        file: &FileNode,
-        file_len: u64,
+    fn notify_evict_listeners_except(
+        &self,
         pn: u32,
-        page: &mut PageCache,
-    ) -> VfsResult<()> {
-        if page.dirty {
-            let page_start = pn as u64 * PAGE_SIZE as u64;
-            let len = file_len.saturating_sub(page_start).min(PAGE_SIZE as u64) as usize;
-            if len > 0 {
-                file.write_at(&page.data()[..len], page_start)?;
+        paddr: PhysAddr,
+        skip_owner: Option<usize>,
+        wait: bool,
+    ) -> bool {
+        // Never invoke an address-space callback while holding the listener
+        // list lock: dropping an mmap backend removes its listener.
+        let listeners = self
+            .shared()
+            .evict_listeners
+            .lock()
+            .iter()
+            .filter_map(|listener| {
+                (listener.owner != skip_owner).then(|| listener.listener.clone())
+            })
+            .collect::<Vec<_>>();
+        // Do not short-circuit: even if one mapping reports a paging error,
+        // every other mapping should still make forward progress.
+        let mut complete = true;
+        for listener in listeners {
+            complete = listener(pn, paddr, wait) && complete;
+        }
+        complete
+    }
+
+    /// Notifies every mapping outside `skip_owner` about a detached page.
+    ///
+    /// The cache keeps the detached page alive in its pending table.  The
+    /// caller must complete its skipped owner before confirming the token.
+    pub fn notify_evicted_page_except(
+        &self,
+        eviction: PageEviction,
+        skip_owner: usize,
+    ) -> bool {
+        self.notify_evict_listeners_except(eviction.pn, eviction.paddr, Some(skip_owner), false)
+    }
+
+    /// Notifies every mapping about a detached page.
+    ///
+    /// This is used by error cleanup which only has a page-table handle for
+    /// one mapping, not the full current address space.  If that address space
+    /// is still locked, its checked listeners return `false` and keep the page
+    /// pinned until a later retry can remove every sibling mapping.
+    pub fn notify_evicted_page(&self, eviction: PageEviction) -> bool {
+        self.notify_evict_listeners_except(eviction.pn, eviction.paddr, None, false)
+    }
+
+    fn begin_evicted_page(
+        &self,
+        pn: u32,
+        page: PageCache,
+        reusable: bool,
+        restore_after_writeback: bool,
+    ) -> PageEviction {
+        let paddr = page.paddr();
+        let generation = self
+            .shared()
+            .next_eviction_generation
+            .fetch_add(1, Ordering::Relaxed);
+        assert_ne!(generation, 0, "page eviction generation exhausted");
+        let mut pending = self.shared().pending_evictions.lock();
+        assert!(
+            !pending.contains_key(&pn),
+            "duplicate pending eviction for page {pn}"
+        );
+        pending.insert(
+            pn,
+            PendingEviction {
+                generation,
+                page,
+                reusable,
+                needs_invalidation: true,
+                restore_after_writeback,
+            },
+        );
+        PageEviction {
+            pn,
+            paddr,
+            generation,
+        }
+    }
+
+    fn eviction_matches(entry: &PendingEviction, eviction: PageEviction) -> bool {
+        entry.generation == eviction.generation && entry.page.paddr() == eviction.paddr
+    }
+
+    /// Finalizes exact detached-page lifecycles after their PTE/TLB barrier.
+    ///
+    /// `cache_op` keeps the pages authoritative while they are temporarily
+    /// moved out of `pending_evictions` for batched I/O.  On writeback failure
+    /// every page is reinserted with `needs_invalidation = false`, so a retry
+    /// cannot free or duplicate the frame.  Sync-detached pages are restored
+    /// to the LRU only after their dirty bit has been cleared by successful
+    /// final writeback.
+    fn finish_evicted_writeback_batch(
+        &self,
+        evictions: &[PageEviction],
+    ) -> VfsResult<Vec<PageEviction>> {
+        if evictions.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let _cache_guard = self.shared().cache_op.lock();
+        let mut detached = {
+            let mut pending = self.shared().pending_evictions.lock();
+            let mut detached = Vec::new();
+            for eviction in evictions {
+                let Some(entry) = pending.get(&eviction.pn) else {
+                    // A normal reusable eviction may have been cancelled and
+                    // restored by a concurrent access.
+                    continue;
+                };
+                if !Self::eviction_matches(entry, *eviction) {
+                    // This is a stale token from an older lifecycle of the
+                    // same page/frame.  It must not affect the current entry.
+                    continue;
+                }
+                let mut entry = pending
+                    .remove(&eviction.pn)
+                    .expect("matching pending eviction disappeared");
+                entry.needs_invalidation = false;
+                detached.push((*eviction, entry));
             }
-            page.dirty = false;
+            detached
+        };
+
+        let writeback_result = (|| {
+            if !self.in_memory() && detached.iter().any(|(_, entry)| entry.page.dirty) {
+                let file = self.inner().entry().as_file()?;
+                let file_len = self.commit_len()?;
+                Self::writeback_dirty_pages(file, file_len, &mut detached)?;
+            }
+            Ok(())
+        })();
+
+        if let Err(err) = writeback_result {
+            let mut pending = self.shared().pending_evictions.lock();
+            for (eviction, mut entry) in detached {
+                // The PTE/TLB barrier already completed.  Let a fault restore
+                // the still-dirty page instead of blocking forever if storage
+                // keeps returning an error.
+                entry.reusable = true;
+                let previous = pending.insert(eviction.pn, entry);
+                assert!(previous.is_none(), "duplicate pending eviction after writeback failure");
+            }
+            return Err(err);
+        }
+
+        let mut displaced = Vec::new();
+        let mut cache = self.shared().page_cache.lock();
+        for (eviction, entry) in detached {
+            if !entry.restore_after_writeback {
+                continue;
+            }
+            if cache.len() == cache.cap().get()
+                && let Some((pn, page)) = cache.pop_lru()
+            {
+                displaced.push((pn, page));
+            }
+            cache.put(eviction.pn, entry.page);
+        }
+        drop(cache);
+
+        Ok(displaced
+            .into_iter()
+            .map(|(pn, page)| self.begin_evicted_page(pn, page, true, false))
+            .collect())
+    }
+
+    fn finish_evicted_writeback_with_wait(
+        &self,
+        eviction: PageEviction,
+        wait: bool,
+    ) -> VfsResult<()> {
+        let mut work = self.finish_evicted_writeback_batch(&[eviction])?;
+        while let Some(displaced) = work.pop() {
+            let mappings_invalidated = self.notify_evict_listeners_except(
+                displaced.pn,
+                displaced.paddr,
+                None,
+                wait,
+            );
+            if !mappings_invalidated {
+                return Err(VfsError::WouldBlock);
+            }
+            work.extend(self.finish_evicted_writeback_batch(&[displaced])?);
         }
         Ok(())
     }
 
-    fn evict_cache(&self, file: &FileNode, pn: u32, page: &mut PageCache) -> VfsResult<()> {
-        self.notify_evict_listeners(pn, page);
-        if page.dirty {
-            let file_len = self.commit_len()?;
-            Self::writeback_page(file, file_len, pn, page)?;
+    /// Completes a caller-owned eviction after the caller has dealt with its
+    /// own locked address space.  The PageCache remains centrally pinned, so
+    /// failure cannot free a frame referenced by a PTE or remote TLB.
+    pub fn complete_evicted_page(
+        &self,
+        eviction: PageEviction,
+        mappings_invalidated: bool,
+    ) -> VfsResult<()> {
+        if !mappings_invalidated {
+            return Err(VfsError::WouldBlock);
         }
-        Ok(())
+        // A caller which owns one address-space lock must not block while a
+        // restored page displaces another cache entry: another listener could
+        // own its address space in the opposite order.
+        self.finish_evicted_writeback_with_wait(eviction, false)
+    }
+
+    fn finish_evicted_page_with_wait(
+        &self,
+        eviction: PageEviction,
+        wait: bool,
+    ) -> VfsResult<()> {
+        let mappings_invalidated =
+            self.notify_evict_listeners_except(eviction.pn, eviction.paddr, None, wait);
+        if !mappings_invalidated {
+            return Err(VfsError::WouldBlock);
+        }
+        self.finish_evicted_writeback_with_wait(eviction, wait)
+    }
+
+    fn retry_pending_evictions_matching(&self, include_sync: bool) -> VfsResult<()> {
+        let candidates = self
+            .shared()
+            .pending_evictions
+            .lock()
+            .iter()
+            .filter_map(|(pn, entry)| {
+                (include_sync || !entry.restore_after_writeback).then_some((
+                    PageEviction {
+                        pn: *pn,
+                        paddr: entry.page.paddr(),
+                        generation: entry.generation,
+                    },
+                    entry.needs_invalidation,
+                ))
+            })
+            .collect::<Vec<_>>();
+        let mut first_error = None;
+        for (eviction, needs_invalidation) in candidates {
+            if needs_invalidation
+                && !self.notify_evict_listeners_except(
+                    eviction.pn,
+                    eviction.paddr,
+                    None,
+                    include_sync,
+                )
+            {
+                first_error.get_or_insert(VfsError::WouldBlock);
+                continue;
+            }
+            if let Err(err) = self.finish_evicted_writeback_with_wait(eviction, include_sync) {
+                warn!(
+                    "Failed to finish pending page eviction {}: {err:?}",
+                    eviction.pn
+                );
+                if first_error.is_none() {
+                    first_error = Some(err);
+                }
+            }
+        }
+        match first_error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+
+    fn retry_pending_evictions(&self) -> VfsResult<()> {
+        self.retry_pending_evictions_matching(true)
+    }
+
+    fn retry_pending_normal_evictions(&self) -> VfsResult<()> {
+        self.retry_pending_evictions_matching(false)
     }
 
     fn page_or_insert<'a>(
@@ -614,20 +929,32 @@ impl CachedFile {
         if cache.contains(&pn) {
             return Ok((cache.get_mut(&pn).unwrap(), None));
         }
+        let restored = {
+            let mut pending = self.shared().pending_evictions.lock();
+            match pending.get(&pn) {
+                Some(entry) if !entry.reusable => return Err(VfsError::WouldBlock),
+                Some(_) => pending.remove(&pn).map(|entry| entry.page),
+                None => None,
+            }
+        };
+        // Prepare the replacement before detaching the old page.  Allocation or
+        // I/O failure therefore cannot silently free a still-mapped old frame.
+        let page = if let Some(page) = restored {
+            page
+        } else {
+            let mut page = PageCache::new()?;
+            page.data().fill(0);
+            if !self.in_memory() {
+                file.read_at(page.data(), pn as u64 * PAGE_SIZE as u64)?;
+            }
+            page
+        };
         let mut evicted = None;
         if cache.len() == cache.cap().get() {
-            // Cache is full, remove the least recently used page
-            if let Some((pn, mut page)) = cache.pop_lru() {
-                self.evict_cache(file, pn, &mut page)?;
-                evicted = Some((pn, page));
+            // Cache is full, remove the least recently used page.
+            if let Some((old_pn, old_page)) = cache.pop_lru() {
+                evicted = Some((old_pn, old_page));
             }
-        }
-
-        // Page not in cache, read it
-        let mut page = PageCache::new()?;
-        page.data().fill(0);
-        if !self.in_memory() {
-            file.read_at(page.data(), pn as u64 * PAGE_SIZE as u64)?;
         }
         cache.put(pn, page);
         Ok((cache.get_mut(&pn).unwrap(), evicted))
@@ -642,16 +969,27 @@ impl CachedFile {
         if cache.contains(&pn) {
             return Ok((cache.get_mut(&pn).unwrap(), None));
         }
+        let restored = {
+            let mut pending = self.shared().pending_evictions.lock();
+            match pending.get(&pn) {
+                Some(entry) if !entry.reusable => return Err(VfsError::WouldBlock),
+                Some(_) => pending.remove(&pn).map(|entry| entry.page),
+                None => None,
+            }
+        };
+        let page = if let Some(page) = restored {
+            page
+        } else {
+            let mut page = PageCache::new()?;
+            page.data().fill(0);
+            page
+        };
         let mut evicted = None;
         if cache.len() == cache.cap().get() {
-            if let Some((pn, mut page)) = cache.pop_lru() {
-                self.evict_cache(file, pn, &mut page)?;
-                evicted = Some((pn, page));
+            if let Some((old_pn, old_page)) = cache.pop_lru() {
+                evicted = Some((old_pn, old_page));
             }
         }
-
-        let mut page = PageCache::new()?;
-        page.data().fill(0);
         cache.put(pn, page);
         Ok((cache.get_mut(&pn).unwrap(), evicted))
     }
@@ -666,32 +1004,154 @@ impl CachedFile {
 
     pub fn with_page<R>(&self, pn: u32, f: impl FnOnce(Option<&mut PageCache>) -> R) -> R {
         let _cache_guard = self.shared().cache_op.lock();
-        f(self.shared().page_cache.lock().get_mut(&pn))
+        let mut pending = self.shared().pending_evictions.lock();
+        if pending.get(&pn).is_some_and(|entry| !entry.reusable) {
+            return f(None);
+        }
+        let restored = pending.remove(&pn).map(|entry| entry.page);
+        drop(pending);
+
+        let mut cache = self.shared().page_cache.lock();
+        let displaced = if let Some(page) = restored {
+            let displaced = if cache.len() == cache.cap().get() {
+                cache.pop_lru()
+            } else {
+                None
+            };
+            cache.put(pn, page);
+            displaced
+        } else {
+            None
+        };
+        let result = f(cache.get_mut(&pn));
+        drop(cache);
+
+        if let Some((old_pn, old_page)) = displaced {
+            // The caller may hold an address-space lock, so callbacks cannot
+            // run here.  Keep the replacement pinned; the normal retry path
+            // will invalidate its mappings after that lock has been dropped.
+            let _ = self.begin_evicted_page(old_pn, old_page, true, false);
+        }
+        result
+    }
+
+    /// Returns true while a non-reusable detached page is crossing its
+    /// PTE/TLB/writeback barrier.  Page-fault code must drop the address-space
+    /// lock and retry instead of remapping that frame during this interval.
+    pub fn page_eviction_in_progress(&self, pn: u32) -> bool {
+        let _cache_guard = self.shared().cache_op.lock();
+        self.shared()
+            .pending_evictions
+            .lock()
+            .get(&pn)
+            .is_some_and(|entry| !entry.reusable)
     }
 
     fn with_page_or_insert_impl<R>(
         &self,
         pn: u32,
         zeroed: bool,
-        f: impl FnOnce(&mut PageCache, Option<(u32, PageCache)>) -> VfsResult<R>,
+        wait_for_pending: bool,
+        f: impl FnOnce(&mut PageCache, Option<(u32, &PageCache)>) -> VfsResult<R>,
     ) -> VfsResult<R> {
-        let _cache_guard = self.shared().cache_op.lock();
-        let mut guard = self.shared().page_cache.lock();
-        let file = self.inner().entry().as_file()?;
-        let (page, evicted) = if zeroed {
-            self.page_or_insert_zeroed(file, &mut guard, pn)?
-        } else {
-            self.page_or_insert(file, &mut guard, pn)?
-        };
-        f(page, evicted)
+        let mut f = Some(f);
+        loop {
+            // Pending normal replacements remain centrally pinned if an address-
+            // space lock is busy.  Retry only those tokens here: an active sync
+            // still owns `writeback_op` and must finish before ordinary I/O may
+            // reuse its detached page.
+            let _ = self.retry_pending_normal_evictions();
+            let (result, eviction) = {
+                let cache_guard = self.shared().cache_op.lock();
+                let pending_blocks_access = wait_for_pending
+                    && self
+                        .shared()
+                        .pending_evictions
+                        .lock()
+                        .get(&pn)
+                        .is_some_and(|entry| !entry.reusable);
+                if pending_blocks_access {
+                    // Do not wait while holding `cache_op`: the writeback owner
+                    // needs it to restore or retire this exact token.  Once the
+                    // current owner releases `writeback_op`, retry any lifecycle
+                    // which ended with a recoverable listener failure.
+                    drop(cache_guard);
+                    let _writeback_guard = self.shared().writeback_op.lock();
+                    self.retry_pending_evictions()?;
+                    continue;
+                }
+
+                let mut guard = self.shared().page_cache.lock();
+                let file = self.inner().entry().as_file()?;
+                let (page, evicted) = if zeroed {
+                    self.page_or_insert_zeroed(file, &mut guard, pn)?
+                } else {
+                    self.page_or_insert(file, &mut guard, pn)?
+                };
+                let evicted_ref = evicted.as_ref().map(|(pn, page)| (*pn, page));
+                let result = f
+                    .take()
+                    .expect("page-cache callback executed more than once")(
+                    page,
+                    evicted_ref,
+                );
+                let eviction =
+                    evicted.map(|(pn, page)| self.begin_evicted_page(pn, page, true, false));
+                (result, eviction)
+            };
+            let finish_result = if let Some(eviction) = eviction {
+                let mappings_invalidated = self.notify_evict_listeners_except(
+                    eviction.pn,
+                    eviction.paddr,
+                    None,
+                    false,
+                );
+                self.complete_evicted_page(eviction, mappings_invalidated)
+            } else {
+                Ok(())
+            };
+            return match result {
+                Ok(value) => match finish_result {
+                    Ok(()) | Err(VfsError::WouldBlock) => {
+                        // A busy address space leaves this reusable replacement in
+                        // `pending_evictions`.  The frame is still pinned and later
+                        // operations retry it, so ordinary file I/O must not fail
+                        // merely because a mapping lock could not be acquired
+                        // without creating an ABBA cycle.
+                        Ok(value)
+                    }
+                    Err(err) => Err(err),
+                },
+                Err(err) => Err(err),
+            };
+        }
     }
 
     pub fn with_page_or_insert<R>(
         &self,
         pn: u32,
-        f: impl FnOnce(&mut PageCache, Option<(u32, PageCache)>) -> VfsResult<R>,
+        f: impl FnOnce(&mut PageCache, Option<(u32, &PageCache)>) -> VfsResult<R>,
     ) -> VfsResult<R> {
-        self.with_page_or_insert_impl(pn, false, f)
+        // Address-space population can hold a mapping lock here, so this public
+        // form must remain nonblocking to avoid an fsync -> aspace ABBA cycle.
+        self.with_page_or_insert_impl(pn, false, false, f)
+    }
+
+    /// Inserts a page and returns a stable token for any detached cache page.
+    /// The cache retains ownership; mmap uses the token to keep that frame
+    /// pinned until PTE removal and remote TLB acknowledgement are complete.
+    pub fn with_page_or_insert_deferred<R>(
+        &self,
+        pn: u32,
+        f: impl FnOnce(&mut PageCache) -> R,
+    ) -> VfsResult<(R, Option<PageEviction>)> {
+        let _cache_guard = self.shared().cache_op.lock();
+        let mut guard = self.shared().page_cache.lock();
+        let file = self.inner().entry().as_file()?;
+        let (page, evicted) = self.page_or_insert(file, &mut guard, pn)?;
+        let result = f(page);
+        let eviction = evicted.map(|(pn, page)| self.begin_evicted_page(pn, page, true, false));
+        Ok((result, eviction))
     }
 
     fn with_pages<T>(
@@ -711,7 +1171,9 @@ impl CachedFile {
 
             let current = initial.take().unwrap();
             initial =
-                Some(self.with_page_or_insert(pn, |page, _| page_each(current, page, page_range))?);
+                Some(self.with_page_or_insert_impl(pn, false, true, |page, _| {
+                    page_each(current, page, page_range)
+                })?);
             page_offset = 0;
         }
 
@@ -738,6 +1200,65 @@ impl CachedFile {
         )
     }
 
+    /// Reads coherent cached contents without inserting or replacing an LRU
+    /// page.  Address-space population uses this fallback while it holds the
+    /// structural lock: triggering an eviction there would have to call back
+    /// into address spaces and could otherwise create a self/ABBA lock cycle.
+    pub fn read_at_no_evict(
+        &self,
+        mut dst: impl Write + IoBufMut,
+        offset: u64,
+    ) -> VfsResult<usize> {
+        let len = self.len()?;
+        let end = (offset + dst.remaining_mut() as u64).min(len);
+        if end <= offset {
+            return Ok(0);
+        }
+
+        let file = self.inner().entry().as_file()?;
+        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+        let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
+        let mut read = 0;
+
+        for pn in start_page..end_page {
+            let page_start = pn as u64 * PAGE_SIZE as u64;
+            let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
+            let range = page_offset..range_end;
+
+            // Keep the cache lookup and backing-file fallback in one serialized
+            // operation.  Otherwise a cached writer could create a newer dirty
+            // page after our miss but before the disk read.
+            let _cache_guard = self.shared().cache_op.lock();
+            let mut cache = self.shared().page_cache.lock();
+            if let Some(page) = cache.get_mut(&pn) {
+                dst.write(&page.data()[range.clone()])?;
+            } else {
+                drop(cache);
+                let mut pending = self.shared().pending_evictions.lock();
+                if let Some(entry) = pending.get_mut(&pn) {
+                    // Both reusable and non-reusable pending pages remain
+                    // pinned and contain the newest dirty data.
+                    dst.write(&entry.page.data()[range.clone()])?;
+                } else {
+                    drop(pending);
+                    if self.in_memory() {
+                        dst.write(&ZERO_PAGE[range.clone()])?;
+                    } else {
+                        let mut page = Vec::new();
+                        page.resize(PAGE_SIZE, 0);
+                        file.read_at(&mut page[..], page_start)?;
+                        dst.write(&page[range.clone()])?;
+                    }
+                }
+            }
+
+            read += range.end - range.start;
+            page_offset = 0;
+        }
+        Ok(read)
+    }
+
     pub fn readahead(&self, offset: u64, count: usize) -> VfsResult<()> {
         if count == 0 || self.in_memory() {
             return Ok(());
@@ -753,7 +1274,7 @@ impl CachedFile {
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
 
         for pn in start_page..end_page {
-            self.with_page_or_insert(pn, |_, _| Ok(()))?;
+            self.with_page_or_insert_impl(pn, false, true, |_, _| Ok(()))?;
         }
 
         Ok(())
@@ -820,7 +1341,7 @@ impl CachedFile {
             let len = range.end - range.start;
 
             let zeroed = Self::can_zero_fill_write_page(old_len, page_start, &range);
-            self.with_page_or_insert_impl(pn, zeroed, |page, _| {
+            self.with_page_or_insert_impl(pn, zeroed, true, |page, _| {
                 buf.read(&mut page.data()[range.start..range.end])?;
                 page.dirty = true;
                 Ok(())
@@ -889,27 +1410,31 @@ impl CachedFile {
     }
 
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
-        let _cache_guard = self.shared().cache_op.lock();
-        let file = self.inner().entry().as_file()?;
-        let old_len = self.len()?;
-        file.set_len(len)?;
-        self.set_cached_len(len, false)?;
+        let _writeback_guard = self.shared().writeback_op.lock();
+        // A pending dirty page may be absent from the LRU after an earlier I/O
+        // failure.  Finish or report that lifecycle before changing EOF, so it
+        // cannot later be restored with stale bytes beyond the new length.
+        self.retry_pending_evictions()?;
+        let evictions = {
+            let _cache_guard = self.shared().cache_op.lock();
+            let file = self.inner().entry().as_file()?;
+            let old_len = self.len()?;
+            file.set_len(len)?;
+            self.set_cached_len(len, false)?;
 
-        let old_last_page = (old_len / PAGE_SIZE as u64) as u32;
-        if old_len < len {
-            let page_start = old_last_page as u64 * PAGE_SIZE as u64;
-            let old_page_offset = (old_len - page_start) as usize;
-            let new_page_offset = (len - page_start).min(PAGE_SIZE as u64) as usize;
-            let mut guard = self.shared().page_cache.lock();
-            if let Some(page) = guard.get_mut(&old_last_page) {
-                page.data()[old_page_offset..new_page_offset].fill(0);
-            }
-        } else if old_len > len {
-            // For truncating, we need to remove all pages that are beyond the
-            // new length
-            // TODO(mivik): can this be more efficient?
-            let first_invalid_page = len.div_ceil(PAGE_SIZE as u64) as u32;
-            let removed = {
+            let old_last_page = (old_len / PAGE_SIZE as u64) as u32;
+            let removed = if old_len < len {
+                let page_start = old_last_page as u64 * PAGE_SIZE as u64;
+                let old_page_offset = (old_len - page_start) as usize;
+                let new_page_offset = (len - page_start).min(PAGE_SIZE as u64) as usize;
+                let mut guard = self.shared().page_cache.lock();
+                if let Some(page) = guard.get_mut(&old_last_page) {
+                    page.data()[old_page_offset..new_page_offset].fill(0);
+                }
+                Vec::new()
+            } else if old_len > len {
+                // For truncating, remove all pages beyond the new length.
+                let first_invalid_page = len.div_ceil(PAGE_SIZE as u64) as u32;
                 let mut guard = self.shared().page_cache.lock();
                 let keys = guard
                     .iter()
@@ -918,17 +1443,26 @@ impl CachedFile {
                     .collect::<Vec<_>>();
                 let mut removed = Vec::new();
                 for pn in keys {
-                    if let Some(page) = guard.pop(&pn) {
+                    if let Some(mut page) = guard.pop(&pn) {
+                        // Don't write back pages since they're discarded.
+                        page.dirty = false;
                         removed.push((pn, page));
                     }
                 }
                 removed
+            } else {
+                Vec::new()
             };
-            for (pn, mut page) in removed {
-                // Don't write back pages since they're discarded.
-                page.dirty = false;
-                self.notify_evict_listeners(pn, &page);
-            }
+            removed
+                .into_iter()
+                .map(|(pn, page)| self.begin_evicted_page(pn, page, false, false))
+                .collect::<Vec<_>>()
+        };
+        for eviction in evictions {
+            // Truncate owns `writeback_op` and no address-space lock.  Wait for
+            // transient mmap activity so EOF cannot change while a detached,
+            // non-reusable page is left behind with `WouldBlock`.
+            self.finish_evicted_page_with_wait(eviction, true)?;
         }
         Ok(())
     }
@@ -941,25 +1475,30 @@ impl CachedFile {
     fn writeback_dirty_run(
         file: &FileNode,
         file_len: u64,
-        run: &mut [(u32, PageCache)],
+        run: &mut [(PageEviction, PendingEviction)],
     ) -> VfsResult<()> {
         if run.is_empty() {
             return Ok(());
         }
 
-        let start = run[0].0 as u64 * PAGE_SIZE as u64;
+        let start = run[0].0.pn as u64 * PAGE_SIZE as u64;
         let mut buf = Vec::new();
-        for (pn, page) in run.iter_mut() {
-            let len = Self::page_write_len(file_len, *pn);
+        for (eviction, entry) in run.iter_mut() {
+            let len = Self::page_write_len(file_len, eviction.pn);
             if len > 0 {
-                buf.extend_from_slice(&page.data()[..len]);
+                buf.extend_from_slice(&entry.page.data()[..len]);
             }
         }
-        if !buf.is_empty() {
-            file.write_at(&buf, start)?;
+        let mut written = 0;
+        while written < buf.len() {
+            let n = file.write_at(&buf[written..], start + written as u64)?;
+            if n == 0 || n > buf.len() - written {
+                return Err(VfsError::Io);
+            }
+            written += n;
         }
-        for (_, page) in run.iter_mut() {
-            page.dirty = false;
+        for (_, entry) in run.iter_mut() {
+            entry.page.dirty = false;
         }
         Ok(())
     }
@@ -967,17 +1506,17 @@ impl CachedFile {
     fn writeback_dirty_pages(
         file: &FileNode,
         file_len: u64,
-        dirty_pages: &mut Vec<(u32, PageCache)>,
+        dirty_pages: &mut Vec<(PageEviction, PendingEviction)>,
     ) -> VfsResult<()> {
-        dirty_pages.sort_by_key(|(pn, _)| *pn);
+        dirty_pages.sort_by_key(|(eviction, _)| eviction.pn);
 
         let mut start = 0;
         while start < dirty_pages.len() {
             let mut end = start + 1;
-            let mut bytes = Self::page_write_len(file_len, dirty_pages[start].0);
+            let mut bytes = Self::page_write_len(file_len, dirty_pages[start].0.pn);
             while end < dirty_pages.len() {
-                let pn = dirty_pages[end].0;
-                let prev_pn = dirty_pages[end - 1].0;
+                let pn = dirty_pages[end].0.pn;
+                let prev_pn = dirty_pages[end - 1].0.pn;
                 if pn != prev_pn + 1 {
                     break;
                 }
@@ -995,15 +1534,44 @@ impl CachedFile {
         Ok(())
     }
 
+    /// Revokes every writable mapping before performing the final dirty-page
+    /// writeback.  Ready pages are still written as contiguous batches; pages
+    /// whose listener failed remain pinned in `pending_evictions` for retry.
+    fn finish_sync_evictions(&self, evictions: Vec<PageEviction>) -> VfsResult<()> {
+        let mut ready = Vec::new();
+        let mut blocked = false;
+        for eviction in evictions {
+            if self.notify_evict_listeners_except(eviction.pn, eviction.paddr, None, true) {
+                ready.push(eviction);
+            } else {
+                blocked = true;
+            }
+        }
+
+        let displaced = self.finish_evicted_writeback_batch(&ready)?;
+        for eviction in displaced {
+            self.finish_evicted_page_with_wait(eviction, true)?;
+        }
+
+        if blocked {
+            Err(VfsError::WouldBlock)
+        } else {
+            Ok(())
+        }
+    }
+
     fn writeback_dirty_pages_in_range(&self, range: Range<u64>) -> VfsResult<()> {
         if self.in_memory() || range.start >= range.end {
             return Ok(());
         }
-        let _cache_guard = self.shared().cache_op.lock();
+        let _writeback_guard = self.shared().writeback_op.lock();
+        // Include dirty pages which an earlier writeback left in the pending
+        // table.  They are authoritative even though an LRU-only scan cannot
+        // see them.
+        self.retry_pending_evictions()?;
         let page_range = Self::page_range(range);
-        let file = self.inner().entry().as_file()?;
-        let file_len = self.commit_len()?;
-        let mut dirty_pages = {
+        let evictions = {
+            let _cache_guard = self.shared().cache_op.lock();
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
                 .iter()
@@ -1012,20 +1580,12 @@ impl CachedFile {
                 })
                 .map(|(pn, _)| *pn)
                 .collect::<Vec<_>>();
-            let mut dirty_pages = Vec::new();
-            for pn in keys {
-                if let Some(page) = cache.pop(&pn) {
-                    dirty_pages.push((pn, page));
-                }
-            }
-            dirty_pages
+            keys.into_iter()
+                .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
+                .map(|(pn, page)| self.begin_evicted_page(pn, page, false, true))
+                .collect::<Vec<_>>()
         };
-        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
-        let mut cache = self.shared().page_cache.lock();
-        for (pn, page) in dirty_pages {
-            cache.put(pn, page);
-        }
-        result
+        self.finish_sync_evictions(evictions)
     }
 
     fn invalidate_clean_pages_in_range(&self, range: Range<u64>) {
@@ -1033,10 +1593,10 @@ impl CachedFile {
             return;
         }
         let page_range = Self::page_range(range);
-        let mut removed = Vec::new();
-        {
+        let evictions = {
             let _cache_guard = self.shared().cache_op.lock();
             let mut cache = self.shared().page_cache.lock();
+            let mut removed = Vec::new();
             let keys = cache
                 .iter()
                 .map(|(pn, _)| *pn)
@@ -1047,27 +1607,46 @@ impl CachedFile {
                     removed.push((pn, page));
                 }
             }
-        }
-        for (pn, mut page) in removed {
-            page.dirty = false;
-            self.notify_evict_listeners(pn, &page);
+            removed
+                .into_iter()
+                .map(|(pn, mut page)| {
+                    page.dirty = false;
+                    self.begin_evicted_page(pn, page, false, false)
+                })
+                .collect::<Vec<_>>()
+        };
+        for eviction in evictions {
+            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
+                warn!("Failed to invalidate cached page: {err:?}");
+            }
         }
     }
 
     fn discard_cached_pages(&self) {
-        let _cache_guard = self.shared().cache_op.lock();
-        let removed = {
+        // This path intentionally discards cache contents and cannot report an
+        // error.  It may help normal replacement tokens make progress, but it
+        // must never consume a sync-owned token and hide its writeback status.
+        let _ = self.retry_pending_normal_evictions();
+        let evictions = {
+            let _cache_guard = self.shared().cache_op.lock();
             let mut cache = self.shared().page_cache.lock();
             let mut removed = Vec::new();
             while let Some((pn, page)) = cache.pop_lru() {
                 removed.push((pn, page));
             }
             removed
+                .into_iter()
+                .map(|(pn, mut page)| {
+                    page.dirty = false;
+                    self.begin_evicted_page(pn, page, false, false)
+                })
+                .collect::<Vec<_>>()
         };
 
-        for (pn, mut page) in removed {
-            page.dirty = false;
-            self.notify_evict_listeners(pn, &page);
+        for eviction in evictions {
+            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
+                warn!("Failed to discard cached page: {err:?}");
+            }
         }
     }
 
@@ -1130,65 +1709,51 @@ impl CachedFile {
         if self.in_memory() {
             return Ok(());
         }
-        let _cache_guard = self.shared().cache_op.lock();
-        let file = self.inner().entry().as_file()?;
-        let file_len = self.commit_len()?;
-        let mut dirty_pages = {
+        let _writeback_guard = self.shared().writeback_op.lock();
+        // Serialize detach -> PTE/TLB revocation -> I/O -> restore.  A second
+        // fsync waits here and then retries any dirty pending page left by an
+        // I/O failure instead of incorrectly reporting success from an empty
+        // LRU scan.
+        self.retry_pending_evictions()?;
+        let evictions = {
+            let _cache_guard = self.shared().cache_op.lock();
             let mut cache = self.shared().page_cache.lock();
             let keys = cache
                 .iter()
                 .filter(|(_, page)| page.dirty)
                 .map(|(pn, _)| *pn)
                 .collect::<Vec<_>>();
-            let mut dirty_pages = Vec::new();
-            for pn in keys {
-                if let Some(page) = cache.pop(&pn) {
-                    dirty_pages.push((pn, page));
-                }
-            }
-            dirty_pages
+            keys.into_iter()
+                .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
+                .map(|(pn, page)| self.begin_evicted_page(pn, page, false, true))
+                .collect::<Vec<_>>()
         };
-        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
-        let mut cache = self.shared().page_cache.lock();
-        for (pn, page) in dirty_pages {
-            cache.put(pn, page);
-        }
-        result
+        self.finish_sync_evictions(evictions)
     }
 
     fn drop_cached_pages(&self) -> VfsResult<()> {
         if self.in_memory() {
             return Ok(());
         }
-        let _cache_guard = self.shared().cache_op.lock();
-        let file = self.inner().entry().as_file()?;
-        let file_len = self.commit_len()?;
-        let removed = {
+        let _writeback_guard = self.shared().writeback_op.lock();
+        self.retry_pending_evictions()?;
+        let evictions = {
+            let _cache_guard = self.shared().cache_op.lock();
             let mut cache = self.shared().page_cache.lock();
             let mut removed = Vec::new();
             while let Some((pn, page)) = cache.pop_lru() {
-                let dirty = page.dirty;
-                removed.push((pn, page, dirty));
+                removed.push((pn, page));
             }
             removed
+                .into_iter()
+                .map(|(pn, page)| self.begin_evicted_page(pn, page, true, false))
+                .collect::<Vec<_>>()
         };
-
-        let mut dirty_pages = Vec::new();
-        for (pn, page, dirty) in removed {
-            self.notify_evict_listeners(pn, &page);
-            if dirty {
-                dirty_pages.push((pn, page));
-            }
+        for eviction in evictions {
+            // Explicit cache dropping owns no address-space lock, so listener
+            // contention is an internal wait rather than a user-visible error.
+            self.finish_evicted_page_with_wait(eviction, true)?;
         }
-
-        let result = Self::writeback_dirty_pages(file, file_len, &mut dirty_pages);
-        if result.is_err() {
-            let mut cache = self.shared().page_cache.lock();
-            for (pn, page) in dirty_pages {
-                cache.put(pn, page);
-            }
-        }
-        result?;
         self.commit_atime()
     }
 
@@ -1381,6 +1946,28 @@ impl FileBackend {
                 {
                     cached
                         .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
+                }
+                dst.read_from(&mut axio::read_fn(|buf| {
+                    loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {
+                        offset += *read as u64;
+                    })
+                }))
+            }
+        }
+    }
+
+    /// Coherent read which never replaces a cached page and therefore never
+    /// invokes an mmap eviction listener.
+    pub fn read_at_no_evict(
+        &self,
+        mut dst: impl Write + IoBufMut,
+        mut offset: u64,
+    ) -> VfsResult<usize> {
+        match self {
+            Self::Cached(cached) => cached.read_at_no_evict(dst, offset),
+            Self::Direct(loc) => {
+                if let Some(cached) = CachedFile::get_existing(loc) {
+                    return cached.read_at_no_evict(dst, offset);
                 }
                 dst.read_from(&mut axio::read_fn(|buf| {
                     loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {

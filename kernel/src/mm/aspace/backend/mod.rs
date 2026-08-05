@@ -20,10 +20,25 @@ pub(crate) use self::cow::CowFaultPlan;
 pub use self::shared::SharedPages;
 use super::{AddrSpace, AddrSpaceLock};
 
+/// Completes local page-table invalidations and, on SMP architectures with a
+/// synchronous primitive, removes stale translations from CPUs running this
+/// page table before a backend can reclaim the unmapped storage.
+fn finish_unmap_before_reclaim(pt: &mut PageTableMut<'_>) {
+    let root = pt.root_paddr();
+    pt.finish();
+    #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+    crate::mm::flush_tlb_on_all_cpus(root, None);
+    #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]
+    let _ = root;
+}
+
 /// Result of the short, locked preparation phase of a page fault.
 pub(crate) enum FaultPreparation {
     /// The current PTE already satisfies the access.
     Handled,
+    /// A detached file page is crossing its PTE/TLB/writeback barrier.  The
+    /// caller must drop the address-space lock and retry.
+    Retry,
     /// A private page can be prepared while no address-space lock is held.
     Cow(CowFaultPlan),
     /// This backend or fault shape still needs the original exclusive path.
@@ -143,6 +158,7 @@ impl Backend {
     ) -> FaultPreparation {
         match self {
             Self::Cow(backend) => backend.prepare_fault(vaddr, area_range, flags, access_flags, pt),
+            Self::File(backend) => backend.prepare_fault(vaddr),
             _ => FaultPreparation::Fallback,
         }
     }

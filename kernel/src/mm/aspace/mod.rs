@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use core::{
     fmt,
     ops::DerefMut,
@@ -11,6 +11,7 @@ use axhal::{
     paging::{MappingFlags, PageTable, PagingError},
     trap::PageFaultFlags,
 };
+use axtask::yield_now;
 use event_listener::{Event, listener};
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
@@ -25,6 +26,7 @@ const ONE_READER: usize = 2;
 const ONE_WAITING_WRITER: usize = 1usize << (usize::BITS / 2);
 const ACTIVE_MASK: usize = ONE_WAITING_WRITER - 1;
 const WAITING_WRITERS_MASK: usize = !ACTIVE_MASK;
+static NEXT_ASPACE_ID: AtomicUsize = AtomicUsize::new(1);
 
 pub(crate) struct RawAddrSpaceRwLock {
     state: AtomicUsize,
@@ -174,25 +176,45 @@ pub struct AddrSpace {
 
 /// Synchronizes structural address-space changes while allowing unrelated
 /// page faults to inspect and update independent PTEs concurrently.
-pub struct AddrSpaceLock(BlockingRwLock<AddrSpace>);
+pub struct AddrSpaceLock {
+    inner: BlockingRwLock<AddrSpace>,
+    root_paddr: PhysAddr,
+    id: usize,
+}
 
 impl AddrSpaceLock {
     pub(crate) fn new(aspace: AddrSpace) -> Self {
-        Self(BlockingRwLock::new(aspace))
+        let root_paddr = aspace.page_table_root();
+        Self {
+            inner: BlockingRwLock::new(aspace),
+            root_paddr,
+            id: NEXT_ASPACE_ID.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// Returns the immutable page-table identity without taking the
+    /// address-space contents lock. This is also safe from scheduler hooks
+    /// which run with local interrupts disabled.
+    pub(crate) const fn page_table_root(&self) -> PhysAddr {
+        self.root_paddr
+    }
+
+    pub(crate) const fn eviction_owner(&self) -> usize {
+        self.id
     }
 
     /// Existing mapping-changing operations take the exclusive side.
     pub(crate) fn lock(&self) -> BlockingRwLockWriteGuard<'_, AddrSpace> {
-        self.0.write()
+        self.inner.write()
     }
 
     /// Page faults take the shared side only for VMA lookup and PTE commit.
     pub(crate) fn read(&self) -> BlockingRwLockReadGuard<'_, AddrSpace> {
-        self.0.read()
+        self.inner.read()
     }
 
     pub(crate) fn try_lock(&self) -> Option<BlockingRwLockWriteGuard<'_, AddrSpace>> {
-        self.0.try_write()
+        self.inner.try_write()
     }
 }
 
@@ -330,17 +352,31 @@ impl AddrSpace {
         self.validate_region(start, size)?;
         let end = start + size;
 
-        let mut modify = self.pt.modify();
-        while let Some(area) = self.areas.find(start) {
-            let range = VirtAddrRange::new(start, area.end().min(end));
-            area.backend()
-                .populate(range, area.flags(), access_flags, &mut modify)?;
-            start = area.end();
-            assert!(start.is_aligned_4k());
-            if start >= end {
-                break;
-            }
+        let mut callbacks = Vec::new();
+        let populate_result: AxResult = {
+            let mut modify = self.pt.modify();
+            (|| {
+                while let Some(area) = self.areas.find(start) {
+                    let range = VirtAddrRange::new(start, area.end().min(end));
+                    let (_, callback) =
+                        area.backend()
+                            .populate(range, area.flags(), access_flags, &mut modify)?;
+                    if let Some(callback) = callback {
+                        callbacks.push(callback);
+                    }
+                    start = area.end();
+                    assert!(start.is_aligned_4k());
+                    if start >= end {
+                        break;
+                    }
+                }
+                Ok(())
+            })()
+        };
+        for callback in callbacks {
+            callback(self);
         }
+        populate_result?;
 
         if start < end {
             // If the area is not fully mapped, we return ENOMEM.
@@ -365,14 +401,22 @@ impl AddrSpace {
     pub fn zap_pages(&mut self, start: VirtAddr, size: usize) -> AxResult {
         self.validate_region(start, size)?;
         let end = start + size;
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        let root = self.page_table_root();
         let mut modify = self.pt.modify();
-        for vaddr in PageIter4K::new(start, end).ok_or(AxError::InvalidInput)? {
-            match modify.unmap(vaddr) {
-                Ok(_) | Err(PagingError::NotMapped) => {}
-                Err(_) => return Err(AxError::BadAddress),
+        let result = (|| {
+            for vaddr in PageIter4K::new(start, end).ok_or(AxError::InvalidInput)? {
+                match modify.unmap(vaddr) {
+                    Ok(_) | Err(PagingError::NotMapped) => {}
+                    Err(_) => return Err(AxError::BadAddress),
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })();
+        modify.finish();
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        crate::mm::flush_tlb_on_all_cpus(root, None);
+        result
     }
 
     /// To process data in this area with the given function.
@@ -528,8 +572,22 @@ impl AddrSpace {
     /// Returns `true` if the page fault is handled successfully (not a real
     /// fault).
     pub fn handle_page_fault(&mut self, vaddr: VirtAddr, access_flags: PageFaultFlags) -> bool {
+        match self.try_handle_page_fault(vaddr, access_flags) {
+            Ok(handled) => handled,
+            Err(err) => {
+                warn!("Failed to populate page for {vaddr:?}: {err}");
+                false
+            }
+        }
+    }
+
+    fn try_handle_page_fault(
+        &mut self,
+        vaddr: VirtAddr,
+        access_flags: PageFaultFlags,
+    ) -> AxResult<bool> {
         if !self.va_range.contains(vaddr) {
-            return false;
+            return Ok(false);
         }
         if let Some(area) = self.areas.find(vaddr) {
             let flags = area.flags();
@@ -548,7 +606,7 @@ impl AddrSpace {
                         }
                         if n == 0 {
                             warn!("No pages populated for {vaddr:?} ({flags:?})");
-                            false
+                            Ok(false)
                         } else {
                             // Another CPU may have installed this mapping while
                             // this CPU was waiting for the address-space lock.
@@ -556,17 +614,18 @@ impl AddrSpace {
                             // retrying the faulting instruction.
                             axhal::asm::flush_tlb(Some(vaddr));
                             synchronize_executable_fault(access_flags);
-                            true
+                            Ok(true)
                         }
                     }
+                    Err(AxError::WouldBlock) => Err(AxError::WouldBlock),
                     Err(err) => {
                         warn!("Failed to populate pages for {vaddr:?} ({flags:?}): {err}");
-                        false
+                        Ok(false)
                     }
                 };
             }
         }
-        false
+        Ok(false)
     }
 
     /// Handles a private fault in three phases: inspect while read-locked,
@@ -627,6 +686,13 @@ impl AddrSpace {
                     }
                     return true;
                 }
+                FaultPreparation::Retry => {
+                    // The read guard used for preparation has been dropped.
+                    // Let the eviction owner finish its PTE/TLB/writeback
+                    // barrier before taking the exclusive fallback lock.
+                    yield_now();
+                    continue;
+                }
                 FaultPreparation::Fallback => break,
                 FaultPreparation::Cow(mut plan) => {
                     if let Err(err) = plan.execute() {
@@ -665,7 +731,22 @@ impl AddrSpace {
             }
         }
 
-        aspace.lock().handle_page_fault(vaddr, access_flags)
+        loop {
+            let result = aspace.lock().try_handle_page_fault(vaddr, access_flags);
+            match result {
+                Ok(handled) => return handled,
+                Err(AxError::WouldBlock) => {
+                    // `populate` rechecked the cache after taking the exclusive
+                    // address-space lock and raced with a sync detach.  Drop the
+                    // lock (above), yield, and restart preparation.
+                    yield_now();
+                }
+                Err(err) => {
+                    warn!("Failed to populate page for {vaddr:?}: {err}");
+                    return false;
+                }
+            }
+        }
     }
 
     /// Attempts to clone the current address space into a new one.
