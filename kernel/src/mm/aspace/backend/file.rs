@@ -8,10 +8,9 @@ use core::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use axerrno::{AxError, AxResult};
 use axfs::{CachedFile, FileFlags};
 use axhal::paging::{MappingFlags, PageSize, PageTableMut, PagingError};
-use axsync::Mutex;
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 
-use super::{AddrSpace, Backend, BackendOps, PopulateCallback, pages_in};
+use super::{AddrSpace, AddrSpaceLock, Backend, BackendOps, PopulateCallback, pages_in};
 
 const NO_FAULT_PAGE: u32 = u32::MAX;
 const MMAP_FAULT_READAHEAD_PAGES: u32 = 4;
@@ -38,7 +37,7 @@ impl Drop for FileBackendInner {
     }
 }
 impl FileBackendInner {
-    pub fn register_listener(self: &Arc<Self>, aspace: &Arc<Mutex<AddrSpace>>) {
+    pub fn register_listener(self: &Arc<Self>, aspace: &Arc<AddrSpaceLock>) {
         if self.handle.load(Ordering::Acquire) != 0 {
             panic!("Listener already registered");
         }
@@ -242,7 +241,7 @@ impl BackendOps for FileBackend {
         _flags: MappingFlags,
         _old_pt: &mut PageTableMut,
         _new_pt: &mut PageTableMut,
-        new_aspace: &Arc<Mutex<AddrSpace>>,
+        new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
         let inner = Arc::new(FileBackendInner {
             start: self.0.start,
@@ -265,7 +264,7 @@ impl Backend {
         cache: CachedFile,
         flags: FileFlags,
         offset: usize,
-        aspace: &Arc<Mutex<AddrSpace>>,
+        aspace: &Arc<AddrSpaceLock>,
     ) -> Self {
         let offset_page = (offset / PAGE_SIZE_4K) as u32;
         let inner = Arc::new(FileBackendInner {

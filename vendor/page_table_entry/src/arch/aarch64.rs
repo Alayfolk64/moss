@@ -207,6 +207,10 @@ impl A64PTE {
 }
 
 impl GenericPTE for A64PTE {
+    fn from_bits(bits: usize) -> Self {
+        Self(bits as u64)
+    }
+
     fn new_page(paddr: PhysAddr, flags: MappingFlags, is_huge: bool) -> Self {
         let mut attr = DescriptorAttr::from(flags) | DescriptorAttr::AF;
         if !is_huge {

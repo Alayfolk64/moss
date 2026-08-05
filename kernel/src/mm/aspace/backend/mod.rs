@@ -7,7 +7,6 @@ use axhal::{
     mem::{phys_to_virt, virt_to_phys},
     paging::{MappingFlags, PageSize, PageTable, PageTableMut},
 };
-use axsync::Mutex;
 use enum_dispatch::enum_dispatch;
 use memory_addr::{DynPageIter, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 use memory_set::MappingBackend;
@@ -17,8 +16,25 @@ mod file;
 mod linear;
 mod shared;
 
+pub(crate) use self::cow::CowFaultPlan;
 pub use self::shared::SharedPages;
-use super::AddrSpace;
+use super::{AddrSpace, AddrSpaceLock};
+
+/// Result of the short, locked preparation phase of a page fault.
+pub(crate) enum FaultPreparation {
+    /// The current PTE already satisfies the access.
+    Handled,
+    /// A private page can be prepared while no address-space lock is held.
+    Cow(CowFaultPlan),
+    /// This backend or fault shape still needs the original exclusive path.
+    Fallback,
+}
+
+/// Result of revalidating a page prepared outside the address-space lock.
+pub(crate) enum FaultCommit {
+    Handled,
+    Stale,
+}
 
 fn divide_page(size: usize, page_size: PageSize) -> usize {
     assert!(page_size.is_aligned(size), "unaligned");
@@ -102,7 +118,7 @@ pub trait BackendOps {
         flags: MappingFlags,
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
-        new_aspace: &Arc<Mutex<AddrSpace>>,
+        new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend>;
 }
 
@@ -114,6 +130,36 @@ pub enum Backend {
     Cow(cow::CowBackend),          // Copy-on-write，写时复制
     Shared(shared::SharedBackend), // 共享内存
     File(file::FileBackend),       // 文件映射
+}
+
+impl Backend {
+    pub(crate) fn prepare_fault(
+        &self,
+        vaddr: VirtAddr,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> FaultPreparation {
+        match self {
+            Self::Cow(backend) => backend.prepare_fault(vaddr, area_range, flags, access_flags, pt),
+            _ => FaultPreparation::Fallback,
+        }
+    }
+
+    pub(crate) fn commit_fault(
+        &self,
+        plan: &mut CowFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        match self {
+            Self::Cow(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
+            _ => Ok(FaultCommit::Stale),
+        }
+    }
 }
 
 impl MappingBackend for Backend {

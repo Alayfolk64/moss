@@ -297,7 +297,8 @@ fn execve_common(
     let old_aspace_guard = old_aspace_snapshot.lock();
     {
         let _commit_guard = NoPreemptIrqSave::new();
-        let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
+        let old_aspace =
+            proc_data.replace_aspace(Arc::new(crate::mm::AddrSpaceLock::new(new_aspace)));
         debug_assert!(Arc::ptr_eq(&old_aspace, &old_aspace_snapshot));
         axtask::replace_current_page_table(page_table_root);
         drop(old_aspace);

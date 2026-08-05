@@ -8,14 +8,14 @@ use axerrno::{AxError, AxResult};
 use axfs::FileBackend;
 use axhal::{
     mem::phys_to_virt,
-    paging::{MappingFlags, PageSize, PageTableMut, PagingError},
+    paging::{MappingFlags, PageSize, PageTable, PageTableMut, PagingError},
 };
-use axsync::Mutex;
 use kspin::SpinNoIrq;
-use memory_addr::{PhysAddr, VirtAddr, VirtAddrRange};
+use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
-    AddrSpace, Backend, BackendOps, PopulateCallback, alloc_frame, dealloc_frame, pages_in,
+    AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
+    alloc_frame, dealloc_frame, pages_in,
 };
 
 struct FrameRefCnt(usize);
@@ -84,6 +84,7 @@ pub struct CowBackend {
     size: PageSize,
     file: Option<(FileBackend, u64, Option<u64>)>,
     mapped_pages: AtomicUsize,
+    identity: Arc<()>,
 }
 
 impl Clone for CowBackend {
@@ -93,11 +94,113 @@ impl Clone for CowBackend {
             size: self.size,
             file: self.file.clone(),
             mapped_pages: AtomicUsize::new(self.mapped_pages.load(Ordering::Relaxed)),
+            identity: self.identity.clone(),
         }
     }
 }
 
+enum CowFaultSource {
+    /// An extra reference pins an anonymous COW source while the address-space
+    /// lock is released.
+    Anonymous(PhysAddr),
+}
+
+impl CowFaultSource {
+    fn paddr(&self) -> PhysAddr {
+        match self {
+            Self::Anonymous(paddr) => *paddr,
+        }
+    }
+}
+
+/// A private fault prepared outside the address-space lock.
+pub(crate) struct CowFaultPlan {
+    identity: Arc<()>,
+    vaddr: VirtAddr,
+    mapping_start: VirtAddr,
+    size: PageSize,
+    file: Option<(FileBackend, u64, Option<u64>)>,
+    frame: Option<PhysAddr>,
+    source: Option<CowFaultSource>,
+}
+
+impl CowFaultPlan {
+    pub(crate) fn execute(&mut self) -> AxResult {
+        if let Some(source) = &self.source {
+            let frame = alloc_referenced_frame(false, self.size)?;
+            self.frame = Some(frame);
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    phys_to_virt(source.paddr()).as_ptr(),
+                    phys_to_virt(frame).as_mut_ptr(),
+                    self.size as _,
+                );
+            }
+            return Ok(());
+        }
+
+        let frame = alloc_referenced_frame(true, self.size)?;
+        self.frame = Some(frame);
+        if let Some((file, mapping_file_start, file_end)) = &self.file {
+            let buf = unsafe {
+                slice::from_raw_parts_mut(phys_to_virt(frame).as_mut_ptr(), self.size as _)
+            };
+            let start = self
+                .mapping_start
+                .as_usize()
+                .saturating_sub(self.vaddr.as_usize());
+            assert!(start < self.size as usize);
+
+            let fault_file_start = *mapping_file_start
+                + self
+                    .vaddr
+                    .as_usize()
+                    .saturating_sub(self.mapping_start.as_usize()) as u64;
+            let max_read = file_end
+                .map_or(u64::MAX, |end| end.saturating_sub(fault_file_start))
+                .min((buf.len() - start) as u64) as usize;
+            file.read_at(&mut &mut buf[start..start + max_read], fault_file_start)?;
+        }
+        Ok(())
+    }
+}
+
+impl Drop for CowFaultPlan {
+    fn drop(&mut self) {
+        if let Some(frame) = self.frame.take() {
+            drop_referenced_frame(frame, self.size);
+        }
+        if let Some(CowFaultSource::Anonymous(frame)) = self.source.take() {
+            drop_referenced_frame(frame, self.size);
+        }
+    }
+}
+
+fn alloc_referenced_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
+    let frame = alloc_frame(zeroed, size)?;
+    FRAME_TABLE.lock().init_frame(frame);
+    Ok(frame)
+}
+
+fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
+    let frame_ref = FRAME_TABLE
+        .lock()
+        .get_frame_ref(frame)
+        .expect("referenced frame must be present");
+    frame_ref.lock().drop_frame(frame, size);
+}
+
 impl CowBackend {
+    fn clone_for_fork(&self) -> Self {
+        Self {
+            start: self.start,
+            size: self.size,
+            file: self.file.clone(),
+            mapped_pages: AtomicUsize::new(0),
+            identity: Arc::new(()),
+        }
+    }
+
     fn dec_mapped_pages(&self) {
         let mut old = self.mapped_pages.load(Ordering::Relaxed);
         while old != 0 {
@@ -114,17 +217,138 @@ impl CowBackend {
     }
 
     fn alloc_new_frame(&self, zeroed: bool) -> AxResult<PhysAddr> {
-        let frame = alloc_frame(zeroed, self.size)?;
-        FRAME_TABLE.lock().init_frame(frame);
-        Ok(frame)
+        alloc_referenced_frame(zeroed, self.size)
     }
 
     fn drop_new_frame(&self, frame: PhysAddr) {
-        let frame_ref = FRAME_TABLE
-            .lock()
-            .get_frame_ref(frame)
-            .expect("new frame must be referenced");
-        frame_ref.lock().drop_frame(frame, self.size);
+        drop_referenced_frame(frame, self.size);
+    }
+
+    pub(crate) fn prepare_fault(
+        &self,
+        vaddr: VirtAddr,
+        _area_range: VirtAddrRange,
+        _flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> FaultPreparation {
+        if self.size != PageSize::Size4K {
+            return FaultPreparation::Fallback;
+        }
+        let vaddr = vaddr.align_down(self.size as usize);
+        match pt.query(vaddr) {
+            Ok((paddr, page_flags, page_size)) => {
+                if page_size == self.size && page_flags.contains(access_flags) {
+                    FaultPreparation::Handled
+                } else if page_size == self.size
+                    && access_flags.contains(MappingFlags::WRITE)
+                    && !page_flags.contains(MappingFlags::WRITE)
+                {
+                    // Concurrent replacement of an existing COW mapping needs
+                    // a synchronous remote TLB invalidation before releasing
+                    // the old PTE reference. RISC-V has that primitive here;
+                    // other architectures keep the exclusive path.
+                    #[cfg(not(target_arch = "riscv64"))]
+                    return FaultPreparation::Fallback;
+
+                    #[cfg(target_arch = "riscv64")]
+                    {
+                        let Some(frame_ref) = FRAME_TABLE.lock().get_frame_ref(paddr) else {
+                            return FaultPreparation::Fallback;
+                        };
+                        let mut frame_ref = frame_ref.lock();
+                        if frame_ref.0 == 1 {
+                            return FaultPreparation::Fallback;
+                        }
+                        let Some(count) = frame_ref.0.checked_add(1) else {
+                            return FaultPreparation::Fallback;
+                        };
+                        frame_ref.0 = count;
+                        return FaultPreparation::Cow(CowFaultPlan {
+                            identity: self.identity.clone(),
+                            vaddr,
+                            mapping_start: self.start,
+                            size: self.size,
+                            file: None,
+                            frame: None,
+                            source: Some(CowFaultSource::Anonymous(paddr)),
+                        });
+                    }
+                } else {
+                    FaultPreparation::Fallback
+                }
+            }
+            Err(PagingError::NotMapped) => FaultPreparation::Cow(CowFaultPlan {
+                identity: self.identity.clone(),
+                vaddr,
+                mapping_start: self.start,
+                size: self.size,
+                file: self.file.clone(),
+                frame: None,
+                source: None,
+            }),
+            Err(_) => FaultPreparation::Fallback,
+        }
+    }
+
+    pub(crate) fn commit_fault(
+        &self,
+        plan: &mut CowFaultPlan,
+        _area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        if !Arc::ptr_eq(&self.identity, &plan.identity) || self.size != plan.size {
+            return Ok(FaultCommit::Stale);
+        }
+
+        match pt.query(plan.vaddr) {
+            Ok((paddr, page_flags, page_size)) => {
+                if page_size == self.size && page_flags.contains(access_flags) {
+                    Ok(FaultCommit::Handled)
+                } else if let Some(source) = plan.source.as_ref() {
+                    if page_size != self.size
+                        || paddr != source.paddr()
+                        || !access_flags.contains(MappingFlags::WRITE)
+                        || page_flags.contains(MappingFlags::WRITE)
+                    {
+                        return Ok(FaultCommit::Stale);
+                    }
+
+                    let frame = plan.frame.ok_or(AxError::BadAddress)?;
+                    if !pt.remap_4k_concurrent_if(plan.vaddr, paddr, frame, flags)? {
+                        return Ok(FaultCommit::Stale);
+                    }
+                    // The leaf CAS replaced the physical frame. Before the
+                    // old PTE reference can be released, every RISC-V hart
+                    // must stop using a possibly cached translation to it.
+                    #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+                    crate::mm::flush_tlb_on_all_cpus(pt.root_paddr(), Some(plan.vaddr));
+                    // Drop the reference formerly owned by this PTE. The
+                    // plan's extra pin remains until CowFaultPlan is dropped.
+                    drop_referenced_frame(paddr, self.size);
+                    plan.frame = None;
+                    Ok(FaultCommit::Handled)
+                } else {
+                    Ok(FaultCommit::Stale)
+                }
+            }
+            Err(PagingError::NotMapped) => {
+                if plan.source.is_some() {
+                    return Ok(FaultCommit::Stale);
+                }
+                let frame = plan.frame.ok_or(AxError::BadAddress)?;
+                match pt.map_4k_concurrent(plan.vaddr, frame, flags) {
+                    Ok(()) => plan.frame = None,
+                    Err(PagingError::AlreadyMapped) => return Ok(FaultCommit::Stale),
+                    Err(err) => return Err(err.into()),
+                }
+                self.mapped_pages.fetch_add(1, Ordering::Relaxed);
+                Ok(FaultCommit::Handled)
+            }
+            Err(_) => Err(AxError::BadAddress),
+        }
     }
 
     fn alloc_new_at(
@@ -321,12 +545,13 @@ impl BackendOps for CowBackend {
         flags: MappingFlags,
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<Mutex<AddrSpace>>,
+        _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
+        let new_backend = self.clone_for_fork();
         // Forking untouched lazy COW regions is common (e.g. fork14). In that
         // case, there is nothing in page tables to duplicate.
         if self.mapped_pages.load(Ordering::Relaxed) == 0 {
-            return Ok(Backend::Cow(self.clone()));
+            return Ok(Backend::Cow(new_backend));
         }
 
         let cow_flags = flags - MappingFlags::WRITE;
@@ -343,20 +568,23 @@ impl BackendOps for CowBackend {
                     if let Err(err) =
                         self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)
                     {
-                        self.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                        new_backend
+                            .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
                         return Err(err);
                     }
+                    new_backend.mapped_pages.fetch_add(1, Ordering::Relaxed);
                 }
                 // If the page is not mapped, skip it.
                 Err(PagingError::NotMapped) => {}
                 Err(_) => {
-                    self.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                    new_backend
+                        .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
                     return Err(AxError::BadAddress);
                 }
             };
         }
 
-        Ok(Backend::Cow(self.clone()))
+        Ok(Backend::Cow(new_backend))
     }
 }
 
@@ -373,6 +601,7 @@ impl Backend {
             size,
             file: Some((file, file_start, file_end)),
             mapped_pages: AtomicUsize::new(0),
+            identity: Arc::new(()),
         })
     }
 
@@ -382,6 +611,7 @@ impl Backend {
             size,
             file: None,
             mapped_pages: AtomicUsize::new(0),
+            identity: Arc::new(()),
         })
     }
 }
