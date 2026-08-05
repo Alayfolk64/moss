@@ -594,42 +594,31 @@ impl AxRunQueue {
 }
 
 fn poll_gc(cx: &mut Context<'_>) -> Poll<()> {
-    loop {
-        // Drop all exited tasks and recycle resources.
-        let n = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.len());
-        for _ in 0..n {
-            // Do not do the slow drops in the critical section.
-            let Some(task) = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.pop_front())
-            else {
-                continue;
-            };
-            match Arc::try_unwrap(task) {
-                Ok(task) => {
-                    // If I'm the last holder of the task, drop it immediately.
-                    drop(task);
-                }
-                Err(task) => {
-                    // Otherwise (e.g, `switch_to` is not compeleted, held by the
-                    // joiner, etc), push it back and wait for them to drop first.
-                    EXITED_TASKS.with_current(|exited_tasks| exited_tasks.push_back(task));
-                }
+    // Only inspect the tasks that were queued when this pass started. A task
+    // can still be referenced by the context-switch path or by its joiner.
+    let queued = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.len());
+    for _ in 0..queued {
+        let Some(task) = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.pop_front()) else {
+            break;
+        };
+
+        match Arc::try_unwrap(task) {
+            Ok(task) => drop(task),
+            Err(task) => {
+                EXITED_TASKS.with_current(|exited_tasks| exited_tasks.push_back(task));
             }
         }
-        // Note: we cannot block current task with preemption disabled,
-        // use `current_ref_raw` to get the `WAIT_FOR_EXIT`'s reference here to avoid
-        // the use of `NoPreemptGuard`. Since gc task is pinned to the current
-        // CPU, there is no affection if the gc task is preempted during the process.
-        unsafe { WAIT_FOR_EXIT.current_ref_raw() }.register(cx.waker());
-
-        // New tasks might be added during the above section, recheck it to
-        // prevent us from sleeping indefinitely.
-        if EXITED_TASKS.with_current(|exited_tasks| exited_tasks.is_empty()) {
-            break;
-        }
-
-        crate::yield_now();
     }
 
+    // The GC task is CPU-pinned, so accessing the per-CPU waker without a
+    // preemption guard is safe here. Register before sleeping so a later task
+    // exit starts another bounded collection pass.
+    unsafe { WAIT_FOR_EXIT.current_ref_raw() }.register(cx.waker());
+
+    // A task still referenced by its joiner can wait for the next task-exit
+    // notification. Reclaiming it is not latency-sensitive, and an
+    // event-driven retry avoids a GC yield loop when the system is otherwise
+    // idle.
     Poll::Pending
 }
 
