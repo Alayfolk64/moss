@@ -297,11 +297,15 @@ impl AddrSpaceLock {
 
 static RECLAIM_QUEUE: SpinNoIrq<VecDeque<Arc<AddrSpaceLock>>> = SpinNoIrq::new(VecDeque::new());
 static RECLAIM_WORKERS: AtomicUsize = AtomicUsize::new(0);
+// Address-space destruction performs synchronous remote TLB shootdowns.  A
+// single worker keeps reclamation off exit/execve without allowing every CPU
+// to enter a mutually dependent shootdown at the same time.
+const RECLAIM_WORKER_LIMIT: usize = 1;
 
 fn start_reclaim_worker() {
     loop {
         let workers = RECLAIM_WORKERS.load(Ordering::Acquire);
-        if workers >= axhal::cpu_num() || RECLAIM_QUEUE.lock().is_empty() {
+        if workers >= RECLAIM_WORKER_LIMIT || RECLAIM_QUEUE.lock().is_empty() {
             return;
         }
         if RECLAIM_WORKERS
