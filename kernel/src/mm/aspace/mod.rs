@@ -444,6 +444,11 @@ impl AddrSpace {
         self.areas
             .protect(start, size, |_| Some(flags), &mut self.pt)?;
 
+        // `mprotect` changes permissions in an address space which sibling
+        // threads may currently execute on other CPUs.
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        crate::mm::flush_tlb_on_all_cpus(self.page_table_root(), None);
+
         Ok(())
     }
 
@@ -677,6 +682,8 @@ impl AddrSpace {
 
         let mut guard = new_aspace.lock();
 
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        let root = self.page_table_root();
         let mut self_modify = self.pt.modify();
         for area in self.areas.iter() {
             let new_backend = area.backend().clone_map(
@@ -691,6 +698,12 @@ impl AddrSpace {
             let aspace = guard.deref_mut();
             aspace.areas.map(new_area, &mut aspace.pt, false)?;
         }
+        // `clone_map` write-protects the parent's private mappings. Finish the
+        // local batched invalidations, then synchronously revoke writable TLB
+        // entries on every other CPU before the child can be returned.
+        self_modify.finish();
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        crate::mm::flush_tlb_on_all_cpus(root, None);
         drop(guard);
 
         Ok(new_aspace)

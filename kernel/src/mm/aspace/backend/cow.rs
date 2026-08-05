@@ -454,6 +454,9 @@ impl CowBackend {
             1 => {
                 // Only one reference, just upgrade the permissions.
                 pt.protect(vaddr, flags)?;
+                pt.finish();
+                #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+                crate::mm::flush_tlb_on_all_cpus(pt.root_paddr(), Some(vaddr));
                 return Ok(());
             }
             _ => {
@@ -470,6 +473,11 @@ impl CowBackend {
                     self.drop_new_frame(new_frame);
                     return Err(err.into());
                 }
+                // The old frame cannot be released until every CPU has
+                // discarded a translation which may still reference it.
+                pt.finish();
+                #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+                crate::mm::flush_tlb_on_all_cpus(pt.root_paddr(), Some(vaddr));
                 frame.drop_frame(paddr, self.size);
             }
         }
