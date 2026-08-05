@@ -120,6 +120,11 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     break;
                 }
 
+                // Syscall and trap handling is complete here, so the saved
+                // user context can migrate without carrying CPU-local kernel
+                // state or locks across the switch.
+                axtask::rebalance_current();
+
                 if !unblock_next_signal() {
                     while check_signals(thr, &mut uctx, None) {}
                 }

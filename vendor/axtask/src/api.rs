@@ -240,6 +240,42 @@ pub fn set_current_affinity(cpumask: AxCpuMask) -> bool {
     }
 }
 
+/// Rebalances the current task at a caller-provided migration-safe point.
+///
+/// Returns `true` when the task moved to another CPU. Kernel code must not
+/// call this while holding a lock, a preemption guard, or other CPU-local
+/// state across the call.
+pub fn rebalance_current() -> bool {
+    #[cfg(not(feature = "smp"))]
+    {
+        false
+    }
+
+    #[cfg(feature = "smp")]
+    {
+        let curr = current().clone();
+        let Some(target_cpu) = crate::run_queue::rebalance_target(&curr) else {
+            return false;
+        };
+
+        const MIGRATION_TASK_STACK_SIZE: usize = 4096;
+        let migration_task = TaskInner::new(
+            move || crate::run_queue::migrate_entry_to(curr, target_cpu),
+            "rebalance-task".into(),
+            MIGRATION_TASK_STACK_SIZE,
+        )
+        .into_arc();
+
+        current_run_queue::<NoPreemptIrqSave>().migrate_current(migration_task);
+        assert_eq!(
+            axhal::percpu::this_cpu_id(),
+            target_cpu,
+            "Rebalancing failed"
+        );
+        true
+    }
+}
+
 /// Current task gives up the CPU time voluntarily, and switches to another
 /// ready task.
 pub fn yield_now() {

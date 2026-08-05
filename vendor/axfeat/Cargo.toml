@@ -106,6 +106,7 @@ ipi = [
     "dep:axipi",
     "axhal/ipi",
     "axruntime/ipi",
+    "axtask?/ipi",
 ]
 irq = [
     "axhal/irq",
