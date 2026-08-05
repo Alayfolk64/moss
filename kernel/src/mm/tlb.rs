@@ -32,10 +32,7 @@ pub(crate) use loongarch64::{
 
 #[cfg(target_arch = "riscv64")]
 mod riscv64 {
-    use core::{
-        hint::spin_loop,
-        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    };
+    use core::sync::atomic::{AtomicUsize, Ordering};
 
     use axhal::mem::{PhysAddr, VirtAddr};
     use memory_addr::PAGE_SIZE_4K;
@@ -43,30 +40,6 @@ mod riscv64 {
 
     static ACTIVE_PAGE_TABLE_ROOTS: [AtomicUsize; axconfig::plat::CPU_NUM] =
         [const { AtomicUsize::new(0) }; axconfig::plat::CPU_NUM];
-    static REMOTE_SFENCE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
-
-    struct RemoteSfenceGuard;
-
-    impl RemoteSfenceGuard {
-        fn acquire() -> Self {
-            while REMOTE_SFENCE_IN_PROGRESS
-                .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
-                .is_err()
-            {
-                // Keep supervisor interrupts in their caller-provided state.
-                // OpenSBI can still take its machine-mode software interrupt
-                // and complete the shootdown owned by another hart.
-                spin_loop();
-            }
-            Self
-        }
-    }
-
-    impl Drop for RemoteSfenceGuard {
-        fn drop(&mut self) {
-            REMOTE_SFENCE_IN_PROGRESS.store(false, Ordering::Release);
-        }
-    }
 
     pub(super) fn note_page_table_switch(root_paddr: PhysAddr) {
         let cpu = axhal::percpu::this_cpu_id();
@@ -90,16 +63,6 @@ mod riscv64 {
         }
 
         let cpu_num = axhal::cpu_num();
-        if cpu_num == 1 {
-            return;
-        }
-
-        // OpenSBI remote fences are synchronous. If several harts enter the
-        // RFENCE ecall together and each waits for the others, none of them can
-        // drain the complete request set. Permit one remote shootdown owner at
-        // a time while keeping the owner pinned to its current hart.
-        let _preempt_guard = kernel_guard::NoPreempt::new();
-        let _remote_guard = RemoteSfenceGuard::acquire();
         let mask_width = usize::BITS as usize;
         let (start, size) = vaddr.map_or((0, usize::MAX), |addr| (addr.as_usize(), PAGE_SIZE_4K));
 
