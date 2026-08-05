@@ -41,6 +41,7 @@ ARCH ?= x86_64
 MYPLAT ?=
 PLAT_CONFIG ?=
 SMP ?=
+CPU_CAPACITY ?=
 MODE ?= release
 LOG ?= warn
 V ?=

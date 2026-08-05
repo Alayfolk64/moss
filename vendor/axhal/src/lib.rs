@@ -120,6 +120,46 @@ pub fn init_early(cpu_id: usize, arg: usize) {
     axplat::init::init_early(cpu_id, arg);
 }
 
+/// Returns the number of CPUs available at runtime.
+///
+/// QEMU's device tree is authoritative. `axconfig::plat::CPU_NUM` only sizes
+/// fixed per-CPU storage and therefore acts as a hard capacity.
+pub fn cpu_num() -> usize {
+    #[cfg(feature = "smp")]
+    {
+        use lazyinit::LazyInit;
+
+        static CPU_NUM: LazyInit<usize> = LazyInit::new();
+        if let Some(cpu_num) = CPU_NUM.get() {
+            return *cpu_num;
+        }
+
+        let capacity = axconfig::plat::CPU_NUM;
+        let detected = dtb::cpu_count()
+            .expect("QEMU SMP requires a valid CPU topology in the device tree");
+        assert!(
+            detected <= capacity,
+            "device tree declares {detected} CPUs, exceeding build capacity {capacity}"
+        );
+        *CPU_NUM.init_once(detected)
+    }
+    #[cfg(not(feature = "smp"))]
+    {
+        1
+    }
+}
+
+/// Translates a dense logical CPU index to its firmware-visible identifier.
+pub fn cpu_hardware_id(logical_id: usize) -> usize {
+    assert!(logical_id < cpu_num(), "logical CPU ID is out of range");
+    logical_id
+}
+
+/// Translates a firmware-visible CPU identifier to a dense logical index.
+pub fn cpu_logical_id(hardware_id: usize) -> Option<usize> {
+    (hardware_id < cpu_num()).then_some(hardware_id)
+}
+
 macro_rules! addr_of_sym {
     ($e:ident) => {
         $e as *const () as usize

@@ -30,7 +30,8 @@ impl MemIf for MemIfImpl {
     /// Note that the ranges returned should not include the range where the
     /// kernel is loaded.
     fn reserved_phys_ram_ranges() -> &'static [RawRange] {
-        &[]
+        // OpenSBI occupies the beginning of RAM below the kernel load address.
+        &[(PHYS_MEMORY_BASE, KERNEL_BASE_PADDR - PHYS_MEMORY_BASE)]
     }
 
     /// Returns all device memory (MMIO) ranges on the platform.

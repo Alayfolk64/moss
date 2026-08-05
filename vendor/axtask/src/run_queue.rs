@@ -100,7 +100,7 @@ pub(crate) fn current_run_queue<G: BaseGuard>() -> CurrentRunQueueRef<'static, G
 /// This function will panic if `cpu_mask` is empty, indicating that there are no available CPUs for task execution.
 ///
 #[cfg(feature = "smp")]
-// The modulo operation is safe here because `axconfig::plat::CPU_NUM` is always greater than 1 with "smp" enabled.
+// Scheduler initialization publishes at least one active CPU.
 #[allow(clippy::modulo_one)]
 #[inline]
 fn select_run_queue_index(cpumask: AxCpuMask) -> usize {
@@ -111,7 +111,7 @@ fn select_run_queue_index(cpumask: AxCpuMask) -> usize {
 
     // Round-robin selection of the run queue index.
     loop {
-        let index = RUN_QUEUE_INDEX.fetch_add(1, Ordering::SeqCst) % axconfig::plat::CPU_NUM;
+        let index = RUN_QUEUE_INDEX.fetch_add(1, Ordering::SeqCst) % crate::api::active_cpu_num();
         if cpumask.get(index) {
             return index;
         }

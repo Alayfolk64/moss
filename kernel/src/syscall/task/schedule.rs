@@ -128,11 +128,12 @@ pub fn sys_sched_setaffinity(pid: i32, cpusetsize: usize, user_mask: *const u8) 
         return Err(AxError::InvalidInput);
     }
 
-    let size = cpusetsize.min(axconfig::plat::CPU_NUM.div_ceil(8));
+    let cpu_num = axtask::active_cpu_count();
+    let size = cpusetsize.min(cpu_num.div_ceil(8));
     let user_mask = vm_load(user_mask, size)?;
     let mut cpu_mask = AxCpuMask::new();
 
-    for i in 0..(size * 8).min(axconfig::plat::CPU_NUM) {
+    for i in 0..(size * 8).min(cpu_num) {
         if user_mask[i / 8] & (1 << (i % 8)) != 0 {
             cpu_mask.set(i, true);
         }

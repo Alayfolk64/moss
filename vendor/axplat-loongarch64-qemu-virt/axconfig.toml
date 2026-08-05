@@ -39,6 +39,8 @@ kernel-aspace-base = "0xffff_8000_0000_0000"    # uint
 kernel-aspace-size = "0x0000_7fff_ffff_f000"    # uint
 # Stack size on bootstrapping. (256K)
 boot-stack-size = 0x40000                       # uint
+# QEMU virt places its generated device tree here.
+fdt-paddr = 0x10_0000                          # uint
 
 #
 # Device specifications
