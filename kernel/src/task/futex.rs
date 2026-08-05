@@ -295,8 +295,18 @@ impl Deref for FutexGuard<'_> {
 
 impl Drop for FutexGuard<'_> {
     fn drop(&mut self) {
-        if Arc::strong_count(&self.inner) <= 2 && self.inner.wq.is_empty() {
-            self.table.0.lock().remove(&self.key);
+        // Most guards still have another user or a queued waiter. Avoid
+        // contending on the table lock unless this entry may be unused.
+        if Arc::strong_count(&self.inner) > 2 || !self.inner.wq.is_empty() {
+            return;
+        }
+
+        let mut table = self.table.0.lock();
+        let can_remove = table.get(&self.key).is_some_and(|entry| {
+            Arc::ptr_eq(entry, &self.inner) && Arc::strong_count(entry) <= 2 && entry.wq.is_empty()
+        });
+        if can_remove {
+            table.remove(&self.key);
         }
     }
 }
