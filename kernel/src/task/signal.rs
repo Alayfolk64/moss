@@ -53,7 +53,15 @@ pub fn check_signals(
     uctx: &mut UserContext,
     restore_blocked: Option<SignalSet>,
 ) -> bool {
+    if thr.pending_exit() || thr.exec_exit_requested() {
+        return false;
+    }
+
     crate::syscall::ptrace_wait_if_stopped(thr);
+
+    if thr.pending_exit() || thr.exec_exit_requested() {
+        return false;
+    }
 
     let pid = thr.proc_data.proc.pid();
     if crate::syscall::ptrace_is_traced(pid) {

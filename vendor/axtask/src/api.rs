@@ -90,6 +90,7 @@ pub fn current_may_uninit() -> Option<CurrentTask> {
 /// The caller must keep the old address space alive until this function
 /// returns.
 pub fn replace_current_page_table(root: memory_addr::PhysAddr) {
+    let _guard = NoPreemptIrqSave::new();
     let curr = current();
     unsafe {
         (*curr.ctx_mut_ptr()).set_page_table_root(root);

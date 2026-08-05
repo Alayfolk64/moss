@@ -237,17 +237,6 @@ fn execve_common(
         return Err(AxError::WouldBlock);
     }
 
-    {
-        let _exec_lock = proc_data.exec_lock.lock();
-        if proc_data.exec_in_progress() {
-            return Err(AxError::WouldBlock);
-        }
-        proc_data.set_exec_in_progress(true);
-    }
-
-    let _exec_state_guard = ExecStateGuard { proc_data };
-    terminate_other_threads_for_exec(proc_data, current_tid);
-
     let fanotify_exec_path = exec_loc
         .as_ref()
         .and_then(|loc| loc.absolute_path().ok())
@@ -270,6 +259,19 @@ fn execve_common(
         load_user_app(&mut new_aspace, Some(path.as_str()), &args, &envs)?
     };
     let page_table_root = new_aspace.page_table_root();
+
+    // Loading above is fallible and leaves the running image untouched. Start
+    // the irreversible thread-group commit only after the new image is ready.
+    {
+        let _exec_lock = proc_data.exec_lock.lock();
+        if proc_data.exec_in_progress() {
+            return Err(AxError::WouldBlock);
+        }
+        proc_data.set_exec_in_progress(true);
+    }
+    let _exec_state_guard = ExecStateGuard { proc_data };
+    terminate_other_threads_for_exec(proc_data, current_tid);
+
     let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
     axtask::replace_current_page_table(page_table_root);
     drop(old_aspace);
