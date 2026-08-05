@@ -26,6 +26,7 @@ use crate::{
     syscall::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
+        unshare_current_fd_table,
     },
     task::{AsThread, ProcessData, address_space_shared_with_live_process, processes, tasks},
 };
@@ -335,6 +336,9 @@ fn execve_common(
     curr.as_thread().set_robust_list_head(0);
     curr.as_thread().reset_rseq();
 
+    // A successful exec undoes CLONE_FILES. Detach before applying CLOEXEC so
+    // the old table and any pipe endpoints remain owned by the live peer.
+    unshare_current_fd_table();
     close_cloexec_files_for_current_process();
 
     ptrace_on_exec(proc_data.proc.pid());
