@@ -7,8 +7,11 @@ static mut BOOT_STACK: [u8; BOOT_STACK_SIZE] = [0; BOOT_STACK_SIZE];
 #[unsafe(link_section = ".data")]
 static mut BOOT_PT_SV39: Aligned4K<[u64; 512]> = Aligned4K::new([0; 512]);
 
+const GIGA_PAGE_SIZE: usize = 1 << 30;
+const SV39_HIGH_HALF_INDEX: usize = 0x100;
+
 #[allow(clippy::identity_op)] // (0x0 << 10) here makes sense because it's an address
-unsafe fn init_boot_page_table() {
+unsafe fn init_boot_page_table(dtb: usize) {
     unsafe {
         // 0x0000_0000..0x4000_0000, VRWX_GAD, 1G block
         BOOT_PT_SV39[0] = (0x0 << 10) | 0xef;
@@ -18,6 +21,17 @@ unsafe fn init_boot_page_table() {
         BOOT_PT_SV39[0x100] = (0x0 << 10) | 0xef;
         // 0xffff_ffc0_8000_0000..0xffff_ffc0_c000_0000, VRWX_GAD, 1G block
         BOOT_PT_SV39[0x102] = (0x80000 << 10) | 0xef;
+
+        // QEMU places the DTB near the end of configured RAM. Map its complete
+        // 1-GiB block before Rust follows the firmware-provided pointer.
+        let block = dtb / GIGA_PAGE_SIZE;
+        assert!(
+            block < SV39_HIGH_HALF_INDEX,
+            "DTB lies outside the Sv39 direct-map capacity"
+        );
+        let pte = ((block * GIGA_PAGE_SIZE) >> 12 << 10) as u64 | 0xef;
+        BOOT_PT_SV39[block] = pte;
+        BOOT_PT_SV39[SV39_HIGH_HALF_INDEX + block] = pte;
     }
 }
 
@@ -43,6 +57,7 @@ unsafe extern "C" fn _start() -> ! {
         li      t0, {boot_stack_size}
         add     sp, sp, t0              // setup boot stack
 
+        mv      a0, s1
         call    {init_boot_page_table}
         call    {init_mmu}              // setup boot page table and enabel MMU
 

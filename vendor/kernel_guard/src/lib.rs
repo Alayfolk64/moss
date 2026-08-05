@@ -63,6 +63,9 @@ pub trait KernelGuardIf {
 
     /// How to disable kernel preemption.
     fn disable_preempt();
+
+    /// How to disable kernel preemption when local IRQs are already disabled.
+    fn disable_preempt_irq_disabled();
 }
 
 /// A base trait that all guards implement.
@@ -94,9 +97,9 @@ cfg_if::cfg_if! {
         /// A guard that disables/enables both kernel preemption and local IRQs
         /// around the critical section.
         ///
-        /// When entering the critical section, it disables kernel preemption
-        /// first, followed by local IRQs. When leaving the critical section, it
-        /// re-enables local IRQs first, followed by kernel preemption.
+        /// When entering the critical section, it disables local IRQs first,
+        /// followed by kernel preemption. When leaving the critical section,
+        /// it re-enables local IRQs first, followed by kernel preemption.
         pub struct NoPreemptIrqSave(usize);
     } else {
         /// Alias of [`NoOp`].
@@ -163,11 +166,12 @@ mod imp {
     impl BaseGuard for NoPreemptIrqSave {
         type State = usize;
         fn acquire() -> Self::State {
-            // disable preempt
+            // Disable IRQs before consulting per-CPU task state. This avoids
+            // recursively acquiring another IRQ-save guard on SMP systems.
+            let state = super::arch::local_irq_save_and_disable();
             #[cfg(feature = "preempt")]
-            crate_interface::call_interface!(KernelGuardIf::disable_preempt);
-            // disable IRQs and save IRQ states
-            super::arch::local_irq_save_and_disable()
+            crate_interface::call_interface!(KernelGuardIf::disable_preempt_irq_disabled);
+            state
         }
         fn release(state: Self::State) {
             // restore IRQ states

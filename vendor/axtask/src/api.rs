@@ -63,8 +63,17 @@ impl kernel_guard::KernelGuardIf for KernelGuardIfImpl {
         }
     }
 
+    fn disable_preempt_irq_disabled() {
+        // NoPreemptIrqSave has already disabled local IRQs, so this per-CPU
+        // read cannot race with task migration.
+        if let Some(curr) = unsafe { CurrentTask::try_get_migration_disabled() } {
+            curr.disable_preempt();
+        }
+    }
+
     fn enable_preempt() {
-        if let Some(curr) = current_may_uninit() {
+        // A preemption guard remains active until this hook returns.
+        if let Some(curr) = unsafe { CurrentTask::try_get_migration_disabled() } {
             curr.enable_preempt(true);
         }
     }
@@ -87,7 +96,7 @@ pub fn current() -> CurrentTask {
 
 /// Initializes the task scheduler (for the primary CPU).
 pub fn init_scheduler() {
-    init_scheduler_with_cpu_num(axconfig::plat::CPU_NUM);
+    init_scheduler_with_cpu_num(axhal::cpu_num());
 }
 
 /// Initializes the task scheduler with cpu_num (for the primary CPU).
@@ -101,6 +110,11 @@ pub fn init_scheduler_with_cpu_num(cpu_num: usize) {
 }
 
 pub(crate) fn active_cpu_num() -> usize {
+    active_cpu_count()
+}
+
+/// Returns the number of CPUs currently managed by the scheduler.
+pub fn active_cpu_count() -> usize {
     CPU_NUM.load(core::sync::atomic::Ordering::Relaxed)
 }
 

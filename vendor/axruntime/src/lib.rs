@@ -177,7 +177,7 @@ pub fn take_runtime_block_device(slot_idx: usize) -> Option<axdriver::AxBlockDev
 }
 
 fn is_init_ok() -> bool {
-    INITED_CPUS.load(Ordering::Acquire) == axconfig::plat::CPU_NUM
+    INITED_CPUS.load(Ordering::Acquire) == axhal::cpu_num()
 }
 
 /// The main entry point of the ArceOS runtime.
@@ -191,10 +191,18 @@ fn is_init_ok() -> bool {
 /// In multi-core environment, this function is called on the primary core, and
 /// secondary cores call [`rust_main_secondary`].
 #[cfg_attr(not(test), axplat::main)]
-pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
+pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
     unsafe { axhal::mem::clear_bss() };
-    axhal::percpu::init_primary(cpu_id);
-    axhal::init_early(cpu_id, arg);
+    // QEMU virt numbers the boot CPU densely. Initialize the early console
+    // before parsing the complete topology so any DT error remains visible.
+    axhal::percpu::init_primary(hardware_cpu_id);
+    axhal::init_early(hardware_cpu_id, arg);
+    let cpu_id = axhal::cpu_logical_id(hardware_cpu_id)
+        .expect("boot CPU is missing from the device-tree topology");
+    assert_eq!(
+        cpu_id, hardware_cpu_id,
+        "boot CPU requires non-identity logical remapping before percpu init"
+    );
 
     ax_println!("{}", LOGO);
     ax_println!(
@@ -213,7 +221,7 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
         option_env!("AX_MODE").unwrap_or(""),
         option_env!("AX_LOG").unwrap_or(""),
         axbacktrace::is_enabled(),
-        axconfig::plat::CPU_NUM,
+        axhal::cpu_num(),
     );
     #[cfg(feature = "rtc")]
     ax_println!(
@@ -227,6 +235,12 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     info!("Primary CPU {cpu_id} started, arg = {arg:#x}.");
 
     axhal::mem::init();
+    ax_println!(
+        "MOSS_DTB cpu_nodes={} memory_regions={} memory_bytes={:#x}",
+        axhal::cpu_num(),
+        axhal::mem::phys_ram_ranges().len(),
+        axhal::mem::total_ram_size(),
+    );
     info!("Found physcial memory regions:");
     for r in axhal::mem::memory_regions() {
         info!(
@@ -339,7 +353,7 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     }
 
     #[cfg(feature = "smp")]
-    self::mp::start_secondary_cpus(cpu_id);
+    self::mp::start_secondary_cpus(hardware_cpu_id);
 
     #[cfg(feature = "irq")]
     {
@@ -361,6 +375,8 @@ pub fn rust_main(cpu_id: usize, arg: usize) -> ! {
     while !is_init_ok() {
         core::hint::spin_loop();
     }
+
+    ax_println!("MOSS_SMP online={}", INITED_CPUS.load(Ordering::Acquire));
 
     unsafe { main() };
 
@@ -388,10 +404,10 @@ fn init_allocator() {
     let kernel_end_paddr = virt_to_phys(_ekernel.as_ptr().addr().into());
 
     let init_region = free_regions()
-        // First try to find a free memory region after the kernel image
-        .find(|r| r.paddr >= kernel_end_paddr)
-        // Otherwise just use the largest free memory region
-        .or_else(|| free_regions().max_by_key(|r| r.size))
+        // The bitmap page allocator manages only its initial contiguous range.
+        // Prefer the largest one so split-memory machines can use high RAM for
+        // page-backed user memory.
+        .max_by_key(|r| (r.size, r.paddr >= kernel_end_paddr))
         .expect("no free memory region found!!");
 
     axalloc::global_init(phys_to_virt(init_region.paddr).as_usize(), init_region.size);

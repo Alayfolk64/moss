@@ -79,7 +79,7 @@ fn create_dir_all(fs: &FsContext, path: &str) -> LinuxResult<()> {
 }
 
 fn cpu_range_string() -> String {
-    match axconfig::plat::CPU_NUM {
+    match axhal::cpu_num() {
         0 | 1 => "0\n".into(),
         num => format!("0-{}\n", num - 1),
     }
@@ -106,7 +106,7 @@ pub fn mount_all() -> LinuxResult<()> {
     create_static_file(&fs, "/sys/block/loop0/queue/dma_alignment", b"0\n")?;
 
     create_dir_all(&fs, "/sys/devices/system/cpu")?;
-    for cpu_id in 0..axconfig::plat::CPU_NUM {
+    for cpu_id in 0..axhal::cpu_num() {
         create_dir_all(&fs, &format!("/sys/devices/system/cpu/cpu{cpu_id}"))?;
     }
     let cpu_range = cpu_range_string();

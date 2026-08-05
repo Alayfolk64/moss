@@ -16,7 +16,11 @@ LOONGARCH_CC ?=
 export BLK := y
 export NET := n
 export VSOCK := n
-export MEM := 1G
+export MEM := 8G
+# Compile-time upper bound for per-CPU storage. QEMU's actual CPU count is
+# discovered from its device tree at boot.
+export CPU_CAPACITY ?= 256
+export SMP ?= 8
 export ICOUNT := n
 export BUS := mmio
 
@@ -123,7 +127,7 @@ build run debug disasm: toolchain defconfig
 all: kernel-rv kernel-la
 
 kernel-rv: toolchain
-	$(MAKE) ARCH=riscv64 build
+	$(MAKE) ARCH=riscv64 MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
 endif
@@ -135,7 +139,7 @@ ifneq ($(DWARF), y)
 endif
 
 kernel-la: toolchain
-	$(MAKE) ARCH=loongarch64 BUS=pci build
+	$(MAKE) ARCH=loongarch64 BUS=pci MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf
 endif

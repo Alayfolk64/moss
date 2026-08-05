@@ -1,14 +1,18 @@
 //! DTB (Device Tree Blob) related functionality.
 use core::ptr::NonNull;
 
-use fdt_parser::Fdt;
+use fdt_parser::{Fdt, Status};
 use lazyinit::LazyInit;
 
 static BOOTARG: LazyInit<usize> = LazyInit::new();
 
 /// Initializes the boot argument.
 pub fn init(arg: usize) {
-    BOOTARG.init_once(arg);
+    if let Some(existing) = BOOTARG.get() {
+        assert_eq!(*existing, arg, "boot DTB address changed after initialization");
+    } else {
+        BOOTARG.init_once(arg);
+    }
 }
 
 /// Returns the boot argument.
@@ -33,6 +37,25 @@ pub fn get_fdt() -> Option<&'static Fdt<'static>> {
     }
 
     CACHED_FDT.init_once(init_fdt()).as_ref()
+}
+
+/// Returns the physical byte range occupied by the boot device tree.
+pub fn physical_range() -> Option<(usize, usize)> {
+    Some((get_bootarg(), get_fdt()?.total_size()))
+}
+
+/// Returns the number of enabled CPU nodes declared by the boot device tree.
+pub fn cpu_count() -> Option<usize> {
+    let count = get_fdt()?
+        .find_nodes("/cpus/cpu")
+        .filter(|node| node.status() != Some(Status::Disabled))
+        .filter(|node| {
+            node.find_property("device_type")
+                .is_none_or(|property| property.str() == "cpu")
+        })
+        .count();
+
+    (count != 0).then_some(count)
 }
 
 /// Get the bootargs chosen from the device tree.
