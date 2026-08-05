@@ -3,6 +3,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use axalloc::{UsageKind, global_allocator};
 use axerrno::{AxError, AxResult};
+use axfs::FolioPageRef;
 use axhal::{
     mem::{phys_to_virt, virt_to_phys},
     paging::{MappingFlags, PageSize, PageTable, PageTableMut},
@@ -16,8 +17,8 @@ mod file;
 mod linear;
 mod shared;
 
-pub(crate) use self::cow::CowFaultPlan;
 pub use self::shared::SharedPages;
+pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan};
 use super::{AddrSpace, AddrSpaceLock};
 
 /// Completes local page-table invalidations and, on SMP architectures with a
@@ -32,10 +33,18 @@ fn finish_unmap_before_reclaim(pt: &mut PageTableMut<'_>) {
     let _ = root;
 }
 
-/// Anonymous frames whose PTEs have been removed but whose storage must stay
-/// alive until every CPU has acknowledged the shared TLB invalidation.
+/// Page owners whose PTEs have been removed but whose storage must stay alive
+/// until every CPU has acknowledged the shared TLB invalidation.
+enum DeferredUnmapPage {
+    Anonymous {
+        paddr: PhysAddr,
+        page_size: PageSize,
+    },
+    File(FolioPageRef),
+}
+
 pub(crate) struct UnmapGather {
-    pages: Vec<(PhysAddr, PageSize)>,
+    pages: Vec<DeferredUnmapPage>,
 }
 
 impl UnmapGather {
@@ -51,7 +60,15 @@ impl UnmapGather {
         page_size: PageSize,
         pt: &mut PageTableMut<'_>,
     ) {
-        self.pages.push((paddr, page_size));
+        self.pages
+            .push(DeferredUnmapPage::Anonymous { paddr, page_size });
+        if self.pages.len() >= Self::MAX_PAGES {
+            self.finish(pt);
+        }
+    }
+
+    pub(crate) fn push_file(&mut self, page: FolioPageRef, pt: &mut PageTableMut<'_>) {
+        self.pages.push(DeferredUnmapPage::File(page));
         if self.pages.len() >= Self::MAX_PAGES {
             self.finish(pt);
         }
@@ -59,8 +76,13 @@ impl UnmapGather {
 
     pub(crate) fn finish(&mut self, pt: &mut PageTableMut<'_>) {
         finish_unmap_before_reclaim(pt);
-        for (paddr, page_size) in self.pages.drain(..) {
-            cow::drop_referenced_frame(paddr, page_size);
+        for page in self.pages.drain(..) {
+            match page {
+                DeferredUnmapPage::Anonymous { paddr, page_size } => {
+                    cow::drop_referenced_frame(paddr, page_size);
+                }
+                DeferredUnmapPage::File(page) => drop(page),
+            }
         }
     }
 }
@@ -74,6 +96,8 @@ pub(crate) enum FaultPreparation {
     Retry,
     /// A private page can be prepared while no address-space lock is held.
     Cow(CowFaultPlan),
+    /// A shared file folio can be loaded while no address-space lock is held.
+    File(FileFaultPlan),
     /// This backend or fault shape still needs the original exclusive path.
     Fallback,
 }
@@ -128,6 +152,11 @@ pub trait BackendOps {
 
     /// Unmap a memory region.
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult;
+
+    /// Discard resident pages while retaining the virtual memory area.
+    fn discard(&self, _range: VirtAddrRange, _pt: &mut PageTableMut) -> AxResult {
+        Err(AxError::OperationNotSupported)
+    }
 
     /// Called before a memory region is protected.
     fn on_protect(
@@ -191,7 +220,7 @@ impl Backend {
     ) -> AxResult {
         match self {
             Self::Cow(backend) => backend.unmap_present_into(range, pt, gather),
-            Self::File(backend) => backend.unmap_for_clear(range, pt),
+            Self::File(backend) => backend.unmap_present_into(range, pt, gather),
             Self::Linear(backend) => backend.unmap_for_clear(range, pt),
             Self::Shared(backend) => backend.unmap_for_clear(range, pt),
         }
@@ -221,7 +250,7 @@ impl Backend {
 
     pub(crate) fn prepare_fault(
         &self,
-        aspace: &Arc<AddrSpaceLock>,
+        _aspace: &Arc<AddrSpaceLock>,
         vaddr: VirtAddr,
         area_range: VirtAddrRange,
         flags: MappingFlags,
@@ -229,26 +258,11 @@ impl Backend {
         pt: &PageTable,
     ) -> FaultPreparation {
         match self {
-            Self::Cow(backend) => {
-                backend.prepare_fault(aspace, vaddr, area_range, flags, access_flags, pt)
+            Self::Cow(backend) => backend.prepare_fault(vaddr, area_range, flags, access_flags, pt),
+            Self::File(backend) => {
+                backend.prepare_fault(vaddr, area_range, flags, access_flags, pt)
             }
-            Self::File(backend) => backend.prepare_fault(vaddr),
             _ => FaultPreparation::Fallback,
-        }
-    }
-
-    /// Installs the truncate observer before a private file mapping can be
-    /// populated without going through the normal fault preparation path.
-    pub(crate) fn attach_private_file_mapping(&self, aspace: &Arc<AddrSpaceLock>) {
-        if let Self::Cow(backend) = self {
-            backend.ensure_length_listener(aspace);
-        }
-    }
-
-    pub(crate) fn file_length_change_in_progress(&self, range: VirtAddrRange) -> bool {
-        match self {
-            Self::Cow(backend) => backend.file_length_change_in_progress(range),
-            _ => false,
         }
     }
 
@@ -262,6 +276,20 @@ impl Backend {
     ) -> AxResult<FaultCommit> {
         match self {
             Self::Cow(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
+            _ => Ok(FaultCommit::Stale),
+        }
+    }
+
+    pub(crate) fn commit_file_fault(
+        &self,
+        plan: &mut FileFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        match self {
+            Self::File(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
             _ => Ok(FaultCommit::Stale),
         }
     }
@@ -303,13 +331,16 @@ impl MappingBackend for Backend {
     ) -> bool {
         let range = VirtAddrRange::from_start_size(start, size);
         let mut cursor = pt.modify();
-        let pte_flags = match BackendOps::on_protect(self, range, new_flags, &mut cursor) {
+        let mut pte_flags = match BackendOps::on_protect(self, range, new_flags, &mut cursor) {
             Ok(flags) => flags,
             Err(err) => {
                 warn!("Failed to protect area: {:?}", err);
                 return false;
             }
         };
+        if matches!(self, Self::Cow(_)) {
+            pte_flags -= MappingFlags::WRITE;
+        }
         cursor.protect_region(start, size, pte_flags).is_ok()
     }
 }

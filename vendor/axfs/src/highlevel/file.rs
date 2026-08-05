@@ -1,15 +1,14 @@
 use alloc::{
     boxed::Box,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{Arc, Weak},
     vec::Vec,
 };
 #[cfg(feature = "times")]
 use core::sync::atomic::AtomicU8;
 use core::{
-    num::NonZeroUsize,
     ops::Range,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     task::Context,
     time::Duration,
 };
@@ -23,8 +22,9 @@ use axhal::mem::{PhysAddr, VirtAddr, virt_to_phys};
 use axio::{SeekFrom, prelude::*};
 use axpoll::{IoEvents, Pollable};
 use axsync::{Mutex, MutexGuard};
+use axtask::WaitQueue;
 use intrusive_collections::{LinkedList, LinkedListAtomicLink, intrusive_adapter};
-use lru::LruCache;
+use kspin::SpinNoIrq;
 use spin::RwLock;
 
 use super::FsContext;
@@ -208,7 +208,7 @@ impl OpenOptions {
         } else {
             // TODO(mivik): is this correct?
             let non_cacheable_type = matches!(
-                cached_metadata(&loc)?.node_type,
+                loc.node_type(),
                 NodeType::CharacterDevice | NodeType::Fifo | NodeType::Socket
             );
 
@@ -312,253 +312,466 @@ impl Default for OpenOptions {
 }
 
 const PAGE_SIZE: usize = 4096;
-const DEFAULT_LOCAL_FILE_CACHE_PAGES: usize = 256;
-const MAX_RETAINED_FILE_CACHE_RECORDS: usize = 64;
-const MAX_READAHEAD_BYTES: usize = DEFAULT_LOCAL_FILE_CACHE_PAGES * PAGE_SIZE;
-const DEFERRED_FILE_LEN_THRESHOLD: u64 = 64 * 1024;
-const WRITEBACK_BATCH_PAGES: usize = 16;
-const WRITEBACK_BATCH_BYTES: usize = WRITEBACK_BATCH_PAGES * PAGE_SIZE;
+// Keep clean file pages while memory is plentiful.  Under pressure, reclaim
+// old cache pages until the allocator has breathing room again.  This mirrors
+// Linux's watermark-driven page-cache policy more closely than a fixed cache
+// size: a small machine retains less, while an otherwise idle large machine
+// can use most of its memory for useful cache.
+const MIN_FREE_MEMORY_BYTES: usize = 64 * 1024 * 1024;
+const FREE_MEMORY_LOW_DIVISOR: usize = 16;
+const FREE_MEMORY_TARGET_DIVISOR: usize = 8;
+const MAX_READAHEAD_BYTES: usize = 1024 * 1024;
+const BUFFERED_READAHEAD_BYTES: usize = 128 * 1024;
+const FOLIO_INDEX_SHARDS: usize = 64;
+const FILE_CACHE_SHARDS: usize = 64;
+const READAHEAD_WORKERS: usize = 8;
+const MAX_FOLIO_ORDER: u8 = 4;
+const MAX_FOLIO_PAGES: usize = 1 << MAX_FOLIO_ORDER;
+const LOCAL_LARGE_FOLIO_CACHE_CAPACITY: usize = 8;
+const LOCAL_PAGE_FRAME_CACHE_SHARDS: usize = 64;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
+static FILE_CACHE_CLOCK: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug)]
-pub struct PageCache {
-    addr: VirtAddr,
-    dirty: bool,
+#[derive(Default)]
+struct SleepRwState {
+    readers: usize,
+    writer: bool,
+    waiting_writers: usize,
 }
 
-impl PageCache {
-    fn new() -> VfsResult<Self> {
-        let addr = global_allocator()
-            .alloc_pages(1, PAGE_SIZE, UsageKind::PageCache)
-            .inspect_err(|err| {
-                warn!("Failed to allocate page cache: {:?}", err);
-            })
-            .map_err(|_| VfsError::NoMemory)?;
-        Ok(Self {
-            addr: addr.into(),
-            dirty: false,
-        })
+/// A small sleeping read/write gate for operations that may block on storage.
+///
+/// `spin::RwLock` remains appropriate for the short folio-index critical
+/// sections below, but must not be held across a block request.  This gate
+/// gives page faults concurrent read access while truncate and invalidation
+/// wait without burning a CPU.
+struct SleepRwLock {
+    state: Mutex<SleepRwState>,
+    wait: WaitQueue,
+}
+
+impl SleepRwLock {
+    const fn new() -> Self {
+        Self {
+            state: Mutex::new(SleepRwState {
+                readers: 0,
+                writer: false,
+                waiting_writers: 0,
+            }),
+            wait: WaitQueue::new(),
+        }
     }
 
+    fn read(&self) -> SleepRwReadGuard<'_> {
+        {
+            let mut state = self.state.lock();
+            if !state.writer && state.waiting_writers == 0 {
+                state.readers += 1;
+                return SleepRwReadGuard { lock: self };
+            }
+        }
+        self.wait.wait_until(|| {
+            let mut state = self.state.lock();
+            if state.writer || state.waiting_writers != 0 {
+                false
+            } else {
+                state.readers += 1;
+                true
+            }
+        });
+        SleepRwReadGuard { lock: self }
+    }
+
+    fn write(&self) -> SleepRwWriteGuard<'_> {
+        let waiting = {
+            let mut state = self.state.lock();
+            state.waiting_writers += 1;
+            if state.writer || state.readers != 0 {
+                true
+            } else {
+                state.waiting_writers -= 1;
+                state.writer = true;
+                false
+            }
+        };
+        if waiting {
+            self.wait.wait_until(|| {
+                let mut state = self.state.lock();
+                if state.writer || state.readers != 0 {
+                    false
+                } else {
+                    state.waiting_writers -= 1;
+                    state.writer = true;
+                    true
+                }
+            });
+        }
+        SleepRwWriteGuard { lock: self }
+    }
+}
+
+struct SleepRwReadGuard<'a> {
+    lock: &'a SleepRwLock,
+}
+
+impl Drop for SleepRwReadGuard<'_> {
+    fn drop(&mut self) {
+        let wake_writer = {
+            let mut state = self.lock.state.lock();
+            state.readers -= 1;
+            state.readers == 0
+        };
+        if wake_writer {
+            self.lock.wait.notify_all(false);
+        }
+    }
+}
+
+struct SleepRwWriteGuard<'a> {
+    lock: &'a SleepRwLock,
+}
+
+impl Drop for SleepRwWriteGuard<'_> {
+    fn drop(&mut self) {
+        {
+            let mut state = self.lock.state.lock();
+            debug_assert!(state.writer);
+            state.writer = false;
+        }
+        self.lock.wait.notify_all(false);
+    }
+}
+
+struct LocalLargeFolioCache {
+    frames: [[usize; LOCAL_LARGE_FOLIO_CACHE_CAPACITY]; MAX_FOLIO_ORDER as usize],
+    lengths: [usize; MAX_FOLIO_ORDER as usize],
+}
+
+impl LocalLargeFolioCache {
+    const fn new() -> Self {
+        Self {
+            frames: [[0; LOCAL_LARGE_FOLIO_CACHE_CAPACITY]; MAX_FOLIO_ORDER as usize],
+            lengths: [0; MAX_FOLIO_ORDER as usize],
+        }
+    }
+
+    fn pop(&mut self, order: u8) -> Option<VirtAddr> {
+        let slot = order.checked_sub(1)? as usize;
+        let len = &mut self.lengths[slot];
+        if *len == 0 {
+            return None;
+        }
+        *len -= 1;
+        Some(self.frames[slot][*len].into())
+    }
+
+    fn push(&mut self, order: u8, frame: VirtAddr) -> bool {
+        let Some(slot) = order.checked_sub(1).map(usize::from) else {
+            return false;
+        };
+        let len = &mut self.lengths[slot];
+        if *len == LOCAL_LARGE_FOLIO_CACHE_CAPACITY {
+            return false;
+        }
+        self.frames[slot][*len] = frame.as_usize();
+        *len += 1;
+        true
+    }
+}
+
+static LOCAL_LARGE_FOLIO_CACHES: [SpinNoIrq<LocalLargeFolioCache>; LOCAL_PAGE_FRAME_CACHE_SHARDS] =
+    [const { SpinNoIrq::new(LocalLargeFolioCache::new()) }; LOCAL_PAGE_FRAME_CACHE_SHARDS];
+
+fn local_large_folio_cache() -> &'static SpinNoIrq<LocalLargeFolioCache> {
+    &LOCAL_LARGE_FOLIO_CACHES[axhal::percpu::this_cpu_id() % LOCAL_PAGE_FRAME_CACHE_SHARDS]
+}
+
+fn alloc_page_frame() -> VfsResult<VirtAddr> {
+    global_allocator()
+        .alloc_pages(1, PAGE_SIZE, UsageKind::PageCache)
+        .map(VirtAddr::from)
+        .inspect_err(|err| warn!("Failed to allocate page cache: {err:?}"))
+        .map_err(|_| VfsError::NoMemory)
+}
+
+#[derive(Debug)]
+struct FolioFrame {
+    addr: VirtAddr,
+    pages: usize,
+}
+
+impl Drop for FolioFrame {
+    fn drop(&mut self) {
+        if self.pages == 1 {
+            global_allocator().dealloc_pages(self.addr.as_usize(), 1, UsageKind::PageCache);
+            return;
+        }
+        if self.pages.is_power_of_two() {
+            let order = self.pages.trailing_zeros() as u8;
+            if (1..=MAX_FOLIO_ORDER).contains(&order)
+                && local_large_folio_cache().lock().push(order, self.addr)
+            {
+                return;
+            }
+        }
+        global_allocator().dealloc_pages(self.addr.as_usize(), self.pages, UsageKind::PageCache);
+    }
+}
+
+fn alloc_folio_frame(order: u8) -> VfsResult<FolioFrame> {
+    let pages = 1usize << order;
+    let addr = if order == 0 {
+        alloc_page_frame()?
+    } else if let Some(frame) = local_large_folio_cache().lock().pop(order) {
+        frame
+    } else {
+        let (start, frames) = match global_allocator().alloc_pages(
+            pages * LOCAL_LARGE_FOLIO_CACHE_CAPACITY,
+            pages * PAGE_SIZE,
+            UsageKind::PageCache,
+        ) {
+            Ok(start) => (start, LOCAL_LARGE_FOLIO_CACHE_CAPACITY),
+            Err(_) => (
+                global_allocator()
+                    .alloc_pages(pages, pages * PAGE_SIZE, UsageKind::PageCache)
+                    .inspect_err(|err| warn!("Failed to allocate order-{order} folio: {err:?}"))
+                    .map_err(|_| VfsError::NoMemory)?,
+                1,
+            ),
+        };
+        let frame = VirtAddr::from(start);
+        let mut cache = local_large_folio_cache().lock();
+        let mut first_uncached = frames;
+        for index in 1..frames {
+            if !cache.push(order, frame + index * pages * PAGE_SIZE) {
+                first_uncached = index;
+                break;
+            }
+        }
+        drop(cache);
+        for index in first_uncached..frames {
+            global_allocator().dealloc_pages(
+                (frame + index * pages * PAGE_SIZE).as_usize(),
+                pages,
+                UsageKind::PageCache,
+            );
+        }
+        frame
+    };
+    Ok(FolioFrame { addr, pages })
+}
+
+#[derive(Debug)]
+struct FolioState {
+    loading: bool,
+    uptodate: bool,
+    error: Option<VfsError>,
+    dirty: u16,
+    writeback: u16,
+    truncated: bool,
+}
+
+/// A physically contiguous, naturally aligned file-cache unit.
+pub struct Folio {
+    index: u32,
+    order: u8,
+    frame: FolioFrame,
+    self_ref: Weak<Folio>,
+    state: Mutex<FolioState>,
+    page_locks: [Mutex<()>; MAX_FOLIO_PAGES],
+    wait: WaitQueue,
+    last_used: AtomicU64,
+}
+
+impl Folio {
+    fn new_loading(index: u32, order: u8) -> VfsResult<Arc<Self>> {
+        debug_assert!(order <= MAX_FOLIO_ORDER);
+        debug_assert_eq!(index & ((1u32 << order) - 1), 0);
+        let frame = alloc_folio_frame(order)?;
+        Ok(Arc::new_cyclic(|this| Self {
+            index,
+            order,
+            frame,
+            self_ref: this.clone(),
+            state: Mutex::new(FolioState {
+                loading: true,
+                uptodate: false,
+                error: None,
+                dirty: 0,
+                writeback: 0,
+                truncated: false,
+            }),
+            page_locks: [const { Mutex::new(()) }; MAX_FOLIO_PAGES],
+            wait: WaitQueue::new(),
+            last_used: AtomicU64::new(FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed)),
+        }))
+    }
+
+    fn page_count(&self) -> usize {
+        1usize << self.order
+    }
+
+    fn byte_len(&self) -> usize {
+        self.page_count() * PAGE_SIZE
+    }
+
+    fn contains(&self, pn: u32) -> bool {
+        pn >= self.index && pn < self.index + self.page_count() as u32
+    }
+
+    fn touch(&self) {
+        self.last_used.store(
+            FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+    }
+
+    fn page_offset(&self, pn: u32) -> usize {
+        debug_assert!(self.contains(pn));
+        (pn - self.index) as usize
+    }
+
+    fn paddr_at(&self, page: usize) -> PhysAddr {
+        virt_to_phys(self.frame.addr + page * PAGE_SIZE)
+    }
+
+    unsafe fn data_mut_unchecked(&self) -> &mut [u8] {
+        unsafe { core::slice::from_raw_parts_mut(self.frame.addr.as_mut_ptr(), self.byte_len()) }
+    }
+
+    fn complete_load(&self, result: VfsResult<()>) {
+        let mut state = self.state.lock();
+        state.loading = false;
+        match result {
+            Ok(()) if !state.truncated => {
+                state.uptodate = true;
+                state.error = None;
+            }
+            Ok(()) => {
+                state.uptodate = false;
+                state.error = Some(VfsError::Io);
+            }
+            Err(err) => {
+                state.uptodate = false;
+                state.error = Some(err);
+            }
+        }
+        drop(state);
+        self.wait.notify_all(false);
+    }
+
+    fn wait_uptodate(&self) -> VfsResult<()> {
+        self.wait.wait_until(|| !self.state.lock().loading);
+        let state = self.state.lock();
+        if state.uptodate && !state.truncated {
+            Ok(())
+        } else {
+            Err(state.error.unwrap_or(VfsError::Io))
+        }
+    }
+}
+
+impl Drop for Folio {
+    fn drop(&mut self) {
+        let state = self.state.lock();
+        if state.dirty != 0 || state.writeback != 0 {
+            warn!("dirty folio dropped without completing writeback");
+        }
+    }
+}
+
+/// A stable reference to one 4-KiB subpage of a folio.
+#[derive(Clone)]
+pub struct FolioPageRef {
+    folio: Arc<Folio>,
+    page: u8,
+}
+
+impl FolioPageRef {
     pub fn paddr(&self) -> PhysAddr {
-        virt_to_phys(self.addr)
+        self.folio.paddr_at(self.page as usize)
+    }
+}
+
+pub struct FolioPage<'a> {
+    folio: &'a Folio,
+    page: usize,
+    _page_guard: MutexGuard<'a, ()>,
+}
+
+impl FolioPage<'_> {
+    pub fn paddr(&self) -> PhysAddr {
+        self.folio.paddr_at(self.page)
+    }
+
+    pub fn page_ref(&self) -> FolioPageRef {
+        FolioPageRef {
+            folio: self
+                .folio
+                .self_ref
+                .upgrade()
+                .expect("folio page outlived its owning Arc"),
+            page: self.page as u8,
+        }
     }
 
     pub fn mark_dirty(&mut self) {
-        self.dirty = true;
+        self.folio.state.lock().dirty |= 1 << self.page;
     }
 
     pub fn data(&mut self) -> &mut [u8] {
-        unsafe { core::slice::from_raw_parts_mut(self.addr.as_mut_ptr(), PAGE_SIZE) }
-    }
-}
-
-impl Drop for PageCache {
-    fn drop(&mut self) {
-        if self.dirty {
-            warn!("dirty page dropped without flushing");
+        let offset = self.page * PAGE_SIZE;
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                (self.folio.frame.addr + offset).as_mut_ptr(),
+                PAGE_SIZE,
+            )
         }
-        global_allocator().dealloc_pages(self.addr.as_usize(), 1, UsageKind::PageCache);
     }
 }
 
 struct EvictListener {
-    listener: Arc<dyn Fn(u32, PhysAddr, bool) -> bool + Send + Sync>,
-    owner: Option<usize>,
+    listener: Arc<dyn Fn(u32, &FolioPageRef) + Send + Sync>,
     link: LinkedListAtomicLink,
 }
 
 intrusive_adapter!(EvictListenerAdapter = Box<EvictListener>: EvictListener { link: LinkedListAtomicLink });
 
-struct PendingEviction {
-    /// Distinguishes repeated detach/restore lifecycles of the same page and
-    /// physical frame.  A delayed completion token may only finish the exact
-    /// lifecycle which created it.
-    generation: usize,
-    page: PageCache,
-    /// A normal cache replacement can be cancelled if this page is accessed
-    /// again before invalidation finishes.  Truncate/invalidate/discard pages
-    /// must not be resurrected.
-    reusable: bool,
-    /// True until every registered mapping has removed this exact physical
-    /// page and completed its remote TLB invalidation.
-    needs_invalidation: bool,
-    /// Dirty pages detached by sync are put back into the authoritative LRU
-    /// after mappings have been revoked and final writeback has completed.
-    restore_after_writeback: bool,
-}
-
-/// Authoritative detached pages plus an ordered index of tokens which normal
-/// cache activity may retire opportunistically.  Both collections live under
-/// one mutex so selecting or moving a token cannot observe a stale index.
-struct PendingEvictions {
-    entries: BTreeMap<u32, PendingEviction>,
-    normal_pages: BTreeSet<u32>,
-}
-
-impl PendingEvictions {
-    fn new() -> Self {
-        Self {
-            entries: BTreeMap::new(),
-            normal_pages: BTreeSet::new(),
-        }
-    }
-
-    fn contains_key(&self, pn: &u32) -> bool {
-        self.entries.contains_key(pn)
-    }
-
-    fn get(&self, pn: &u32) -> Option<&PendingEviction> {
-        self.entries.get(pn)
-    }
-
-    fn get_mut(&mut self, pn: &u32) -> Option<&mut PendingEviction> {
-        self.entries.get_mut(pn)
-    }
-
-    fn insert(&mut self, pn: u32, entry: PendingEviction) -> Option<PendingEviction> {
-        let normal = !entry.restore_after_writeback;
-        let previous = self.entries.insert(pn, entry);
-        if normal {
-            self.normal_pages.insert(pn);
-        } else {
-            self.normal_pages.remove(&pn);
-        }
-        previous
-    }
-
-    fn remove(&mut self, pn: &u32) -> Option<PendingEviction> {
-        self.normal_pages.remove(pn);
-        self.entries.remove(pn)
-    }
-
-    fn iter(&self) -> impl Iterator<Item = (&u32, &PendingEviction)> {
-        self.entries.iter()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    fn next_normal(&self, cursor: u32) -> Option<u32> {
-        self.normal_pages
-            .range(cursor..)
-            .next()
-            .or_else(|| self.normal_pages.iter().next())
-            .copied()
-    }
-}
-
-/// Stable identity for a page detached from the LRU but still pinned by the
-/// file cache until all mappings and final writeback have completed.
-#[derive(Clone, Copy)]
-pub struct PageEviction {
-    pn: u32,
-    paddr: PhysAddr,
-    generation: usize,
-}
-
-impl PageEviction {
-    pub const fn page_number(self) -> u32 {
-        self.pn
-    }
-
-    pub const fn paddr(self) -> PhysAddr {
-        self.paddr
-    }
-}
-
-/// Ordered phases of a private-mapping EOF-shrink callback.  Every observer
-/// completes `Protect` before any observer receives `Apply`, establishing a
-/// cross-address-space write/TLB barrier for fork-shared anonymous frames.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FileLengthChangePhase {
-    Protect,
-    Apply,
-}
-
-struct CachedFileShared {
-    page_cache: Mutex<LruCache<u32, PageCache>>,
+/// Per-inode file cache, equivalent to Linux's `address_space`.
+///
+/// The sharded index is the lookup fast path; `folio_heads` owns one canonical
+/// reference per variable-order folio.
+struct FileAddressSpace {
+    folio_index: [RwLock<BTreeMap<u32, Arc<Folio>>>; FOLIO_INDEX_SHARDS],
+    folio_heads: Mutex<BTreeMap<u32, Arc<Folio>>>,
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
-    /// Pages whose mappings could not all be invalidated immediately.  Keeping
-    /// the frames here prevents stale PTEs from becoming use-after-free aliases.
-    pending_evictions: Mutex<PendingEvictions>,
-    next_eviction_generation: AtomicUsize,
-    /// Page-number cursor for bounded, fair opportunistic retirement.  A hot
-    /// cache path must not rescan every blocked token on each access.
-    next_normal_eviction_retry: AtomicUsize,
-    /// Keeps detached pages from being reloaded by the same inode operation.
-    cache_op: Mutex<()>,
-    /// Serializes complete dirty-page synchronization lifecycles.  In
-    /// particular, a second fsync must not observe an empty LRU while the first
-    /// fsync still owns dirty pages in `pending_evictions`.
-    writeback_op: Mutex<()>,
+    /// Readers and writeback share this lock. Truncate and destructive
+    /// invalidation take it exclusively and wait for in-flight folio I/O.
+    invalidate_lock: SleepRwLock,
     /// Only one thread can append to the file at a time, while multiple writers
     /// are permitted.
-    append_lock: RwLock<()>,
-    /// Range whose cached pages are being revoked for an EOF change.  It is
-    /// published before the first writeback and remains visible until the
-    /// backing EOF and cache state have both committed (or rolled back).
-    length_change: Mutex<Option<Range<u64>>>,
-    /// Monotonic identity of the file-length state.  Unlike the transient
-    /// marker above, this also detects a complete shrink-then-regrow cycle
-    /// between a private fault's file read and PTE commit.
-    length_generation: AtomicUsize,
-    /// MAP_PRIVATE mappings keep anonymous frames which are no longer tied to
-    /// page-cache eviction.  A successful shrink must still revoke their PTEs
-    /// beyond the new EOF before the length-change transaction becomes
-    /// invisible to faults.
-    length_change_listeners:
-        Mutex<BTreeMap<usize, Arc<dyn Fn(Range<u64>, FileLengthChangePhase) + Send + Sync>>>,
-    next_length_change_listener: AtomicUsize,
+    append_lock: SleepRwLock,
 }
 
-impl CachedFileShared {
+impl FileAddressSpace {
     pub fn new() -> Self {
         Self {
-            page_cache: Mutex::new(LruCache::new(
-                NonZeroUsize::new(DEFAULT_LOCAL_FILE_CACHE_PAGES).unwrap(),
-            )),
+            folio_index: [const { RwLock::new(BTreeMap::new()) }; FOLIO_INDEX_SHARDS],
+            folio_heads: Mutex::new(BTreeMap::new()),
             evict_listeners: Mutex::new(LinkedList::default()),
-            pending_evictions: Mutex::new(PendingEvictions::new()),
-            next_eviction_generation: AtomicUsize::new(1),
-            next_normal_eviction_retry: AtomicUsize::new(0),
-            cache_op: Mutex::new(()),
-            writeback_op: Mutex::new(()),
-            append_lock: RwLock::new(()),
-            length_change: Mutex::new(None),
-            length_generation: AtomicUsize::new(0),
-            length_change_listeners: Mutex::new(BTreeMap::new()),
-            next_length_change_listener: AtomicUsize::new(1),
+            invalidate_lock: SleepRwLock::new(),
+            append_lock: SleepRwLock::new(),
         }
     }
 
     pub fn new_unbounded() -> Self {
         Self {
-            page_cache: Mutex::new(LruCache::unbounded()),
+            folio_index: [const { RwLock::new(BTreeMap::new()) }; FOLIO_INDEX_SHARDS],
+            folio_heads: Mutex::new(BTreeMap::new()),
             evict_listeners: Mutex::new(LinkedList::default()),
-            pending_evictions: Mutex::new(PendingEvictions::new()),
-            next_eviction_generation: AtomicUsize::new(1),
-            next_normal_eviction_retry: AtomicUsize::new(0),
-            cache_op: Mutex::new(()),
-            writeback_op: Mutex::new(()),
-            append_lock: RwLock::new(()),
-            length_change: Mutex::new(None),
-            length_generation: AtomicUsize::new(0),
-            length_change_listeners: Mutex::new(BTreeMap::new()),
-            next_length_change_listener: AtomicUsize::new(1),
+            invalidate_lock: SleepRwLock::new(),
+            append_lock: SleepRwLock::new(),
         }
-    }
-}
-
-struct LengthChangeGuard<'a> {
-    shared: &'a CachedFileShared,
-}
-
-impl Drop for LengthChangeGuard<'_> {
-    fn drop(&mut self) {
-        let old = self.shared.length_change.lock().take();
-        debug_assert!(old.is_some(), "length-change guard lost its range");
     }
 }
 
@@ -567,32 +780,63 @@ type FileCacheKey = (usize, u64);
 struct CachedFileRecord {
     key: FileCacheKey,
     location: Location,
-    shared: Arc<CachedFileShared>,
+    shared: Arc<FileAddressSpace>,
     in_memory: bool,
-    removed: AtomicBool,
-    active_handles: AtomicUsize,
+    last_used: AtomicU64,
 }
 
-static FILE_CACHES: spin::Lazy<RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>> =
-    spin::Lazy::new(|| RwLock::new(BTreeMap::new()));
+impl CachedFileRecord {
+    fn touch(&self) {
+        self.last_used.store(
+            FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+    }
+}
+
+static FILE_CACHES: [RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>; FILE_CACHE_SHARDS] =
+    [const { RwLock::new(BTreeMap::new()) }; FILE_CACHE_SHARDS];
+static PAGE_CACHE_RECLAIM_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct CachedFile {
     inner: Location,
     record: Arc<CachedFileRecord>,
-    /// Whether this counted reference belongs to an open file/mmap user.
-    /// Internal registry snapshots are counted too, but only run last-reference
-    /// cleanup for records which have already been removed from the namespace.
-    tracked: bool,
 }
 
 impl Clone for CachedFile {
     fn clone(&self) -> Self {
-        self.record.active_handles.fetch_add(1, Ordering::Relaxed);
         Self {
             inner: self.inner.clone(),
             record: self.record.clone(),
-            tracked: self.tracked,
         }
+    }
+}
+
+struct ReadaheadJob {
+    cached: CachedFile,
+    folio: Arc<Folio>,
+}
+
+static READAHEAD_QUEUE: Mutex<VecDeque<ReadaheadJob>> = Mutex::new(VecDeque::new());
+static READAHEAD_WORK: WaitQueue = WaitQueue::new();
+static READAHEAD_WORKERS_STARTED: AtomicBool = AtomicBool::new(false);
+
+fn readahead_worker() -> ! {
+    loop {
+        READAHEAD_WORK.wait_until(|| !READAHEAD_QUEUE.lock().is_empty());
+        let job = READAHEAD_QUEUE.lock().pop_front();
+        if let Some(job) = job {
+            job.cached.load_readahead_folio(job.folio);
+        }
+    }
+}
+
+fn start_readahead_workers() {
+    if READAHEAD_WORKERS_STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    for _ in 0..READAHEAD_WORKERS {
+        axtask::spawn(|| readahead_worker());
     }
 }
 
@@ -614,92 +858,78 @@ impl CachedFile {
         (fs_ptr as *const () as usize, location.inode())
     }
 
+    fn file_cache_shard(key: FileCacheKey) -> usize {
+        ((key.0 >> 6) ^ key.1 as usize) % FILE_CACHE_SHARDS
+    }
+
+    fn cache_for_key(
+        key: FileCacheKey,
+    ) -> &'static RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>> {
+        &FILE_CACHES[Self::file_cache_shard(key)]
+    }
+
+    fn all_records() -> Vec<Arc<CachedFileRecord>> {
+        FILE_CACHES
+            .iter()
+            .flat_map(|cache| cache.read().values().cloned().collect::<Vec<_>>())
+            .collect()
+    }
+
+    fn record_from_global_cache(location: &Location, in_memory: bool) -> Arc<CachedFileRecord> {
+        let key = Self::file_cache_key(location);
+        let mut caches = Self::cache_for_key(key).write();
+        caches
+            .entry(key)
+            .or_insert_with(|| {
+                let shared = if in_memory {
+                    Arc::new(FileAddressSpace::new_unbounded())
+                } else {
+                    Arc::new(FileAddressSpace::new())
+                };
+                Arc::new(CachedFileRecord {
+                    key,
+                    location: location.clone(),
+                    shared,
+                    in_memory,
+                    last_used: AtomicU64::new(FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed)),
+                })
+            })
+            .clone()
+    }
+
     pub fn get_or_create(location: Location) -> Self {
         let in_memory = location.filesystem().name() == "tmpfs";
-        let key = Self::file_cache_key(&location);
 
-        // `user_data -> FILE_CACHES` is the registry lock order used by both
-        // lookup and removal.  A weak pointer is usable only while the same
-        // record is still the current global entry; otherwise a removal racing
-        // this lookup could split one inode into two cache/lock domains.
-        let mut user_data = location.user_data();
-        let mut caches = FILE_CACHES.write();
-        let weak_record = user_data.get::<FileUserData>().and_then(|it| it.get());
-        let record = weak_record
-            .filter(|record| {
-                caches
-                    .get(&key)
-                    .is_some_and(|current| Arc::ptr_eq(current, record))
-            })
-            .unwrap_or_else(|| {
-                caches
-                    .entry(key)
-                    .or_insert_with(|| {
-                        let shared = if in_memory {
-                            Arc::new(CachedFileShared::new_unbounded())
-                        } else {
-                            Arc::new(CachedFileShared::new())
-                        };
-                        Arc::new(CachedFileRecord {
-                            key,
-                            location: location.clone(),
-                            shared,
-                            in_memory,
-                            removed: AtomicBool::new(false),
-                            active_handles: AtomicUsize::new(0),
-                        })
-                    })
-                    .clone()
-            });
-        user_data.insert(FileUserData::Weak(Arc::downgrade(&record)));
-        // Publish the user before releasing the registry locks. A concurrent
-        // finalizer therefore cannot retire the record between lookup and the
-        // handle becoming visible.
-        record.active_handles.fetch_add(1, Ordering::Relaxed);
-        drop(caches);
-        drop(user_data);
+        let mut guard = location.user_data();
+        let record = if let Some(record) = guard.get::<FileUserData>().and_then(|it| it.get()) {
+            record
+        } else {
+            let record = Self::record_from_global_cache(&location, in_memory);
+            guard.insert(FileUserData::Weak(Arc::downgrade(&record)));
+            record
+        };
+        drop(guard);
+        record.touch();
 
         Self {
             inner: location,
             record,
-            tracked: true,
         }
     }
 
-    fn remove_global_record_if_unused(&self) -> bool {
-        self.remove_global_record_with_active_count(0)
-    }
-
-    fn remove_global_record_if_only_snapshot(&self) -> bool {
-        debug_assert!(!self.tracked);
-        self.remove_global_record_with_active_count(1)
-    }
-
-    fn remove_global_record_with_active_count(&self, expected_active: usize) -> bool {
-        // Match `get_or_create`'s registry order. Holding `user_data` prevents
-        // a new tracked handle from being published between the active-user
-        // check and global removal. Registry snapshots increment the same
-        // counter before releasing FILE_CACHES' read side.
-        let mut user_data = self.inner.user_data();
-        let mut caches = FILE_CACHES.write();
-        let is_current = caches
-            .get(&self.record.key)
-            .is_some_and(|current| Arc::ptr_eq(current, &self.record));
-        if !is_current
-            || self.record.active_handles.load(Ordering::Acquire) != expected_active
-        {
-            return false;
-        }
-
-        caches.remove(&self.record.key);
-        if user_data
-            .get::<FileUserData>()
-            .and_then(|it| it.get())
-            .is_some_and(|record| Arc::ptr_eq(&record, &self.record))
-        {
-            user_data.remove::<FileUserData>();
-        }
-        true
+    fn get_existing(location: &Location) -> Option<Self> {
+        let key = Self::file_cache_key(location);
+        Self::cache_for_key(key)
+            .read()
+            .get(&key)
+            .cloned()
+            .map(|record| {
+                record.touch();
+                Self {
+                    inner: location.clone(),
+                    record,
+                }
+            })
     }
 
     pub fn ptr_eq(&self, other: &Self) -> bool {
@@ -714,8 +944,109 @@ impl CachedFile {
         &self.inner
     }
 
-    fn shared(&self) -> &CachedFileShared {
+    fn shared(&self) -> &FileAddressSpace {
         self.record.shared.as_ref()
+    }
+
+    fn folio_shard(pn: u32) -> usize {
+        pn as usize % FOLIO_INDEX_SHARDS
+    }
+
+    fn lookup_folio(&self, pn: u32) -> Option<Arc<Folio>> {
+        let folio = self.shared().folio_index[Self::folio_shard(pn)]
+            .read()
+            .get(&pn)
+            .cloned();
+        if let Some(folio) = folio.as_ref() {
+            folio.touch();
+        }
+        folio
+    }
+
+    /// Publishes every base-page slot before starting I/O. `folio_heads`
+    /// serializes the short multi-shard update, while cache hits never touch
+    /// this lock.
+    fn publish_folio(&self, folio: &Arc<Folio>) -> bool {
+        let mut heads = self.shared().folio_heads.lock();
+        let end = folio.index + folio.page_count() as u32;
+        for pn in folio.index..end {
+            if self.shared().folio_index[Self::folio_shard(pn)]
+                .read()
+                .contains_key(&pn)
+            {
+                return false;
+            }
+        }
+        heads.insert(folio.index, folio.clone());
+        for pn in folio.index..end {
+            self.shared().folio_index[Self::folio_shard(pn)]
+                .write()
+                .insert(pn, folio.clone());
+        }
+        true
+    }
+
+    fn remove_folio(&self, folio: &Arc<Folio>) -> bool {
+        let mut heads = self.shared().folio_heads.lock();
+        if !heads
+            .get(&folio.index)
+            .is_some_and(|cached| Arc::ptr_eq(cached, folio))
+        {
+            return false;
+        }
+        heads.remove(&folio.index);
+        let end = folio.index + folio.page_count() as u32;
+        for pn in folio.index..end {
+            let mut shard = self.shared().folio_index[Self::folio_shard(pn)].write();
+            if shard
+                .get(&pn)
+                .is_some_and(|cached| Arc::ptr_eq(cached, folio))
+            {
+                shard.remove(&pn);
+            }
+        }
+        true
+    }
+
+    fn choose_folio_order(start: u32, end: u32) -> u8 {
+        let remaining = end.saturating_sub(start);
+        for order in (0..=MAX_FOLIO_ORDER).rev() {
+            let pages = 1u32 << order;
+            if start.is_multiple_of(pages) && pages <= remaining {
+                return order;
+            }
+        }
+        0
+    }
+
+    fn get_or_publish_folio(&self, pn: u32, preferred_order: u8) -> VfsResult<(Arc<Folio>, bool)> {
+        if let Some(folio) = self.lookup_folio(pn) {
+            return Ok((folio, false));
+        }
+
+        let mut order = preferred_order.min(MAX_FOLIO_ORDER);
+        loop {
+            let pages = 1u32 << order;
+            let index = pn & !(pages - 1);
+            let folio = match Folio::new_loading(index, order) {
+                Ok(folio) => folio,
+                Err(VfsError::NoMemory) if order > 0 => {
+                    order -= 1;
+                    continue;
+                }
+                Err(err) => return Err(err),
+            };
+            if self.publish_folio(&folio) {
+                return Ok((folio, true));
+            }
+            if let Some(folio) = self.lookup_folio(pn) {
+                return Ok((folio, false));
+            }
+            if order == 0 {
+                continue;
+            }
+            order -= 1;
+        }
     }
 
     pub fn len(&self) -> VfsResult<u64> {
@@ -738,6 +1069,10 @@ impl CachedFile {
         self.inner().grow_cached_len(len, !self.in_memory())
     }
 
+    fn set_cached_len(&self, len: u64, dirty: bool) -> VfsResult<()> {
+        self.inner().set_cached_len(len, dirty)
+    }
+
     fn commit_len(&self) -> VfsResult<u64> {
         let len = self.len()?;
         if !self.in_memory() {
@@ -750,126 +1085,50 @@ impl CachedFile {
         self.inner().flush_metadata_cache(false)
     }
 
+    fn read_fully_at(
+        &self,
+        file: &FileNode,
+        mut buf: &mut [u8],
+        mut offset: u64,
+    ) -> VfsResult<usize> {
+        let mut read = 0;
+        while !buf.is_empty() {
+            let count = file.read_at(buf, offset)?;
+            if count == 0 {
+                break;
+            }
+            read += count;
+            offset += count as u64;
+            buf = &mut buf[count..];
+        }
+        Ok(read)
+    }
+
+    fn write_fully_at(&self, file: &FileNode, mut buf: &[u8], mut offset: u64) -> VfsResult<()> {
+        while !buf.is_empty() {
+            let written = file.write_at(buf, offset)?;
+            if written == 0 {
+                return Err(VfsError::Io);
+            }
+            offset += written as u64;
+            buf = &buf[written..];
+        }
+        Ok(())
+    }
+
     fn from_record(record: &Arc<CachedFileRecord>) -> Self {
-        // Callers must invoke this while holding FILE_CACHES for reading.  The
-        // increment is then published before a finalizer can acquire the write
-        // side and retire the registry entry.
-        record.active_handles.fetch_add(1, Ordering::Relaxed);
         Self {
             inner: record.location.clone(),
             record: record.clone(),
-            tracked: false,
-        }
-    }
-
-    fn get_existing(key: FileCacheKey) -> Option<Self> {
-        let caches = FILE_CACHES.read();
-        caches.get(&key).map(Self::from_record)
-    }
-
-    fn begin_length_change(&self, range: Range<u64>) -> LengthChangeGuard<'_> {
-        let _cache_guard = self.shared().cache_op.lock();
-        let mut active = self.shared().length_change.lock();
-        assert!(active.is_none(), "overlapping file length changes");
-        self.shared()
-            .length_generation
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
-                generation.checked_add(1)
-            })
-            .expect("file length generation exhausted");
-        *active = Some(range);
-        LengthChangeGuard {
-            shared: self.shared(),
-        }
-    }
-
-    fn length_change_blocks_page(&self, pn: u32) -> bool {
-        self.shared()
-            .length_change
-            .lock()
-            .as_ref()
-            .is_some_and(|range| Self::page_overlaps_range(pn, range))
-    }
-
-    /// Takes one coherent snapshot of the transient marker and persistent
-    /// generation.  `None` means the requested page is currently covered by a
-    /// length-change transaction and must not be read or committed.
-    fn length_generation_for_page(&self, pn: u32) -> Option<usize> {
-        let active = self.shared().length_change.lock();
-        if active
-            .as_ref()
-            .is_some_and(|range| Self::page_overlaps_range(pn, range))
-        {
-            None
-        } else {
-            Some(self.shared().length_generation.load(Ordering::Acquire))
-        }
-    }
-
-    fn add_length_change_listener<F>(&self, listener: F) -> usize
-    where
-        F: Fn(Range<u64>, FileLengthChangePhase) + Send + Sync + 'static,
-    {
-        let handle = self
-            .shared()
-            .next_length_change_listener
-            .fetch_add(1, Ordering::Relaxed);
-        assert_ne!(handle, 0, "file length-change listener handles exhausted");
-        let previous = self
-            .shared()
-            .length_change_listeners
-            .lock()
-            .insert(handle, Arc::new(listener));
-        assert!(previous.is_none(), "duplicate file length-change listener");
-        handle
-    }
-
-    fn remove_length_change_listener(&self, handle: usize) {
-        let removed = self
-            .shared()
-            .length_change_listeners
-            .lock()
-            .remove(&handle);
-        debug_assert!(removed.is_some(), "unknown file length-change listener");
-    }
-
-    fn notify_length_change_listeners(&self, range: Range<u64>) {
-        // Listener destruction removes itself from this table.  Snapshot the
-        // callbacks so an address-space teardown cannot deadlock on the list.
-        let listeners = self
-            .shared()
-            .length_change_listeners
-            .lock()
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
-        for listener in &listeners {
-            listener(range.clone(), FileLengthChangePhase::Protect);
-        }
-        for listener in listeners {
-            listener(range.clone(), FileLengthChangePhase::Apply);
         }
     }
 
     pub fn add_evict_listener<F>(&self, listener: F) -> usize
     where
-        F: Fn(u32) + Send + Sync + 'static,
-    {
-        self.add_evict_listener_checked(usize::MAX, move |pn, _, _| {
-            listener(pn);
-            true
-        })
-    }
-
-    /// Registers an eviction listener that confirms page-table removal and
-    /// synchronous remote TLB invalidation for the exact physical page.
-    pub fn add_evict_listener_checked<F>(&self, owner: usize, listener: F) -> usize
-    where
-        F: Fn(u32, PhysAddr, bool) -> bool + Send + Sync + 'static,
+        F: Fn(u32, &FolioPageRef) + Send + Sync + 'static,
     {
         let pointer = Box::new(EvictListener {
             listener: Arc::new(listener),
-            owner: (owner != usize::MAX).then_some(owner),
             link: LinkedListAtomicLink::new(),
         });
         let handle = pointer.as_ref() as *const EvictListener as usize;
@@ -883,443 +1142,30 @@ impl CachedFile {
         cursor.remove();
     }
 
-    fn notify_evict_listeners_except(
-        &self,
-        pn: u32,
-        paddr: PhysAddr,
-        skip_owner: Option<usize>,
-        wait: bool,
-    ) -> bool {
-        // Never invoke an address-space callback while holding the listener
-        // list lock: dropping an mmap backend removes its listener.
+    fn notify_evict_listeners(&self, pn: u32, page: &FolioPageRef) {
         let listeners = self
             .shared()
             .evict_listeners
             .lock()
             .iter()
-            .filter_map(|listener| {
-                (listener.owner != skip_owner).then(|| listener.listener.clone())
-            })
+            .map(|listener| listener.listener.clone())
             .collect::<Vec<_>>();
-        // Do not short-circuit: even if one mapping reports a paging error,
-        // every other mapping should still make forward progress.
-        let mut complete = true;
         for listener in listeners {
-            complete = listener(pn, paddr, wait) && complete;
-        }
-        complete
-    }
-
-    /// Notifies every mapping outside `skip_owner` about a detached page.
-    ///
-    /// The cache keeps the detached page alive in its pending table.  The
-    /// caller must complete its skipped owner before confirming the token.
-    pub fn notify_evicted_page_except(
-        &self,
-        eviction: PageEviction,
-        skip_owner: usize,
-    ) -> bool {
-        self.notify_evict_listeners_except(eviction.pn, eviction.paddr, Some(skip_owner), false)
-    }
-
-    /// Notifies every mapping about a detached page.
-    ///
-    /// This is used by error cleanup which only has a page-table handle for
-    /// one mapping, not the full current address space.  If that address space
-    /// is still locked, its checked listeners return `false` and keep the page
-    /// pinned until a later retry can remove every sibling mapping.
-    pub fn notify_evicted_page(&self, eviction: PageEviction) -> bool {
-        self.notify_evict_listeners_except(eviction.pn, eviction.paddr, None, false)
-    }
-
-    fn begin_evicted_page(
-        &self,
-        pn: u32,
-        page: PageCache,
-        reusable: bool,
-        restore_after_writeback: bool,
-    ) -> PageEviction {
-        let paddr = page.paddr();
-        let generation = self
-            .shared()
-            .next_eviction_generation
-            .fetch_add(1, Ordering::Relaxed);
-        assert_ne!(generation, 0, "page eviction generation exhausted");
-        let mut pending = self.shared().pending_evictions.lock();
-        assert!(
-            !pending.contains_key(&pn),
-            "duplicate pending eviction for page {pn}"
-        );
-        pending.insert(
-            pn,
-            PendingEviction {
-                generation,
-                page,
-                reusable,
-                needs_invalidation: true,
-                restore_after_writeback,
-            },
-        );
-        PageEviction {
-            pn,
-            paddr,
-            generation,
+            listener(pn, page);
         }
     }
 
-    fn eviction_matches(entry: &PendingEviction, eviction: PageEviction) -> bool {
-        entry.generation == eviction.generation && entry.page.paddr() == eviction.paddr
-    }
-
-    /// Finalizes exact detached-page lifecycles after their PTE/TLB barrier.
-    ///
-    /// `cache_op` keeps the pages authoritative while they are temporarily
-    /// moved out of `pending_evictions` for batched I/O.  On writeback failure
-    /// every page is reinserted with `needs_invalidation = false`, so a retry
-    /// cannot free or duplicate the frame.  Sync-detached pages are restored
-    /// to the LRU only after their dirty bit has been cleared by successful
-    /// final writeback.
-    fn finish_evicted_writeback_batch(
-        &self,
-        evictions: &[PageEviction],
-    ) -> VfsResult<Vec<PageEviction>> {
-        if evictions.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let _cache_guard = self.shared().cache_op.lock();
-        let mut detached = {
-            let mut pending = self.shared().pending_evictions.lock();
-            let mut detached = Vec::new();
-            for eviction in evictions {
-                let Some(entry) = pending.get(&eviction.pn) else {
-                    // A normal reusable eviction may have been cancelled and
-                    // restored by a concurrent access.
-                    continue;
-                };
-                if !Self::eviction_matches(entry, *eviction) {
-                    // This is a stale token from an older lifecycle of the
-                    // same page/frame.  It must not affect the current entry.
-                    continue;
-                }
-                let mut entry = pending
-                    .remove(&eviction.pn)
-                    .expect("matching pending eviction disappeared");
-                entry.needs_invalidation = false;
-                detached.push((*eviction, entry));
-            }
-            detached
-        };
-
-        let writeback_result = (|| {
-            if !self.in_memory() && detached.iter().any(|(_, entry)| entry.page.dirty) {
-                let file = self.inner().entry().as_file()?;
-                let file_len = self.commit_len()?;
-                Self::writeback_dirty_pages(file, file_len, &mut detached)?;
-            }
+    fn load_folio(&self, file: &FileNode, folio: &Arc<Folio>, zeroed: bool) -> VfsResult<()> {
+        let data = unsafe { folio.data_mut_unchecked() };
+        let result = if zeroed || self.in_memory() {
+            data.fill(0);
             Ok(())
-        })();
-
-        if let Err(err) = writeback_result {
-            let mut pending = self.shared().pending_evictions.lock();
-            for (eviction, mut entry) in detached {
-                // The PTE/TLB barrier already completed.  Let a fault restore
-                // the still-dirty page instead of blocking forever if storage
-                // keeps returning an error.
-                entry.reusable = true;
-                let previous = pending.insert(eviction.pn, entry);
-                assert!(previous.is_none(), "duplicate pending eviction after writeback failure");
-            }
-            return Err(err);
-        }
-
-        let mut displaced = Vec::new();
-        let mut cache = self.shared().page_cache.lock();
-        for (eviction, entry) in detached {
-            if !entry.restore_after_writeback {
-                continue;
-            }
-            if cache.len() == cache.cap().get()
-                && let Some((pn, page)) = cache.pop_lru()
-            {
-                displaced.push((pn, page));
-            }
-            cache.put(eviction.pn, entry.page);
-        }
-        drop(cache);
-
-        Ok(displaced
-            .into_iter()
-            .map(|(pn, page)| self.begin_evicted_page(pn, page, true, false))
-            .collect())
-    }
-
-    fn finish_evicted_writeback_with_wait(
-        &self,
-        eviction: PageEviction,
-        wait: bool,
-    ) -> VfsResult<()> {
-        let mut work = self.finish_evicted_writeback_batch(&[eviction])?;
-        while let Some(displaced) = work.pop() {
-            let mappings_invalidated = self.notify_evict_listeners_except(
-                displaced.pn,
-                displaced.paddr,
-                None,
-                wait,
-            );
-            if !mappings_invalidated {
-                return Err(VfsError::WouldBlock);
-            }
-            work.extend(self.finish_evicted_writeback_batch(&[displaced])?);
-        }
-        Ok(())
-    }
-
-    /// Completes a caller-owned eviction after the caller has dealt with its
-    /// own locked address space.  The PageCache remains centrally pinned, so
-    /// failure cannot free a frame referenced by a PTE or remote TLB.
-    pub fn complete_evicted_page(
-        &self,
-        eviction: PageEviction,
-        mappings_invalidated: bool,
-    ) -> VfsResult<()> {
-        if !mappings_invalidated {
-            return Err(VfsError::WouldBlock);
-        }
-        // This entry point can be called while an mmap population owns an
-        // address-space lock, so waiting behind fsync would create an ABBA
-        // cycle.  Opportunistic completion is still serialized when the lock
-        // is immediately available; otherwise the pinned token is retried by
-        // the next non-address-space owner.
-        let Some(_writeback_guard) = self.shared().writeback_op.try_lock() else {
-            return Err(VfsError::WouldBlock);
-        };
-        // A caller which owns one address-space lock must not block while a
-        // restored page displaces another cache entry: another listener could
-        // own its address space in the opposite order.
-        self.finish_evicted_writeback_with_wait(eviction, false)
-    }
-
-    fn finish_evicted_page_with_wait(
-        &self,
-        eviction: PageEviction,
-        wait: bool,
-    ) -> VfsResult<()> {
-        let mappings_invalidated =
-            self.notify_evict_listeners_except(eviction.pn, eviction.paddr, None, wait);
-        if !mappings_invalidated {
-            return Err(VfsError::WouldBlock);
-        }
-        self.finish_evicted_writeback_with_wait(eviction, wait)
-    }
-
-    fn retry_pending_evictions_matching(&self, include_sync: bool) -> VfsResult<()> {
-        let candidates = self
-            .shared()
-            .pending_evictions
-            .lock()
-            .iter()
-            .filter_map(|(pn, entry)| {
-                (include_sync || !entry.restore_after_writeback).then_some((
-                    PageEviction {
-                        pn: *pn,
-                        paddr: entry.page.paddr(),
-                        generation: entry.generation,
-                    },
-                    entry.needs_invalidation,
-                ))
-            })
-            .collect::<Vec<_>>();
-        let mut first_error = None;
-        for (eviction, needs_invalidation) in candidates {
-            if needs_invalidation
-                && !self.notify_evict_listeners_except(
-                    eviction.pn,
-                    eviction.paddr,
-                    None,
-                    include_sync,
-                )
-            {
-                first_error.get_or_insert(VfsError::WouldBlock);
-                continue;
-            }
-            if let Err(err) = self.finish_evicted_writeback_with_wait(eviction, include_sync) {
-                warn!(
-                    "Failed to finish pending page eviction {}: {err:?}",
-                    eviction.pn
-                );
-                if first_error.is_none() {
-                    first_error = Some(err);
-                }
-            }
-        }
-        match first_error {
-            Some(err) => Err(err),
-            None => Ok(()),
-        }
-    }
-
-    fn retry_pending_evictions(&self) -> VfsResult<()> {
-        self.retry_pending_evictions_matching(true)
-    }
-
-    fn retry_pending_normal_evictions(&self) -> VfsResult<()> {
-        // This opportunistic path may be entered while mmap population owns an
-        // address-space lock, so it must never wait behind fsync (which can be
-        // waiting for that same address space).  If the serialization lock is
-        // immediately available, owning it closes the dirty-token visibility
-        // gap with fsync/truncate while the token is detached for writeback.
-        let Some(_writeback_guard) = self.shared().writeback_op.try_lock() else {
-            return Ok(());
-        };
-
-        // Ordinary reads, writes and faults call this function in their hot
-        // path. Retrying the whole pending map here turns one contended token
-        // into O(pending * listeners) work on every page access and can prevent
-        // the operation which owns the contended address-space lock from ever
-        // running. Advance at most one normal token per call, rotating the
-        // starting page so one busy mapping cannot starve later tokens.
-        let cursor = self
-            .shared()
-            .next_normal_eviction_retry
-            .load(Ordering::Relaxed) as u32;
-        let candidate = {
-            let pending = self.shared().pending_evictions.lock();
-            pending.next_normal(cursor).map(|pn| {
-                let entry = pending
-                    .get(&pn)
-                    .expect("normal pending-eviction index is stale");
-                (
-                    PageEviction {
-                        pn,
-                        paddr: entry.page.paddr(),
-                        generation: entry.generation,
-                    },
-                    entry.needs_invalidation,
-                )
-            })
-        };
-        let Some((eviction, needs_invalidation)) = candidate else {
-            return Ok(());
-        };
-        self.shared().next_normal_eviction_retry.store(
-            eviction.pn.checked_add(1).unwrap_or(0) as usize,
-            Ordering::Relaxed,
-        );
-
-        if needs_invalidation
-            && !self.notify_evict_listeners_except(
-                eviction.pn,
-                eviction.paddr,
-                None,
-                false,
-            )
-        {
-            return Err(VfsError::WouldBlock);
-        }
-        match self.finish_evicted_writeback_with_wait(eviction, false) {
-            Err(VfsError::WouldBlock) => Err(VfsError::WouldBlock),
-            Err(err) => {
-                warn!(
-                    "Failed to finish pending page eviction {}: {err:?}",
-                    eviction.pn
-                );
-                Err(err)
-            }
-            Ok(()) => Ok(()),
-        }
-    }
-
-    /// Returns with `cache_op` held only after every pending token visible at
-    /// the same serialization point has completed.  The caller must already
-    /// own `writeback_op`; this closes the scan-then-lock gap where ordinary
-    /// cache insertion could otherwise create a dirty pending page between an
-    /// fsync/truncate pending scan and its LRU scan.
-    fn lock_cache_after_draining_pending(&self) -> VfsResult<MutexGuard<'_, ()>> {
-        loop {
-            self.retry_pending_evictions()?;
-            let cache_guard = self.shared().cache_op.lock();
-            if self.shared().pending_evictions.lock().is_empty() {
-                return Ok(cache_guard);
-            }
-            drop(cache_guard);
-        }
-    }
-
-    fn page_or_insert<'a>(
-        &self,
-        file: &FileNode,
-        cache: &'a mut LruCache<u32, PageCache>,
-        pn: u32,
-    ) -> VfsResult<(&'a mut PageCache, Option<(u32, PageCache)>)> {
-        // TODO: Matching the result of `get_mut` confuses compiler. See
-        // https://users.rust-lang.org/t/return-do-not-release-mutable-borrow/55757.
-        if cache.contains(&pn) {
-            return Ok((cache.get_mut(&pn).unwrap(), None));
-        }
-        let restored = {
-            let mut pending = self.shared().pending_evictions.lock();
-            match pending.get(&pn) {
-                Some(entry) if !entry.reusable => return Err(VfsError::WouldBlock),
-                Some(_) => pending.remove(&pn).map(|entry| entry.page),
-                None => None,
-            }
-        };
-        // Prepare the replacement before detaching the old page.  Allocation or
-        // I/O failure therefore cannot silently free a still-mapped old frame.
-        let page = if let Some(page) = restored {
-            page
         } else {
-            let mut page = PageCache::new()?;
-            page.data().fill(0);
-            if !self.in_memory() {
-                file.read_at(page.data(), pn as u64 * PAGE_SIZE as u64)?;
-            }
-            page
+            self.read_fully_at(file, data, folio.index as u64 * PAGE_SIZE as u64)
+                .map(|read| data[read..].fill(0))
         };
-        let mut evicted = None;
-        if cache.len() == cache.cap().get() {
-            // Cache is full, remove the least recently used page.
-            if let Some((old_pn, old_page)) = cache.pop_lru() {
-                evicted = Some((old_pn, old_page));
-            }
-        }
-        cache.put(pn, page);
-        Ok((cache.get_mut(&pn).unwrap(), evicted))
-    }
-
-    fn page_or_insert_zeroed<'a>(
-        &self,
-        file: &FileNode,
-        cache: &'a mut LruCache<u32, PageCache>,
-        pn: u32,
-    ) -> VfsResult<(&'a mut PageCache, Option<(u32, PageCache)>)> {
-        if cache.contains(&pn) {
-            return Ok((cache.get_mut(&pn).unwrap(), None));
-        }
-        let restored = {
-            let mut pending = self.shared().pending_evictions.lock();
-            match pending.get(&pn) {
-                Some(entry) if !entry.reusable => return Err(VfsError::WouldBlock),
-                Some(_) => pending.remove(&pn).map(|entry| entry.page),
-                None => None,
-            }
-        };
-        let page = if let Some(page) = restored {
-            page
-        } else {
-            let mut page = PageCache::new()?;
-            page.data().fill(0);
-            page
-        };
-        let mut evicted = None;
-        if cache.len() == cache.cap().get() {
-            if let Some((old_pn, old_page)) = cache.pop_lru() {
-                evicted = Some((old_pn, old_page));
-            }
-        }
-        cache.put(pn, page);
-        Ok((cache.get_mut(&pn).unwrap(), evicted))
+        folio.complete_load(result);
+        folio.wait_uptodate()
     }
 
     fn can_zero_fill_write_page(old_len: u64, page_start: u64, range: &Range<usize>) -> bool {
@@ -1330,192 +1176,204 @@ impl CachedFile {
         range.start == 0 && range.end >= old_valid_end
     }
 
-    pub fn with_page<R>(&self, pn: u32, f: impl FnOnce(Option<&mut PageCache>) -> R) -> R {
-        let _cache_guard = self.shared().cache_op.lock();
-        if self.length_change_blocks_page(pn) {
-            return f(None);
+    fn with_folio_page<R>(
+        &self,
+        folio: &Arc<Folio>,
+        pn: u32,
+        f: impl FnOnce(&mut FolioPage<'_>) -> R,
+    ) -> VfsResult<R> {
+        folio.wait_uptodate()?;
+        let page = folio.page_offset(pn);
+        let page_guard = folio.page_locks[page].lock();
+        let state = folio.state.lock();
+        if !state.uptodate || state.truncated {
+            return Err(state.error.unwrap_or(VfsError::Io));
         }
-        let mut pending = self.shared().pending_evictions.lock();
-        if pending.get(&pn).is_some_and(|entry| !entry.reusable) {
-            return f(None);
-        }
-        let restored = pending.remove(&pn).map(|entry| entry.page);
-        drop(pending);
-
-        let mut cache = self.shared().page_cache.lock();
-        let displaced = if let Some(page) = restored {
-            let displaced = if cache.len() == cache.cap().get() {
-                cache.pop_lru()
-            } else {
-                None
-            };
-            cache.put(pn, page);
-            displaced
-        } else {
-            None
+        drop(state);
+        let mut page = FolioPage {
+            folio,
+            page,
+            _page_guard: page_guard,
         };
-        let result = f(cache.get_mut(&pn));
-        drop(cache);
-
-        if let Some((old_pn, old_page)) = displaced {
-            // The caller may hold an address-space lock, so callbacks cannot
-            // run here.  Keep the replacement pinned; the normal retry path
-            // will invalidate its mappings after that lock has been dropped.
-            let _ = self.begin_evicted_page(old_pn, old_page, true, false);
-        }
-        result
+        Ok(f(&mut page))
     }
 
-    /// Returns true while a non-reusable detached page is crossing its
-    /// PTE/TLB/writeback barrier.  Page-fault code must drop the address-space
-    /// lock and retry instead of remapping that frame during this interval.
-    pub fn page_eviction_in_progress(&self, pn: u32) -> bool {
-        let _cache_guard = self.shared().cache_op.lock();
-        self.length_change_blocks_page(pn)
-            || self
-                .shared()
-                .pending_evictions
-                .lock()
-                .get(&pn)
-                .is_some_and(|entry| !entry.reusable)
+    pub fn with_page<R>(&self, pn: u32, f: impl FnOnce(Option<&mut FolioPage<'_>>) -> R) -> R {
+        let folio = {
+            let _invalidate = self.shared().invalidate_lock.read();
+            self.lookup_folio(pn)
+        };
+        let Some(folio) = folio else {
+            return f(None);
+        };
+
+        // A readahead worker may own a newly published loading folio. Never
+        // wait for that worker while holding invalidate_lock: a truncate can
+        // queue as a writer, prevent the worker from acquiring its read side,
+        // and then wait forever for this reader to leave.
+        if folio.wait_uptodate().is_err() {
+            return f(None);
+        }
+
+        let _invalidate = self.shared().invalidate_lock.read();
+        let Some(current) = self.lookup_folio(pn) else {
+            return f(None);
+        };
+        if !Arc::ptr_eq(&current, &folio) {
+            return f(None);
+        }
+        let page_index = folio.page_offset(pn);
+        let page_guard = folio.page_locks[page_index].lock();
+        let state = folio.state.lock();
+        if !state.uptodate || state.truncated {
+            return f(None);
+        }
+        drop(state);
+        let mut page = FolioPage {
+            folio: &folio,
+            page: page_index,
+            _page_guard: page_guard,
+        };
+        f(Some(&mut page))
+    }
+
+    fn page_ref_if_cached(&self, pn: u32) -> Option<FolioPageRef> {
+        let folio = self.lookup_folio(pn)?;
+        let state = folio.state.lock();
+        if state.loading || !state.uptodate || state.truncated {
+            return None;
+        }
+        drop(state);
+        Some(FolioPageRef {
+            page: folio.page_offset(pn) as u8,
+            folio,
+        })
+    }
+
+    /// Runs a short mapping commit while truncate/invalidation is excluded.
+    ///
+    /// The caller performs all storage I/O before entering this function. It
+    /// is intended only for publishing a PTE and its matching folio pin.
+    pub fn with_valid_page_ref<R>(
+        &self,
+        pn: u32,
+        page: &FolioPageRef,
+        mark_dirty: bool,
+        commit: impl FnOnce() -> R,
+    ) -> Option<R> {
+        let _invalidate = self.shared().invalidate_lock.read();
+        let cached = self.lookup_folio(pn)?;
+        if !Arc::ptr_eq(&cached, &page.folio) || cached.page_offset(pn) != page.page as usize {
+            return None;
+        }
+        let mut state = cached.state.lock();
+        if state.loading || !state.uptodate || state.truncated {
+            return None;
+        }
+        if mark_dirty && !self.in_memory() {
+            state.dirty |= 1 << page.page;
+        }
+        drop(state);
+        Some(commit())
     }
 
     fn with_page_or_insert_impl<R>(
         &self,
         pn: u32,
         zeroed: bool,
-        wait_for_pending: bool,
-        f: impl FnOnce(&mut PageCache, Option<(u32, &PageCache)>) -> VfsResult<R>,
+        preferred_order: u8,
+        f: impl FnOnce(&mut FolioPage<'_>, Option<(u32, FolioPageRef)>) -> VfsResult<R>,
     ) -> VfsResult<R> {
-        let mut f = Some(f);
+        // A speculative read may fail after publishing its loading folio.
+        // Linux does not turn that stale readahead error directly into SIGBUS:
+        // the foreground fault removes the failed cache entry and retries the
+        // page once as demand I/O.
+        let mut may_retry_failed_folio = true;
         loop {
-            // Pending normal replacements remain centrally pinned if an address-
-            // space lock is busy.  Retry only those tokens here: an active sync
-            // still owns `writeback_op` and must finish before ordinary I/O may
-            // reuse its detached page.
-            let _ = self.retry_pending_normal_evictions();
-            let (result, eviction) = {
-                let cache_guard = self.shared().cache_op.lock();
-                let transaction_blocks_access = self.length_change_blocks_page(pn);
-                let pending_blocks_access = self
-                    .shared()
-                    .pending_evictions
-                    .lock()
-                    .get(&pn)
-                    .is_some_and(|entry| !entry.reusable);
-                if wait_for_pending && (transaction_blocks_access || pending_blocks_access) {
-                    // Do not wait while holding `cache_op`: the writeback owner
-                    // needs it to restore or retire this exact token.  Once the
-                    // current owner releases `writeback_op`, retry any lifecycle
-                    // which ended with a recoverable listener failure.
-                    drop(cache_guard);
-                    let _writeback_guard = self.shared().writeback_op.lock();
-                    self.retry_pending_evictions()?;
+            // Look up under the invalidation gate, but wait for an in-flight
+            // loader only after dropping it. Once the folio becomes ready,
+            // reacquire the gate and verify that the same folio is still
+            // indexed before exposing its page.
+            let cached = {
+                let _invalidate = self.shared().invalidate_lock.read();
+                self.lookup_folio(pn)
+            };
+            if let Some(folio) = cached {
+                match folio.wait_uptodate() {
+                    Ok(()) => {
+                        let _invalidate = self.shared().invalidate_lock.read();
+                        let current = self.lookup_folio(pn);
+                        if current
+                            .as_ref()
+                            .is_some_and(|current| Arc::ptr_eq(current, &folio))
+                        {
+                            return self.with_folio_page(&folio, pn, |page| f(page, None))?;
+                        }
+                        continue;
+                    }
+                    Err(_err) if may_retry_failed_folio => {
+                        let _invalidate = self.shared().invalidate_lock.read();
+                        if self
+                            .lookup_folio(pn)
+                            .as_ref()
+                            .is_some_and(|current| Arc::ptr_eq(current, &folio))
+                        {
+                            self.remove_folio(&folio);
+                        }
+                        may_retry_failed_folio = false;
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+
+            Self::reclaim_page_cache_if_needed(self.record.key);
+            let _invalidate = self.shared().invalidate_lock.read();
+            let file = self.inner().entry().as_file()?;
+            let (folio, loader) = self.get_or_publish_folio(pn, preferred_order)?;
+            if !loader {
+                // Another task published the folio after the lock-free lookup.
+                // Drop invalidate_lock before waiting for that task at the top
+                // of the loop.
+                continue;
+            }
+            let load_result = self.load_folio(file, &folio, zeroed);
+            if let Err(err) = load_result {
+                self.remove_folio(&folio);
+                if may_retry_failed_folio {
+                    may_retry_failed_folio = false;
                     continue;
                 }
-                if transaction_blocks_access || pending_blocks_access {
-                    return Err(VfsError::WouldBlock);
-                }
-
-                let mut guard = self.shared().page_cache.lock();
-                let file = self.inner().entry().as_file()?;
-                let (page, evicted) = if zeroed {
-                    self.page_or_insert_zeroed(file, &mut guard, pn)?
-                } else {
-                    self.page_or_insert(file, &mut guard, pn)?
-                };
-                let evicted_ref = evicted.as_ref().map(|(pn, page)| (*pn, page));
-                let result = f
-                    .take()
-                    .expect("page-cache callback executed more than once")(
-                    page,
-                    evicted_ref,
-                );
-                let eviction =
-                    evicted.map(|(pn, page)| self.begin_evicted_page(pn, page, true, false));
-                (result, eviction)
-            };
-            let finish_result = if let Some(eviction) = eviction {
-                let mappings_invalidated = self.notify_evict_listeners_except(
-                    eviction.pn,
-                    eviction.paddr,
-                    None,
-                    false,
-                );
-                self.complete_evicted_page(eviction, mappings_invalidated)
-            } else {
-                Ok(())
-            };
-            return match result {
-                Ok(value) => match finish_result {
-                    Ok(()) => Ok(value),
-                    Err(VfsError::WouldBlock) => {
-                        // Listener or writeback serialization contention is a
-                        // normal deferred-completion state.  The page remains
-                        // pinned in `pending_evictions` and bounded later work
-                        // advances it; printing every transient miss can itself
-                        // dominate a build's serial console path.
-                        Ok(value)
-                    }
-                    Err(err) => {
-                        // The callback has already consumed input or copied data
-                        // into the target page.  A failure while retiring an
-                        // unrelated displaced page must not turn that completed
-                        // operation into an error which the caller may retry.
-                        // The failed page remains pinned and dirty in
-                        // `pending_evictions`, so a later operation can retry the
-                        // writeback without losing data.
-                        warn!("Deferred displaced-page writeback failed: {err:?}");
-                        Ok(value)
-                    }
-                },
-                Err(err) => Err(err),
-            };
+                return Err(err);
+            }
+            return self.with_folio_page(&folio, pn, |page| f(page, None))?;
         }
     }
 
     pub fn with_page_or_insert<R>(
         &self,
         pn: u32,
-        f: impl FnOnce(&mut PageCache, Option<(u32, &PageCache)>) -> VfsResult<R>,
+        f: impl FnOnce(&mut FolioPage<'_>, Option<(u32, FolioPageRef)>) -> VfsResult<R>,
     ) -> VfsResult<R> {
-        // Address-space population can hold a mapping lock here, so this public
-        // form must remain nonblocking to avoid an fsync -> aspace ABBA cycle.
-        self.with_page_or_insert_impl(pn, false, false, f)
+        self.with_page_or_insert_impl(pn, false, 0, f)
     }
 
-    /// Inserts a page and returns a stable token for any detached cache page.
-    /// The cache retains ownership; mmap uses the token to keep that frame
-    /// pinned until PTE removal and remote TLB acknowledgement are complete.
-    pub fn with_page_or_insert_deferred<R>(
-        &self,
-        pn: u32,
-        f: impl FnOnce(&mut PageCache) -> R,
-    ) -> VfsResult<(R, Option<PageEviction>)> {
-        let _cache_guard = self.shared().cache_op.lock();
-        if self.length_change_blocks_page(pn) {
-            return Err(VfsError::WouldBlock);
-        }
-        // Recheck EOF at the same serialization point as insertion. A fault
-        // may have sampled the old length before waiting behind truncate;
-        // without this check it could map a fully out-of-range page after the
-        // shorter EOF was already committed.
-        if u64::from(pn) * PAGE_SIZE as u64 >= self.len()? {
-            return Err(VfsError::Io);
-        }
-        let mut guard = self.shared().page_cache.lock();
-        let file = self.inner().entry().as_file()?;
-        let (page, evicted) = self.page_or_insert(file, &mut guard, pn)?;
-        let result = f(page);
-        let eviction = evicted.map(|(pn, page)| self.begin_evicted_page(pn, page, true, false));
-        Ok((result, eviction))
+    /// Demand-loads the naturally aligned folio containing a file-mapping
+    /// fault. Unlike advisory readahead, the faulting task owns this load and
+    /// waits for the whole folio, so neighboring faults coalesce behind one
+    /// request without putting speculative I/O ahead of the demanded page.
+    pub fn fault_page_ref(&self, pn: u32) -> VfsResult<FolioPageRef> {
+        let file_pages = self.len()?.div_ceil(PAGE_SIZE as u64).max(1);
+        let order = (u64::BITS - 1 - file_pages.leading_zeros()) as u8;
+        self.with_page_or_insert_impl(pn, false, order.min(MAX_FOLIO_ORDER), |page, _| {
+            Ok(page.page_ref())
+        })
     }
 
     fn with_pages<T>(
         &self,
         range: Range<u64>,
         page_initial: impl FnOnce(&FileNode) -> VfsResult<T>,
-        mut page_each: impl FnMut(T, &mut PageCache, Range<usize>) -> VfsResult<T>,
+        mut page_each: impl FnMut(T, &mut FolioPage<'_>, Range<usize>) -> VfsResult<T>,
     ) -> VfsResult<T> {
         let file = self.inner().entry().as_file()?;
         let mut initial = Some(page_initial(file)?);
@@ -1527,10 +1385,14 @@ impl CachedFile {
             let page_range = page_offset..(range.end - page_start).min(PAGE_SIZE as u64) as usize;
 
             let current = initial.take().unwrap();
-            initial =
-                Some(self.with_page_or_insert_impl(pn, false, true, |page, _| {
-                    page_each(current, page, page_range)
-                })?);
+            // A foreground buffered read must wait only for the range the
+            // caller actually requested. Larger speculative windows belong to
+            // `readahead()`: synchronously turning every 4-KiB header read
+            // into 64 KiB of I/O amplifies Cargo's many short file reads.
+            let order = Self::choose_folio_order(pn, end_page);
+            initial = Some(self.with_page_or_insert_impl(pn, false, order, |page, _| {
+                page_each(current, page, page_range)
+            })?);
             page_offset = 0;
         }
 
@@ -1538,9 +1400,8 @@ impl CachedFile {
     }
 
     pub fn read_at(&self, mut dst: impl Write + IoBufMut, offset: u64) -> VfsResult<usize> {
-        let _append_guard = self.shared().append_lock.read();
         let len = self.len()?;
-        let end = (offset + dst.remaining_mut() as u64).min(len);
+        let end = offset.saturating_add(dst.remaining_mut() as u64).min(len);
         if end <= offset {
             return Ok(0);
         }
@@ -1552,76 +1413,13 @@ impl CachedFile {
             |_| Ok(0),
             |read, page, range| {
                 let len = range.end - range.start;
-                dst.write(&page.data()[range.start..range.end])?;
+                dst.write_all(&page.data()[range.start..range.end])?;
                 Ok(read + len)
             },
         )
     }
 
-    /// Reads coherent cached contents without inserting or replacing an LRU
-    /// page.  Address-space population uses this fallback while it holds the
-    /// structural lock: triggering an eviction there would have to call back
-    /// into address spaces and could otherwise create a self/ABBA lock cycle.
-    pub fn read_at_no_evict(
-        &self,
-        mut dst: impl Write + IoBufMut,
-        offset: u64,
-    ) -> VfsResult<usize> {
-        let len = self.len()?;
-        let end = (offset + dst.remaining_mut() as u64).min(len);
-        if end <= offset {
-            return Ok(0);
-        }
-
-        let file = self.inner().entry().as_file()?;
-        let start_page = (offset / PAGE_SIZE as u64) as u32;
-        let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
-        let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
-        let mut read = 0;
-
-        for pn in start_page..end_page {
-            let page_start = pn as u64 * PAGE_SIZE as u64;
-            let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
-            let range = page_offset..range_end;
-
-            // Keep the cache lookup and backing-file fallback in one serialized
-            // operation.  Otherwise a cached writer could create a newer dirty
-            // page after our miss but before the disk read.
-            let _cache_guard = self.shared().cache_op.lock();
-            if self.length_change_blocks_page(pn) {
-                return Err(VfsError::WouldBlock);
-            }
-            let mut cache = self.shared().page_cache.lock();
-            if let Some(page) = cache.get_mut(&pn) {
-                dst.write(&page.data()[range.clone()])?;
-            } else {
-                drop(cache);
-                let mut pending = self.shared().pending_evictions.lock();
-                if let Some(entry) = pending.get_mut(&pn) {
-                    // Both reusable and non-reusable pending pages remain
-                    // pinned and contain the newest dirty data.
-                    dst.write(&entry.page.data()[range.clone()])?;
-                } else {
-                    drop(pending);
-                    if self.in_memory() {
-                        dst.write(&ZERO_PAGE[range.clone()])?;
-                    } else {
-                        let mut page = Vec::new();
-                        page.resize(PAGE_SIZE, 0);
-                        file.read_at(&mut page[..], page_start)?;
-                        dst.write(&page[range.clone()])?;
-                    }
-                }
-            }
-
-            read += range.end - range.start;
-            page_offset = 0;
-        }
-        Ok(read)
-    }
-
     pub fn readahead(&self, offset: u64, count: usize) -> VfsResult<()> {
-        let _append_guard = self.shared().append_lock.read();
         if count == 0 || self.in_memory() {
             return Ok(());
         }
@@ -1632,14 +1430,80 @@ impl CachedFile {
         }
         let count = count.min(MAX_READAHEAD_BYTES);
         let end = offset.saturating_add(count as u64).min(len);
-        let start_page = (offset / PAGE_SIZE as u64) as u32;
+        let mut start_page = (offset / PAGE_SIZE as u64) as u32;
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
+        Self::reclaim_page_cache_if_needed(self.record.key);
+        let _invalidate = self.shared().invalidate_lock.read();
+        let mut loaders = Vec::new();
+        let mut prepare_error = None;
+        while start_page < end_page {
+            if let Some(folio) = self.lookup_folio(start_page) {
+                // An existing loading folio already represents an in-flight
+                // read. Readahead is advisory and must not wait for it.
+                start_page = (folio.index + folio.page_count() as u32).min(end_page);
+                continue;
+            }
 
-        for pn in start_page..end_page {
-            self.with_page_or_insert_impl(pn, false, true, |_, _| Ok(()))?;
+            let order = Self::choose_folio_order(start_page, end_page);
+            match self.get_or_publish_folio(start_page, order) {
+                Ok((folio, true)) => {
+                    start_page = (folio.index + folio.page_count() as u32).min(end_page);
+                    loaders.push(folio);
+                }
+                Ok((folio, false)) => {
+                    start_page = (folio.index + folio.page_count() as u32).min(end_page);
+                }
+                Err(err) => {
+                    prepare_error = Some(err);
+                    break;
+                }
+            }
         }
+        drop(_invalidate);
 
-        Ok(())
+        if !loaders.is_empty() {
+            start_readahead_workers();
+            let count = loaders.len();
+            let mut queue = READAHEAD_QUEUE.lock();
+            queue.extend(loaders.into_iter().map(|folio| ReadaheadJob {
+                cached: self.clone(),
+                folio,
+            }));
+            drop(queue);
+            READAHEAD_WORK.notify_many(count.min(READAHEAD_WORKERS), false);
+        }
+        prepare_error.map_or(Ok(()), Err)
+    }
+
+    fn load_readahead_folio(&self, folio: Arc<Folio>) {
+        let _invalidate = self.shared().invalidate_lock.read();
+        let Ok(file) = self.inner().entry().as_file() else {
+            folio.complete_load(Err(VfsError::Io));
+            self.remove_folio(&folio);
+            return;
+        };
+        let Ok(file_len) = self.len() else {
+            folio.complete_load(Err(VfsError::Io));
+            self.remove_folio(&folio);
+            return;
+        };
+
+        let loading = {
+            let state = folio.state.lock();
+            state.loading && !state.truncated
+        };
+        let folio_start = u64::from(folio.index) * PAGE_SIZE as u64;
+        if !loading {
+            return;
+        }
+        if folio_start >= file_len {
+            folio.complete_load(Err(VfsError::Io));
+            self.remove_folio(&folio);
+            return;
+        }
+        if self.load_folio(file, &folio, false).is_err() {
+            self.remove_folio(&folio);
+        }
     }
 
     fn read_at_in_memory(
@@ -1648,6 +1512,7 @@ impl CachedFile {
         offset: u64,
         end: u64,
     ) -> VfsResult<usize> {
+        let _invalidate = self.shared().invalidate_lock.read();
         let start_page = (offset / PAGE_SIZE as u64) as u32;
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
         let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
@@ -1659,20 +1524,12 @@ impl CachedFile {
             let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
             let len = range_end - range_start;
 
-            loop {
-                let cache_guard = self.shared().cache_op.lock();
-                if self.length_change_blocks_page(pn) {
-                    drop(cache_guard);
-                    let _writeback_guard = self.shared().writeback_op.lock();
-                    continue;
-                }
-                let mut guard = self.shared().page_cache.lock();
-                if let Some(page) = guard.get_mut(&pn) {
-                    dst.write(&page.data()[range_start..range_end])?;
-                } else {
-                    dst.write(&ZERO_PAGE[range_start..range_end])?;
-                }
-                break;
+            if let Some(folio) = self.lookup_folio(pn) {
+                self.with_folio_page(&folio, pn, |page| {
+                    dst.write_all(&page.data()[range_start..range_end])
+                })??;
+            } else {
+                dst.write_all(&ZERO_PAGE[range_start..range_end])?;
             }
             read += len;
             page_offset = 0;
@@ -1682,7 +1539,9 @@ impl CachedFile {
     }
 
     fn write_at_locked(&self, mut buf: impl Read + IoBuf, offset: u64) -> VfsResult<usize> {
-        let end = offset + buf.remaining() as u64;
+        let end = offset
+            .checked_add(buf.remaining() as u64)
+            .ok_or(VfsError::InvalidInput)?;
         if end <= offset {
             return Ok(0);
         }
@@ -1692,17 +1551,7 @@ impl CachedFile {
 
         let old_len = self.len()?;
         if end > old_len {
-            if end <= DEFERRED_FILE_LEN_THRESHOLD {
-                let file = self.inner().entry().as_file()?;
-                file.set_len(end)?;
-                // Backing EOF has committed.  Update an existing cache
-                // infallibly; if another thread invalidated it, the next
-                // lookup reads the new backing metadata instead of recreating
-                // an old cached EOF through a fallible second operation.
-                self.inner().set_cached_len_if_present(end);
-            } else {
-                self.grow_cached_len(end)?;
-            }
+            self.grow_cached_len(end)?;
         }
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
@@ -1716,9 +1565,10 @@ impl CachedFile {
             let len = range.end - range.start;
 
             let zeroed = Self::can_zero_fill_write_page(old_len, page_start, &range);
-            self.with_page_or_insert_impl(pn, zeroed, true, |page, _| {
-                buf.read(&mut page.data()[range.start..range.end])?;
-                page.dirty = true;
+            let order = Self::choose_folio_order(pn, end_page);
+            self.with_page_or_insert_impl(pn, zeroed, order, |page, _| {
+                buf.read_exact(&mut page.data()[range.start..range.end])?;
+                page.mark_dirty();
                 Ok(())
             })?;
             written += len;
@@ -1737,7 +1587,7 @@ impl CachedFile {
         let file = self.inner().entry().as_file()?;
         if end > self.len()? {
             file.set_len(end)?;
-            self.inner().set_cached_len_if_present(end);
+            self.set_cached_len(end, false)?;
         }
 
         let start_page = (offset / PAGE_SIZE as u64) as u32;
@@ -1751,19 +1601,14 @@ impl CachedFile {
             let range_end = (end - page_start).min(PAGE_SIZE as u64) as usize;
             let len = range_end - range_start;
 
-            let mut guard = self.shared().page_cache.lock();
-            if let Some(page) = guard.get_mut(&pn) {
-                buf.read(&mut page.data()[range_start..range_end])?;
-            } else {
-                let mut data = Vec::new();
-                data.resize(len, 0);
-                buf.read(&mut data)?;
-                if data.iter().any(|byte| *byte != 0) {
-                    let mut page = PageCache::new()?;
-                    page.data().fill(0);
+            let mut data = Vec::new();
+            data.resize(len, 0);
+            buf.read_exact(&mut data)?;
+            if data.iter().any(|byte| *byte != 0) || self.lookup_folio(pn).is_some() {
+                self.with_page_or_insert_impl(pn, true, 0, |page, _| {
                     page.data()[range_start..range_end].copy_from_slice(&data);
-                    guard.put(pn, page);
-                }
+                    Ok(())
+                })?;
             }
             written += len;
             page_offset = 0;
@@ -1784,446 +1629,373 @@ impl CachedFile {
             .map(|written| (written, len + written as u64))
     }
 
-    /// Restores transactionally detached pages while `cache_op` is held.
-    /// Concurrent activity may have filled the freed LRU slots while PTE
-    /// callbacks ran, so any displaced page starts its own pinned lifecycle.
-    fn restore_detached_pages_locked(
-        &self,
-        pages: Vec<(u32, PageCache)>,
-    ) -> Vec<PageEviction> {
-        let mut cache = self.shared().page_cache.lock();
-        let mut displaced = Vec::new();
-        for (pn, page) in pages {
-            debug_assert!(!cache.contains(&pn));
-            if cache.len() == cache.cap().get()
-                && let Some(entry) = cache.pop_lru()
-            {
-                displaced.push(entry);
-            }
-            cache.put(pn, page);
-        }
-        drop(cache);
-        displaced
-            .into_iter()
-            .map(|(pn, page)| self.begin_evicted_page(pn, page, true, false))
-            .collect()
-    }
-
-    /// Detaches every cached page overlapping `range`, revokes all exact PTEs
-    /// and returns the still-owned frames with writeback/cache serialization
-    /// held. No backing-file mutation has happened yet. If a listener fails,
-    /// the original frames are restored before the error is returned.
-    fn lock_pages_for_len_change(
-        &self,
-        range: Range<u64>,
-    ) -> VfsResult<(
-        MutexGuard<'_, ()>,
-        MutexGuard<'_, ()>,
-        Vec<(u32, PageCache)>,
-    )> {
-        let writeback_guard = self.shared().writeback_op.lock();
-        self.writeback_dirty_pages_in_range_locked(&range)?;
-
-        let cache_guard = self.lock_cache_after_draining_pending()?;
-        let evictions = {
-            let mut cache = self.shared().page_cache.lock();
-            let keys = cache
-                .iter()
-                .map(|(pn, _)| *pn)
-                .filter(|pn| Self::page_overlaps_range(*pn, &range))
-                .collect::<Vec<_>>();
-            keys.into_iter()
-                .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
-                .map(|(pn, page)| self.begin_evicted_page(pn, page, false, false))
-                .collect::<Vec<_>>()
-        };
-        if evictions.is_empty() {
-            return Ok((writeback_guard, cache_guard, Vec::new()));
-        }
-        drop(cache_guard);
-
-        let mut mappings_invalidated = true;
-        for eviction in &evictions {
-            mappings_invalidated = self.notify_evict_listeners_except(
-                eviction.pn,
-                eviction.paddr,
-                None,
-                true,
-            ) && mappings_invalidated;
-        }
-
-        let cache_guard = self.shared().cache_op.lock();
-        let pages = {
-            let mut pending = self.shared().pending_evictions.lock();
-            evictions
-                .iter()
-                .map(|eviction| {
-                    let entry = pending
-                        .remove(&eviction.pn)
-                        .expect("length-change eviction token disappeared");
-                    assert!(
-                        Self::eviction_matches(&entry, *eviction),
-                        "length-change eviction token changed generation"
-                    );
-                    (eviction.pn, entry.page)
-                })
-                .collect::<Vec<_>>()
-        };
-
-        if mappings_invalidated {
-            return Ok((writeback_guard, cache_guard, pages));
-        }
-
-        let displaced = self.restore_detached_pages_locked(pages);
-        drop(cache_guard);
-        for eviction in displaced {
-            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
-                warn!("Failed to finish rollback page displacement: {err:?}");
-            }
-        }
-        Err(VfsError::WouldBlock)
-    }
-
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
-        let _append_guard = self.shared().append_lock.write();
+        let _append = self.shared().append_lock.write();
         let old_len = self.len()?;
         if old_len == len {
-            let _writeback_guard = self.shared().writeback_op.lock();
-            let _cache_guard = self.lock_cache_after_draining_pending()?;
-            self.inner().entry().as_file()?.set_len(len)?;
-            self.inner().set_cached_len_if_present(len);
             return Ok(());
         }
 
-        let affected_start = if old_len > len {
-            len / PAGE_SIZE as u64 * PAGE_SIZE as u64
-        } else {
-            old_len / PAGE_SIZE as u64 * PAGE_SIZE as u64
-        };
-        let affected_end = if old_len > len {
-            u64::MAX
-        } else {
-            affected_start.saturating_add(PAGE_SIZE as u64)
-        };
-        // Publish the whole affected range before the first dirty writeback.
-        // Faults which sampled the old EOF then retry outside their address-
-        // space lock, and ordinary cache users wait behind `writeback_op`.
-        let _length_change_guard =
-            self.begin_length_change(affected_start..affected_end);
+        // Dirty data below a shrinking EOF must reach storage before ext4
+        // releases the corresponding blocks.
+        if len < old_len && !self.in_memory() {
+            self.writeback_folios_in_range(0..len)?;
+        }
+
+        let invalidate = self.shared().invalidate_lock.write();
         let file = self.inner().entry().as_file()?;
-        let (_writeback_guard, cache_guard, pages) =
-            self.lock_pages_for_len_change(affected_start..affected_end)?;
+        file.set_len(len)?;
+        self.set_cached_len(len, false)?;
 
-        if let Err(err) = file.set_len(len) {
-            let displaced = self.restore_detached_pages_locked(pages);
-            drop(cache_guard);
-            for eviction in displaced {
-                if let Err(finish_err) = self.finish_evicted_page_with_wait(eviction, true) {
-                    warn!("Failed to finish set_len rollback displacement: {finish_err:?}");
+        let mut removed = Vec::new();
+        let mut invalid_pages = Vec::new();
+        if old_len < len {
+            for folio in self.folios_snapshot() {
+                let start = folio.index as u64 * PAGE_SIZE as u64;
+                let end = start + folio.byte_len() as u64;
+                let zero_start = old_len.max(start);
+                let zero_end = len.min(end);
+                if zero_start >= zero_end {
+                    continue;
                 }
-            }
-            return Err(err);
-        }
-
-        // The backing operation above is the irreversible commit point.
-        // Never follow it with a fallible metadata-cache creation: update the
-        // cache only if it still exists, otherwise leave it absent so future
-        // EOF validation reads the committed backing length.
-        self.inner().set_cached_len_if_present(len);
-        let mut restore = Vec::new();
-        if old_len > len {
-            let partial_pn = (len / PAGE_SIZE as u64) as u32;
-            let partial_offset = (len % PAGE_SIZE as u64) as usize;
-            for (pn, mut page) in pages {
-                if partial_offset != 0 && pn == partial_pn {
-                    page.data()[partial_offset..].fill(0);
-                    page.dirty = false;
-                    restore.push((pn, page));
+                let state = folio.state.lock();
+                if state.uptodate && !state.truncated {
+                    let data = unsafe { folio.data_mut_unchecked() };
+                    data[(zero_start - start) as usize..(zero_end - start) as usize].fill(0);
                 }
+                drop(state);
             }
         } else {
-            let zero_start = (old_len % PAGE_SIZE as u64) as usize;
-            let zero_end = (len - affected_start).min(PAGE_SIZE as u64) as usize;
-            for (pn, mut page) in pages {
-                page.data()[zero_start..zero_end].fill(0);
-                restore.push((pn, page));
+            let first_invalid_page = len.div_ceil(PAGE_SIZE as u64) as u32;
+            for folio in self.folios_snapshot() {
+                let start = folio.index as u64 * PAGE_SIZE as u64;
+                let end = start + folio.byte_len() as u64;
+                if start >= len {
+                    if self.remove_folio(&folio) {
+                        let mut state = folio.state.lock();
+                        state.truncated = true;
+                        state.uptodate = false;
+                        state.dirty = 0;
+                        state.error = Some(VfsError::Io);
+                        drop(state);
+                        removed.push(folio);
+                        continue;
+                    }
+                } else if end > len {
+                    let mut state = folio.state.lock();
+                    let data = unsafe { folio.data_mut_unchecked() };
+                    data[(len - start) as usize..].fill(0);
+                    let valid_pages = (len - start).div_ceil(PAGE_SIZE as u64) as usize;
+                    let valid_mask = if valid_pages >= u16::BITS as usize {
+                        u16::MAX
+                    } else {
+                        (1u16 << valid_pages) - 1
+                    };
+                    state.dirty &= valid_mask;
+                }
+                for pn in
+                    first_invalid_page.max(folio.index)..folio.index + folio.page_count() as u32
+                {
+                    let page = FolioPageRef {
+                        folio: folio.clone(),
+                        page: folio.page_offset(pn) as u8,
+                    };
+                    invalid_pages.push((pn, page));
+                }
             }
         }
-
-        let displaced = self.restore_detached_pages_locked(restore);
-        drop(cache_guard);
-        if old_len > len {
-            // Two-phase private-map callbacks first revoke WRITE in every
-            // address space, then preserve the partial page's private prefix,
-            // zero its tail, and unmap pages wholly beyond the new EOF.
-            self.notify_length_change_listeners(len..old_len);
+        drop(invalidate);
+        for (pn, page) in invalid_pages {
+            self.notify_evict_listeners(pn, &page);
         }
-        for eviction in displaced {
-            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
-                // EOF already changed. Keep the displaced page centrally pinned
-                // for retry instead of turning a committed truncate into a
-                // caller-visible error which might be retried.
-                warn!("Deferred set_len page displacement failed: {err:?}");
-            }
+        for folio in removed {
+            self.notify_folio_evict(&folio);
         }
         Ok(())
     }
 
-    fn page_write_len(file_len: u64, pn: u32) -> usize {
-        let page_start = pn as u64 * PAGE_SIZE as u64;
-        file_len.saturating_sub(page_start).min(PAGE_SIZE as u64) as usize
+    fn folios_snapshot(&self) -> Vec<Arc<Folio>> {
+        self.shared().folio_heads.lock().values().cloned().collect()
     }
 
-    fn writeback_dirty_run(
+    fn notify_folio_evict(&self, folio: &Arc<Folio>) {
+        for page in 0..folio.page_count() {
+            let reference = FolioPageRef {
+                folio: folio.clone(),
+                page: page as u8,
+            };
+            self.notify_evict_listeners(folio.index + page as u32, &reference);
+        }
+    }
+
+    fn folio_overlaps(folio: &Folio, range: &Range<u64>) -> bool {
+        let start = folio.index as u64 * PAGE_SIZE as u64;
+        let end = start + folio.byte_len() as u64;
+        start < range.end && end > range.start
+    }
+
+    fn writeback_folio(
+        &self,
         file: &FileNode,
         file_len: u64,
-        run: &mut [(PageEviction, PendingEviction)],
-    ) -> VfsResult<()> {
-        if run.is_empty() {
-            return Ok(());
-        }
+        folio: &Arc<Folio>,
+    ) -> VfsResult<bool> {
+        folio.wait_uptodate()?;
+        folio.wait.wait_until(|| folio.state.lock().writeback == 0);
 
-        let start = run[0].0.pn as u64 * PAGE_SIZE as u64;
-        let mut buf = Vec::new();
-        for (eviction, entry) in run.iter_mut() {
-            let len = Self::page_write_len(file_len, eviction.pn);
-            if len > 0 {
-                buf.extend_from_slice(&entry.page.data()[..len]);
+        let folio_start = folio.index as u64 * PAGE_SIZE as u64;
+        let valid_bytes = file_len
+            .saturating_sub(folio_start)
+            .min(folio.byte_len() as u64) as usize;
+        let index_refs = folio.page_count() + 2;
+        let externally_pinned = Arc::strong_count(folio) > index_refs;
+        let dirty = {
+            let mut state = folio.state.lock();
+            if state.truncated {
+                return Ok(false);
             }
-        }
-        let mut written = 0;
-        while written < buf.len() {
-            let n = file.write_at(&buf[written..], start + written as u64)?;
-            if n == 0 || n > buf.len() - written {
-                return Err(VfsError::Io);
+            if valid_bytes == 0 {
+                state.dirty = 0;
+                return Ok(false);
             }
-            written += n;
-        }
-        for (_, entry) in run.iter_mut() {
-            entry.page.dirty = false;
-        }
-        Ok(())
-    }
-
-    fn writeback_dirty_pages(
-        file: &FileNode,
-        file_len: u64,
-        dirty_pages: &mut Vec<(PageEviction, PendingEviction)>,
-    ) -> VfsResult<()> {
-        dirty_pages.sort_by_key(|(eviction, _)| eviction.pn);
-
-        let mut start = 0;
-        while start < dirty_pages.len() {
-            let mut end = start + 1;
-            let mut bytes = Self::page_write_len(file_len, dirty_pages[start].0.pn);
-            while end < dirty_pages.len() {
-                let pn = dirty_pages[end].0.pn;
-                let prev_pn = dirty_pages[end - 1].0.pn;
-                if pn != prev_pn + 1 {
-                    break;
-                }
-                let len = Self::page_write_len(file_len, pn);
-                if bytes > 0 && bytes + len > WRITEBACK_BATCH_BYTES {
-                    break;
-                }
-                bytes += len;
-                end += 1;
-            }
-            Self::writeback_dirty_run(file, file_len, &mut dirty_pages[start..end])?;
-            start = end;
-        }
-
-        Ok(())
-    }
-
-    /// Revokes every writable mapping before performing the final dirty-page
-    /// writeback.  Ready pages are still written as contiguous batches; pages
-    /// whose listener failed remain pinned in `pending_evictions` for retry.
-    fn finish_sync_evictions(&self, evictions: Vec<PageEviction>) -> VfsResult<()> {
-        let mut ready = Vec::new();
-        let mut blocked = false;
-        for eviction in evictions {
-            if self.notify_evict_listeners_except(eviction.pn, eviction.paddr, None, true) {
-                ready.push(eviction);
+            let valid_pages = valid_bytes.div_ceil(PAGE_SIZE);
+            let valid_mask = if valid_pages >= u16::BITS as usize {
+                u16::MAX
             } else {
-                blocked = true;
+                (1u16 << valid_pages) - 1
+            };
+            state.dirty &= valid_mask;
+            let dirty = state.dirty;
+            if dirty == 0 {
+                return Ok(false);
+            }
+            state.dirty &= !dirty;
+            state.writeback |= dirty;
+            dirty
+        };
+        let mut data = Vec::new();
+        data.resize(valid_bytes, 0);
+        for page in 0..folio.page_count() {
+            if dirty & (1 << page) == 0 {
+                continue;
+            }
+            let _page_guard = folio.page_locks[page].lock();
+            let start = page * PAGE_SIZE;
+            let end = (start + PAGE_SIZE).min(valid_bytes);
+            if start < end {
+                data[start..end]
+                    .copy_from_slice(&unsafe { folio.data_mut_unchecked() }[start..end]);
             }
         }
 
-        let displaced = self.finish_evicted_writeback_batch(&ready)?;
-        for eviction in displaced {
-            self.finish_evicted_page_with_wait(eviction, true)?;
+        let mut result = Ok(());
+        let mut page = 0;
+        while page < folio.page_count() {
+            if dirty & (1 << page) == 0 {
+                page += 1;
+                continue;
+            }
+            let run_start = page;
+            while page < folio.page_count() && dirty & (1 << page) != 0 {
+                page += 1;
+            }
+            let byte_start = run_start * PAGE_SIZE;
+            let byte_end = (page * PAGE_SIZE).min(data.len());
+            if byte_start < byte_end {
+                result = self.write_fully_at(
+                    file,
+                    &data[byte_start..byte_end],
+                    folio_start + byte_start as u64,
+                );
+                if result.is_err() {
+                    break;
+                }
+            }
         }
 
-        if blocked {
-            Err(VfsError::WouldBlock)
-        } else {
-            Ok(())
+        let mut state = folio.state.lock();
+        state.writeback &= !dirty;
+        if result.is_err() || externally_pinned || Arc::strong_count(folio) > index_refs {
+            // A writable mmap can modify the frame after the bounce copy was
+            // taken without taking FolioState. Keep pinned pages dirty until
+            // their PTE is removed, preventing a later modification from
+            // being mistaken for already-written data.
+            state.dirty |= dirty;
         }
+        drop(state);
+        folio.wait.notify_all(false);
+        result.map(|_| true)
     }
 
-    fn writeback_dirty_pages_in_range_locked(&self, range: &Range<u64>) -> VfsResult<()> {
+    fn writeback_folios_in_range(&self, range: Range<u64>) -> VfsResult<()> {
         if self.in_memory() || range.start >= range.end {
             return Ok(());
         }
-        let evictions = {
-            // Include dirty pages which an earlier writeback left pending and
-            // exclude a new replacement from appearing before the LRU scan.
-            let _cache_guard = self.lock_cache_after_draining_pending()?;
-            let mut cache = self.shared().page_cache.lock();
-            let keys = cache
-                .iter()
-                .filter(|(pn, page)| Self::page_overlaps_range(**pn, range) && page.dirty)
-                .map(|(pn, _)| *pn)
-                .collect::<Vec<_>>();
-            keys.into_iter()
-                .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
-                .map(|(pn, page)| self.begin_evicted_page(pn, page, false, true))
-                .collect::<Vec<_>>()
-        };
-        self.finish_sync_evictions(evictions)
-    }
 
-    fn page_overlaps_range(pn: u32, range: &Range<u64>) -> bool {
-        let page_start = u64::from(pn) * PAGE_SIZE as u64;
-        page_start < range.end && page_start.saturating_add(PAGE_SIZE as u64) > range.start
-    }
-
-    /// Flushes dirty cached data in `range` and returns with both direct-I/O
-    /// serialization locks held.  The final dirty recheck is made while
-    /// `cache_op` is held, closing the gap in which a cached writer or a new
-    /// writable mmap fault could otherwise race the backing-file operation.
-    fn lock_direct_read_range(
-        &self,
-        range: Range<u64>,
-    ) -> VfsResult<(MutexGuard<'_, ()>, MutexGuard<'_, ()>)> {
-        let writeback_guard = self.shared().writeback_op.lock();
-        loop {
-            self.writeback_dirty_pages_in_range_locked(&range)?;
-            let cache_guard = self.lock_cache_after_draining_pending()?;
-            let dirty = self
-                .shared()
-                .page_cache
-                .lock()
-                .iter()
-                .any(|(pn, page)| Self::page_overlaps_range(*pn, &range) && page.dirty);
-            if !dirty {
-                return Ok((writeback_guard, cache_guard));
+        let file = self.inner().entry().as_file()?;
+        let file_len = self.len()?;
+        let folios = self.folios_snapshot();
+        let mut wrote = false;
+        for folio in folios {
+            if Self::folio_overlaps(&folio, &range) {
+                // A speculative folio may still be owned by a readahead
+                // worker. Wait before entering the invalidation gate so a
+                // queued truncate cannot block that worker behind us.
+                folio.wait_uptodate()?;
+                let _invalidate = self.shared().invalidate_lock.read();
+                wrote |= self.writeback_folio(file, file_len, &folio)?;
             }
-            drop(cache_guard);
         }
+        if wrote {
+            self.commit_len()?;
+        }
+        Ok(())
     }
 
-    /// Returns with no cached or pending page overlapping `range`, while
-    /// holding the same locks across the following direct write.  Clean pages
-    /// are invalidated before the backing file is changed, so no stale mmap
-    /// translation or post-write dirty-bit clearing window is possible.
-    fn lock_direct_write_range(
-        &self,
-        range: Range<u64>,
-    ) -> VfsResult<(MutexGuard<'_, ()>, MutexGuard<'_, ()>)> {
-        let writeback_guard = self.shared().writeback_op.lock();
-        loop {
-            self.writeback_dirty_pages_in_range_locked(&range)?;
-            let cache_guard = self.lock_cache_after_draining_pending()?;
-            let evictions = {
-                let mut cache = self.shared().page_cache.lock();
-                if cache
-                    .iter()
-                    .any(|(pn, page)| Self::page_overlaps_range(*pn, &range) && page.dirty)
-                {
-                    drop(cache);
-                    drop(cache_guard);
-                    continue;
-                }
+    fn writeback_dirty_pages_in_range(&self, range: Range<u64>) -> VfsResult<()> {
+        self.writeback_folios_in_range(range)
+    }
 
-                let keys = cache
-                    .iter()
-                    .map(|(pn, _)| *pn)
-                    .filter(|pn| Self::page_overlaps_range(*pn, &range))
-                    .collect::<Vec<_>>();
-                keys.into_iter()
-                    .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
-                    .map(|(pn, page)| self.begin_evicted_page(pn, page, false, false))
-                    .collect::<Vec<_>>()
+    fn invalidate_clean_pages_in_range(&self, range: Range<u64>) {
+        if self.in_memory() || range.start >= range.end {
+            return;
+        }
+        let invalidate = self.shared().invalidate_lock.write();
+        let mut removed = Vec::new();
+        for folio in self.folios_snapshot() {
+            if !Self::folio_overlaps(&folio, &range) {
+                continue;
+            }
+            let clean = {
+                let state = folio.state.lock();
+                !state.loading && state.dirty == 0 && state.writeback == 0
             };
-
-            if evictions.is_empty() {
-                return Ok((writeback_guard, cache_guard));
+            if clean && self.remove_folio(&folio) {
+                removed.push(folio);
             }
-            drop(cache_guard);
-            for eviction in evictions {
-                self.finish_evicted_page_with_wait(eviction, true)?;
-            }
+        }
+        drop(invalidate);
+        for folio in removed {
+            self.notify_folio_evict(&folio);
         }
     }
 
     fn discard_cached_pages(&self) {
-        // This path intentionally discards cache contents and cannot report an
-        // error.  It may help normal replacement tokens make progress, but it
-        // must never consume a sync-owned token and hide its writeback status.
-        let _ = self.retry_pending_normal_evictions();
-        let evictions = {
-            let _cache_guard = self.shared().cache_op.lock();
-            let mut cache = self.shared().page_cache.lock();
-            let mut removed = Vec::new();
-            while let Some((pn, page)) = cache.pop_lru() {
-                removed.push((pn, page));
+        let invalidate = self.shared().invalidate_lock.write();
+        let mut removed = Vec::new();
+        for folio in self.folios_snapshot() {
+            if self.remove_folio(&folio) {
+                {
+                    let mut state = folio.state.lock();
+                    state.loading = false;
+                    state.uptodate = false;
+                    state.error = Some(VfsError::Io);
+                    state.dirty = 0;
+                    state.writeback = 0;
+                    state.truncated = true;
+                }
+                folio.wait.notify_all(false);
+                removed.push(folio);
             }
-            removed
-                .into_iter()
-                .map(|(pn, mut page)| {
-                    page.dirty = false;
-                    self.begin_evicted_page(pn, page, false, false)
-                })
-                .collect::<Vec<_>>()
-        };
+        }
+        drop(invalidate);
 
-        for eviction in evictions {
-            if let Err(err) = self.finish_evicted_page_with_wait(eviction, true) {
-                warn!("Failed to discard cached page: {err:?}");
-            }
+        for folio in removed {
+            self.notify_folio_evict(&folio);
         }
     }
 
-    fn remove_unused_global_record(&self, discard_metadata: bool) {
-        if self.remove_global_record_if_unused() {
-            if discard_metadata {
-                self.inner.discard_metadata_cache();
+    fn memory_watermarks() -> (usize, usize) {
+        let allocator = global_allocator();
+        let total = allocator.used_pages() + allocator.available_pages();
+        let minimum = MIN_FREE_MEMORY_BYTES / PAGE_SIZE;
+        let low = (total / FREE_MEMORY_LOW_DIVISOR).max(minimum).min(total);
+        let target = (total / FREE_MEMORY_TARGET_DIVISOR).max(low).min(total);
+        (low, target)
+    }
+
+    /// Reclaim least-recently-used folios without holding an index lock during
+    /// writeback. Mapped folios remain pinned until the owning PTE is removed.
+    fn reclaim_pages(&self, limit: usize) -> VfsResult<usize> {
+        if self.in_memory() || limit == 0 {
+            return Ok(0);
+        }
+
+        let file = self.inner().entry().as_file()?;
+        let file_len = self.len()?;
+        let mut folios = self.folios_snapshot();
+        folios.sort_unstable_by_key(|folio| folio.last_used.load(Ordering::Relaxed));
+
+        let mut reclaimed = 0;
+        let mut wrote = false;
+        for folio in folios {
+            if reclaimed >= limit {
+                break;
+            }
+            // See writeback_folios_in_range: never sleep on a loading folio
+            // while holding invalidate_lock.
+            folio.wait_uptodate()?;
+            {
+                let _invalidate = self.shared().invalidate_lock.read();
+                wrote |= self.writeback_folio(file, file_len, &folio)?;
+            }
+
+            let invalidate = self.shared().invalidate_lock.write();
+            let clean = {
+                let state = folio.state.lock();
+                !state.loading && state.dirty == 0 && state.writeback == 0 && !state.truncated
+            };
+            let index_refs = folio.page_count() + 2;
+            if clean && Arc::strong_count(&folio) <= index_refs && self.remove_folio(&folio) {
+                reclaimed += folio.page_count();
+                drop(invalidate);
+                self.notify_folio_evict(&folio);
             } else {
-                self.inner.invalidate_metadata_cache();
+                drop(invalidate);
             }
         }
+        if wrote {
+            self.commit_len()?;
+        }
+        Ok(reclaimed)
     }
 
-    fn prune_inactive_file_caches(retain_key: FileCacheKey) {
-        let inactive = {
-            let caches = FILE_CACHES.read();
-            caches
-                .iter()
-                .filter(|(key, record)| {
-                    **key != retain_key
-                        && !record.in_memory
-                        && record.active_handles.load(Ordering::Acquire) == 0
-                })
-                .map(|(key, record)| (*key, Self::from_record(record)))
-                .collect::<Vec<_>>()
-        };
-        let inactive_after_current_drop = inactive.len() + 1;
-        if inactive_after_current_drop <= MAX_RETAINED_FILE_CACHE_RECORDS {
+    fn reclaim_page_cache_if_needed(retain_key: FileCacheKey) {
+        let allocator = global_allocator();
+        let (low, target) = Self::memory_watermarks();
+        if allocator.available_pages() >= low {
             return;
         }
 
-        for (_, cached) in inactive
+        let Some(_reclaim_guard) = PAGE_CACHE_RECLAIM_LOCK.try_lock() else {
+            // Another task is already making progress. Let this allocation
+            // continue instead of forming a process-wide reclaim convoy.
+            return;
+        };
+        if allocator.available_pages() >= low {
+            return;
+        }
+
+        let mut records = Self::all_records()
             .into_iter()
-            .take(inactive_after_current_drop - MAX_RETAINED_FILE_CACHE_RECORDS)
-        {
-            if let Err(err) = cached.drop_cached_pages() {
-                warn!("Failed to prune inactive file cache: {err:?}");
-                continue;
+            .filter(|record| !record.in_memory)
+            .collect::<Vec<_>>();
+        records.sort_unstable_by_key(|record| {
+            (
+                record.key == retain_key,
+                record.last_used.load(Ordering::Relaxed),
+            )
+        });
+
+        for record in records {
+            let available = allocator.available_pages();
+            if available >= target {
+                break;
             }
-            if cached.remove_global_record_if_only_snapshot() {
-                cached.inner.invalidate_metadata_cache();
+            let wanted = target - available;
+            let cached = Self::from_record(&record);
+            if let Err(err) = cached.reclaim_pages(wanted) {
+                warn!("Failed to reclaim file cache pages: {err:?}");
             }
         }
     }
@@ -2232,49 +2004,15 @@ impl CachedFile {
         if self.in_memory() {
             return Ok(());
         }
-        let _writeback_guard = self.shared().writeback_op.lock();
-        // Serialize detach -> PTE/TLB revocation -> I/O -> restore.  A second
-        // fsync waits here and then retries any dirty pending page left by an
-        // I/O failure instead of incorrectly reporting success from an empty
-        // LRU scan.
-        let evictions = {
-            let _cache_guard = self.lock_cache_after_draining_pending()?;
-            let mut cache = self.shared().page_cache.lock();
-            let keys = cache
-                .iter()
-                .filter(|(_, page)| page.dirty)
-                .map(|(pn, _)| *pn)
-                .collect::<Vec<_>>();
-            keys.into_iter()
-                .filter_map(|pn| cache.pop(&pn).map(|page| (pn, page)))
-                .map(|(pn, page)| self.begin_evicted_page(pn, page, false, true))
-                .collect::<Vec<_>>()
-        };
-        self.finish_sync_evictions(evictions)
+        self.writeback_folios_in_range(0..u64::MAX)
     }
 
     fn drop_cached_pages(&self) -> VfsResult<()> {
         if self.in_memory() {
             return Ok(());
         }
-        let _writeback_guard = self.shared().writeback_op.lock();
-        let evictions = {
-            let _cache_guard = self.lock_cache_after_draining_pending()?;
-            let mut cache = self.shared().page_cache.lock();
-            let mut removed = Vec::new();
-            while let Some((pn, page)) = cache.pop_lru() {
-                removed.push((pn, page));
-            }
-            removed
-                .into_iter()
-                .map(|(pn, page)| self.begin_evicted_page(pn, page, true, false))
-                .collect::<Vec<_>>()
-        };
-        for eviction in evictions {
-            // Explicit cache dropping owns no address-space lock, so listener
-            // contention is an internal wait rather than a user-visible error.
-            self.finish_evicted_page_with_wait(eviction, true)?;
-        }
+        self.writeback_dirty_pages_in_cache()?;
+        self.invalidate_clean_pages_in_range(0..u64::MAX);
         self.commit_atime()
     }
 
@@ -2298,101 +2036,80 @@ impl CachedFile {
 
 impl Drop for CachedFile {
     fn drop(&mut self) {
-        let previous = self.record.active_handles.fetch_sub(1, Ordering::AcqRel);
-        assert!(previous > 0, "CachedFile active-handle counter underflow");
-        if previous != 1 {
+        if self.in_memory() || Arc::strong_count(&self.record) != 2 {
             return;
         }
-
-        if self.record.removed.load(Ordering::Acquire) {
-            if !self.in_memory()
-                && let Err(err) = self
-                    .writeback_dirty_pages_in_cache()
-                    .and_then(|_| self.commit_atime())
-            {
-                warn!("Failed to write back removed file cache: {err:?}");
-                return;
-            }
-            if self.remove_global_record_if_unused() {
-                if self.in_memory() {
-                    self.discard_cached_pages();
-                }
-                self.inner.discard_metadata_cache();
-            }
-            return;
-        }
-
-        if !self.tracked {
-            return;
-        }
-
-        if self.in_memory() {
-            return;
-        }
-
-        if let Err(err) = self.writeback_dirty_pages_in_cache().and_then(|_| self.commit_atime()) {
-            if err.canonicalize() == VfsError::StorageFull {
-                self.discard_cached_pages();
-                self.remove_unused_global_record(true);
-                return;
-            }
-            warn!("Failed to write back unused file cache: {err:?}");
-            return;
-        }
-
-        Self::prune_inactive_file_caches(self.record.key);
+        self.record.touch();
+        Self::reclaim_page_cache_if_needed(self.record.key);
     }
 }
 
 pub fn sync_global_file_caches() -> VfsResult<()> {
-    let cached_files = {
-        let caches = FILE_CACHES.read();
-        caches
-            .values()
-            .map(CachedFile::from_record)
-            .collect::<Vec<_>>()
-    };
-    for cached in cached_files {
-        if cached.in_memory() {
+    let records = CachedFile::all_records();
+    for record in &records {
+        if record.in_memory {
             continue;
         }
-        cached.sync(false)?;
+        let cached = CachedFile::from_record(record);
+        cached.writeback_dirty_pages_in_cache()?;
+        cached.commit_atime()?;
     }
     flush_inode_metadata_caches(false)?;
+
+    // An inode sync in ext4 flushes the whole shared filesystem. Running it
+    // once per cached file turns a single sync(2) into thousands of identical
+    // full-cache flushes after a build, so deduplicate by filesystem identity.
+    let mut flushed = BTreeSet::new();
+    for record in &records {
+        if record.in_memory {
+            continue;
+        }
+        let filesystem = record.location.filesystem();
+        let pointer = filesystem as *const dyn axfs_ng_vfs::FilesystemOps as *const () as usize;
+        if flushed.insert(pointer) {
+            filesystem.flush()?;
+        }
+    }
     Ok(())
 }
 
 pub fn drop_global_file_caches() -> VfsResult<()> {
-    let cached_files = {
-        let caches = FILE_CACHES.read();
-        caches
-            .values()
-            .map(CachedFile::from_record)
-            .collect::<Vec<_>>()
-    };
-    for cached in cached_files {
-        if cached.in_memory() {
+    let records = CachedFile::all_records();
+    for record in records {
+        if record.in_memory {
             continue;
         }
-        cached.drop_cached_pages()?;
+        CachedFile::from_record(&record).drop_cached_pages()?;
     }
     Ok(())
 }
 
 pub fn drop_file_caches_by_device(device: u64) -> VfsResult<()> {
-    let cached_files = {
-        let caches = FILE_CACHES.read();
-        caches
-            .values()
-            .filter(|record| record.location.mountpoint().device() == device)
-            .map(CachedFile::from_record)
-            .collect::<Vec<_>>()
-    };
+    let records = FILE_CACHES
+        .iter()
+        .flat_map(|cache| {
+            cache
+                .read()
+                .iter()
+                .filter(|(_, record)| record.location.mountpoint().device() == device)
+                .map(|(key, record)| (*key, record.clone()))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
 
-    for cached in cached_files {
-        cached.drop_cached_pages()?;
-        if cached.remove_global_record_if_only_snapshot() {
-            cached.inner.invalidate_metadata_cache();
+    for (_, record) in &records {
+        CachedFile::from_record(record).drop_cached_pages()?;
+    }
+
+    for (key, record) in records {
+        let mut caches = CachedFile::cache_for_key(key).write();
+        if caches
+            .get(&key)
+            .is_some_and(|current| Arc::ptr_eq(current, &record))
+        {
+            caches.remove(&key);
+            record.location.user_data().remove::<FileUserData>();
+            record.location.invalidate_metadata_cache();
         }
     }
     Ok(())
@@ -2400,66 +2117,59 @@ pub fn drop_file_caches_by_device(device: u64) -> VfsResult<()> {
 
 pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     let key = CachedFile::file_cache_key(location);
-    let Some(cached) = CachedFile::get_existing(key) else {
+    let cache = CachedFile::cache_for_key(key);
+    let Some(record) = cache.read().get(&key).cloned() else {
         location.invalidate_metadata_cache();
         return Ok(());
     };
-    debug_assert_eq!(cached.record.key, key);
-    if cached.in_memory() {
-        // tmpfs has no backing device: this canonical record owns the file
-        // contents even when no descriptor currently holds a CachedFile.
-        // Invalidating metadata must never retire its pages while it remains
-        // linked in the namespace.
-    } else {
-        cached.drop_cached_pages()?;
-        let _ = cached.remove_global_record_if_only_snapshot();
+    debug_assert_eq!(record.key, key);
+    if record.in_memory {
+        cache.write().remove(&key);
+        location.user_data().remove::<FileUserData>();
+        location.invalidate_metadata_cache();
+        return Ok(());
     }
+    CachedFile::from_record(&record).drop_cached_pages()?;
+    cache.write().remove(&key);
+    location.user_data().remove::<FileUserData>();
     location.invalidate_metadata_cache();
     Ok(())
 }
 
 pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<()> {
     let key = CachedFile::file_cache_key(location);
-    let Some(cached) = CachedFile::get_existing(key) else {
-        // Preparation precedes the namespace mutation and must remain
-        // rollback-safe if unlink/rename later fails.
+    let cache = CachedFile::cache_for_key(key);
+    let Some(record) = cache.read().get(&key).cloned() else {
+        // 这里只是 namespace 修改前的准备阶段；失败时必须仍可继续使用原记录。
         location.invalidate_metadata_cache();
         return Ok(());
     };
 
-    debug_assert_eq!(cached.record.key, key);
-    if !cached.in_memory() {
-        cached.drop_cached_pages()?;
+    debug_assert_eq!(record.key, key);
+    if !record.in_memory {
+        CachedFile::from_record(&record).drop_cached_pages()?;
     }
-    // This is the prepare half and runs before the namespace mutation.  Keep
-    // the canonical record intact until unlink/rename has actually succeeded;
-    // otherwise an open in the gap, or a failed unlink, could observe an empty
-    // replacement record (catastrophic for tmpfs, whose pages are the data).
     location.invalidate_metadata_cache();
     Ok(())
 }
 
-/// Commits cache retirement after unlink or replacement has succeeded.
+/// 在 unlink 或 rename 替换成功后提交缓存记录退役。
 pub fn finalize_removed_file_cache(location: &Location) {
     let key = CachedFile::file_cache_key(location);
-    let Some(cached) = CachedFile::get_existing(key) else {
+    let cache = CachedFile::cache_for_key(key);
+    let Some(record) = cache.read().get(&key).cloned() else {
         location.discard_metadata_cache();
         return;
     };
 
-    debug_assert_eq!(cached.record.key, key);
-    cached.record.removed.store(true, Ordering::Release);
-    if cached.remove_global_record_if_only_snapshot() {
-        if cached.in_memory() {
-            cached.discard_cached_pages();
-        }
-        location.discard_metadata_cache();
-    } else {
-        // Existing open files and mmap backends keep the record and its pages.
-        // Their last CachedFile::drop observes `removed` and performs final
-        // retirement, avoiding both split lock domains and tmpfs leaks.
-        location.invalidate_metadata_cache();
+    debug_assert_eq!(record.key, key);
+    // tmpfs 的页就是文件内容；只有没有打开文件或 mmap 持有记录时才能丢弃。
+    if record.in_memory && Arc::strong_count(&record) == 2 {
+        CachedFile::from_record(&record).discard_cached_pages();
     }
+    cache.write().remove(&key);
+    location.user_data().remove::<FileUserData>();
+    location.discard_metadata_cache();
 }
 
 pub fn cached_file_len(location: &Location) -> Option<u64> {
@@ -2494,20 +2204,6 @@ pub enum FileBackend {
     Direct(Location),
 }
 
-/// Owns one file-length callback for the lifetime of a private mapping.
-/// Dropping the last mapping clone unregisters it before releasing the cached
-/// inode handle.
-pub struct FileLengthChangeListener {
-    cached: CachedFile,
-    handle: usize,
-}
-
-impl Drop for FileLengthChangeListener {
-    fn drop(&mut self) {
-        self.cached.remove_length_change_listener(self.handle);
-    }
-}
-
 impl FileBackend {
     pub(crate) fn new_direct(location: Location) -> Self {
         Self::Direct(location)
@@ -2519,22 +2215,28 @@ impl FileBackend {
 
     pub fn read_at(&self, mut dst: impl Write + IoBufMut, mut offset: u64) -> VfsResult<usize> {
         match self {
-            Self::Cached(cached) => cached.read_at(dst, offset),
+            Self::Cached(cached) => {
+                let requested = dst.remaining_mut();
+                let read = cached.read_at(dst, offset)?;
+                // Buffered consumers such as rustc normally continue after a
+                // full-page read. Submit the next window asynchronously; tiny
+                // ELF/header probes stay demand-only, and the shared folio
+                // index coalesces overlap between processes.
+                if read >= PAGE_SIZE && requested >= PAGE_SIZE {
+                    let _ = cached
+                        .readahead(offset.saturating_add(read as u64), BUFFERED_READAHEAD_BYTES);
+                }
+                Ok(read)
+            }
             Self::Direct(loc) => {
                 let start = offset;
                 let len = dst.remaining_mut();
-                // Direct and cached handles must join the same inode lock
-                // domain even when this is the first operation to create it.
-                // A lookup-only fast path would race a concurrent first mmap
-                // or cached open between the lookup and backing-file I/O.
-                let cached = CachedFile::get_or_create(loc.clone());
-                let _direct_io_guards = if len > 0 {
-                    Some(cached.lock_direct_read_range(
-                        start..start.saturating_add(len as u64),
-                    )?)
-                } else {
-                    None
-                };
+                if len > 0
+                    && let Some(cached) = CachedFile::get_existing(loc)
+                {
+                    cached
+                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
+                }
                 dst.read_from(&mut axio::read_fn(|buf| {
                     loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {
                         offset += *read as u64;
@@ -2544,75 +2246,19 @@ impl FileBackend {
         }
     }
 
-    /// Coherent read which never replaces a cached page and therefore never
-    /// invokes an mmap eviction listener.
-    pub fn read_at_no_evict(
-        &self,
-        dst: impl Write + IoBufMut,
-        offset: u64,
-    ) -> VfsResult<usize> {
-        match self {
-            Self::Cached(cached) => cached.read_at_no_evict(dst, offset),
-            Self::Direct(loc) => {
-                // Join the inode cache domain before the lookup.  Otherwise a
-                // concurrent first cached writer could create a dirty page
-                // after a `get_existing` miss and before the backing read.
-                CachedFile::get_or_create(loc.clone()).read_at_no_evict(dst, offset)
-            }
-        }
-    }
-
-    /// Returns true while truncate is changing the page containing `offset`.
-    /// Fault code uses this as the prepare/commit generation barrier.
-    pub fn length_change_in_progress(&self, offset: u64) -> bool {
-        let cached = match self {
-            Self::Cached(cached) => cached.clone(),
-            Self::Direct(location) => CachedFile::get_or_create(location.clone()),
-        };
-        let pn = (offset / PAGE_SIZE as u64) as u32;
-        cached.length_change_blocks_page(pn)
-    }
-
-    /// Returns a stable file-length generation when the page containing
-    /// `offset` is not being changed.  A fault must compare this value again
-    /// after reading and before publishing its PTE.
-    pub fn length_change_generation(&self, offset: u64) -> Option<usize> {
-        let cached = match self {
-            Self::Cached(cached) => cached.clone(),
-            Self::Direct(location) => CachedFile::get_or_create(location.clone()),
-        };
-        let pn = (offset / PAGE_SIZE as u64) as u32;
-        cached.length_generation_for_page(pn)
-    }
-
-    /// Registers an observer for complete file pages invalidated by shrink.
-    pub fn add_length_change_listener<F>(&self, listener: F) -> FileLengthChangeListener
-    where
-        F: Fn(Range<u64>, FileLengthChangePhase) + Send + Sync + 'static,
-    {
-        let cached = match self {
-            Self::Cached(cached) => cached.clone(),
-            Self::Direct(location) => CachedFile::get_or_create(location.clone()),
-        };
-        let handle = cached.add_length_change_listener(listener);
-        FileLengthChangeListener { cached, handle }
-    }
-
     pub fn write_at(&self, mut src: impl Read + IoBuf, mut offset: u64) -> VfsResult<usize> {
         match self {
             Self::Cached(cached) => cached.write_at(src, offset),
             Self::Direct(loc) => {
                 let start = offset;
                 let len = src.remaining();
-                let cached = CachedFile::get_or_create(loc.clone());
-                let _append_guard = cached.shared().append_lock.read();
-                let _direct_io_guards = if len > 0 {
-                    Some(cached.lock_direct_write_range(
-                        start..start.saturating_add(len as u64),
-                    )?)
-                } else {
-                    None
-                };
+                let cached = CachedFile::get_existing(loc);
+                if len > 0
+                    && let Some(cached) = cached.as_ref()
+                {
+                    cached
+                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
+                }
                 let result = src.write_to(&mut axio::write_fn(|buf| {
                     loc.entry()
                         .as_file()?
@@ -2623,6 +2269,9 @@ impl FileBackend {
                 }));
                 if offset > start {
                     loc.grow_cached_len_if_present(offset);
+                    if let Some(cached) = cached {
+                        cached.invalidate_clean_pages_in_range(start..offset);
+                    }
                 }
                 let written = result?;
                 Ok(written)
@@ -2634,6 +2283,59 @@ impl FileBackend {
         match self {
             Self::Cached(cached) => cached.readahead(offset, count),
             Self::Direct(_) => Ok(()),
+        }
+    }
+
+    /// Returns a stable reference to one aligned cached page. Direct backends
+    /// intentionally fall back to copying because they have no cache-owned
+    /// frame to pin.
+    pub fn page_ref_at(&self, offset: u64) -> VfsResult<Option<FolioPageRef>> {
+        if !offset.is_multiple_of(PAGE_SIZE as u64) {
+            return Ok(None);
+        }
+        let Ok(pn) = u32::try_from(offset / PAGE_SIZE as u64) else {
+            return Ok(None);
+        };
+        match self {
+            Self::Cached(cached) => {
+                if let Some(page) = cached.page_ref_if_cached(pn) {
+                    Ok(Some(page))
+                } else {
+                    cached.fault_page_ref(pn).map(Some)
+                }
+            }
+            Self::Direct(_) => Ok(None),
+        }
+    }
+
+    /// Returns an already resident aligned cache page without issuing I/O.
+    /// This is used by mmap fault-around: the faulting page may perform
+    /// readahead, while neighboring PTEs are installed only for pages that are
+    /// ready by the time the address-space lock is reacquired.
+    pub fn cached_page_ref_at(&self, offset: u64) -> Option<FolioPageRef> {
+        if !offset.is_multiple_of(PAGE_SIZE as u64) {
+            return None;
+        }
+        let pn = u32::try_from(offset / PAGE_SIZE as u64).ok()?;
+        match self {
+            Self::Cached(cached) => cached.page_ref_if_cached(pn),
+            Self::Direct(_) => None,
+        }
+    }
+
+    pub fn with_valid_page_ref<R>(
+        &self,
+        offset: u64,
+        page: &FolioPageRef,
+        commit: impl FnOnce() -> R,
+    ) -> Option<R> {
+        if !offset.is_multiple_of(PAGE_SIZE as u64) {
+            return None;
+        }
+        let pn = u32::try_from(offset / PAGE_SIZE as u64).ok()?;
+        match self {
+            Self::Cached(cached) => cached.with_valid_page_ref(pn, page, false, commit),
+            Self::Direct(_) => None,
         }
     }
 
@@ -2666,10 +2368,10 @@ impl FileBackend {
         match self {
             Self::Cached(cached) => cached.append(src),
             Self::Direct(loc) => {
-                let cached = CachedFile::get_or_create(loc.clone());
-                let _append_guard = cached.shared().append_lock.write();
-                let _direct_io_guards = cached.lock_direct_write_range(0..u64::MAX)?;
-                loc.entry().as_file()?.sync(true)?;
+                let cached = CachedFile::get_existing(loc);
+                if let Some(cached) = cached.as_ref() {
+                    cached.sync(true)?;
+                }
                 let mut start = None;
                 let mut end = 0;
                 let result = src.write_to(&mut axio::write_fn(|buf| {
@@ -2681,8 +2383,11 @@ impl FileBackend {
                         n
                     })
                 }));
-                if start.is_some() {
+                if let Some(start) = start {
                     loc.set_cached_len_if_present(end);
+                    if let Some(cached) = cached {
+                        cached.invalidate_clean_pages_in_range(start..end);
+                    }
                 }
                 let written = result?;
                 Ok((written, end))
@@ -2707,10 +2412,14 @@ impl FileBackend {
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         match self {
             Self::Cached(cached) => cached.set_len(len),
-            // Truncate must publish the same length-change transaction and
-            // notify MAP_PRIVATE observers regardless of the descriptor's
-            // O_DIRECT mode.
-            Self::Direct(loc) => CachedFile::get_or_create(loc.clone()).set_len(len),
+            Self::Direct(loc) => {
+                if let Some(cached) = CachedFile::get_existing(loc) {
+                    return cached.set_len(len);
+                }
+                loc.entry().as_file()?.set_len(len)?;
+                loc.set_cached_len(len, false)?;
+                Ok(())
+            }
         }
     }
 }

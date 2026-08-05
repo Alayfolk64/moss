@@ -1,22 +1,55 @@
 use alloc::{
-    boxed::Box,
+    collections::BTreeMap,
     sync::{Arc, Weak},
     vec::Vec,
 };
-use core::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use core::{
+    mem,
+    sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+};
 
 use axerrno::{AxError, AxResult};
-use axfs::{CachedFile, FileFlags, PageEviction};
-use axhal::paging::{MappingFlags, PageSize, PageTableMut, PagingError};
-use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
+use axfs::{CachedFile, FileFlags, FolioPageRef};
+use axhal::paging::{MappingFlags, PageSize, PageTable, PageTableMut, PagingError};
+use axsync::Mutex;
+use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
-    AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultPreparation, PopulateCallback,
-    finish_unmap_before_reclaim, pages_in,
+    AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
+    UnmapGather, finish_unmap_before_reclaim, pages_in,
 };
 
 const NO_FAULT_PAGE: u32 = u32::MAX;
 const MMAP_FAULT_READAHEAD_PAGES: u32 = 4;
+const FILE_PAGE_SHARDS: usize = 64;
+
+struct FilePageRefs {
+    shards: [Mutex<BTreeMap<VirtAddr, FolioPageRef>>; FILE_PAGE_SHARDS],
+}
+
+impl FilePageRefs {
+    fn new() -> Self {
+        Self {
+            shards: [const { Mutex::new(BTreeMap::new()) }; FILE_PAGE_SHARDS],
+        }
+    }
+
+    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, FolioPageRef>> {
+        &self.shards[vaddr.as_usize() / PAGE_SIZE_4K % FILE_PAGE_SHARDS]
+    }
+
+    fn insert(&self, vaddr: VirtAddr, page: FolioPageRef) {
+        self.shard(vaddr).lock().insert(vaddr, page);
+    }
+
+    fn get(&self, vaddr: VirtAddr) -> Option<FolioPageRef> {
+        self.shard(vaddr).lock().get(&vaddr).cloned()
+    }
+
+    fn remove(&self, vaddr: VirtAddr) -> Option<FolioPageRef> {
+        self.shard(vaddr).lock().remove(&vaddr)
+    }
+}
 
 #[doc(hidden)]
 pub struct FileBackendInner {
@@ -24,11 +57,13 @@ pub struct FileBackendInner {
     cache: CachedFile,
     flags: FileFlags,
     offset_page: u32,
-    owner: usize,
     handle: AtomicUsize,
     last_fault_page: AtomicU32,
     next_readahead_page: AtomicU32,
     futex_handle: Arc<()>,
+    mapped_pages: FilePageRefs,
+    pending_evictions: Mutex<Vec<(u32, FolioPageRef)>>,
+    eviction_worker_running: AtomicBool,
 }
 impl Drop for FileBackendInner {
     fn drop(&mut self) {
@@ -46,170 +81,144 @@ impl FileBackendInner {
             panic!("Listener already registered");
         }
         let aspace = Arc::downgrade(aspace);
-        let handle = self.cache.add_evict_listener_checked(self.owner, {
+        let handle = self.cache.add_evict_listener({
             let this = Arc::downgrade(self);
-            move |pn, paddr, wait| {
+            move |pn, page| {
                 let Some(this) = this.upgrade() else {
-                    return true;
+                    return;
                 };
                 let Some(aspace) = aspace.upgrade() else {
                     // The address space has been dropped, nothing to do.
-                    return true;
+                    return;
                 };
-                if wait {
-                    // Sync/writeback callers hold no address-space lock.  Use
-                    // normal blocking semantics so transient mmap activity does
-                    // not escape to fsync as `WouldBlock`.
-                    return this.on_evict(pn, paddr, &mut aspace.lock());
+                if let Some(mut guard) = aspace.try_lock() {
+                    this.on_evict(pn, page, &mut guard);
+                } else {
+                    this.defer_evict(pn, page.clone(), aspace);
                 }
-                // Ordinary cache insertion can run while MAP_POPULATE or a
-                // fallback fault already holds another address-space lock.  Do
-                // not wait in that mode: two mappings of the same inode could
-                // otherwise acquire A -> B and B -> A.
-                let Some(mut aspace) = aspace.try_lock() else {
-                    return false;
-                };
-                this.on_evict(pn, paddr, &mut aspace)
             }
         });
         self.handle.store(handle, Ordering::Release);
     }
 
-    fn evicted_vaddr(&self, pn: u32) -> Option<VirtAddr> {
-        let Some(pn) = pn.checked_sub(self.offset_page) else {
-            return None;
-        };
-        Some(self.start + pn as usize * PageSize::Size4K as usize)
-    }
-
-    fn unmap_matching_page(
-        &self,
-        pn: u32,
-        paddr: axhal::mem::PhysAddr,
-        pt: &mut PageTableMut,
-    ) -> bool {
-        let Some(vaddr) = self.evicted_vaddr(pn) else {
-            return true;
-        };
-        match pt.query(vaddr) {
-            Ok((mapped, ..)) if mapped == paddr => match pt.unmap(vaddr) {
-                Ok(_) => {
-                    finish_unmap_before_reclaim(pt);
-                    true
-                }
-                Err(PagingError::NotMapped) => true,
-                Err(err) => {
-                    warn!("Failed to unmap page {:?}: {:?}", vaddr, err);
-                    false
-                }
-            },
-            Ok(_) | Err(PagingError::NotMapped) => true,
-            Err(err) => {
-                warn!("Failed to query evicted page {:?}: {:?}", vaddr, err);
-                false
-            }
+    fn defer_evict(self: &Arc<Self>, pn: u32, page: FolioPageRef, aspace: Arc<AddrSpaceLock>) {
+        self.pending_evictions.lock().push((pn, page));
+        if self.eviction_worker_running.swap(true, Ordering::AcqRel) {
+            return;
         }
+
+        let this = self.clone();
+        axtask::spawn(move || {
+            loop {
+                let pending = {
+                    let mut pending = this.pending_evictions.lock();
+                    mem::take(&mut *pending)
+                };
+                if pending.is_empty() {
+                    this.eviction_worker_running.store(false, Ordering::Release);
+                    if this.pending_evictions.lock().is_empty() {
+                        return;
+                    }
+                    if this
+                        .eviction_worker_running
+                        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                        .is_err()
+                    {
+                        return;
+                    }
+                    continue;
+                }
+
+                let mut guard = aspace.lock();
+                for (pn, page) in pending {
+                    this.on_evict(pn, &page, &mut guard);
+                }
+            }
+        });
     }
 
-    fn on_evict(
-        self: &Arc<Self>,
-        pn: u32,
-        paddr: axhal::mem::PhysAddr,
-        aspace: &mut AddrSpace,
-    ) -> bool {
-        let Some(vaddr) = self.evicted_vaddr(pn) else {
-            return true;
+    fn on_evict(self: &Arc<Self>, pn: u32, page: &FolioPageRef, aspace: &mut AddrSpace) {
+        let Some(pn) = pn.checked_sub(self.offset_page) else {
+            return;
         };
+        let vaddr = self.start + pn as usize * PageSize::Size4K as usize;
         if !aspace.find_area(vaddr).is_some_and(
             |it| matches!(it.backend(), Backend::File(file) if Arc::ptr_eq(&file.0, self)),
         ) {
             // Ignore if the page is not controlled by this file mapping.
-            return true;
+            return;
+        }
+        if !self
+            .mapped_pages
+            .get(vaddr)
+            .is_some_and(|mapped| mapped.paddr() == page.paddr())
+        {
+            return;
         }
 
-        let mut modify = aspace.page_table_mut().modify();
-        self.unmap_matching_page(pn, paddr, &mut modify)
-    }
-
-    fn finish_evicted_pages(self: &Arc<Self>, pages: Vec<PageEviction>, aspace: &mut AddrSpace) {
-        for eviction in pages {
-            let others_done = self.cache.notify_evicted_page_except(eviction, self.owner);
-            let current_done = aspace.unmap_cached_file_page(
-                &self.cache,
-                eviction.page_number(),
-                eviction.paddr(),
-            );
-            if let Err(err) = self
-                .cache
-                .complete_evicted_page(eviction, others_done && current_done)
-            {
-                warn!("Failed to complete mmap page eviction: {err:?}");
+        let pt = aspace.page_table_mut();
+        match pt.query(vaddr) {
+            Ok((paddr, _, PageSize::Size4K)) if paddr == page.paddr() => {}
+            Ok(_) => return,
+            Err(PagingError::NotMapped) => {
+                self.mapped_pages.remove(vaddr);
+                return;
+            }
+            Err(err) => {
+                warn!("Failed to query file mapping {vaddr:?}: {err:?}");
+                return;
             }
         }
-    }
-
-    fn finish_evicted_pages_in_table(&self, pages: Vec<PageEviction>, pt: &mut PageTableMut) {
-        for eviction in pages {
-            let current_done =
-                self.unmap_matching_page(eviction.page_number(), eviction.paddr(), pt);
-            // This error path only has the current backend and PageTableMut, so
-            // it cannot enumerate sibling VMAs belonging to the same owner.
-            // Notify every checked listener.  Listeners for the currently
-            // locked address space return false, keeping the token pinned; a
-            // later retry obtains that address space and removes all aliases.
-            let all_listeners_done = self.cache.notify_evicted_page(eviction);
-            if let Err(err) = self
-                .cache
-                .complete_evicted_page(eviction, all_listeners_done && current_done)
-            {
-                warn!("Failed to complete mmap page eviction: {err:?}");
+        let mut modify = pt.modify();
+        match modify.unmap(vaddr) {
+            Ok(_) => finish_unmap_before_reclaim(&mut modify),
+            Err(PagingError::NotMapped) => {}
+            Err(err) => {
+                warn!("Failed to unmap page {:?}: {:?}", vaddr, err);
+                return;
             }
         }
+        self.mapped_pages.remove(vaddr);
     }
 }
 
 /// File-backed mapping backend.
 #[derive(Clone)]
 pub struct FileBackend(Arc<FileBackendInner>);
-impl FileBackend {
-    pub(super) fn unmap_for_clear(
-        &self,
-        range: VirtAddrRange,
-        pt: &mut PageTableMut<'_>,
-    ) -> AxResult {
-        for addr in pages_in(range, PageSize::Size4K)? {
-            match pt.unmap(addr) {
-                Ok(_) | Err(PagingError::NotMapped) => {}
-                Err(err) => return Err(err.into()),
-            }
-        }
-        Ok(())
-    }
 
+impl FileBackend {
     pub(super) fn merge_compatible(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
+}
 
-    pub(crate) fn prepare_fault(&self, vaddr: VirtAddr) -> FaultPreparation {
-        let page = ((vaddr.align_down_4k() - self.0.start) / PAGE_SIZE_4K) as u32;
-        let Some(pn) = self.0.offset_page.checked_add(page) else {
-            return FaultPreparation::Fallback;
-        };
-        if self.0.cache.page_eviction_in_progress(pn) {
-            FaultPreparation::Retry
-        } else {
-            FaultPreparation::Fallback
+pub(crate) struct FileFaultPlan {
+    identity: Arc<FileBackendInner>,
+    vaddr: VirtAddr,
+    pn: u32,
+    page: Option<FolioPageRef>,
+    expected_paddr: Option<PhysAddr>,
+}
+
+impl FileFaultPlan {
+    pub(crate) fn execute(&mut self) -> AxResult {
+        if self.expected_paddr.is_some() {
+            return Ok(());
         }
-    }
+        let offset = u64::from(self.pn) * PAGE_SIZE_4K as u64;
+        if offset >= self.identity.cache.len()? {
+            return Err(AxError::Io);
+        }
 
-    fn evicted_vaddr_for_cache(&self, cache: &CachedFile, pn: u32) -> Option<VirtAddr> {
-        self.0
-            .cache
-            .ptr_eq(cache)
-            .then(|| self.0.evicted_vaddr(pn))
-            .flatten()
+        // The demanded page owns a naturally aligned folio load. Starting
+        // advisory readahead first would let speculative requests occupy the
+        // VirtIO queue while the faulting task waits behind them.
+        self.page = Some(self.identity.cache.fault_page_ref(self.pn)?);
+        Ok(())
     }
+}
 
+impl FileBackend {
     fn check_flags(&self, flags: MappingFlags) -> AxResult {
         let mut required_flags = FileFlags::empty();
         if flags.contains(MappingFlags::READ) {
@@ -246,6 +255,166 @@ impl FileBackend {
         let count = (end - start) as usize * PAGE_SIZE_4K;
         let _ = self.0.cache.readahead(offset, count);
     }
+
+    pub(crate) fn prepare_fault(
+        &self,
+        vaddr: VirtAddr,
+        _area_range: VirtAddrRange,
+        _flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> FaultPreparation {
+        let vaddr = vaddr.align_down(PAGE_SIZE_4K);
+        match pt.query(vaddr) {
+            Ok((_paddr, page_flags, PageSize::Size4K)) if page_flags.contains(access_flags) => {
+                FaultPreparation::Handled
+            }
+            Ok((paddr, page_flags, PageSize::Size4K))
+                if access_flags.contains(MappingFlags::WRITE)
+                    && !page_flags.contains(MappingFlags::WRITE) =>
+            {
+                let Some(page) = self.0.mapped_pages.get(vaddr) else {
+                    return FaultPreparation::Fallback;
+                };
+                if page.paddr() != paddr {
+                    return FaultPreparation::Fallback;
+                }
+                let pn = ((vaddr - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
+                FaultPreparation::File(FileFaultPlan {
+                    identity: self.0.clone(),
+                    vaddr,
+                    pn,
+                    page: Some(page),
+                    expected_paddr: Some(paddr),
+                })
+            }
+            Ok(_) => FaultPreparation::Fallback,
+            Err(PagingError::NotMapped) => {
+                let pn = ((vaddr - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
+                FaultPreparation::File(FileFaultPlan {
+                    identity: self.0.clone(),
+                    vaddr,
+                    pn,
+                    page: None,
+                    expected_paddr: None,
+                })
+            }
+            Err(_) => FaultPreparation::Fallback,
+        }
+    }
+
+    pub(crate) fn commit_fault(
+        &self,
+        plan: &mut FileFaultPlan,
+        _area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        if !Arc::ptr_eq(&self.0, &plan.identity) {
+            return Ok(FaultCommit::Stale);
+        }
+        if plan.expected_paddr.is_none() {
+            let page = plan.page.as_ref().ok_or(AxError::BadAddress)?;
+            let mapping_page = page.clone();
+            let write_fault = access_flags.contains(MappingFlags::WRITE);
+            let map_flags = if self.0.cache.in_memory() || write_fault {
+                flags
+            } else {
+                flags - MappingFlags::WRITE
+            };
+            let committed =
+                self.0
+                    .cache
+                    .with_valid_page_ref(plan.pn, page, write_fault, || {
+                        match pt.map_4k_concurrent(plan.vaddr, page.paddr(), map_flags) {
+                            Ok(()) => {
+                                self.0.mapped_pages.insert(plan.vaddr, mapping_page);
+                                Ok(true)
+                            }
+                            Err(PagingError::AlreadyMapped) => Ok(false),
+                            Err(err) => Err(AxError::from(err)),
+                        }
+                    });
+            return match committed {
+                Some(Ok(true)) => {
+                    plan.page = None;
+                    Ok(FaultCommit::Handled)
+                }
+                Some(Ok(false)) | None => Ok(FaultCommit::Stale),
+                Some(Err(err)) => Err(err),
+            };
+        }
+
+        let expected_paddr = plan.expected_paddr.ok_or(AxError::BadAddress)?;
+        match pt.query(plan.vaddr) {
+            Ok((_paddr, page_flags, PageSize::Size4K)) if page_flags.contains(access_flags) => {
+                return Ok(FaultCommit::Handled);
+            }
+            Ok((paddr, page_flags, PageSize::Size4K))
+                if paddr == expected_paddr
+                    && access_flags.contains(MappingFlags::WRITE)
+                    && !page_flags.contains(MappingFlags::WRITE) => {}
+            _ => return Ok(FaultCommit::Stale),
+        }
+
+        let page = plan.page.as_ref().ok_or(AxError::BadAddress)?;
+        let committed = self.0.cache.with_valid_page_ref(plan.pn, page, true, || {
+            pt.remap_4k_concurrent_if(plan.vaddr, expected_paddr, expected_paddr, flags)
+        });
+        match committed {
+            Some(Ok(true)) => Ok(FaultCommit::Handled),
+            Some(Ok(false)) | None => Ok(FaultCommit::Stale),
+            Some(Err(err)) => Err(err.into()),
+        }
+    }
+}
+
+impl FileBackend {
+    pub(super) fn unmap_present_into(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut,
+        gather: &mut UnmapGather,
+    ) -> AxResult {
+        let mut cursor = range.start;
+        while let Some((vaddr, paddr, _flags, page_size)) =
+            pt.next_present_mapping(cursor, range.end)
+        {
+            if vaddr < range.start || vaddr >= range.end || page_size != PageSize::Size4K {
+                return Err(AxError::BadAddress);
+            }
+            cursor = vaddr + PAGE_SIZE_4K;
+
+            let Some(page) = self.0.mapped_pages.remove(vaddr) else {
+                return Err(AxError::BadAddress);
+            };
+            if page.paddr() != paddr {
+                self.0.mapped_pages.insert(vaddr, page);
+                return Err(AxError::BadAddress);
+            }
+
+            match pt.unmap(vaddr) {
+                Ok((unmapped, _, PageSize::Size4K)) if unmapped == paddr => {}
+                Ok(_) => {
+                    // The PTE has already been cleared, so keep the folio pin
+                    // rather than publishing an unowned replacement.
+                    self.0.mapped_pages.insert(vaddr, page);
+                    return Err(AxError::BadAddress);
+                }
+                Err(err) => {
+                    self.0.mapped_pages.insert(vaddr, page);
+                    return Err(err.into());
+                }
+            }
+
+            // A stale remote translation must be gone before dropping the
+            // final folio reference and allowing its frame to be recycled.
+            gather.push_file(page, pt);
+        }
+
+        Ok(())
+    }
 }
 
 impl BackendOps for FileBackend {
@@ -258,29 +427,45 @@ impl BackendOps for FileBackend {
     }
 
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
-        let result = (|| {
-            for addr in pages_in(range, PageSize::Size4K)? {
-                match pt.unmap(addr) {
-                    Ok(_) | Err(PagingError::NotMapped) => {}
-                    Err(err) => {
-                        warn!("Failed to unmap page {:?}: {:?}", addr, err);
-                        return Err(err.into());
-                    }
-                }
-            }
-            Ok(())
-        })();
-        finish_unmap_before_reclaim(pt);
+        let mut gather = UnmapGather::new();
+        let result = self.unmap_present_into(range, pt, &mut gather);
+        // Run on success and failure so deferred folio pins always outlive
+        // every stale translation queued by the loop.
+        gather.finish(pt);
         result
+    }
+
+    fn discard(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
+        self.unmap(range, pt)
     }
 
     fn on_protect(
         &self,
-        _range: VirtAddrRange,
+        range: VirtAddrRange,
         new_flags: MappingFlags,
-        _pt: &mut PageTableMut,
+        pt: &mut PageTableMut,
     ) -> AxResult<MappingFlags> {
         self.check_flags(new_flags)?;
+        if new_flags.contains(MappingFlags::WRITE) && !self.0.cache.in_memory() {
+            let mut cursor = range.start;
+            while let Some((vaddr, _paddr, _flags, page_size)) =
+                pt.next_present_mapping(cursor, range.end)
+            {
+                if vaddr < range.start || vaddr >= range.end || page_size != PageSize::Size4K {
+                    return Err(AxError::BadAddress);
+                }
+                cursor = vaddr + PAGE_SIZE_4K;
+                if self.0.mapped_pages.get(vaddr).is_none() {
+                    continue;
+                }
+                let pn = ((vaddr - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
+                self.0.cache.with_page(pn, |page| {
+                    if let Some(page) = page {
+                        page.mark_dirty();
+                    }
+                });
+            }
+        }
         Ok(new_flags)
     }
 
@@ -292,83 +477,57 @@ impl BackendOps for FileBackend {
         pt: &mut PageTableMut,
     ) -> AxResult<(usize, Option<PopulateCallback>)> {
         let mut pages = 0;
-        let mut to_be_evicted: Vec<PageEviction> = Vec::new();
         let start_page = ((range.start - self.0.start) / PAGE_SIZE_4K) as u32 + self.0.offset_page;
         let fault_readahead =
             range.end - range.start == PAGE_SIZE_4K && access_flags.contains(MappingFlags::READ);
         let file_len = self.0.cache.len().ok();
-        let populate_result: AxResult = (|| {
-            for (i, addr) in pages_in(range, PageSize::Size4K)?.enumerate() {
-                let pn = start_page + i as u32;
-                if file_len.is_some_and(|len| u64::from(pn) * PAGE_SIZE_4K as u64 >= len) {
-                    return Err(AxError::Io);
-                }
-                match pt.query(addr) {
-                    Ok((paddr, page_flags, _)) => {
-                        if access_flags.contains(MappingFlags::WRITE)
-                            && !page_flags.contains(MappingFlags::WRITE)
-                        {
-                            let in_memory = self.0.cache.in_memory();
-                            self.0.cache.with_page(pn, |page| {
-                                let Some(page) = page else {
-                                    return Err(AxError::WouldBlock);
-                                };
-                                if !in_memory {
-                                    page.mark_dirty();
-                                }
-                                pt.remap(addr, paddr, flags)?;
-                                pages += 1;
-                                AxResult::Ok(())
-                            })?;
-                        } else if page_flags.contains(access_flags) {
+        for (i, addr) in pages_in(range, PageSize::Size4K)?.enumerate() {
+            let pn = start_page + i as u32;
+            if file_len.is_some_and(|len| u64::from(pn) * PAGE_SIZE_4K as u64 >= len) {
+                return Err(AxError::Io);
+            }
+            match pt.query(addr) {
+                Ok((paddr, page_flags, _)) => {
+                    if access_flags.contains(MappingFlags::WRITE)
+                        && !page_flags.contains(MappingFlags::WRITE)
+                    {
+                        let in_memory = self.0.cache.in_memory();
+                        self.0.cache.with_page(pn, |page| {
+                            if !in_memory {
+                                page.expect("page should be present").mark_dirty();
+                            }
+                            pt.remap(addr, paddr, flags)?;
                             pages += 1;
-                        }
-                    }
-                    // If the page is not mapped, try map it.
-                    Err(PagingError::NotMapped) => {
-                        let map_flags = if self.0.cache.in_memory() {
-                            // For in memory files, we don't need to (and also
-                            // musn't) mark them dirty, so we can use the original
-                            // flags.
-                            flags
-                        } else {
-                            flags - MappingFlags::WRITE
-                        };
-                        let (map_result, evicted) =
-                            self.0.cache.with_page_or_insert_deferred(pn, |page| {
-                                pt.map(addr, page.paddr(), PageSize::Size4K, map_flags)
-                            })?;
-                        if let Some(evicted) = evicted {
-                            to_be_evicted.push(evicted);
-                        }
-                        map_result?;
+                            AxResult::Ok(())
+                        })?;
+                    } else if page_flags.contains(access_flags) {
                         pages += 1;
                     }
-                    Err(_) => return Err(AxError::BadAddress),
                 }
+                // If the page is not mapped, try map it.
+                Err(PagingError::NotMapped) => {
+                    let map_flags = if self.0.cache.in_memory() {
+                        // For in memory files, we don't need to (and also
+                        // musn't) mark them dirty, so we can use the original
+                        // flags.
+                        flags
+                    } else {
+                        flags - MappingFlags::WRITE
+                    };
+                    self.0.cache.with_page_or_insert(pn, |page, _| {
+                        pt.map(addr, page.paddr(), PageSize::Size4K, map_flags)?;
+                        self.0.mapped_pages.insert(addr, page.page_ref());
+                        pages += 1;
+                        Ok(())
+                    })?;
+                }
+                Err(_) => return Err(AxError::BadAddress),
             }
-            Ok(())
-        })();
-        if let Err(err) = populate_result {
-            self.0.finish_evicted_pages_in_table(to_be_evicted, pt);
-            return Err(err);
         }
-        // Readahead can itself evict a page.  It must not run while this
-        // address-space lock is held because a checked eviction listener may
-        // synchronously wait for this same address space.  A later stage can
-        // move deferred readahead into the post-populate callback.
-        let _ = fault_readahead;
-        Ok((
-            pages,
-            if to_be_evicted.is_empty() {
-                None
-            } else {
-                let inner = self.0.clone();
-                Some(Box::new(move |aspace: &mut AddrSpace| {
-                    inner.finish_evicted_pages(to_be_evicted, aspace);
-                }))
-            },
-        ))
+        if pages > 0 && fault_readahead {
+            self.maybe_readahead_after_fault(start_page);
+        }
+        Ok((pages, None))
     }
 
     fn clone_map(
@@ -384,11 +543,13 @@ impl BackendOps for FileBackend {
             cache: self.0.cache.clone(),
             flags: self.0.flags,
             offset_page: self.0.offset_page,
-            owner: new_aspace.eviction_owner(),
             handle: AtomicUsize::new(0),
             last_fault_page: AtomicU32::new(NO_FAULT_PAGE),
             next_readahead_page: AtomicU32::new(0),
             futex_handle: self.0.futex_handle.clone(),
+            mapped_pages: FilePageRefs::new(),
+            pending_evictions: Mutex::new(Vec::new()),
+            eviction_worker_running: AtomicBool::new(false),
         });
         inner.register_listener(new_aspace);
         Ok(Backend::File(FileBackend(inner)))
@@ -409,61 +570,15 @@ impl Backend {
             cache,
             flags,
             offset_page,
-            owner: aspace.eviction_owner(),
             handle: AtomicUsize::new(0),
             last_fault_page: AtomicU32::new(NO_FAULT_PAGE),
             next_readahead_page: AtomicU32::new(0),
             futex_handle: Arc::new(()),
+            mapped_pages: FilePageRefs::new(),
+            pending_evictions: Mutex::new(Vec::new()),
+            eviction_worker_running: AtomicBool::new(false),
         });
         inner.register_listener(aspace);
         Self::File(FileBackend(inner))
-    }
-}
-
-impl AddrSpace {
-    /// Removes every mapping in this address space that points at the exact
-    /// detached file-cache frame.  One address space may map the same inode
-    /// through several VMAs/listeners; batching them here avoids re-entering
-    /// the address-space lock through a sibling listener.
-    fn unmap_cached_file_page(
-        &mut self,
-        cache: &CachedFile,
-        pn: u32,
-        paddr: axhal::mem::PhysAddr,
-    ) -> bool {
-        let vaddrs = self
-            .areas
-            .iter()
-            .filter_map(|area| match area.backend() {
-                Backend::File(file) => file
-                    .evicted_vaddr_for_cache(cache, pn)
-                    .filter(|vaddr| area.va_range().contains(*vaddr)),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let mut complete = true;
-        let mut changed = false;
-        let mut modify = self.page_table_mut().modify();
-        for vaddr in vaddrs {
-            match modify.query(vaddr) {
-                Ok((mapped, ..)) if mapped == paddr => match modify.unmap(vaddr) {
-                    Ok(_) => changed = true,
-                    Err(PagingError::NotMapped) => {}
-                    Err(err) => {
-                        warn!("Failed to unmap page {:?}: {:?}", vaddr, err);
-                        complete = false;
-                    }
-                },
-                Ok(_) | Err(PagingError::NotMapped) => {}
-                Err(err) => {
-                    warn!("Failed to query evicted page {:?}: {:?}", vaddr, err);
-                    complete = false;
-                }
-            }
-        }
-        if changed {
-            finish_unmap_before_reclaim(&mut modify);
-        }
-        complete
     }
 }

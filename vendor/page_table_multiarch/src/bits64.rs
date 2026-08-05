@@ -75,6 +75,23 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
         Ok((entry.paddr().add(off), entry.flags(), size))
     }
 
+    /// Finds the first present mapping that overlaps `[start, end)`.
+    ///
+    /// Missing entries are skipped at their page-table level, so sparse ranges
+    /// are traversed by populated page-table nodes instead of 4-KiB pages.
+    pub fn next_present_mapping(
+        &self,
+        start: M::VirtAddr,
+        end: M::VirtAddr,
+    ) -> Option<(M::VirtAddr, PhysAddr, MappingFlags, PageSize)> {
+        let start: usize = start.into();
+        let end: usize = end.into();
+        if start >= end {
+            return None;
+        }
+        self.next_present_in_table(self.root_paddr, 0, start, end)
+    }
+
     /// Gets a mutable reference to modify the page table.
     ///
     /// The TLB will be flushed automatically when the mutable reference is
@@ -109,6 +126,67 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
 
     fn load_entry(&self, table: PhysAddr, index: usize) -> PTE {
         PTE::from_bits(self.atomic_entry(table, index).load(Ordering::Acquire))
+    }
+
+    fn next_present_in_table(
+        &self,
+        table: PhysAddr,
+        level: usize,
+        start: usize,
+        end: usize,
+    ) -> Option<(M::VirtAddr, PhysAddr, MappingFlags, PageSize)> {
+        debug_assert!(level < M::LEVELS);
+        let shift = 12 + 9 * (M::LEVELS - level - 1);
+        let address_bits = usize::BITS as usize;
+        let span = (shift < address_bits).then(|| 1usize << shift);
+        let mut addr = start;
+
+        while addr < end {
+            let index = if shift < address_bits {
+                (addr >> shift) & (ENTRY_COUNT - 1)
+            } else {
+                0
+            };
+            let mapping_base = span.map_or(0, |span| addr & !(span - 1));
+            let entry_end = span.map_or(end, |span| {
+                mapping_base
+                    .checked_add(span)
+                    .unwrap_or(usize::MAX)
+                    .min(end)
+            });
+            let entry = self.load_entry(table, index);
+
+            if !entry.is_unused() {
+                if level + 1 == M::LEVELS || entry.is_huge() {
+                    if entry.is_present() {
+                        let span = span?;
+                        let page_size = match span {
+                            PAGE_SIZE_4K => PageSize::Size4K,
+                            0x20_0000 => PageSize::Size2M,
+                            0x4000_0000 => PageSize::Size1G,
+                            _ => return None,
+                        };
+                        return Some((
+                            mapping_base.into(),
+                            entry.paddr(),
+                            entry.flags(),
+                            page_size,
+                        ));
+                    }
+                } else if let Ok(next_table) = self.next_table_paddr(entry)
+                    && let Some(found) =
+                        self.next_present_in_table(next_table, level + 1, addr, entry_end)
+                {
+                    return Some(found);
+                }
+            }
+
+            if entry_end <= addr {
+                break;
+            }
+            addr = entry_end;
+        }
+        None
     }
 
     fn next_table<'a>(&self, entry: &PTE) -> PagingResult<&'a [PTE]> {

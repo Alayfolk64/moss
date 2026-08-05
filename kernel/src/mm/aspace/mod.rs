@@ -631,28 +631,6 @@ impl AddrSpace {
     ) -> AxResult<ProtectStats> {
         self.validate_region(start, size)?;
 
-        if flags.contains(MappingFlags::WRITE) {
-            let end = start + size;
-            for area in self.areas.iter() {
-                let overlap_start = area.start().max(start);
-                let overlap_end = area.end().min(end);
-                if overlap_start < overlap_end
-                    && area
-                        .backend()
-                        .file_length_change_in_progress(VirtAddrRange::new(
-                            overlap_start,
-                            overlap_end,
-                        ))
-                {
-                    // A shrink callback may be between its global Protect and
-                    // Apply phases.  Do not re-grant WRITE until the marker is
-                    // cleared, or a fork-shared frame could be modified while
-                    // another address space zeros its partial-EOF tail.
-                    return Err(AxError::WouldBlock);
-                }
-            }
-        }
-
         let access_flags = VmaMetadata::access_flags();
         let requested = flags & access_flags;
         let requested_user = user_flags & access_flags;
@@ -998,6 +976,29 @@ impl AddrSpace {
                     let flags = area.flags();
                     area.backend()
                         .commit_fault(&mut plan, area.va_range(), flags, access_flags, pt)
+                }
+                FaultPreparation::File(mut plan) => {
+                    if let Err(err) = plan.execute() {
+                        warn!("Failed to prepare file page for {vaddr:?}: {err}");
+                        return false;
+                    }
+
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
+                    }
+                    let flags = area.flags();
+                    area.backend().commit_file_fault(
+                        &mut plan,
+                        area.va_range(),
+                        flags,
+                        access_flags,
+                        pt,
+                    )
                 }
             };
 
