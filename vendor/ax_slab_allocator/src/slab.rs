@@ -1,4 +1,4 @@
-use super::SET_SIZE;
+use super::{BuddyHeap, SET_SIZE};
 use alloc::alloc::{AllocError, Layout};
 
 pub struct Slab<const BLK_SIZE: usize> {
@@ -35,7 +35,7 @@ impl<const BLK_SIZE: usize> Slab<BLK_SIZE> {
     pub fn allocate(
         &mut self,
         _layout: Layout,
-        buddy: &mut buddy_system_allocator::Heap<32>,
+        buddy: &mut BuddyHeap,
     ) -> Result<usize, AllocError> {
         match self.free_block_list.pop() {
             Some(block) => Ok(block.addr()),
