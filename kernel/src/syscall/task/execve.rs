@@ -9,8 +9,9 @@ use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{Location, NodeType};
 use axhal::uspace::UserContext;
-use axtask::current;
+use axtask::{current, yield_now};
 use linux_raw_sys::general::{AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, MS_NOEXEC};
+use starry_process::Pid;
 use starry_vm::vm_load_until_nul;
 
 use super::ptrace_on_exec;
@@ -22,8 +23,44 @@ use crate::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
     },
-    task::{AsThread, processes},
+    task::{AsThread, ProcessData, get_task, processes},
 };
+
+struct ExecStateGuard<'a> {
+    proc_data: &'a ProcessData,
+}
+
+impl Drop for ExecStateGuard<'_> {
+    fn drop(&mut self) {
+        self.proc_data.set_exec_in_progress(false);
+    }
+}
+
+fn terminate_other_threads_for_exec(proc_data: &ProcessData, current_tid: Pid) {
+    loop {
+        let other_tids = proc_data
+            .proc
+            .threads()
+            .into_iter()
+            .filter(|tid| *tid != current_tid)
+            .collect::<Vec<_>>();
+
+        if other_tids.is_empty() {
+            break;
+        }
+
+        for tid in other_tids {
+            if let Ok(task) = get_task(tid)
+                && let Some(thread) = task.try_as_thread()
+            {
+                thread.request_exec_exit();
+                task.interrupt();
+            }
+        }
+
+        yield_now();
+    }
+}
 
 fn has_exec_permission(loc: &Location, uid: u32, gid: u32) -> AxResult<bool> {
     let meta = loc.metadata()?;
@@ -187,11 +224,26 @@ fn execve_common(
         }
     }
 
-    if proc_data.proc.threads().len() > 1 {
-        // TODO: handle multi-thread case
-        error!("sys_execve: multi-thread not supported");
+    let current_tid = curr.id().as_u64() as Pid;
+    if current_tid != proc_data.proc.pid() {
+        warn!(
+            "sys_execve: non-leader exec is not supported yet: tid={}, pid={}",
+            current_tid,
+            proc_data.proc.pid()
+        );
         return Err(AxError::WouldBlock);
     }
+
+    {
+        let _exec_lock = proc_data.exec_lock.lock();
+        if proc_data.exec_in_progress() {
+            return Err(AxError::WouldBlock);
+        }
+        proc_data.set_exec_in_progress(true);
+    }
+
+    let _exec_state_guard = ExecStateGuard { proc_data };
+    terminate_other_threads_for_exec(proc_data, current_tid);
 
     let fanotify_exec_path = exec_loc
         .as_ref()

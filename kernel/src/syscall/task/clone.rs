@@ -185,6 +185,11 @@ impl CloneArgs {
         let curr = current();
         let old_proc_data = &curr.as_thread().proc_data;
 
+        let _exec_lock = old_proc_data.exec_lock.lock();
+        if old_proc_data.exec_in_progress() {
+            return Err(AxError::WouldBlock);
+        }
+
         let mut new_task = new_user_task(&curr.name(), new_uctx, set_child_tid);
 
         let tid = new_task.id().as_u64() as Pid;
