@@ -261,7 +261,7 @@ pub struct ProcessData {
     pub cmdline: RwLock<Arc<Vec<String>>>,
     /// The virtual memory address space.
     // TODO: scopify
-    pub aspace: Arc<Mutex<AddrSpace>>,
+    aspace: RwLock<Arc<Mutex<AddrSpace>>>,
 
     /// Serializes `clone` and `execve` changes to the thread group.
     pub exec_lock: Mutex<()>,
@@ -329,7 +329,7 @@ impl ProcessData {
             proc,
             exe_path: RwLock::new(exe_path),
             cmdline: RwLock::new(cmdline),
-            aspace,
+            aspace: RwLock::new(aspace),
             exec_lock: Mutex::new(()),
             exec_in_progress: AtomicBool::new(false),
             scope: RwLock::new(Scope::new()),
@@ -374,6 +374,16 @@ impl ProcessData {
         self.heap_top.load(Ordering::Acquire)
     }
 
+    /// Return a stable reference to the process address space.
+    pub fn aspace(&self) -> Arc<Mutex<AddrSpace>> {
+        self.aspace.read().clone()
+    }
+
+    /// Atomically install a fully constructed replacement address space.
+    pub fn replace_aspace(&self, new_aspace: Arc<Mutex<AddrSpace>>) -> Arc<Mutex<AddrSpace>> {
+        core::mem::replace(&mut *self.aspace.write(), new_aspace)
+    }
+
     /// Set the top address of the user heap.
     pub fn set_heap_top(&self, top: usize) {
         self.heap_top.store(top, Ordering::Release)
@@ -386,7 +396,7 @@ impl ProcessData {
     }
 
     pub fn current_rss_kb(&self) -> usize {
-        self.aspace.lock().resident_set_size() / 1024
+        self.aspace().lock().resident_set_size() / 1024
     }
 
     pub fn child_maxrss_kb(&self) -> usize {

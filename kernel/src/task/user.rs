@@ -11,6 +11,9 @@ use super::{
 use crate::syscall::{handle_syscall, ptrace_wait_if_stopped};
 
 fn exit_if_requested_by_exec(thr: &Thread) -> bool {
+    if thr.pending_exit() {
+        return true;
+    }
     if !thr.exec_exit_requested() {
         return false;
     }
@@ -49,7 +52,8 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     ReturnReason::Syscall => handle_syscall(&mut uctx),
                     ReturnReason::PageFault(addr, flags) => {
                         let fault_signal = {
-                            let mut aspace = thr.proc_data.aspace.lock();
+                            let aspace_ref = thr.proc_data.aspace();
+                            let mut aspace = aspace_ref.lock();
                             if crate::syscall::is_mmap_sigbus_fault(
                                 thr.proc_data.proc.pid(),
                                 addr,
