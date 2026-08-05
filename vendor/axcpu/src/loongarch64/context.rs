@@ -269,10 +269,11 @@ impl TaskContext {
         }
         #[cfg(feature = "uspace")]
         {
-            if self.pgdl != next_ctx.pgdl {
-                unsafe { crate::asm::write_user_page_table(pa!(next_ctx.pgdl)) };
-                crate::asm::flush_tlb(None); // currently flush the entire TLB
-            }
+            // A page-table root can be reused after its previous address space
+            // is destroyed, so equality alone does not prove cached entries
+            // are valid.
+            unsafe { crate::asm::write_user_page_table(pa!(next_ctx.pgdl)) };
+            crate::asm::flush_tlb(None);
         }
         #[cfg(feature = "fp-simd")]
         {

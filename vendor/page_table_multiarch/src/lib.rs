@@ -87,6 +87,17 @@ pub trait PagingMetaData: Sync + Send {
     /// If `vaddr` is [`None`], flushes the entire TLB. Otherwise, flushes the
     /// TLB entry at the given virtual address.
     fn flush_tlb(vaddr: Option<Self::VirtAddr>);
+
+    /// Flushes a TLB entry only on the current CPU.
+    fn flush_tlb_local(vaddr: Option<Self::VirtAddr>) {
+        Self::flush_tlb(vaddr);
+    }
+
+    /// Flushes translations belonging to one page-table root.
+    fn flush_tlb_for(root_paddr: PhysAddr, vaddr: Option<Self::VirtAddr>) {
+        let _ = root_paddr;
+        Self::flush_tlb(vaddr);
+    }
 }
 
 /// The low-level **OS-dependent** helpers that must be provided for

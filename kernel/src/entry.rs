@@ -75,6 +75,9 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
 
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
+    #[cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))]
+    crate::mm::init_tlb_shootdown();
+
     pseudofs::mount_all().expect("Failed to mount pseudofs");
     spawn_alarm_task();
 

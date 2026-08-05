@@ -318,7 +318,10 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
             return Err(PagingError::AlreadyMapped);
         }
         *entry = GenericPTE::new_page(target.align_down(page_size), flags, page_size.is_huge());
-        self.flush(vaddr);
+        // A newly installed mapping cannot replace a cached valid
+        // translation on another CPU. Invalidate only the current CPU's
+        // possible negative entry; no synchronous remote shootdown is needed.
+        M::flush_tlb_local(Some(vaddr));
         Ok(())
     }
 
@@ -546,11 +549,11 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
             ToFlush::None => {}
             ToFlush::Addresses(addrs) => {
                 for vaddr in addrs.iter() {
-                    M::flush_tlb(Some(*vaddr));
+                    M::flush_tlb_for(self.inner.root_paddr(), Some(*vaddr));
                 }
             }
             ToFlush::Full => {
-                M::flush_tlb(None);
+                M::flush_tlb_for(self.inner.root_paddr(), None);
             }
         }
         self.flush = ToFlush::None;

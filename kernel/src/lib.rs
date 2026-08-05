@@ -18,6 +18,8 @@ pub mod entry;
 
 mod config;
 mod file;
+#[cfg(target_arch = "loongarch64")]
+mod ipi;
 mod mm;
 mod pseudofs;
 mod syscall;

@@ -6,6 +6,30 @@ use loongArch64::register::{
 use super::context::TrapFrame;
 use crate::trap::PageFaultFlags;
 
+const PRMD_PIE: usize = 1 << 2;
+
+struct KernelPageFaultIrqGuard {
+    enabled: bool,
+}
+
+impl KernelPageFaultIrqGuard {
+    fn new(prmd: usize) -> Self {
+        let enabled = prmd & PRMD_PIE != 0;
+        if enabled {
+            crate::asm::enable_irqs();
+        }
+        Self { enabled }
+    }
+}
+
+impl Drop for KernelPageFaultIrqGuard {
+    fn drop(&mut self) {
+        if self.enabled {
+            crate::asm::disable_irqs();
+        }
+    }
+}
+
 core::arch::global_asm!(
     include_asm_macros!(),
     include_str!("trap.S"),
@@ -19,7 +43,15 @@ fn handle_breakpoint(era: &mut usize) {
 
 fn handle_page_fault(tf: &mut TrapFrame, access_flags: PageFaultFlags) {
     let vaddr = va!(badv::read().vaddr());
-    if handle_trap!(PAGE_FAULT, vaddr, access_flags) {
+    // Exceptions clear CRMD.IE. Restore the pre-exception interrupt state while
+    // resolving a kernel page fault so the handler can block, be preempted, and
+    // participate in synchronous cross-CPU TLB shootdowns. The guard leaves
+    // interrupts disabled for the assembly trap-return path.
+    let irq_guard = KernelPageFaultIrqGuard::new(tf.prmd);
+    let handled = handle_trap!(PAGE_FAULT, vaddr, access_flags);
+    drop(irq_guard);
+
+    if handled {
         return;
     }
     #[cfg(feature = "uspace")]
