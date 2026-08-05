@@ -19,10 +19,15 @@ use memory_set::{MemoryArea, MemorySet};
 
 const WRITER_LOCKED: usize = 1;
 const ONE_READER: usize = 2;
+// Keep the active owner/readers and the number of queued writers in one
+// atomic word. A try-writer can therefore succeed only from the exact zero
+// state and cannot jump ahead of a writer that has already queued.
+const ONE_WAITING_WRITER: usize = 1usize << (usize::BITS / 2);
+const ACTIVE_MASK: usize = ONE_WAITING_WRITER - 1;
+const WAITING_WRITERS_MASK: usize = !ACTIVE_MASK;
 
 pub(crate) struct RawAddrSpaceRwLock {
     state: AtomicUsize,
-    waiting_writers: AtomicUsize,
     event: Event,
 }
 
@@ -30,8 +35,27 @@ impl RawAddrSpaceRwLock {
     const fn new() -> Self {
         Self {
             state: AtomicUsize::new(0),
-            waiting_writers: AtomicUsize::new(0),
             event: Event::new(),
+        }
+    }
+
+    fn try_lock_queued_writer(&self) -> bool {
+        let mut state = self.state.load(Ordering::Acquire);
+        loop {
+            debug_assert_ne!(state & WAITING_WRITERS_MASK, 0);
+            if state & ACTIVE_MASK != 0 {
+                return false;
+            }
+            let next = (state - ONE_WAITING_WRITER) | WRITER_LOCKED;
+            match self.state.compare_exchange_weak(
+                state,
+                next,
+                Ordering::Acquire,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(observed) => state = observed,
+            }
         }
     }
 }
@@ -54,14 +78,12 @@ unsafe impl lock_api::RawRwLock for RawAddrSpaceRwLock {
     }
 
     fn try_lock_shared(&self) -> bool {
-        if self.waiting_writers.load(Ordering::Acquire) != 0 {
-            return false;
-        }
         let mut state = self.state.load(Ordering::Acquire);
         loop {
-            if state & WRITER_LOCKED != 0 {
+            if state & (WRITER_LOCKED | WAITING_WRITERS_MASK) != 0 {
                 return false;
             }
+            debug_assert!(state <= ACTIVE_MASK - ONE_READER);
             match self.state.compare_exchange_weak(
                 state,
                 state + ONE_READER,
@@ -76,30 +98,24 @@ unsafe impl lock_api::RawRwLock for RawAddrSpaceRwLock {
 
     unsafe fn unlock_shared(&self) {
         let previous = self.state.fetch_sub(ONE_READER, Ordering::Release);
-        debug_assert!(previous >= ONE_READER && previous & WRITER_LOCKED == 0);
-        if previous == ONE_READER {
+        debug_assert!(previous & ACTIVE_MASK >= ONE_READER && previous & WRITER_LOCKED == 0);
+        if previous & ACTIVE_MASK == ONE_READER {
             self.event.notify(usize::MAX);
         }
     }
 
     fn lock_exclusive(&self) {
-        self.waiting_writers.fetch_add(1, Ordering::AcqRel);
+        self.state
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                state.checked_add(ONE_WAITING_WRITER)
+            })
+            .expect("too many queued address-space writers");
         loop {
-            if self
-                .state
-                .compare_exchange(0, WRITER_LOCKED, Ordering::Acquire, Ordering::Relaxed)
-                .is_ok()
-            {
-                self.waiting_writers.fetch_sub(1, Ordering::Release);
+            if self.try_lock_queued_writer() {
                 return;
             }
             listener!(self.event => waiter);
-            if self
-                .state
-                .compare_exchange(0, WRITER_LOCKED, Ordering::Acquire, Ordering::Relaxed)
-                .is_ok()
-            {
-                self.waiting_writers.fetch_sub(1, Ordering::Release);
+            if self.try_lock_queued_writer() {
                 return;
             }
             axtask::future::block_on(waiter);
@@ -113,8 +129,9 @@ unsafe impl lock_api::RawRwLock for RawAddrSpaceRwLock {
     }
 
     unsafe fn unlock_exclusive(&self) {
-        debug_assert_eq!(self.state.load(Ordering::Relaxed), WRITER_LOCKED);
-        self.state.store(0, Ordering::Release);
+        let previous = self.state.fetch_and(!WRITER_LOCKED, Ordering::Release);
+        debug_assert_ne!(previous & WRITER_LOCKED, 0);
+        debug_assert_eq!(previous & (ACTIVE_MASK - WRITER_LOCKED), 0);
         self.event.notify(usize::MAX);
     }
 }
