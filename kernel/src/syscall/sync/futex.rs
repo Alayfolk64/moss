@@ -113,10 +113,7 @@ pub fn sys_futex(
 
             let mut count = 0;
             if let Some(futex) = futex {
-                count = futex.wq.wake(value as _, u32::MAX);
-                if count == value as usize {
-                    count += futex.wq.requeue(value2 as _, &futex2.wq) as usize;
-                }
+                count = futex.wq.wake_requeue(value as _, value2 as _, &futex2.wq);
             }
             Ok(count as _)
         }
