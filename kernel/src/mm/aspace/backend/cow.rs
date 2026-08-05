@@ -448,9 +448,12 @@ impl CowBackend {
             .get_frame_ref(paddr)
             .ok_or(AxError::BadAddress)?;
         drop(frame_table);
-        let mut frame = frame.lock();
-        assert!(frame.0 > 0, "invalid frame reference count");
-        match frame.0 {
+        let ref_count = {
+            let frame = frame.lock();
+            assert!(frame.0 > 0, "invalid frame reference count");
+            frame.0
+        };
+        match ref_count {
             1 => {
                 // Only one reference, just upgrade the permissions.
                 pt.protect(vaddr, flags)?;
@@ -478,7 +481,7 @@ impl CowBackend {
                 pt.finish();
                 #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
                 crate::mm::flush_tlb_on_all_cpus(pt.root_paddr(), Some(vaddr));
-                frame.drop_frame(paddr, self.size);
+                drop_referenced_frame(paddr, self.size);
             }
         }
 
