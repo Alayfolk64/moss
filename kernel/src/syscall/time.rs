@@ -1,6 +1,6 @@
-use alloc::{collections::BTreeMap, format, string::String};
+use alloc::{collections::BTreeMap, format, string::String, sync::Arc, vec::Vec};
 use core::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 
@@ -9,7 +9,7 @@ use axhal::time::{
     TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, realtime_time,
     set_realtime_offset_nanos, wall_time,
 };
-use axtask::{current, yield_now};
+use axtask::{WaitQueue, current, yield_now};
 use lazy_static::lazy_static;
 use linux_raw_sys::general::{
     __kernel_clockid_t, CLOCK_BOOTTIME, CLOCK_BOOTTIME_ALARM, CLOCK_MONOTONIC,
@@ -252,6 +252,7 @@ pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> A
         .try_into()
         .map_err(|_| AxError::InvalidInput)?;
     set_realtime_offset_nanos(offset);
+    wake_posix_timer_workers();
     Ok(0)
 }
 
@@ -400,7 +401,7 @@ pub fn sys_timer_create(
     let tid = curr.id().as_u64() as Pid;
     let id = POSIX_TIMERS.lock().create(pid, tid, clock_id, signo);
     if let Err(err) = timerid.vm_write(id) {
-        POSIX_TIMERS.lock().delete(pid, id);
+        let _ = POSIX_TIMERS.lock().delete(pid, id);
         return Err(err.into());
     }
     Ok(0)
@@ -409,10 +410,11 @@ pub fn sys_timer_create(
 pub fn sys_timer_delete(timerid: i32) -> AxResult<isize> {
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    POSIX_TIMERS
+    let wakeup = POSIX_TIMERS
         .lock()
         .delete(pid, timerid)
         .ok_or(AxError::InvalidInput)?;
+    wakeup.notify();
     Ok(0)
 }
 
@@ -455,10 +457,11 @@ pub fn sys_timer_settime(
 
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let (old, arm) =
+    let (old, arm, wakeup) =
         POSIX_TIMERS
             .lock()
             .settime(pid, timerid, new_spec, flags & TIMER_ABSTIME != 0)?;
+    wakeup.notify();
     if let Some(old_value) = old_value.nullable() {
         write_itimerspec(old_value, old)?;
     }
@@ -532,7 +535,7 @@ fn write_itimerspec(ptr: *mut itimerspec, spec: KernelTimerSpec) -> AxResult<()>
     })?)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct PosixTimer {
     owner_pid: Pid,
     owner_tid: Pid,
@@ -542,6 +545,28 @@ struct PosixTimer {
     deadline: Option<TimeValue>,
     generation: u64,
     overrun: i32,
+    wakeup: Arc<PosixTimerWake>,
+}
+
+/// 每个 POSIX timer 独立维护等待队列与事件序号。事件序号使修改、删除与
+/// worker 准备睡眠之间不存在 lost wakeup。
+struct PosixTimerWake {
+    event: WaitQueue,
+    sequence: AtomicU64,
+}
+
+impl PosixTimerWake {
+    fn new() -> Self {
+        Self {
+            event: WaitQueue::new(),
+            sequence: AtomicU64::new(0),
+        }
+    }
+
+    fn notify(&self) {
+        self.sequence.fetch_add(1, Ordering::Release);
+        self.event.notify_all(false);
+    }
 }
 
 impl PosixTimer {
@@ -580,18 +605,28 @@ impl PosixTimerTable {
                 deadline: None,
                 generation: 0,
                 overrun: 0,
+                wakeup: Arc::new(PosixTimerWake::new()),
             },
         );
         id
     }
 
-    fn delete(&mut self, pid: Pid, id: i32) -> Option<()> {
-        self.timers.remove(&(pid, id)).map(|_| ())
+    fn delete(&mut self, pid: Pid, id: i32) -> Option<Arc<PosixTimerWake>> {
+        self.timers.remove(&(pid, id)).map(|timer| timer.wakeup)
     }
 
-    fn remove_process(&mut self, pid: Pid) {
+    fn remove_process(&mut self, pid: Pid) -> Vec<Arc<PosixTimerWake>> {
         self.next_id.remove(&pid);
-        self.timers.retain(|(owner, _), _| *owner != pid);
+        let mut wakeups = Vec::new();
+        self.timers.retain(|(owner, _), timer| {
+            if *owner == pid {
+                wakeups.push(timer.wakeup.clone());
+                false
+            } else {
+                true
+            }
+        });
+        wakeups
     }
 
     fn get(&self, pid: Pid, id: i32) -> Option<&PosixTimer> {
@@ -604,7 +639,11 @@ impl PosixTimerTable {
         id: i32,
         spec: KernelTimerSpec,
         abstime: bool,
-    ) -> AxResult<(KernelTimerSpec, Option<(TimeValue, u64)>)> {
+    ) -> AxResult<(
+        KernelTimerSpec,
+        Option<(TimeValue, u64)>,
+        Arc<PosixTimerWake>,
+    )> {
         let timer = self
             .timers
             .get_mut(&(pid, id))
@@ -629,6 +668,7 @@ impl PosixTimerTable {
         Ok((
             old,
             timer.deadline.map(|deadline| (deadline, timer.generation)),
+            timer.wakeup.clone(),
         ))
     }
 }
@@ -642,7 +682,22 @@ pub fn release_process_time_resources(pid: Pid) {
     offsets.remove(&pid);
     refresh_timens_offsets_active(&offsets);
     drop(offsets);
-    POSIX_TIMERS.lock().remove_process(pid);
+    let wakeups = POSIX_TIMERS.lock().remove_process(pid);
+    for wakeup in wakeups {
+        wakeup.notify();
+    }
+}
+
+fn wake_posix_timer_workers() {
+    let wakeups = POSIX_TIMERS
+        .lock()
+        .timers
+        .values()
+        .map(|timer| timer.wakeup.clone())
+        .collect::<Vec<_>>();
+    for wakeup in wakeups {
+        wakeup.notify();
+    }
 }
 
 fn spawn_posix_timer(pid: Pid, timerid: i32, deadline: TimeValue, generation: u64) {
@@ -655,15 +710,23 @@ fn spawn_posix_timer(pid: Pid, timerid: i32, deadline: TimeValue, generation: u6
 
 fn posix_timer_worker(pid: Pid, timerid: i32, mut deadline: TimeValue, generation: u64) {
     loop {
-        let Some(clock_id) = POSIX_TIMERS
+        let Some(timer) = POSIX_TIMERS
             .lock()
             .get(pid, timerid)
             .filter(|timer| timer.generation == generation)
-            .map(|timer| (timer.clock_id, timer.owner_pid, timer.owner_tid))
+            .map(|timer| {
+                (
+                    timer.clock_id,
+                    timer.owner_pid,
+                    timer.owner_tid,
+                    timer.wakeup.clone(),
+                    timer.wakeup.sequence.load(Ordering::Acquire),
+                )
+            })
         else {
             return;
         };
-        let (clock_id, owner_pid, owner_tid) = clock_id;
+        let (clock_id, owner_pid, owner_tid, wakeup, mut wake_sequence) = timer;
 
         loop {
             let Some(now) = posix_timer_clock_now(clock_id, owner_pid, owner_tid) else {
@@ -679,7 +742,28 @@ fn posix_timer_worker(pid: Pid, timerid: i32, mut deadline: TimeValue, generatio
             {
                 return;
             }
-            yield_now();
+
+            // 墙钟/单调时钟可以直接睡到截止时间；进程 CPU 时钟只有在任务
+            // 实际运行时才推进，因此用 1ms 上限周期复查。
+            let remaining = deadline.saturating_sub(now);
+            let wait = if clock_id == CLOCK_PROCESS_CPUTIME_ID {
+                remaining.min(Duration::from_millis(1))
+            } else {
+                remaining
+            };
+            let timed_out = wakeup.event.wait_timeout_until(wait, || {
+                wakeup.sequence.load(Ordering::Acquire) != wake_sequence
+            });
+            if !timed_out {
+                if !POSIX_TIMERS
+                    .lock()
+                    .get(pid, timerid)
+                    .is_some_and(|timer| timer.generation == generation)
+                {
+                    return;
+                }
+                wake_sequence = wakeup.sequence.load(Ordering::Acquire);
+            }
         }
 
         let (signo, interval, next_deadline) = {

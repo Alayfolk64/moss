@@ -246,8 +246,6 @@ dependencies = [
 [[package]]
 name = "axcpu"
 version = "0.3.0-preview.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5eeabf0939995cb9bcc17c8f7b49099eba7ce13fb811da1071186b584cad2656"
 dependencies = [
  "aarch64-cpu",
  "axbacktrace",
@@ -424,6 +422,7 @@ dependencies = [
  "axio",
  "axpoll",
  "axsync",
+ "axtask",
  "bitflags 2.11.0",
  "cfg-if",
  "chrono",
@@ -530,14 +529,10 @@ dependencies = [
 [[package]]
 name = "axmm"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd888813ea2c3e503dad39dd9c8ab29d8aa6180a1ed142f7c8ff2033e2148abe"
 dependencies = [
  "axalloc",
  "axconfig",
  "axerrno 0.2.2",
- "axfs",
- "axfs-ng-vfs",
  "axhal",
  "axsync",
  "axtask",
@@ -715,8 +710,6 @@ dependencies = [
 [[package]]
 name = "axruntime"
 version = "0.2.2-preview.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1d457ccb4246b5c447d2b89bac387978c22e85805191e171d660fad70128422"
 dependencies = [
  "axalloc",
  "axbacktrace",
@@ -736,6 +729,7 @@ dependencies = [
  "ctor_bare",
  "indoc",
  "percpu",
+ "spin 0.10.0",
 ]
 
 [[package]]
@@ -1643,8 +1637,6 @@ checksum = "b1f0625c50adb5f6aaf47f05cae3c4dbc13a74c659241b06c4576f3d7e1da940"
 [[package]]
 name = "memory_set"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a49ecd4114cf87f7e442ec5dd03bd590e7094541f987057310dbb32a6341ad"
 dependencies = [
  "axerrno 0.1.2",
  "memory_addr",
@@ -1744,8 +1736,6 @@ dependencies = [
 [[package]]
 name = "page_table_entry"
 version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dda9891ec368fda90e4b2cc36592b4881073e25a339fe7e3eddd811f0cf6bf18"
 dependencies = [
  "aarch64-cpu",
  "bitflags 2.11.0",
@@ -1756,8 +1746,6 @@ dependencies = [
 [[package]]
 name = "page_table_multiarch"
 version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a012c0bb9b8b0c4887d0b90f37cf8164537b69bb5560ecdcf4ada0c3b64e3976"
 dependencies = [
  "arrayvec",
  "axerrno 0.1.2",

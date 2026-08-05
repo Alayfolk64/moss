@@ -14,7 +14,7 @@ use core::{
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, OpenOptions, OpenResult};
-use axfs_ng_vfs::path::Path;
+use axfs_ng_vfs::{Location, path::Path};
 use axio::prelude::*;
 use axpoll::{IoEvents, PollSet, Pollable};
 use axsync::Mutex;
@@ -42,12 +42,12 @@ const FAN_ATTRIB: u64 = 0x0000_0004;
 const FAN_CLOSE_WRITE: u64 = 0x0000_0008;
 const FAN_CLOSE_NOWRITE: u64 = 0x0000_0010;
 const FAN_OPEN: u64 = 0x0000_0020;
-const FAN_MOVED_FROM: u64 = 0x0000_0040;
-const FAN_MOVED_TO: u64 = 0x0000_0080;
+pub(super) const FAN_MOVED_FROM: u64 = 0x0000_0040;
+pub(super) const FAN_MOVED_TO: u64 = 0x0000_0080;
 const FAN_CREATE: u64 = 0x0000_0100;
-const FAN_DELETE: u64 = 0x0000_0200;
-const FAN_DELETE_SELF: u64 = 0x0000_0400;
-const FAN_MOVE_SELF: u64 = 0x0000_0800;
+pub(super) const FAN_DELETE: u64 = 0x0000_0200;
+pub(super) const FAN_DELETE_SELF: u64 = 0x0000_0400;
+pub(super) const FAN_MOVE_SELF: u64 = 0x0000_0800;
 const FAN_OPEN_EXEC: u64 = 0x0000_1000;
 const FAN_Q_OVERFLOW: u64 = 0x0000_4000;
 const FAN_FS_ERROR: u64 = 0x0000_8000;
@@ -1653,6 +1653,131 @@ fn fanotify_snapshot_file(path: String) -> Arc<dyn FileLike> {
     Arc::new(FanotifyPathFile { path })
 }
 
+fn location_path(location: &Location, fallback: &str) -> String {
+    location
+        .absolute_path()
+        .ok()
+        .map_or_else(|| fallback.to_string(), |path| path.to_string())
+}
+
+/// Builds an inode event from a Location which the namespace transaction has
+/// already resolved.  This variant never reacquires FS_CONTEXT, so callers can
+/// snapshot the exact object while holding the namespace lock.
+pub(super) fn prepare_fanotify_location_event(
+    location: &Location,
+    fallback_path: &str,
+    mask: u64,
+) -> Option<FanotifyPreparedEvent> {
+    if !has_fanotify_interest(mask) {
+        return None;
+    }
+    let target = target_from_location(location)?;
+    let path = location_path(location, fallback_path);
+    Some(FanotifyPreparedEvent {
+        target,
+        child_target: None,
+        child_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
+        child_name: None,
+        child_path: None,
+        object_target: None,
+        path: path.clone(),
+        file: fanotify_snapshot_file(path),
+        mask,
+        event_is_dir: target.is_dir,
+    })
+}
+
+/// Builds a parent/name event from the exact parent and child captured by a
+/// namespace transaction, without resolving the pathname a second time.
+pub(super) fn prepare_fanotify_dirent_location_event(
+    parent: &Location,
+    child: Option<&Location>,
+    name: &str,
+    fallback_path: &str,
+    mask: u64,
+    event_is_dir: bool,
+) -> Option<FanotifyPreparedEvent> {
+    if !has_fanotify_interest(mask) {
+        return None;
+    }
+    let child_target = child.and_then(target_from_location);
+    let parent_path = parent.absolute_path().ok().map(|path| path.to_string());
+    let path = parent_path.map_or_else(
+        || fallback_path.to_string(),
+        |parent_path| {
+            if parent_path == "/" {
+                format!("/{name}")
+            } else {
+                format!("{parent_path}/{name}")
+            }
+        },
+    );
+    let file: Arc<dyn FileLike> = Arc::new(Directory::new(parent.clone()));
+    let target = target_from_location(parent)?;
+    Some(FanotifyPreparedEvent {
+        target,
+        child_target,
+        child_info_type: FANOTIFY_EVENT_INFO_TYPE_FID,
+        child_name: None,
+        child_path: None,
+        object_target: None,
+        path,
+        file,
+        mask,
+        event_is_dir,
+    })
+}
+
+pub(super) fn prepare_fanotify_rename_location_event(
+    old_parent: &Location,
+    old_target: &Location,
+    old_name: &str,
+    old_path: &str,
+    new_parent: &Location,
+    new_name: &str,
+    is_dir: bool,
+) -> Option<FanotifyPreparedEvent> {
+    let mut event = prepare_fanotify_dirent_location_event(
+        old_parent,
+        Some(old_target),
+        old_name,
+        old_path,
+        FAN_RENAME,
+        is_dir,
+    )?;
+    event.object_target = event.child_target;
+    let new_parent_path = new_parent.absolute_path().ok().map(|path| path.to_string());
+    event.child_path = new_parent_path.map(|parent_path| {
+        if parent_path == "/" {
+            format!("/{new_name}")
+        } else {
+            format!("{parent_path}/{new_name}")
+        }
+    });
+    event.child_target = target_from_location(new_parent);
+    event.child_info_type = FANOTIFY_EVENT_INFO_TYPE_NEW_DFID_NAME;
+    event.child_name = Some(new_name.to_string());
+    Some(event)
+}
+
+pub(super) fn prepare_fanotify_location_alias(
+    target: &Location,
+    new_parent: &Location,
+    new_name: &str,
+) -> Option<FanotifyPathAlias> {
+    let target = target_from_location(target)?;
+    let parent_path = new_parent
+        .absolute_path()
+        .ok()
+        .map(|path| path.to_string())?;
+    let path = if parent_path == "/" {
+        format!("/{new_name}")
+    } else {
+        format!("{parent_path}/{new_name}")
+    };
+    Some(FanotifyPathAlias { target, path })
+}
+
 fn notify_fanotify_resolved_path(dirfd: c_int, path: &str, mask: u64) {
     if let Some(event) = prepare_fanotify_path_event(dirfd, path, mask) {
         notify_fanotify_prepared_event(event);
@@ -2064,6 +2189,15 @@ fn target_from_stat(stat: crate::file::Kstat) -> FanotifyTarget {
         ino: stat.ino,
         is_dir: stat.mode & S_IFMT == S_IFDIR,
     }
+}
+
+fn target_from_location(location: &Location) -> Option<FanotifyTarget> {
+    let metadata = location.metadata().ok()?;
+    Some(FanotifyTarget {
+        dev: metadata.device,
+        ino: metadata.inode,
+        is_dir: location.is_dir(),
+    })
 }
 
 fn target_from_file_like(file: &Arc<dyn FileLike>) -> AxResult<FanotifyTarget> {

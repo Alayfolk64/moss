@@ -20,14 +20,15 @@ use crate::{
     config::USER_HEAP_BASE,
     file::{FD_TABLE, File, resolve_at},
     mm::{
-        copy_from_kernel, load_user_app, load_user_app_from_location, new_user_aspace_empty,
-        vm_load_string,
+        copy_from_kernel, defer_address_space_reclaim, load_user_app, load_user_app_from_location,
+        new_user_aspace_empty, vm_load_string,
     },
     syscall::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
+        unshare_current_fd_table,
     },
-    task::{AsThread, ProcessData, processes, tasks},
+    task::{AsThread, ProcessData, address_space_shared_with_live_process, processes, tasks},
 };
 
 struct ExecStateGuard<'a> {
@@ -295,15 +296,29 @@ fn execve_common(
     // the middle of the local commit.
     let old_aspace_snapshot = proc_data.aspace();
     let old_aspace_guard = old_aspace_snapshot.lock();
-    {
+    let old_aspace = {
         let _commit_guard = NoPreemptIrqSave::new();
-        let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
+        let old_aspace =
+            proc_data.replace_aspace(Arc::new(crate::mm::AddrSpaceLock::new(new_aspace)));
         debug_assert!(Arc::ptr_eq(&old_aspace, &old_aspace_snapshot));
         axtask::replace_current_page_table(page_table_root);
-        drop(old_aspace);
-    }
+        old_aspace
+    };
+    let old_aspace_shared =
+        address_space_shared_with_live_process(&old_aspace, proc_data.proc.pid());
+    let old_locked_bytes = if old_aspace_shared {
+        0
+    } else {
+        old_aspace_guard.locked_bytes()
+    };
+    crate::syscall::release_process_mmap_resources(proc_data.proc.pid(), old_locked_bytes);
     drop(old_aspace_guard);
     drop(old_aspace_snapshot);
+    if old_aspace_shared {
+        drop(old_aspace);
+    } else {
+        defer_address_space_reclaim(old_aspace);
+    }
 
     curr.set_name(loc.name());
 
@@ -319,7 +334,11 @@ fn execve_common(
     // They can become dangling once the address space is replaced.
     curr.as_thread().set_clear_child_tid(0);
     curr.as_thread().set_robust_list_head(0);
+    curr.as_thread().reset_rseq();
 
+    // A successful exec undoes CLONE_FILES. Detach before applying CLOEXEC so
+    // the old table and any pipe endpoints remain owned by the live peer.
+    unshare_current_fd_table();
     close_cloexec_files_for_current_process();
 
     ptrace_on_exec(proc_data.proc.pid());

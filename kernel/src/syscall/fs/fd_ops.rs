@@ -14,8 +14,12 @@ use axfs_ng_vfs::{
     path::Path,
 };
 use axio::{Seek, SeekFrom};
-use axtask::{current, yield_now};
+use axtask::{
+    current,
+    future::{block_on, interruptible},
+};
 use bitflags::bitflags;
+use event_listener::{Event, listener};
 use kernel_guard::NoPreempt;
 use linux_raw_sys::general::*;
 use scope_local::ActiveScope;
@@ -23,6 +27,7 @@ use spin::RwLock;
 use starry_signal::Signo;
 
 use super::{
+    NAMESPACE_TRANSACTION,
     fanotify::{
         check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
         notify_fanotify_fd_close, notify_fanotify_open,
@@ -45,7 +50,7 @@ use crate::{
         sys::{sys_getegid, sys_geteuid},
         task::current_has_cap,
     },
-    task::{AsThread, processes},
+    task::AsThread,
 };
 
 /// Convert open flags to [`OpenOptions`].
@@ -558,6 +563,7 @@ pub fn sys_openat(
     if flags_u32 & __O_TMPFILE != 0 {
         return Err(AxError::OperationNotSupported);
     }
+    let namespace_transaction = (flags_u32 & O_CREAT != 0).then(|| NAMESPACE_TRANSACTION.lock());
 
     let mode = mode & !current().as_thread().proc_data.umask();
     let ids = (sys_geteuid()? as u32, sys_getegid()? as u32);
@@ -581,12 +587,16 @@ pub fn sys_openat(
             check_open_access(dirfd, path.as_str(), flags_u32, ids)?;
             match open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32) {
                 Ok(result) => {
-                    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                    let created = flags_u32 & O_CREAT != 0 && !existed_before_create;
+                    if created {
                         record_created_file(dirfd, path.as_str(), mode, ids)?;
+                    }
+                    drop(namespace_transaction);
+                    if created {
                         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
                     }
                     let fd = add_to_fd(result, flags_u32)?;
-                    if flags_u32 & O_CREAT != 0 && !existed_before_create {
+                    if created {
                         notify_fanotify_create(dirfd, &path, false);
                     }
                     return Ok(fd as isize);
@@ -602,10 +612,13 @@ pub fn sys_openat(
 
         if !existed_before_create {
             record_created_file(dirfd, path.as_str(), mode, ids)?;
+        }
+        let result = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)?;
+        drop(namespace_transaction);
+        if !existed_before_create {
             notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         }
-        let fd = open_with_create_follow(dirfd, path.as_str(), &open_options, flags_u32)
-            .and_then(|it| add_to_fd(it, flags_u32))?;
+        let fd = add_to_fd(result, flags_u32)?;
         if !existed_before_create {
             notify_fanotify_create(dirfd, &path, false);
         }
@@ -618,13 +631,15 @@ pub fn sys_openat(
     if flags_u32 & O_CREAT != 0 && !existed_before_create {
         let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
         record_created_file(dirfd, path.as_str(), mode, ids)?;
+        drop(namespace_transaction);
         notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
         let fd = add_to_fd(result, flags as _)?;
         notify_fanotify_create(dirfd, &path, false);
         return Ok(fd as isize);
     }
-    let fd = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)
-        .and_then(|it| add_to_fd(it, flags as _))?;
+    let result = open_with_create_follow(dirfd, path.as_str(), &options, flags_u32)?;
+    drop(namespace_transaction);
+    let fd = add_to_fd(result, flags as _)?;
     Ok(fd as isize)
 }
 
@@ -667,6 +682,29 @@ bitflags! {
     }
 }
 
+/// Gives the current process a private copy of its descriptor table.
+///
+/// File descriptions themselves remain shared, as required by dup/fork
+/// semantics. Replacing the table lets exit and exec close this process's
+/// descriptors without mutating a live process that used `CLONE_FILES`.
+pub fn unshare_current_fd_table() {
+    let cloned = FD_TABLE.read().clone();
+
+    // The running task keeps a leaked scope read guard between context
+    // switches. Temporarily leave the scope before taking its write lock.
+    let curr = current();
+    let thr = curr.as_thread();
+    let _preempt_guard = NoPreempt::new();
+    ActiveScope::set_global();
+    unsafe { thr.proc_data.scope.force_read_decrement() };
+    let mut scope = thr.proc_data.scope.write();
+    *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
+    drop(scope);
+    let scope = thr.proc_data.scope.read();
+    unsafe { ActiveScope::set(&scope) };
+    core::mem::forget(scope);
+}
+
 pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     if last < first {
         return Err(AxError::InvalidInput);
@@ -678,24 +716,7 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     let last = last as usize;
 
     if flags.contains(CloseRangeFlags::UNSHARE) {
-        // 1) Snapshot current FD table.
-        let cloned = FD_TABLE.read().clone();
-
-        // 2) Detach current task's scope-local FD table pointer.
-        // The running task keeps a leaked scope read-lock (see TaskExt::on_enter/on_leave),
-        // so we must temporarily drop it before taking scope.write(). Keep preemption
-        // disabled during this window to avoid task switch with a mismatched lock count.
-        let curr = current();
-        let thr = curr.as_thread();
-        let _preempt_guard = NoPreempt::new();
-        ActiveScope::set_global();
-        unsafe { thr.proc_data.scope.force_read_decrement() };
-        let mut scope = thr.proc_data.scope.write();
-        *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
-        drop(scope);
-        let scope = thr.proc_data.scope.read();
-        unsafe { ActiveScope::set(&scope) };
-        core::mem::forget(scope);
+        unshare_current_fd_table();
     }
 
     let mut fd_table = FD_TABLE.write();
@@ -763,6 +784,8 @@ static POSIX_LOCKS: RwLock<BTreeMap<PosixLockKey, Vec<PosixRecordLock>>> =
 static POSIX_WAIT_GRAPH: RwLock<BTreeMap<u32, Vec<u32>>> = RwLock::new(BTreeMap::new());
 static FILE_LEASES: RwLock<BTreeMap<PosixLockKey, FileLease>> = RwLock::new(BTreeMap::new());
 static BSD_FLOCKS: RwLock<BTreeMap<PosixLockKey, Vec<BsdFileLock>>> = RwLock::new(BTreeMap::new());
+static POSIX_LOCK_CHANGED: Event = Event::new();
+static BSD_FLOCK_CHANGED: Event = Event::new();
 
 fn has_unblocked_pending_signal() -> bool {
     let curr = current();
@@ -1113,6 +1136,8 @@ fn release_posix_locks_for_file_like(file_like: &Arc<dyn FileLike>) {
             map.remove(&key);
         }
     }
+    drop(map);
+    POSIX_LOCK_CHANGED.notify(usize::MAX);
 }
 
 fn release_file_lease_for_file_like(file_like: &Arc<dyn FileLike>) {
@@ -1144,6 +1169,8 @@ fn release_bsd_flocks_for_file_like(file_like: &Arc<dyn FileLike>) {
             map.remove(&key);
         }
     }
+    drop(map);
+    BSD_FLOCK_CHANGED.notify(usize::MAX);
 }
 
 fn release_bsd_flocks_for_file_like_if_last(file_like: &Arc<dyn FileLike>) {
@@ -1167,20 +1194,6 @@ fn release_bsd_flocks_for_closed_files(files: &[Arc<dyn FileLike>]) {
             release_bsd_flocks_for_file_like(file);
         }
     }
-}
-
-fn current_fd_table_shared_by_live_process() -> bool {
-    let fd_table_ref = FD_TABLE.clone();
-    let curr_pid = current().as_thread().proc_data.proc.pid();
-
-    processes().iter().any(|proc_data| {
-        if proc_data.proc.pid() == curr_pid || proc_data.proc.is_zombie() {
-            return false;
-        }
-        let scope = proc_data.scope.read();
-        let other_fd_table = FD_TABLE.scope(&scope).clone();
-        Arc::ptr_eq(&fd_table_ref, &other_fd_table)
-    })
 }
 
 fn current_file_likes() -> Vec<Arc<dyn FileLike>> {
@@ -1208,10 +1221,10 @@ fn close_current_fd_table() {
 }
 
 pub fn close_all_files_for_current_process() {
-    if current_fd_table_shared_by_live_process() {
-        return;
-    }
-
+    // A process sharing its table through CLONE_FILES must drop only its own
+    // references. Skipping cleanup leaves pipe writers alive in zombies and
+    // can deadlock a parent that reads until EOF before calling wait().
+    unshare_current_fd_table();
     let file_likes = current_file_likes();
     release_file_likes_for_process_exit(&file_likes);
     close_current_fd_table();
@@ -1242,7 +1255,9 @@ pub fn release_posix_locks_for_pid(pid: u32) {
         locks.retain(|lock| lock.owner != pid);
         !locks.is_empty()
     });
+    drop(map);
     clear_wait_dependencies(pid);
+    POSIX_LOCK_CHANGED.notify(usize::MAX);
 }
 
 pub fn release_file_leases_for_pid(pid: u32) {
@@ -1296,6 +1311,8 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
     let owner = current().as_thread().proc_data.proc.pid();
 
     loop {
+        // 先注册监听，再检查锁表，避免在检查冲突与进入等待之间丢失解锁事件。
+        listener!(POSIX_LOCK_CHANGED => lock_changed);
         let mut map = POSIX_LOCKS.write();
         let mut should_remove_key = false;
         let mut conflict_owners = Vec::new();
@@ -1314,7 +1331,9 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
             if should_remove_key {
                 map.remove(&key);
             }
+            drop(map);
             clear_wait_dependencies(owner);
+            POSIX_LOCK_CHANGED.notify(usize::MAX);
             return Ok(0);
         }
 
@@ -1338,7 +1357,12 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
             clear_wait_dependencies(owner);
             return Err(AxError::Interrupted);
         }
-        yield_now();
+        if block_on(interruptible(lock_changed)).is_err()
+            && (current().as_thread().exec_exit_requested() || has_unblocked_pending_signal())
+        {
+            clear_wait_dependencies(owner);
+            return Err(AxError::Interrupted);
+        }
     }
 }
 
@@ -1593,11 +1617,15 @@ pub fn sys_flock(fd: c_int, operation: c_int) -> AxResult<isize> {
     }
 
     loop {
+        // 与 POSIX 记录锁一样，监听必须早于冲突检查，才能消除 lost wakeup。
+        listener!(BSD_FLOCK_CHANGED => lock_changed);
         let mut map = BSD_FLOCKS.write();
         let locks = map.entry(key).or_default();
         if !bsd_flock_conflicts(locks, owner, exclusive) {
             locks.retain(|lock| lock.owner != owner);
             locks.push(BsdFileLock { owner, exclusive });
+            drop(map);
+            BSD_FLOCK_CHANGED.notify(usize::MAX);
             return Ok(0);
         }
         if nonblock {
@@ -1607,6 +1635,10 @@ pub fn sys_flock(fd: c_int, operation: c_int) -> AxResult<isize> {
         if current().as_thread().exec_exit_requested() {
             return Err(AxError::Interrupted);
         }
-        yield_now();
+        if block_on(interruptible(lock_changed)).is_err()
+            && (current().as_thread().exec_exit_requested() || has_unblocked_pending_signal())
+        {
+            return Err(AxError::Interrupted);
+        }
     }
 }

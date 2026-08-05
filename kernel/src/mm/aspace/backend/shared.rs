@@ -2,11 +2,13 @@ use alloc::{sync::Arc, vec, vec::Vec};
 
 use axerrno::{AxError, AxResult};
 use axhal::paging::{MappingFlags, PageSize, PageTableMut, PagingError};
-use axsync::Mutex;
 use kspin::SpinNoIrq;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
-use super::{AddrSpace, Backend, BackendOps, alloc_frame, dealloc_frame, divide_page, pages_in};
+use super::{
+    AddrSpaceLock, Backend, BackendOps, alloc_frame, dealloc_frame, divide_page,
+    finish_unmap_before_reclaim, pages_in,
+};
 
 pub struct SharedPages {
     phys_pages: SpinNoIrq<Vec<Option<PhysAddr>>>,
@@ -73,9 +75,27 @@ impl SharedBackend {
         &self.pages
     }
 
+    pub(super) fn merge_compatible(&self, other: &Self) -> bool {
+        self.start == other.start && Arc::ptr_eq(&self.pages, &other.pages)
+    }
+
     fn page_index(&self, start: VirtAddr) -> usize {
         debug_assert!(start.is_aligned(self.pages.size));
         divide_page(start - self.start, self.pages.size)
+    }
+
+    pub(super) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+    ) -> AxResult {
+        for vaddr in pages_in(range, self.pages.size)? {
+            match pt.unmap(vaddr) {
+                Ok(_) | Err(PagingError::NotMapped) => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(())
     }
 }
 
@@ -91,13 +111,17 @@ impl BackendOps for SharedBackend {
 
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         debug!("Shared::unmap: {:?}", range);
-        for vaddr in pages_in(range, self.pages.size)? {
-            match pt.unmap(vaddr) {
-                Ok(_) | Err(PagingError::NotMapped) => {}
-                Err(err) => return Err(err.into()),
+        let result = (|| {
+            for vaddr in pages_in(range, self.pages.size)? {
+                match pt.unmap(vaddr) {
+                    Ok(_) | Err(PagingError::NotMapped) => {}
+                    Err(err) => return Err(err.into()),
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })();
+        finish_unmap_before_reclaim(pt);
+        result
     }
 
     fn populate(
@@ -135,7 +159,7 @@ impl BackendOps for SharedBackend {
         _flags: MappingFlags,
         _old_pt: &mut PageTableMut,
         _new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<Mutex<AddrSpace>>,
+        _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
         Ok(Backend::Shared(self.clone()))
     }

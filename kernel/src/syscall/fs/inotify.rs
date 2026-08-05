@@ -13,7 +13,7 @@ use core::{
 };
 
 use axerrno::{AxError, AxResult};
-use axfs_ng_vfs::path::Path;
+use axfs_ng_vfs::{Location, path::Path};
 use axio::prelude::*;
 use axpoll::{IoEvents, PollSet, Pollable};
 use axsync::Mutex;
@@ -50,6 +50,12 @@ struct Target {
 
 #[derive(Clone, Copy)]
 pub(crate) struct InotifyTarget(Target);
+
+pub(crate) struct InotifyDirent {
+    parent: Target,
+    name: String,
+    is_dir: bool,
+}
 
 #[derive(Clone)]
 struct Watch {
@@ -298,6 +304,15 @@ fn target_from_stat(stat: crate::file::Kstat) -> Target {
     }
 }
 
+fn target_from_location(location: &Location) -> Option<Target> {
+    let metadata = location.metadata().ok()?;
+    Some(Target {
+        dev: metadata.device,
+        ino: metadata.inode,
+        is_dir: location.is_dir(),
+    })
+}
+
 fn target_from_file(file: &Arc<dyn FileLike>) -> AxResult<Target> {
     file.stat().map(target_from_stat)
 }
@@ -420,6 +435,45 @@ pub(crate) fn prepare_inotify_target(dirfd: c_int, path: &str) -> Option<Inotify
     target_from_path(dirfd, path, 0)
         .ok()
         .map(|(target, _)| InotifyTarget(target))
+}
+
+pub(crate) fn prepare_inotify_location_target(location: &Location) -> Option<InotifyTarget> {
+    if !has_inotify_watchers() {
+        return None;
+    }
+    target_from_location(location).map(InotifyTarget)
+}
+
+pub(crate) fn prepare_inotify_location_dirent(
+    parent: &Location,
+    name: &str,
+    is_dir: bool,
+) -> Option<InotifyDirent> {
+    if !has_inotify_watchers() {
+        return None;
+    }
+    Some(InotifyDirent {
+        parent: target_from_location(parent)?,
+        name: name.to_string(),
+        is_dir,
+    })
+}
+
+pub(crate) fn notify_inotify_prepared_dirent(event: InotifyDirent, mask: u32, cookie: u32) {
+    if !has_inotify_watchers() {
+        return;
+    }
+    notify_target(
+        event.parent,
+        mask,
+        Some(&event.name),
+        event.is_dir,
+        cookie,
+        false,
+    );
+    if mask == IN_DELETE {
+        yield_now();
+    }
 }
 
 pub(crate) fn notify_inotify_target(target: InotifyTarget, mask: u32) {

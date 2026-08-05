@@ -7,13 +7,12 @@ use alloc::{
 
 use axfs::FS_CONTEXT;
 use axhal::uspace::UserContext;
-use axsync::Mutex;
 use axtask::{AxTaskExt, spawn_task};
 use starry_process::{Pid, Process};
 
 use crate::{
     file::FD_TABLE,
-    mm::{copy_from_kernel, load_user_app, new_user_aspace_empty},
+    mm::{AddrSpaceLock, copy_from_kernel, load_user_app, new_user_aspace_empty},
     pseudofs::{self, dev::tty::N_TTY},
     task::{ProcessData, Thread, add_task_to_table, new_user_task, spawn_alarm_task},
 };
@@ -107,7 +106,7 @@ pub fn init(args: &[String], envs: &[String]) {
         proc,
         path,
         Arc::new(args),
-        Arc::new(Mutex::new(uspace)),
+        Arc::new(AddrSpaceLock::new(uspace)),
         Arc::default(),
         None,
     );

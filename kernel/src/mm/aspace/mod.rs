@@ -1,5 +1,9 @@
-use alloc::sync::Arc;
-use core::{fmt, ops::DerefMut};
+use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
+use core::{
+    fmt, mem,
+    ops::DerefMut,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use axerrno::{AxError, AxResult, ax_bail};
 use axhal::{
@@ -7,21 +11,327 @@ use axhal::{
     paging::{MappingFlags, PageTable, PagingError},
     trap::PageFaultFlags,
 };
-use axsync::Mutex;
+use axtask::yield_now;
+use event_listener::{Event, listener};
+use kspin::SpinNoIrq;
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
-use memory_set::{MemoryArea, MemorySet};
+use memory_set::{MappingError, MemoryArea, MemorySet, ProtectStats};
+
+const WRITER_LOCKED: usize = 1;
+const ONE_READER: usize = 2;
+// Keep the active owner/readers and the number of queued writers in one
+// atomic word. A try-writer can therefore succeed only from the exact zero
+// state and cannot jump ahead of a writer that has already queued.
+const ONE_WAITING_WRITER: usize = 1usize << (usize::BITS / 2);
+const ACTIVE_MASK: usize = ONE_WAITING_WRITER - 1;
+const WAITING_WRITERS_MASK: usize = !ACTIVE_MASK;
+static NEXT_ASPACE_ID: AtomicUsize = AtomicUsize::new(1);
+
+pub(crate) struct RawAddrSpaceRwLock {
+    state: AtomicUsize,
+    event: Event,
+}
+
+impl RawAddrSpaceRwLock {
+    const fn new() -> Self {
+        Self {
+            state: AtomicUsize::new(0),
+            event: Event::new(),
+        }
+    }
+
+    fn try_lock_queued_writer(&self) -> bool {
+        let mut state = self.state.load(Ordering::Acquire);
+        loop {
+            debug_assert_ne!(state & WAITING_WRITERS_MASK, 0);
+            if state & ACTIVE_MASK != 0 {
+                return false;
+            }
+            let next = (state - ONE_WAITING_WRITER) | WRITER_LOCKED;
+            match self.state.compare_exchange_weak(
+                state,
+                next,
+                Ordering::Acquire,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(observed) => state = observed,
+            }
+        }
+    }
+}
+
+unsafe impl lock_api::RawRwLock for RawAddrSpaceRwLock {
+    const INIT: Self = Self::new();
+    type GuardMarker = lock_api::GuardSend;
+
+    fn lock_shared(&self) {
+        loop {
+            if self.try_lock_shared() {
+                return;
+            }
+            listener!(self.event => waiter);
+            if self.try_lock_shared() {
+                return;
+            }
+            axtask::future::block_on(waiter);
+        }
+    }
+
+    fn try_lock_shared(&self) -> bool {
+        let mut state = self.state.load(Ordering::Acquire);
+        loop {
+            if state & (WRITER_LOCKED | WAITING_WRITERS_MASK) != 0 {
+                return false;
+            }
+            debug_assert!(state <= ACTIVE_MASK - ONE_READER);
+            match self.state.compare_exchange_weak(
+                state,
+                state + ONE_READER,
+                Ordering::Acquire,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(next) => state = next,
+            }
+        }
+    }
+
+    unsafe fn unlock_shared(&self) {
+        let previous = self.state.fetch_sub(ONE_READER, Ordering::Release);
+        debug_assert!(previous & ACTIVE_MASK >= ONE_READER && previous & WRITER_LOCKED == 0);
+        if previous & ACTIVE_MASK == ONE_READER {
+            self.event.notify(usize::MAX);
+        }
+    }
+
+    fn lock_exclusive(&self) {
+        self.state
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |state| {
+                state.checked_add(ONE_WAITING_WRITER)
+            })
+            .expect("too many queued address-space writers");
+        loop {
+            if self.try_lock_queued_writer() {
+                return;
+            }
+            listener!(self.event => waiter);
+            if self.try_lock_queued_writer() {
+                return;
+            }
+            axtask::future::block_on(waiter);
+        }
+    }
+
+    fn try_lock_exclusive(&self) -> bool {
+        self.state
+            .compare_exchange(0, WRITER_LOCKED, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+    }
+
+    unsafe fn unlock_exclusive(&self) {
+        let previous = self.state.fetch_and(!WRITER_LOCKED, Ordering::Release);
+        debug_assert_ne!(previous & WRITER_LOCKED, 0);
+        debug_assert_eq!(previous & (ACTIVE_MASK - WRITER_LOCKED), 0);
+        self.event.notify(usize::MAX);
+    }
+}
+
+pub(crate) type BlockingRwLock<T> = lock_api::RwLock<RawAddrSpaceRwLock, T>;
+pub(crate) type BlockingRwLockReadGuard<'a, T> =
+    lock_api::RwLockReadGuard<'a, RawAddrSpaceRwLock, T>;
+pub(crate) type BlockingRwLockWriteGuard<'a, T> =
+    lock_api::RwLockWriteGuard<'a, RawAddrSpaceRwLock, T>;
 
 mod backend;
 
 pub use self::backend::*;
 
+const MAX_CONCURRENT_FAULT_RETRIES: usize = 4;
+
+#[inline]
+fn synchronize_executable_fault(access_flags: PageFaultFlags) {
+    if access_flags.contains(MappingFlags::EXECUTE) {
+        // File contents are copied into a freshly allocated frame while the
+        // address-space lock is released. Synchronize instruction fetch on the
+        // hart which resolved the executable fault before retrying user code.
+        #[cfg(target_arch = "riscv64")]
+        riscv::asm::fence_i();
+        #[cfg(target_arch = "loongarch64")]
+        unsafe {
+            core::arch::asm!("ibar 0", options(nostack));
+        }
+    }
+    #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]
+    let _ = access_flags;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct VmaMetadata {
+    user_flags: MappingFlags,
+    may_flags: MappingFlags,
+    shared: bool,
+    file_backed: bool,
+    anonymous: bool,
+    locked: bool,
+}
+
+impl VmaMetadata {
+    fn access_flags() -> MappingFlags {
+        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE
+    }
+
+    fn unrestricted(user_flags: MappingFlags, backend: &Backend) -> Self {
+        let (shared, file_backed, anonymous) = backend.default_vma_kind();
+        Self {
+            user_flags: user_flags & Self::access_flags(),
+            may_flags: Self::access_flags(),
+            shared,
+            file_backed,
+            anonymous,
+            locked: false,
+        }
+    }
+
+    pub(crate) fn mmap(
+        user_flags: MappingFlags,
+        may_flags: MappingFlags,
+        shared: bool,
+        file_backed: bool,
+        anonymous: bool,
+        locked: bool,
+    ) -> Self {
+        Self {
+            user_flags: user_flags & Self::access_flags(),
+            may_flags: may_flags & Self::access_flags(),
+            shared,
+            file_backed,
+            anonymous,
+            locked,
+        }
+    }
+
+    pub(crate) const fn shared(&self) -> bool {
+        self.shared
+    }
+    pub(crate) const fn file_backed(&self) -> bool {
+        self.file_backed
+    }
+    pub(crate) const fn anonymous(&self) -> bool {
+        self.anonymous
+    }
+    pub(crate) const fn locked(&self) -> bool {
+        self.locked
+    }
+    pub(crate) const fn user_flags(&self) -> MappingFlags {
+        self.user_flags
+    }
+
+    fn permits(&self, flags: MappingFlags) -> bool {
+        self.may_flags.contains(flags & Self::access_flags())
+    }
+
+    fn with_user_flags(mut self, flags: MappingFlags) -> Self {
+        self.user_flags = flags & Self::access_flags();
+        self
+    }
+
+    fn for_fork(mut self) -> Self {
+        self.locked = false;
+        self
+    }
+}
+
 /// The virtual memory address space.
 pub struct AddrSpace {
     va_range: VirtAddrRange,
-    areas: MemorySet<Backend>,
+    areas: MemorySet<Backend, VmaMetadata>,
     pt: PageTable,
+}
+
+/// Synchronizes structural address-space changes while allowing unrelated
+/// page faults to inspect and update independent PTEs concurrently.
+pub struct AddrSpaceLock {
+    inner: BlockingRwLock<AddrSpace>,
+    root_paddr: PhysAddr,
+    id: usize,
+}
+
+impl AddrSpaceLock {
+    pub(crate) fn new(aspace: AddrSpace) -> Self {
+        let root_paddr = aspace.page_table_root();
+        Self {
+            inner: BlockingRwLock::new(aspace),
+            root_paddr,
+            id: NEXT_ASPACE_ID.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    /// Returns the immutable page-table identity without taking the
+    /// address-space contents lock. This is also safe from scheduler hooks
+    /// which run with local interrupts disabled.
+    pub(crate) const fn page_table_root(&self) -> PhysAddr {
+        self.root_paddr
+    }
+
+    pub(crate) const fn eviction_owner(&self) -> usize {
+        self.id
+    }
+
+    /// Existing mapping-changing operations take the exclusive side.
+    pub(crate) fn lock(&self) -> BlockingRwLockWriteGuard<'_, AddrSpace> {
+        self.inner.write()
+    }
+
+    /// Page faults take the shared side only for VMA lookup and PTE commit.
+    pub(crate) fn read(&self) -> BlockingRwLockReadGuard<'_, AddrSpace> {
+        self.inner.read()
+    }
+
+    pub(crate) fn try_lock(&self) -> Option<BlockingRwLockWriteGuard<'_, AddrSpace>> {
+        self.inner.try_write()
+    }
+}
+
+static RECLAIM_QUEUE: SpinNoIrq<VecDeque<Arc<AddrSpaceLock>>> = SpinNoIrq::new(VecDeque::new());
+static RECLAIM_WORKERS: AtomicUsize = AtomicUsize::new(0);
+
+fn start_reclaim_worker() {
+    loop {
+        let workers = RECLAIM_WORKERS.load(Ordering::Acquire);
+        if workers >= axhal::cpu_num() || RECLAIM_QUEUE.lock().is_empty() {
+            return;
+        }
+        if RECLAIM_WORKERS
+            .compare_exchange_weak(workers, workers + 1, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            continue;
+        }
+
+        axtask::spawn(|| {
+            loop {
+                let Some(aspace) = RECLAIM_QUEUE.lock().pop_front() else {
+                    RECLAIM_WORKERS.fetch_sub(1, Ordering::AcqRel);
+                    // An enqueue can race with the empty observation while all
+                    // workers are leaving. Recheck after publishing the new
+                    // worker count so that queued work cannot be stranded.
+                    start_reclaim_worker();
+                    return;
+                };
+                aspace.lock().clear();
+            }
+        });
+        return;
+    }
+}
+
+/// Clears a dead address space outside the exit or execve critical path.
+pub(crate) fn defer_address_space_reclaim(aspace: Arc<AddrSpaceLock>) {
+    RECLAIM_QUEUE.lock().push_back(aspace);
+    start_reclaim_worker();
 }
 
 impl AddrSpace {
@@ -96,7 +406,7 @@ impl AddrSpace {
         self.areas.find_free_area(hint, size, limit, align)
     }
 
-    pub fn find_area(&self, vaddr: VirtAddr) -> Option<&MemoryArea<Backend>> {
+    pub(crate) fn find_area(&self, vaddr: VirtAddr) -> Option<&MemoryArea<Backend, VmaMetadata>> {
         self.areas.find(vaddr)
     }
 
@@ -122,7 +432,9 @@ impl AddrSpace {
         }
 
         let offset = start_vaddr.as_usize() as isize - start_paddr.as_usize() as isize;
-        let area = MemoryArea::new(start_vaddr, size, flags, Backend::new_linear(offset));
+        let backend = Backend::new_linear(offset);
+        let metadata = VmaMetadata::unrestricted(flags, &backend);
+        let area = MemoryArea::new_with_metadata(start_vaddr, size, flags, backend, metadata);
         self.areas.map(area, &mut self.pt, false)?;
         Ok(())
     }
@@ -136,12 +448,34 @@ impl AddrSpace {
         populate: bool,
         backend: Backend,
     ) -> AxResult {
+        let metadata = VmaMetadata::unrestricted(flags, &backend);
+        self.map_with_metadata(start, size, flags, populate, backend, metadata)
+    }
+
+    pub(crate) fn map_with_metadata(
+        &mut self,
+        start: VirtAddr,
+        size: usize,
+        flags: MappingFlags,
+        populate: bool,
+        backend: Backend,
+        metadata: VmaMetadata,
+    ) -> AxResult {
         self.validate_region(start, size)?;
 
-        let area = MemoryArea::new(start, size, flags, backend);
+        let area = MemoryArea::new_with_metadata(start, size, flags, backend, metadata);
         self.areas.map(area, &mut self.pt, false)?;
         if populate {
-            self.populate_area(start, size, flags)?;
+            if let Err(err) = self.populate_area(start, size, flags) {
+                // `MemorySet::map` has already published the VMA, and a
+                // backend may have populated a prefix before reporting an
+                // error.  A failed mmap must leave neither the area nor those
+                // PTE/frame/listener side effects behind.
+                self.areas
+                    .unmap(start, size, &mut self.pt)
+                    .expect("failed to roll back partially populated mapping");
+                return Err(err);
+            }
         }
         Ok(())
     }
@@ -158,17 +492,31 @@ impl AddrSpace {
         self.validate_region(start, size)?;
         let end = start + size;
 
-        let mut modify = self.pt.modify();
-        while let Some(area) = self.areas.find(start) {
-            let range = VirtAddrRange::new(start, area.end().min(end));
-            area.backend()
-                .populate(range, area.flags(), access_flags, &mut modify)?;
-            start = area.end();
-            assert!(start.is_aligned_4k());
-            if start >= end {
-                break;
-            }
+        let mut callbacks = Vec::new();
+        let populate_result: AxResult = {
+            let mut modify = self.pt.modify();
+            (|| {
+                while let Some(area) = self.areas.find(start) {
+                    let range = VirtAddrRange::new(start, area.end().min(end));
+                    let (_, callback) =
+                        area.backend()
+                            .populate(range, area.flags(), access_flags, &mut modify)?;
+                    if let Some(callback) = callback {
+                        callbacks.push(callback);
+                    }
+                    start = area.end();
+                    assert!(start.is_aligned_4k());
+                    if start >= end {
+                        break;
+                    }
+                }
+                Ok(())
+            })()
+        };
+        for callback in callbacks {
+            callback(self);
         }
+        populate_result?;
 
         if start < end {
             // If the area is not fully mapped, we return ENOMEM.
@@ -193,14 +541,22 @@ impl AddrSpace {
     pub fn zap_pages(&mut self, start: VirtAddr, size: usize) -> AxResult {
         self.validate_region(start, size)?;
         let end = start + size;
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        let root = self.page_table_root();
         let mut modify = self.pt.modify();
-        for vaddr in PageIter4K::new(start, end).ok_or(AxError::InvalidInput)? {
-            match modify.unmap(vaddr) {
-                Ok(_) | Err(PagingError::NotMapped) => {}
-                Err(_) => return Err(AxError::BadAddress),
+        let result = (|| {
+            for vaddr in PageIter4K::new(start, end).ok_or(AxError::InvalidInput)? {
+                match modify.unmap(vaddr) {
+                    Ok(_) | Err(PagingError::NotMapped) => {}
+                    Err(_) => return Err(AxError::BadAddress),
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })();
+        modify.finish();
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        crate::mm::flush_tlb_on_all_cpus(root, None);
+        result
     }
 
     /// To process data in this area with the given function.
@@ -266,18 +622,136 @@ impl AddrSpace {
     /// Returns an error if the address range is out of the address space or not
     /// aligned.
     /// 改权限，比如只读改成可读写
-    pub fn protect(&mut self, start: VirtAddr, size: usize, flags: MappingFlags) -> AxResult {
+    pub fn protect(
+        &mut self,
+        start: VirtAddr,
+        size: usize,
+        flags: MappingFlags,
+        user_flags: MappingFlags,
+    ) -> AxResult<ProtectStats> {
         self.validate_region(start, size)?;
 
-        self.areas
-            .protect(start, size, |_| Some(flags), &mut self.pt)?;
+        let access_flags = VmaMetadata::access_flags();
+        let requested = flags & access_flags;
+        let requested_user = user_flags & access_flags;
+        let stats = self.areas.protect(
+            start,
+            size,
+            |area| {
+                if !area.metadata().permits(requested_user) {
+                    return Err(MappingError::PermissionDenied);
+                }
+                let new_flags = (area.flags() - access_flags) | requested;
+                let new_metadata = area.metadata().with_user_flags(requested_user);
+                Ok(
+                    (new_flags != area.flags() || new_metadata != *area.metadata())
+                        .then_some((new_flags, new_metadata)),
+                )
+            },
+            |left, right| {
+                left.flags() == right.flags()
+                    && left.metadata() == right.metadata()
+                    && left.backend().merge_compatible(right.backend())
+            },
+            &mut self.pt,
+        )?;
 
-        Ok(())
+        // `mprotect` changes permissions in an address space which sibling
+        // threads may currently execute on other CPUs.
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        crate::mm::flush_tlb_on_all_cpus(self.page_table_root(), None);
+
+        Ok(stats)
+    }
+
+    pub(crate) fn locked_bytes_in_range(&self, start: VirtAddr, size: usize) -> usize {
+        let Some(end) = start.checked_add(size) else {
+            return 0;
+        };
+        self.areas
+            .iter()
+            .filter(|area| area.metadata().locked())
+            .map(|area| {
+                area.end()
+                    .min(end)
+                    .as_usize()
+                    .saturating_sub(area.start().max(start).as_usize())
+            })
+            .sum()
+    }
+
+    pub(crate) fn locked_bytes(&self) -> usize {
+        self.areas
+            .iter()
+            .filter(|area| area.metadata().locked())
+            .map(|area| area.size())
+            .sum()
+    }
+
+    pub(crate) fn range_is_private_anonymous(&self, start: VirtAddr, size: usize) -> bool {
+        self.range_metadata_matches(start, size, |metadata| {
+            !metadata.shared() && metadata.anonymous()
+        })
+    }
+
+    pub(crate) fn range_is_shared_file(&self, start: VirtAddr, size: usize) -> bool {
+        self.range_metadata_matches(start, size, |metadata| {
+            metadata.shared() && metadata.file_backed()
+        })
+    }
+
+    fn range_metadata_matches(
+        &self,
+        start: VirtAddr,
+        size: usize,
+        predicate: impl Fn(&VmaMetadata) -> bool,
+    ) -> bool {
+        let Some(end) = start.checked_add(size) else {
+            return false;
+        };
+        let mut cursor = start;
+        while cursor < end {
+            let Some(area) = self.areas.find(cursor) else {
+                return false;
+            };
+            if !predicate(area.metadata()) {
+                return false;
+            }
+            cursor = area.end().min(end);
+        }
+        true
     }
 
     /// Removes all mappings in the address space.
     pub fn clear(&mut self) {
-        self.areas.clear(&mut self.pt).unwrap();
+        // Retain all backend owners while one page-table cursor and one
+        // deferred-frame gather remove every VMA. This turns per-VMA remote
+        // shootdowns into shared bounded batches.
+        let areas = mem::take(&mut self.areas);
+        let mut pt = self.pt.modify();
+        let mut gather = UnmapGather::new();
+        let mut result = Ok(());
+        for area in areas.iter() {
+            if let Err(err) = area
+                .backend()
+                .unmap_for_clear(area.va_range(), &mut pt, &mut gather)
+            {
+                result = Err(err);
+                break;
+            }
+        }
+        gather.finish(&mut pt);
+        drop(pt);
+        match result {
+            Ok(()) => drop(areas),
+            Err(err) => {
+                // Preserve backend owners on an impossible metadata/PTE
+                // disagreement; freeing them could recycle a still-mapped
+                // frame after the partial clear.
+                mem::forget(areas);
+                panic!("failed to clear address space: {err}");
+            }
+        }
     }
 
     /// Checks whether an access to the specified memory region is valid.
@@ -351,8 +825,22 @@ impl AddrSpace {
     /// Returns `true` if the page fault is handled successfully (not a real
     /// fault).
     pub fn handle_page_fault(&mut self, vaddr: VirtAddr, access_flags: PageFaultFlags) -> bool {
+        match self.try_handle_page_fault(vaddr, access_flags) {
+            Ok(handled) => handled,
+            Err(err) => {
+                warn!("Failed to populate page for {vaddr:?}: {err}");
+                false
+            }
+        }
+    }
+
+    fn try_handle_page_fault(
+        &mut self,
+        vaddr: VirtAddr,
+        access_flags: PageFaultFlags,
+    ) -> AxResult<bool> {
         if !self.va_range.contains(vaddr) {
-            return false;
+            return Ok(false);
         }
         if let Some(area) = self.areas.find(vaddr) {
             let flags = area.flags();
@@ -371,19 +859,182 @@ impl AddrSpace {
                         }
                         if n == 0 {
                             warn!("No pages populated for {vaddr:?} ({flags:?})");
-                            false
+                            Ok(false)
                         } else {
-                            true
+                            // Another CPU may have installed this mapping while
+                            // this CPU was waiting for the address-space lock.
+                            // Drop any locally cached invalid translation before
+                            // retrying the faulting instruction.
+                            axhal::asm::flush_tlb(Some(vaddr));
+                            synchronize_executable_fault(access_flags);
+                            Ok(true)
                         }
                     }
+                    Err(AxError::WouldBlock) => Err(AxError::WouldBlock),
                     Err(err) => {
                         warn!("Failed to populate pages for {vaddr:?} ({flags:?}): {err}");
-                        false
+                        Ok(false)
                     }
                 };
             }
         }
-        false
+        Ok(false)
+    }
+
+    /// Handles a private fault in three phases: inspect while read-locked,
+    /// allocate/copy/read without the address-space lock, then revalidate and
+    /// atomically publish the PTE while read-locked again.
+    pub fn handle_page_fault_concurrent(
+        aspace: &Arc<AddrSpaceLock>,
+        vaddr: VirtAddr,
+        access_flags: PageFaultFlags,
+    ) -> bool {
+        Self::handle_page_fault_concurrent_inner(aspace, vaddr, access_flags, true)
+    }
+
+    /// Populates one page for a kernel access check. Unlike a real user fault,
+    /// observing that another thread already installed the mapping does not
+    /// require a local TLB invalidation.
+    pub fn populate_page_concurrent(
+        aspace: &Arc<AddrSpaceLock>,
+        vaddr: VirtAddr,
+        access_flags: MappingFlags,
+    ) -> bool {
+        Self::handle_page_fault_concurrent_inner(aspace, vaddr, access_flags, false)
+    }
+
+    fn handle_page_fault_concurrent_inner(
+        aspace: &Arc<AddrSpaceLock>,
+        vaddr: VirtAddr,
+        access_flags: PageFaultFlags,
+        flush_existing: bool,
+    ) -> bool {
+        let mut stale_retries = 0;
+        loop {
+            let preparation = {
+                let guard = aspace.read();
+                if !guard.va_range.contains(vaddr) {
+                    return false;
+                }
+                let Some(area) = guard.areas.find(vaddr) else {
+                    return false;
+                };
+                if !area.flags().contains(access_flags) {
+                    return false;
+                }
+                area.backend().prepare_fault(
+                    aspace,
+                    vaddr,
+                    area.va_range(),
+                    area.flags(),
+                    access_flags,
+                    &guard.pt,
+                )
+            };
+
+            let committed = match preparation {
+                FaultPreparation::Handled => {
+                    if flush_existing {
+                        axhal::asm::flush_tlb(Some(vaddr));
+                        synchronize_executable_fault(access_flags);
+                    }
+                    return true;
+                }
+                FaultPreparation::Retry => {
+                    // The read guard used for preparation has been dropped.
+                    // Let the eviction owner finish its PTE/TLB/writeback
+                    // barrier before taking the exclusive fallback lock.
+                    yield_now();
+                    continue;
+                }
+                FaultPreparation::Fallback => break,
+                FaultPreparation::Cow(mut plan) => {
+                    match plan.execute() {
+                        Ok(()) => {}
+                        Err(AxError::WouldBlock) => {
+                            // A file truncate published its affected range after
+                            // this fault sampled the old EOF. Retry only after
+                            // dropping the address-space read lock (already done
+                            // above), so truncate can finish its PTE/TLB barrier.
+                            yield_now();
+                            continue;
+                        }
+                        Err(err) => {
+                            warn!("Failed to prepare private page for {vaddr:?}: {err}");
+                            return false;
+                        }
+                    }
+
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
+                    }
+                    let flags = area.flags();
+                    area.backend()
+                        .commit_fault(&mut plan, area.va_range(), flags, access_flags, pt)
+                }
+                FaultPreparation::File(mut plan) => {
+                    if let Err(err) = plan.execute() {
+                        warn!("Failed to prepare file page for {vaddr:?}: {err}");
+                        return false;
+                    }
+
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
+                    }
+                    let flags = area.flags();
+                    area.backend().commit_file_fault(
+                        &mut plan,
+                        area.va_range(),
+                        flags,
+                        access_flags,
+                        pt,
+                    )
+                }
+            };
+
+            match committed {
+                Ok(FaultCommit::Handled) => {
+                    axhal::asm::flush_tlb(Some(vaddr));
+                    synchronize_executable_fault(access_flags);
+                    return true;
+                }
+                Ok(FaultCommit::Stale) if stale_retries < MAX_CONCURRENT_FAULT_RETRIES => {
+                    stale_retries += 1;
+                }
+                Ok(FaultCommit::Stale) => break,
+                Err(err) => {
+                    warn!("Failed to commit private page for {vaddr:?}: {err}");
+                    return false;
+                }
+            }
+        }
+
+        loop {
+            let result = aspace.lock().try_handle_page_fault(vaddr, access_flags);
+            match result {
+                Ok(handled) => return handled,
+                Err(AxError::WouldBlock) => {
+                    // `populate` rechecked the cache after taking the exclusive
+                    // address-space lock and raced with a sync detach.  Drop the
+                    // lock (above), yield, and restart preparation.
+                    yield_now();
+                }
+                Err(err) => {
+                    warn!("Failed to populate page for {vaddr:?}: {err}");
+                    return false;
+                }
+            }
+        }
     }
 
     /// Attempts to clone the current address space into a new one.
@@ -391,12 +1042,17 @@ impl AddrSpace {
     /// This method creates a new empty address space with the same base and
     /// size, then iterates over all memory areas in the original address
     /// space to copy or share their mappings into the new one.
-    pub fn try_clone(&mut self) -> AxResult<Arc<Mutex<Self>>> {
-        let new_aspace = Arc::new(Mutex::new(Self::new_empty(self.base(), self.size())?));
+    pub fn try_clone(&mut self) -> AxResult<Arc<AddrSpaceLock>> {
+        let new_aspace = Arc::new(AddrSpaceLock::new(Self::new_empty(
+            self.base(),
+            self.size(),
+        )?));
         let new_aspace_clone = new_aspace.clone();
 
         let mut guard = new_aspace.lock();
 
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        let root = self.page_table_root();
         let mut self_modify = self.pt.modify();
         for area in self.areas.iter() {
             let new_backend = area.backend().clone_map(
@@ -407,10 +1063,22 @@ impl AddrSpace {
                 &new_aspace_clone,
             )?;
 
-            let new_area = MemoryArea::new(area.start(), area.size(), area.flags(), new_backend);
+            let new_area = MemoryArea::new_with_metadata(
+                area.start(),
+                area.size(),
+                area.flags(),
+                new_backend,
+                area.metadata().for_fork(),
+            );
             let aspace = guard.deref_mut();
             aspace.areas.map(new_area, &mut aspace.pt, false)?;
         }
+        // `clone_map` write-protects the parent's private mappings. Finish the
+        // local batched invalidations, then synchronously revoke writable TLB
+        // entries on every other CPU before the child can be returned.
+        self_modify.finish();
+        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+        crate::mm::flush_tlb_on_all_cpus(root, None);
         drop(guard);
 
         Ok(new_aspace)
@@ -420,7 +1088,7 @@ impl AddrSpace {
     ///
     /// This is required for `procfs` to generate `/proc/pid/maps`.
     /// Exposing internal state for system introspection is a standard practice.
-    pub fn areas(&self) -> impl Iterator<Item = &MemoryArea<Backend>> {
+    pub(crate) fn areas(&self) -> impl Iterator<Item = &MemoryArea<Backend, VmaMetadata>> {
         self.areas.iter()
     }
 }

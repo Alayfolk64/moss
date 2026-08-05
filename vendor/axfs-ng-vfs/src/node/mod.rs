@@ -226,6 +226,11 @@ type SharedInodeMetadataCache = Arc<Mutex<InodeMetadataCache>>;
 
 static INODE_METADATA_CACHES: spin::Lazy<Mutex<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>>> =
     spin::Lazy::new(|| Mutex::new(BTreeMap::new()));
+/// Serializes registry retirement with every user of a shared cache record.
+/// Ordinary metadata operations take the read side.  Retire/update operations
+/// first take the upgradeable side, which prevents new readers from starving
+/// the transaction, and then upgrade after existing readers have left.
+static INODE_METADATA_CACHE_TRANSACTION: spin::RwLock<()> = spin::RwLock::new(());
 
 fn inode_metadata_cache_key(filesystem: &dyn FilesystemOps, inode: u64) -> InodeMetadataCacheKey {
     let fs_ptr: *const dyn FilesystemOps = filesystem;
@@ -233,17 +238,24 @@ fn inode_metadata_cache_key(filesystem: &dyn FilesystemOps, inode: u64) -> Inode
 }
 
 pub(super) fn invalidate_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
+    let _transaction = INODE_METADATA_CACHE_TRANSACTION
+        .upgradeable_read()
+        .upgrade();
     let key = inode_metadata_cache_key(filesystem, inode);
     let shared = INODE_METADATA_CACHES.lock().remove(&key);
     if let Some(shared) = shared
         && let Err(err) = flush_metadata_cache_shared(&shared, false)
     {
-        INODE_METADATA_CACHES.lock().entry(key).or_insert(shared);
+        let replaced = INODE_METADATA_CACHES.lock().insert(key, shared);
+        debug_assert!(replaced.is_none());
         warn!("Failed to flush inode metadata cache on invalidation: {err:?}");
     }
 }
 
 fn discard_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
+    let _transaction = INODE_METADATA_CACHE_TRANSACTION
+        .upgradeable_read()
+        .upgrade();
     let key = inode_metadata_cache_key(filesystem, inode);
     INODE_METADATA_CACHES.lock().remove(&key);
 }
@@ -302,7 +314,11 @@ fn restore_metadata_dirty(
     if size.is_some() {
         cache.dirty_size = true;
     }
-    merge_metadata_update(&mut cache.dirty_update, update);
+    // A newer update may have arrived while the backing operation ran.  Put
+    // the failed update back underneath it so the newer field values win.
+    let mut merged_update = update.clone();
+    merge_metadata_update(&mut merged_update, &cache.dirty_update);
+    cache.dirty_update = merged_update;
 }
 
 fn flush_metadata_cache_shared(
@@ -349,6 +365,7 @@ fn flush_metadata_cache_shared(
 }
 
 pub fn flush_inode_metadata_caches(data_only: bool) -> VfsResult<()> {
+    let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
     let caches = INODE_METADATA_CACHES
         .lock()
         .values()
@@ -449,47 +466,55 @@ impl DirEntry {
         })
     }
 
-    fn metadata_cache(&self) -> Option<SharedInodeMetadataCache> {
+    /// The caller must hold either side of `INODE_METADATA_CACHE_TRANSACTION`.
+    fn metadata_cache_locked(&self) -> Option<SharedInodeMetadataCache> {
         INODE_METADATA_CACHES
             .lock()
             .get(&self.metadata_cache_key())
             .cloned()
     }
 
-    fn ensure_metadata_cache(&self) -> VfsResult<SharedInodeMetadataCache> {
-        if let Some(cache) = self.metadata_cache() {
+    /// The caller must hold either side of `INODE_METADATA_CACHE_TRANSACTION`.
+    fn ensure_metadata_cache_locked(&self) -> VfsResult<SharedInodeMetadataCache> {
+        let key = self.metadata_cache_key();
+        if let Some(cache) = self.metadata_cache_locked() {
             return Ok(cache);
         }
 
-        let key = self.metadata_cache_key();
         let metadata = self.raw_metadata()?;
         let mut caches = INODE_METADATA_CACHES.lock();
-        Ok(caches
-            .entry(key)
-            .or_insert_with(|| {
-                Arc::new(Mutex::new(InodeMetadataCache {
-                    node: self.0.node.clone_inner(),
-                    file: self.as_file().ok().map(|file| file.inner().clone()),
-                    metadata,
-                    dirty_size: false,
-                    dirty_update: MetadataUpdate::default(),
-                }))
-            })
-            .clone())
+        if let Some(cache) = caches.get(&key) {
+            return Ok(cache.clone());
+        }
+        let cache = Arc::new(Mutex::new(InodeMetadataCache {
+            node: self.0.node.clone_inner(),
+            file: self.as_file().ok().map(|file| file.inner().clone()),
+            metadata,
+            dirty_size: false,
+            dirty_update: MetadataUpdate::default(),
+        }));
+        caches.insert(key, cache.clone());
+        Ok(cache)
     }
 
     pub fn metadata(&self) -> VfsResult<Metadata> {
         if !self.cacheable_metadata() {
             return self.raw_metadata();
         }
-        if let Some(cache) = self.metadata_cache() {
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        if let Some(cache) = self.metadata_cache_locked() {
             return Ok(cache.lock().metadata.clone());
         }
-        Ok(self.ensure_metadata_cache()?.lock().metadata.clone())
+        Ok(self
+            .ensure_metadata_cache_locked()?
+            .lock()
+            .metadata
+            .clone())
     }
 
     pub fn cached_metadata(&self) -> Option<Metadata> {
-        self.metadata_cache()
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        self.metadata_cache_locked()
             .map(|cache| cache.lock().metadata.clone())
     }
 
@@ -506,7 +531,8 @@ impl DirEntry {
             return self.0.node.update_metadata(update);
         }
 
-        let shared = self.ensure_metadata_cache()?;
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        let shared = self.ensure_metadata_cache_locked()?;
         let mut cache = shared.lock();
         apply_metadata_update(&mut cache.metadata, &update);
         merge_metadata_update(&mut cache.dirty_update, &update);
@@ -525,7 +551,8 @@ impl DirEntry {
         if !self.cacheable_metadata() {
             return self.raw_metadata().map(|metadata| metadata.size);
         }
-        let shared = self.ensure_metadata_cache()?;
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        let shared = self.ensure_metadata_cache_locked()?;
         let mut cache = shared.lock();
         let old_len = cache.metadata.size;
         if len > old_len {
@@ -539,7 +566,8 @@ impl DirEntry {
         if !self.cacheable_metadata() {
             return Ok(());
         }
-        let shared = self.ensure_metadata_cache()?;
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        let shared = self.ensure_metadata_cache_locked()?;
         let mut cache = shared.lock();
         cache.metadata.size = len;
         cache.dirty_size = dirty;
@@ -547,7 +575,12 @@ impl DirEntry {
     }
 
     pub fn set_cached_len_if_present(&self, len: u64) {
-        if let Some(shared) = self.metadata_cache() {
+        // This follows an irreversible backing-size commit.  Wait for any
+        // creator that sampled the old size, then update what it published.
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION
+            .upgradeable_read()
+            .upgrade();
+        if let Some(shared) = self.metadata_cache_locked() {
             let mut cache = shared.lock();
             cache.metadata.size = len;
             cache.dirty_size = false;
@@ -555,7 +588,10 @@ impl DirEntry {
     }
 
     pub fn grow_cached_len_if_present(&self, len: u64) {
-        if let Some(shared) = self.metadata_cache() {
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION
+            .upgradeable_read()
+            .upgrade();
+        if let Some(shared) = self.metadata_cache_locked() {
             let mut cache = shared.lock();
             if len > cache.metadata.size {
                 cache.metadata.size = len;
@@ -567,7 +603,8 @@ impl DirEntry {
         if !self.cacheable_metadata() {
             return Ok(false);
         }
-        let shared = self.ensure_metadata_cache()?;
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        let shared = self.ensure_metadata_cache_locked()?;
         let mut cache = shared.lock();
         let stale_by_time = atime
             .checked_sub(cache.metadata.atime)
@@ -587,7 +624,8 @@ impl DirEntry {
         if !self.cacheable_metadata() {
             return Ok(false);
         }
-        let shared = self.ensure_metadata_cache()?;
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        let shared = self.ensure_metadata_cache_locked()?;
         let mut cache = shared.lock();
         cache.metadata.mtime = mtime;
         cache.metadata.ctime = mtime;
@@ -600,7 +638,8 @@ impl DirEntry {
         if !self.cacheable_metadata() {
             return Ok(());
         }
-        let Some(shared) = self.metadata_cache() else {
+        let _transaction = INODE_METADATA_CACHE_TRANSACTION.read();
+        let Some(shared) = self.metadata_cache_locked() else {
             return Ok(());
         };
         flush_metadata_cache_shared(&shared, data_only)

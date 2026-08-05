@@ -30,6 +30,7 @@ resolver = "2"
 
 [features]
 default = []
+ipi = ["irq", "axhal/ipi"]
 irq = ["axhal/irq"]
 multitask = [
     "dep:axconfig",

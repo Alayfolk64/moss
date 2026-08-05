@@ -12,13 +12,17 @@ mod tests;
 
 pub use self::area::MemoryArea;
 pub use self::backend::MappingBackend;
-pub use self::set::MemorySet;
+pub use self::set::{MemorySet, ProtectStats};
 
 /// Error type for memory mapping operations.
 #[derive(Debug, Eq, PartialEq)]
 pub enum MappingError {
     /// Invalid parameter (e.g., `addr`, `size`, `flags`, etc.)
     InvalidParam,
+    /// The requested range contains an unmapped hole.
+    NotMapped,
+    /// The requested access flags exceed the area's maximum permissions.
+    PermissionDenied,
     /// The given range overlaps with an existing mapping.
     AlreadyExists,
     /// The backend page table is in a bad state.
@@ -30,6 +34,8 @@ impl From<MappingError> for axerrno::AxError {
     fn from(err: MappingError) -> Self {
         match err {
             MappingError::InvalidParam => axerrno::AxError::InvalidInput,
+            MappingError::NotMapped => axerrno::AxError::NoMemory,
+            MappingError::PermissionDenied => axerrno::AxError::PermissionDenied,
             MappingError::AlreadyExists => axerrno::AxError::AlreadyExists,
             MappingError::BadState => axerrno::AxError::BadState,
         }

@@ -48,6 +48,8 @@ struct Shared {
     poll_rx: PollSet,
     poll_tx: PollSet,
     poll_close: PollSet,
+    readers: AtomicUsize,
+    writers: AtomicUsize,
 }
 
 pub struct Pipe {
@@ -58,7 +60,19 @@ pub struct Pipe {
 }
 impl Drop for Pipe {
     fn drop(&mut self) {
+        let endpoints = if self.read_side {
+            &self.shared.readers
+        } else {
+            &self.shared.writers
+        };
+        let previous = endpoints.fetch_sub(1, Ordering::AcqRel);
+        debug_assert!(previous > 0, "pipe endpoint count underflow");
         self.shared.poll_close.wake();
+        if self.read_side {
+            self.shared.poll_tx.wake();
+        } else {
+            self.shared.poll_rx.wake();
+        }
     }
 }
 
@@ -70,6 +84,8 @@ impl Pipe {
             poll_rx: PollSet::new(),
             poll_tx: PollSet::new(),
             poll_close: PollSet::new(),
+            readers: AtomicUsize::new(1),
+            writers: AtomicUsize::new(1),
         });
         let read_end = Pipe {
             read_side: true,
@@ -98,11 +114,19 @@ impl Pipe {
                     poll_rx: PollSet::new(),
                     poll_tx: PollSet::new(),
                     poll_close: PollSet::new(),
+                    readers: AtomicUsize::new(0),
+                    writers: AtomicUsize::new(0),
                 });
                 pipes.insert(key, Arc::downgrade(&shared));
                 shared
             }
         };
+
+        if read_side {
+            shared.readers.fetch_add(1, Ordering::Relaxed);
+        } else {
+            shared.writers.fetch_add(1, Ordering::Relaxed);
+        }
 
         Self {
             read_side,
@@ -125,7 +149,11 @@ impl Pipe {
     }
 
     pub fn closed(&self) -> bool {
-        Arc::strong_count(&self.shared) == 1
+        if self.read_side {
+            self.shared.writers.load(Ordering::Acquire) == 0
+        } else {
+            self.shared.readers.load(Ordering::Acquire) == 0
+        }
     }
 
     pub fn capacity(&self) -> usize {
@@ -357,7 +385,9 @@ impl Pollable for Pipe {
             events.set(IoEvents::IN, buf.occupied_len() > 0);
             events.set(IoEvents::HUP, self.closed());
         } else {
-            events.set(IoEvents::OUT, buf.vacant_len() >= PAGE_SIZE_4K);
+            let closed = self.closed();
+            events.set(IoEvents::OUT, !closed && buf.vacant_len() >= PAGE_SIZE_4K);
+            events.set(IoEvents::ERR, closed);
         }
         events
     }

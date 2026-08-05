@@ -1,18 +1,36 @@
 use alloc::collections::BTreeMap;
-#[allow(unused_imports)] // this is a weird false alarm
-use alloc::vec::Vec;
 use core::fmt;
+use core::ops::Bound::{Excluded, Unbounded};
 
 use memory_addr::{AddrRange, MemoryAddr};
 
 use crate::{MappingBackend, MappingError, MappingResult, MemoryArea};
 
 /// A container that maintains memory mappings ([`MemoryArea`]).
-pub struct MemorySet<B: MappingBackend> {
-    areas: BTreeMap<B::Addr, MemoryArea<B>>,
+pub struct MemorySet<B: MappingBackend, M = ()> {
+    areas: BTreeMap<B::Addr, MemoryArea<B, M>>,
 }
 
-impl<B: MappingBackend> MemorySet<B> {
+/// Exact structural work performed by [`MemorySet::protect`].
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProtectStats {
+    /// VMAs checked while validating complete range coverage and permissions.
+    pub validated: usize,
+    /// VMAs revisited during the mutation pass.
+    pub visited: usize,
+    /// VMAs whose current flags actually changed.
+    pub changed: usize,
+    /// VMAs already carrying the requested flags and metadata.
+    pub unchanged: usize,
+    /// New VMA boundaries created at the requested range edges.
+    pub split: usize,
+    /// Adjacent compatible VMAs coalesced after the change.
+    pub merged: usize,
+    /// Number of VMAs in this memory set after the operation.
+    pub output: usize,
+}
+
+impl<B: MappingBackend, M: Clone> MemorySet<B, M> {
     /// Creates a new memory set.
     pub const fn new() -> Self {
         Self {
@@ -31,7 +49,7 @@ impl<B: MappingBackend> MemorySet<B> {
     }
 
     /// Returns the iterator over all memory areas.
-    pub fn iter(&self) -> impl Iterator<Item = &MemoryArea<B>> {
+    pub fn iter(&self) -> impl Iterator<Item = &MemoryArea<B, M>> {
         self.areas.values()
     }
 
@@ -51,7 +69,7 @@ impl<B: MappingBackend> MemorySet<B> {
     }
 
     /// Finds the memory area that contains the given address.
-    pub fn find(&self, addr: B::Addr) -> Option<&MemoryArea<B>> {
+    pub fn find(&self, addr: B::Addr) -> Option<&MemoryArea<B, M>> {
         let candidate = self.areas.range(..=addr).last().map(|(_, a)| a);
         candidate.filter(|a| a.va_range().contains(addr))
     }
@@ -112,7 +130,7 @@ impl<B: MappingBackend> MemorySet<B> {
     /// error.
     pub fn map(
         &mut self,
-        area: MemoryArea<B>,
+        area: MemoryArea<B, M>,
         page_table: &mut B::PageTable,
         unmap_overlap: bool,
     ) -> MappingResult {
@@ -204,88 +222,193 @@ impl<B: MappingBackend> MemorySet<B> {
         Ok(())
     }
 
-    /// Change the flags of memory mappings within the given address range.
+    /// Change mapping flags in a completely mapped address range.
     ///
-    /// `update_flags` is a function that receives old flags and processes
-    /// new flags (e.g., some flags can not be changed through this interface).
-    /// It returns [`None`] if there is no bit to change.
-    ///
-    /// Memory areas will be skipped according to `update_flags`. Memory areas
-    /// that are fully contained in the range or contains the range or
-    /// intersects with the boundary will be handled similarly to `munmap`.
+    /// The validation pass starts at the VMA containing `start` and visits
+    /// only overlapping VMAs. It rejects holes before modifying the page table.
+    /// `update_flags` also validates caller-defined metadata and returns
+    /// [`None`] for an unchanged VMA. `can_merge` decides whether adjacent VMAs
+    /// describe the same mapping and may be coalesced after the update.
     pub fn protect(
         &mut self,
         start: B::Addr,
         size: usize,
-        update_flags: impl Fn(B::Flags) -> Option<B::Flags>,
+        update_flags: impl Fn(&MemoryArea<B, M>) -> MappingResult<Option<(B::Flags, M)>>,
+        can_merge: impl Fn(&MemoryArea<B, M>, &MemoryArea<B, M>) -> bool,
         page_table: &mut B::PageTable,
-    ) -> MappingResult {
+    ) -> MappingResult<ProtectStats> {
         let end = start.checked_add(size).ok_or(MappingError::InvalidParam)?;
-        let mut to_insert = Vec::new();
-        for (&area_start, area) in self.areas.iter_mut() {
-            let area_end = area.end();
-
-            if let Some(new_flags) = update_flags(area.flags()) {
-                if area_start >= end {
-                    // [ prot ]
-                    //          [ area ]
-                    break;
-                } else if area_end <= start {
-                    //          [ prot ]
-                    // [ area ]
-                    // Do nothing
-                } else if area_start >= start && area_end <= end {
-                    // [   prot   ]
-                    //   [ area ]
-                    area.protect_area(new_flags, page_table)?;
-                    area.set_flags(new_flags);
-                } else if area_start < start && area_end > end {
-                    //        [ prot ]
-                    // [ left | area | right ]
-                    let right_part = area.split(end).unwrap();
-                    area.set_end(start);
-
-                    let mut middle_part =
-                        MemoryArea::new(start, size, area.flags(), area.backend().clone());
-                    middle_part.protect_area(new_flags, page_table)?;
-                    middle_part.set_flags(new_flags);
-
-                    to_insert.push((right_part.start(), right_part));
-                    to_insert.push((middle_part.start(), middle_part));
-                } else if area_end > end {
-                    // [    prot ]
-                    //   [  area | right ]
-                    let right_part = area.split(end).unwrap();
-                    area.protect_area(new_flags, page_table)?;
-                    area.set_flags(new_flags);
-
-                    to_insert.push((right_part.start(), right_part));
-                } else {
-                    //        [ prot    ]
-                    // [ left |  area ]
-                    let mut right_part = area.split(start).unwrap();
-                    right_part.protect_area(new_flags, page_table)?;
-                    right_part.set_flags(new_flags);
-
-                    to_insert.push((right_part.start(), right_part));
-                }
-            }
+        if start == end {
+            return Ok(ProtectStats {
+                output: self.areas.len(),
+                ..ProtectStats::default()
+            });
         }
-        self.areas.extend(to_insert);
-        Ok(())
+
+        // Validate the entire interval before changing either VMAs or PTEs.
+        // Each lookup starts at the previous area's end, so no VMA before the
+        // requested range is scanned.
+        let mut stats = ProtectStats::default();
+        let mut needs_update = false;
+        let mut cursor = start;
+        while cursor < end {
+            let area = self.find(cursor).ok_or(MappingError::NotMapped)?;
+            stats.validated += 1;
+            if update_flags(area)?.is_some() {
+                needs_update = true;
+            } else {
+                stats.unchanged += 1;
+            }
+            cursor = area.end().min(end);
+        }
+        if !needs_update {
+            stats.output = self.areas.len();
+            return Ok(stats);
+        }
+
+        // Revisit only the VMAs proven to cover the interval. Removing one VMA
+        // at a time avoids allocating a temporary key vector on the hot path.
+        cursor = start;
+        while cursor < end {
+            let (area_start, affected_end, update) = {
+                let (area_start, area) = self
+                    .areas
+                    .range(..=cursor)
+                    .next_back()
+                    .filter(|(_, area)| area.end() > cursor)
+                    .ok_or(MappingError::NotMapped)?;
+                (*area_start, area.end().min(end), update_flags(area)?)
+            };
+            stats.visited += 1;
+            let Some((new_flags, new_metadata)) = update else {
+                // Preserve the original VMA exactly. In particular, do not
+                // manufacture range-boundary splits for a no-op mprotect.
+                cursor = affected_end;
+                continue;
+            };
+
+            // Complete the only fallible mutation while the original VMA is
+            // still present. If the backend rejects the page-table update,
+            // the VMA tree remains structurally unchanged.
+            self.areas
+                .get(&area_start)
+                .expect("validated VMA disappeared while MemorySet is exclusively borrowed")
+                .protect_subrange(
+                    cursor,
+                    affected_end.wrapping_sub_addr(cursor),
+                    new_flags,
+                    page_table,
+                )?;
+
+            // From this point onward the operation only reshapes in-memory
+            // metadata and cannot return an error.
+            let mut area = self
+                .areas
+                .remove(&area_start)
+                .expect("validated VMA disappeared while MemorySet is exclusively borrowed");
+            if area.start() < cursor {
+                let affected = area
+                    .split(cursor)
+                    .expect("cursor must be strictly inside the validated VMA");
+                self.areas.insert(area.start(), area);
+                area = affected;
+                stats.split += 1;
+            }
+
+            let trailing = if affected_end < area.end() {
+                stats.split += 1;
+                area.split(affected_end)
+            } else {
+                None
+            };
+
+            area.set_flags(new_flags);
+            area.set_metadata(new_metadata);
+            stats.changed += 1;
+
+            let affected_start = area.start();
+            self.areas.insert(affected_start, area);
+            if let Some(trailing) = trailing {
+                self.areas.insert(trailing.start(), trailing);
+            }
+
+            stats.merged += self.merge_at(affected_start, &can_merge);
+            cursor = affected_end;
+        }
+
+        stats.output = self.areas.len();
+        Ok(stats)
+    }
+
+    fn merge_at(
+        &mut self,
+        area_start: B::Addr,
+        can_merge: &impl Fn(&MemoryArea<B, M>, &MemoryArea<B, M>) -> bool,
+    ) -> usize {
+        let mut merged = 0;
+        let mut current_start = area_start;
+
+        if let Some(previous_start) = self
+            .areas
+            .range(..current_start)
+            .next_back()
+            .and_then(|(previous_start, previous)| {
+                let current = self.areas.get(&current_start)?;
+                (previous.end() == current.start() && can_merge(previous, current))
+                    .then_some(*previous_start)
+            })
+        {
+            let current = self
+                .areas
+                .remove(&current_start)
+                .expect("merge candidate disappeared");
+            self.areas
+                .get_mut(&previous_start)
+                .expect("merge predecessor disappeared")
+                .set_end(current.end());
+            current_start = previous_start;
+            merged += 1;
+        }
+
+        loop {
+            let Some(next_start) = self
+                .areas
+                .range((Excluded(current_start), Unbounded))
+                .next()
+                .and_then(|(next_start, next)| {
+                    let current = self.areas.get(&current_start)?;
+                    (current.end() == next.start() && can_merge(current, next))
+                        .then_some(*next_start)
+                })
+            else {
+                break;
+            };
+            let next = self
+                .areas
+                .remove(&next_start)
+                .expect("merge successor disappeared");
+            self.areas
+                .get_mut(&current_start)
+                .expect("merge current VMA disappeared")
+                .set_end(next.end());
+            merged += 1;
+        }
+
+        merged
     }
 }
 
-impl<B: MappingBackend> Default for MemorySet<B> {
+impl<B: MappingBackend, M: Clone> Default for MemorySet<B, M> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<B: MappingBackend> fmt::Debug for MemorySet<B>
+impl<B: MappingBackend, M: Clone> fmt::Debug for MemorySet<B, M>
 where
     B::Addr: fmt::Debug,
     B::Flags: fmt::Debug,
+    M: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.areas.values()).finish()

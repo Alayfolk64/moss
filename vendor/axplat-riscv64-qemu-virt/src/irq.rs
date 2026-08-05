@@ -9,7 +9,7 @@ use axplat::{
     percpu::this_cpu_id,
 };
 use kspin::SpinNoIrq;
-use riscv::register::sie;
+use riscv::register::{sie, sip};
 use riscv_plic::Plic;
 use sbi_rt::HartMask;
 
@@ -193,6 +193,11 @@ impl IrqIf for IrqIfImpl {
                 Some(irq)
             },
             @S_SOFT => {
+                // SBI IPIs are delivered as supervisor software interrupts.
+                // SSIP is level-triggered and must be acknowledged explicitly;
+                // otherwise the hart immediately traps again after sret and can
+                // never schedule the task that the IPI was meant to wake.
+                unsafe { sip::clear_ssoft() };
                 trace!("IRQ: IPI");
                 let handler = IPI_HANDLER.load(Ordering::Acquire);
                 if !handler.is_null() {

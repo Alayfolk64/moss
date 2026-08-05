@@ -7,7 +7,10 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use axerrno::{AxError, AxResult};
 use axfs::{CachedFile, FileFlags};
-use axhal::paging::{MappingFlags, PageSize, PageTableMut, PagingError};
+use axhal::{
+    mem::PhysAddr,
+    paging::{MappingFlags, PageSize, PageTableMut, PagingError},
+};
 use axsync::Mutex;
 use memory_addr::{PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
 
@@ -37,45 +40,61 @@ impl Drop for FileBackendInner {
 }
 impl FileBackendInner {
     pub fn register_listener(self: &Arc<Self>, aspace: &Arc<Mutex<AddrSpace>>) -> usize {
+        let owner = Arc::as_ptr(aspace) as usize;
         let aspace = Arc::downgrade(aspace);
-        self.cache.add_evict_listener({
+        self.cache.add_evict_listener_checked(owner, {
             let this = Arc::downgrade(self);
-            move |pn, _page| {
+            move |pn, paddr, wait| {
                 let Some(this) = this.upgrade() else {
-                    return;
+                    return true;
                 };
                 let Some(aspace) = aspace.upgrade() else {
                     // The address space has been dropped, nothing to do.
-                    return;
+                    return true;
                 };
+                if wait {
+                    return this.on_evict(pn, paddr, &mut aspace.lock());
+                }
                 let Some(mut aspace) = aspace.try_lock() else {
                     // This can happen during the populate process, when new pages
-                    // are being populated and old pages are being evicted. In this
-                    // case, we delegate the unmapping to the populate process.
-                    return;
+                    // are being populated and old pages are being evicted.  Report
+                    // the failure so axfs keeps the detached frame pinned.
+                    return false;
                 };
-                this.on_evict(pn, &mut aspace);
+                this.on_evict(pn, paddr, &mut aspace)
             }
         })
     }
 
-    fn on_evict(self: &Arc<Self>, pn: u32, aspace: &mut AddrSpace) {
+    fn on_evict(self: &Arc<Self>, pn: u32, paddr: PhysAddr, aspace: &mut AddrSpace) -> bool {
         let Some(pn) = pn.checked_sub(self.offset_page) else {
-            return;
+            return true;
         };
         let vaddr = self.start + pn as usize * PageSize::Size4K as usize;
         if !aspace.find_area(vaddr).is_some_and(
             |it| matches!(it.backend(), Backend::File(file) if Arc::ptr_eq(&file.0, self)),
         ) {
             // Ignore if the page is not controlled by this file mapping.
-            return;
+            return true;
         }
 
-        let pt = aspace.page_table_mut();
-        match pt.modify().unmap(vaddr) {
-            Ok(_) | Err(PagingError::NotMapped) => {}
+        let mut pt = aspace.page_table_mut().modify();
+        match pt.query(vaddr) {
+            Ok((mapped, ..)) if mapped == paddr => match pt.unmap(vaddr) {
+                Ok(_) => {
+                    pt.finish();
+                    true
+                }
+                Err(PagingError::NotMapped) => true,
+                Err(err) => {
+                    warn!("Failed to unmap page {:?}: {:?}", vaddr, err);
+                    false
+                }
+            },
+            Ok(_) | Err(PagingError::NotMapped) => true,
             Err(err) => {
-                warn!("Failed to unmap page {:?}: {:?}", vaddr, err);
+                warn!("Failed to query evicted page {:?}: {:?}", vaddr, err);
+                false
             }
         }
     }
@@ -155,8 +174,11 @@ impl BackendOps for FileBackend {
                     {
                         let in_memory = self.0.cache.in_memory();
                         self.0.cache.with_page(pn, |page| {
+                            let Some(page) = page else {
+                                return Err(AxError::WouldBlock);
+                            };
                             if !in_memory {
-                                page.expect("page should be present").mark_dirty();
+                                page.mark_dirty();
                             }
                             pt.remap(addr, paddr, flags)?;
                             pages += 1;
@@ -177,8 +199,8 @@ impl BackendOps for FileBackend {
                         flags - MappingFlags::WRITE
                     };
                     self.0.cache.with_page_or_insert(pn, |page, evicted| {
-                        if let Some((pn, _)) = evicted {
-                            to_be_evicted.push(pn);
+                        if let Some((pn, page)) = evicted {
+                            to_be_evicted.push((pn, page.paddr()));
                         }
                         pt.map(addr, page.paddr(), PageSize::Size4K, map_flags)?;
                         pages += 1;
@@ -195,8 +217,8 @@ impl BackendOps for FileBackend {
             } else {
                 let inner = self.0.clone();
                 Some(Box::new(move |aspace: &mut AddrSpace| {
-                    for pn in to_be_evicted {
-                        inner.on_evict(pn, aspace);
+                    for (pn, paddr) in to_be_evicted {
+                        let _ = inner.on_evict(pn, paddr, aspace);
                     }
                 }))
             },

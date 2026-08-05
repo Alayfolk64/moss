@@ -2,6 +2,7 @@ use alloc::{collections::VecDeque, sync::Arc};
 use core::{
     future::poll_fn,
     mem::MaybeUninit,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::{Context, Poll},
 };
 use futures_util::task::AtomicWaker;
@@ -58,6 +59,8 @@ static mut RUN_QUEUES: [MaybeUninit<&'static mut AxRunQueue>; axconfig::plat::CP
     [ARRAY_REPEAT_VALUE; axconfig::plat::CPU_NUM];
 #[allow(clippy::declare_interior_mutable_const)] // It's ok because it's used only for initialization `RUN_QUEUES`.
 const ARRAY_REPEAT_VALUE: MaybeUninit<&'static mut AxRunQueue> = MaybeUninit::uninit();
+static RUN_QUEUE_READY: [AtomicBool; axconfig::plat::CPU_NUM] =
+    [const { AtomicBool::new(false) }; axconfig::plat::CPU_NUM];
 
 /// Returns a reference to the current run queue in [`CurrentRunQueueRef`].
 ///
@@ -82,10 +85,11 @@ pub(crate) fn current_run_queue<G: BaseGuard>() -> CurrentRunQueueRef<'static, G
     }
 }
 
-/// Selects the run queue index based on a CPU set bitmap and load balancing.
+/// Selects the least-loaded initialized run queue allowed by `cpumask`.
 ///
 /// This function filters the available run queues based on the provided `cpumask` and
-/// selects the run queue index for the next task. The selection is based on a round-robin algorithm.
+/// selects the run queue index for the next task. Ready tasks and the running
+/// non-idle task both contribute to load; round-robin order breaks ties.
 ///
 /// ## Arguments
 ///
@@ -103,19 +107,62 @@ pub(crate) fn current_run_queue<G: BaseGuard>() -> CurrentRunQueueRef<'static, G
 // Scheduler initialization publishes at least one active CPU.
 #[allow(clippy::modulo_one)]
 #[inline]
-fn select_run_queue_index(cpumask: AxCpuMask) -> usize {
-    use core::sync::atomic::{AtomicUsize, Ordering};
+fn select_run_queue_index(cpumask: AxCpuMask, preferred_cpu: Option<usize>) -> usize {
     static RUN_QUEUE_INDEX: AtomicUsize = AtomicUsize::new(0);
 
     assert!(!cpumask.is_empty(), "No available CPU for task execution");
 
-    // Round-robin selection of the run queue index.
-    loop {
-        let index = RUN_QUEUE_INDEX.fetch_add(1, Ordering::SeqCst) % crate::api::active_cpu_num();
-        if cpumask.get(index) {
-            return index;
+    let cpu_num = crate::api::active_cpu_num();
+    if let Some(cpu_id) = preferred_cpu
+        && cpu_id < cpu_num
+        && cpumask.get(cpu_id)
+        && RUN_QUEUE_READY[cpu_id].load(Ordering::Acquire)
+    {
+        return cpu_id;
+    }
+
+    let start = RUN_QUEUE_INDEX.fetch_add(1, Ordering::Relaxed) % cpu_num;
+    let mut selected = None;
+    let mut minimum_load = usize::MAX;
+
+    for offset in 0..cpu_num {
+        let cpu_id = (start + offset) % cpu_num;
+        if cpumask.get(cpu_id) && RUN_QUEUE_READY[cpu_id].load(Ordering::Acquire) {
+            let load = unsafe { RUN_QUEUES[cpu_id].assume_init_ref().load() };
+            if load < minimum_load {
+                selected = Some(cpu_id);
+                minimum_load = load;
+            }
         }
     }
+
+    selected.unwrap_or_else(|| {
+        (0..cpu_num)
+            .find(|&cpu_id| cpumask.get(cpu_id) && RUN_QUEUE_READY[cpu_id].load(Ordering::Acquire))
+            .expect("No initialized CPU is available for task execution")
+    })
+}
+
+/// Chooses a less-loaded CPU for the current task at a migration-safe point.
+///
+/// Moving one running task lowers the source load and raises the destination
+/// load, so a difference smaller than two cannot improve the balance.
+#[cfg(feature = "smp")]
+pub(crate) fn rebalance_target(task: &AxTaskRef) -> Option<usize> {
+    let current_cpu = this_cpu_id();
+    let cpumask = task.cpumask();
+    if !cpumask.get(current_cpu) || !RUN_QUEUE_READY[current_cpu].load(Ordering::Acquire) {
+        return None;
+    }
+
+    let current_load = unsafe { RUN_QUEUES[current_cpu].assume_init_ref().load() };
+    let target_cpu = select_run_queue_index(cpumask, None);
+    if target_cpu == current_cpu {
+        return None;
+    }
+
+    let target_load = unsafe { RUN_QUEUES[target_cpu].assume_init_ref().load() };
+    (current_load > target_load.saturating_add(1)).then_some(target_cpu)
 }
 
 /// Retrieves a `'static` reference to the run queue corresponding to the given index.
@@ -185,7 +232,7 @@ pub(crate) fn select_run_queue<G: BaseGuard>(task: &AxTaskRef) -> AxRunQueueRef<
         {
             previous_cpu
         } else {
-            select_run_queue_index(cpumask)
+            select_run_queue_index(cpumask, None)
         };
         AxRunQueueRef {
             inner: get_run_queue(index),
@@ -203,6 +250,12 @@ pub(crate) struct AxRunQueue {
     /// Since irq and preempt are preserved by the kernel guard hold by `AxRunQueueRef`,
     /// we just use a simple raw spin lock here.
     scheduler: SpinRaw<Scheduler>,
+    /// Number of runnable tasks waiting in `scheduler`.
+    ready_tasks: AtomicUsize,
+    /// Whether a non-idle task is currently running on this CPU.
+    running_task: AtomicBool,
+    /// Coalesces repeated remote wakeup IPIs while this CPU is idle.
+    idle_kick_pending: AtomicBool,
 }
 
 /// A reference to the run queue with specific guard.
@@ -257,6 +310,9 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
         #[cfg(feature = "smp")]
         task.set_cpu_id(self.inner.cpu_id as _);
         self.inner.scheduler.lock().add_task(task);
+        self.inner.ready_tasks.fetch_add(1, Ordering::Relaxed);
+        #[cfg(all(feature = "smp", feature = "ipi"))]
+        self.inner.kick_if_idle();
     }
 
     /// Unblock one task by inserting it into the run queue.
@@ -277,6 +333,8 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
             // Since now, the task to be unblocked is in the `Ready` state.
             let cpu_id = self.inner.cpu_id;
             debug!("task unblock: {task_id_name} on run_queue {cpu_id}");
+            #[cfg(all(feature = "smp", feature = "ipi"))]
+            self.inner.kick_if_idle();
             // Note: when the task is unblocked on another CPU's run queue,
             // we just ingiore the `resched` flag.
             if resched && cpu_id == this_cpu_id() {
@@ -459,6 +517,32 @@ impl AxRunQueue {
         Self {
             cpu_id,
             scheduler: SpinRaw::new(scheduler),
+            ready_tasks: AtomicUsize::new(1),
+            running_task: AtomicBool::new(!crate::current().is_idle()),
+            idle_kick_pending: AtomicBool::new(false),
+        }
+    }
+
+    fn load(&self) -> usize {
+        self.ready_tasks.load(Ordering::Relaxed)
+            + self.running_task.load(Ordering::Relaxed) as usize
+    }
+
+    #[cfg(all(feature = "smp", feature = "ipi"))]
+    fn kick_if_idle(&self) {
+        if self.cpu_id != this_cpu_id()
+            && !self.running_task.load(Ordering::Acquire)
+            && self
+                .idle_kick_pending
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+        {
+            axhal::irq::send_ipi(
+                axhal::irq::IPI_IRQ,
+                axhal::irq::IpiTarget::Other {
+                    cpu_id: self.cpu_id,
+                },
+            );
         }
     }
 
@@ -501,6 +585,7 @@ impl AxRunQueue {
             #[cfg(feature = "smp")]
             task.set_cpu_id(self.cpu_id as _);
             self.scheduler.lock().put_prev_task(task, preempt);
+            self.ready_tasks.fetch_add(1, Ordering::Relaxed);
             true
         } else {
             false
@@ -510,14 +595,20 @@ impl AxRunQueue {
     /// Core reschedule subroutine.
     /// Pick the next task to run and switch to it.
     fn resched(&mut self) {
-        let next = self
-            .scheduler
-            .lock()
-            .pick_next_task()
-            .unwrap_or_else(|| unsafe {
+        // Reaching the scheduler consumes any outstanding idle wakeup. Clear
+        // the latch before checking the queue so a concurrent enqueue either
+        // becomes visible below or sends another IPI.
+        self.idle_kick_pending.store(false, Ordering::Release);
+
+        let next = if let Some(next) = self.scheduler.lock().pick_next_task() {
+            self.ready_tasks.fetch_sub(1, Ordering::Relaxed);
+            next
+        } else {
+            unsafe {
                 // Safety: IRQs must be disabled at this time.
                 IDLE_TASK.current_ref_raw().get_unchecked().clone()
-            });
+            }
+        };
         assert!(
             next.is_ready(),
             "next {} is not ready: {:?}",
@@ -542,12 +633,15 @@ impl AxRunQueue {
         #[cfg(feature = "preempt")]
         next_task.set_preempt_pending(false);
         next_task.set_state(TaskState::Running);
+        self.running_task
+            .store(!next_task.is_idle(), Ordering::Relaxed);
         if prev_task.ptr_eq(&next_task) {
             return;
         }
         #[cfg(feature = "smp")]
         next_task.set_cpu_id(self.cpu_id as _);
         next_task.mark_has_run();
+        next_task.record_schedule();
 
         // Claim the task as running, we do this before switching to it
         // such that any running task will have this set.
@@ -594,42 +688,31 @@ impl AxRunQueue {
 }
 
 fn poll_gc(cx: &mut Context<'_>) -> Poll<()> {
-    loop {
-        // Drop all exited tasks and recycle resources.
-        let n = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.len());
-        for _ in 0..n {
-            // Do not do the slow drops in the critical section.
-            let Some(task) = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.pop_front())
-            else {
-                continue;
-            };
-            match Arc::try_unwrap(task) {
-                Ok(task) => {
-                    // If I'm the last holder of the task, drop it immediately.
-                    drop(task);
-                }
-                Err(task) => {
-                    // Otherwise (e.g, `switch_to` is not compeleted, held by the
-                    // joiner, etc), push it back and wait for them to drop first.
-                    EXITED_TASKS.with_current(|exited_tasks| exited_tasks.push_back(task));
-                }
+    // Only inspect the tasks that were queued when this pass started. A task
+    // can still be referenced by the context-switch path or by its joiner.
+    let queued = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.len());
+    for _ in 0..queued {
+        let Some(task) = EXITED_TASKS.with_current(|exited_tasks| exited_tasks.pop_front()) else {
+            break;
+        };
+
+        match Arc::try_unwrap(task) {
+            Ok(task) => drop(task),
+            Err(task) => {
+                EXITED_TASKS.with_current(|exited_tasks| exited_tasks.push_back(task));
             }
         }
-        // Note: we cannot block current task with preemption disabled,
-        // use `current_ref_raw` to get the `WAIT_FOR_EXIT`'s reference here to avoid
-        // the use of `NoPreemptGuard`. Since gc task is pinned to the current
-        // CPU, there is no affection if the gc task is preempted during the process.
-        unsafe { WAIT_FOR_EXIT.current_ref_raw() }.register(cx.waker());
-
-        // New tasks might be added during the above section, recheck it to
-        // prevent us from sleeping indefinitely.
-        if EXITED_TASKS.with_current(|exited_tasks| exited_tasks.is_empty()) {
-            break;
-        }
-
-        crate::yield_now();
     }
 
+    // The GC task is CPU-pinned, so accessing the per-CPU waker without a
+    // preemption guard is safe here. Register before sleeping so a later task
+    // exit starts another bounded collection pass.
+    unsafe { WAIT_FOR_EXIT.current_ref_raw() }.register(cx.waker());
+
+    // A task still referenced by its joiner can wait for the next task-exit
+    // notification. Reclaiming it is not latency-sensitive, and an
+    // event-driven retry avoids a GC yield loop when the system is otherwise
+    // idle.
     Poll::Pending
 }
 
@@ -639,13 +722,44 @@ fn poll_gc(cx: &mut Context<'_>) -> Poll<()> {
 /// then puts the task to the scheduler of target run queue.
 #[cfg(feature = "smp")]
 pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
-    let run_queue = select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task);
+    let mut run_queue = select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task);
     migrated_task.set_cpu_id(run_queue.inner.cpu_id as _);
     run_queue
         .inner
         .scheduler
         .lock()
-        .put_prev_task(migrated_task, false)
+        .put_prev_task(migrated_task, false);
+    run_queue.inner.ready_tasks.fetch_add(1, Ordering::Relaxed);
+    #[cfg(feature = "ipi")]
+    run_queue.inner.kick_if_idle();
+}
+
+/// Inserts a voluntarily migrating task into a specific run queue.
+#[cfg(feature = "smp")]
+pub(crate) fn migrate_entry_to(migrated_task: AxTaskRef, target_cpu: usize) {
+    let cpumask = migrated_task.cpumask();
+    assert!(
+        target_cpu < crate::api::active_cpu_num()
+            && cpumask.get(target_cpu)
+            && RUN_QUEUE_READY[target_cpu].load(Ordering::Acquire),
+        "invalid migration target {target_cpu}"
+    );
+
+    let irq_state = kernel_guard::NoPreemptIrqSave::acquire();
+    let mut run_queue: AxRunQueueRef<'_, kernel_guard::NoPreemptIrqSave> = AxRunQueueRef {
+        inner: get_run_queue(target_cpu),
+        state: irq_state,
+        _phantom: core::marker::PhantomData,
+    };
+    migrated_task.set_cpu_id(target_cpu as _);
+    run_queue
+        .inner
+        .scheduler
+        .lock()
+        .put_prev_task(migrated_task, false);
+    run_queue.inner.ready_tasks.fetch_add(1, Ordering::Relaxed);
+    #[cfg(feature = "ipi")]
+    run_queue.inner.kick_if_idle();
 }
 
 /// Clear the `on_cpu` field of previous task running on this CPU.
@@ -688,6 +802,7 @@ pub(crate) fn init() {
     unsafe {
         RUN_QUEUES[cpu_id].write(RUN_QUEUE.current_ref_mut_raw());
     }
+    RUN_QUEUE_READY[cpu_id].store(true, Ordering::Release);
 }
 
 pub(crate) fn init_secondary() {
@@ -710,4 +825,5 @@ pub(crate) fn init_secondary() {
     unsafe {
         RUN_QUEUES[cpu_id].write(RUN_QUEUE.current_ref_mut_raw());
     }
+    RUN_QUEUE_READY[cpu_id].store(true, Ordering::Release);
 }

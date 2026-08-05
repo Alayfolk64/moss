@@ -1,10 +1,4 @@
-use alloc::{
-    ffi::CString,
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use alloc::{ffi::CString, string::ToString, vec, vec::Vec};
 use core::{
     ffi::{c_char, c_int},
     mem::offset_of,
@@ -14,8 +8,8 @@ use core::{
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{
-    FS_CONTEXT, FsContext, invalidate_removed_file_cache, sync_global_file_caches,
-    update_cached_metadata,
+    FS_CONTEXT, FsContext, finalize_removed_file_cache, invalidate_removed_file_cache,
+    sync_global_file_caches, update_cached_metadata,
 };
 use axfs_ng_vfs::{DeviceId, Location, MetadataUpdate, NodePermission, NodeType, path::Path};
 use axhal::time::realtime_time;
@@ -29,17 +23,18 @@ use linux_raw_sys::{
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use super::{
+    NAMESPACE_TRANSACTION,
     fanotify::{
-        commit_fanotify_path_alias, fanotify_path_is_dir, fanotify_prepared_event_is_dir,
-        notify_fanotify_attrib_path, notify_fanotify_create, notify_fanotify_delete,
-        notify_fanotify_move_from, notify_fanotify_move_to, notify_fanotify_prepared_event,
-        prepare_fanotify_delete_event, prepare_fanotify_delete_self_event,
-        prepare_fanotify_move_from_event, prepare_fanotify_move_self_event,
-        prepare_fanotify_path_alias, prepare_fanotify_rename_event,
+        FAN_DELETE, FAN_DELETE_SELF, FAN_MOVE_SELF, FAN_MOVED_FROM, FAN_MOVED_TO,
+        commit_fanotify_path_alias, notify_fanotify_attrib_path, notify_fanotify_create,
+        notify_fanotify_prepared_event, prepare_fanotify_dirent_location_event,
+        prepare_fanotify_location_alias, prepare_fanotify_location_event,
+        prepare_fanotify_rename_location_event,
     },
     inotify::{
-        next_inotify_cookie, notify_inotify_dirent, notify_inotify_path, notify_inotify_target,
-        prepare_inotify_target,
+        next_inotify_cookie, notify_inotify_dirent, notify_inotify_path,
+        notify_inotify_prepared_dirent, notify_inotify_target, prepare_inotify_location_dirent,
+        prepare_inotify_location_target,
     },
     stat::check_parent_search_access,
 };
@@ -188,6 +183,7 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
     let euid = proc_data.euid();
     let egid = proc_data.egid();
 
+    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
     with_fs(dirfd, |fs| {
         let path = Path::new(path.as_str());
         let (dir, name) = fs.resolve_nonexistent(path)?;
@@ -249,6 +245,7 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
         )?;
         Ok(0)
     })?;
+    drop(namespace_transaction);
     notify_inotify_dirent(dirfd, &path, IN_CREATE, true, 0);
     notify_fanotify_create(dirfd, &path, true);
     Ok(0)
@@ -292,6 +289,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         return Err(AxError::OperationNotPermitted);
     }
 
+    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
     let loc = with_fs(dirfd, |fs| {
         let (dir, name) = fs.resolve_nonexistent(Path::new(path.as_str()))?;
         let dir_stat = dir.metadata()?;
@@ -339,6 +337,7 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         register_special_node(path.to_string(), mode, dev_id_from_raw(dev));
     }
 
+    drop(namespace_transaction);
     notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
     notify_fanotify_create(dirfd, &path, false);
     Ok(0)
@@ -403,6 +402,60 @@ fn effective_dirfd_for_path(dirfd: c_int, path: &str) -> c_int {
     }
 }
 
+fn fs_context_at(fs: &FsContext, dirfd: c_int) -> AxResult<FsContext> {
+    if dirfd == AT_FDCWD {
+        Ok(fs.clone())
+    } else {
+        fs.with_current_dir(Directory::from_fd(dirfd)?.inner().clone())
+            .map_err(Into::into)
+    }
+}
+
+/// Equivalent to resolve_at for namespace transactions which already hold
+/// FS_CONTEXT.  Re-entering resolve_at here would recursively lock FS_CONTEXT
+/// and, more importantly, split lookup from the following mutation.
+fn resolve_location_at_locked(
+    fs: &FsContext,
+    dirfd: c_int,
+    path: Option<&str>,
+    flags: u32,
+) -> AxResult<Location> {
+    match path {
+        Some("") | None => {
+            if flags & AT_EMPTY_PATH == 0 {
+                return Err(AxError::NotFound);
+            }
+            if dirfd == AT_FDCWD {
+                return Ok(fs.current_dir().clone());
+            }
+            let file_like = get_file_like(dirfd)?;
+            if let Some(file) = file_like.downcast_ref::<File>() {
+                Ok(file.inner().location().clone())
+            } else if let Some(dir) = file_like.downcast_ref::<Directory>() {
+                Ok(dir.inner().clone())
+            } else {
+                Err(AxError::BadFileDescriptor)
+            }
+        }
+        Some(path) => {
+            if path.len() >= PATH_MAX as usize {
+                return Err(AxError::NameTooLong);
+            }
+            let context = if path.starts_with('/') {
+                fs.clone()
+            } else {
+                fs_context_at(fs, dirfd)?
+            };
+            if flags & AT_SYMLINK_NOFOLLOW != 0 {
+                context.resolve_no_follow(path)
+            } else {
+                context.resolve(path)
+            }
+            .map_err(Into::into)
+        }
+    }
+}
+
 fn check_link_dir_access(dir: &Location) -> AxResult<()> {
     if dir.mount_flags() & MS_RDONLY != 0 {
         return Err(AxError::ReadOnlyFilesystem);
@@ -455,39 +508,6 @@ fn lookup_optional(dir: &Location, name: &str) -> AxResult<Option<Location>> {
         Err(err) if err.canonicalize() == AxError::NotFound => Ok(None),
         Err(err) => Err(err),
     }
-}
-
-fn choose_rename_exchange_tmp_name(dir: &Location) -> AxResult<String> {
-    for i in 0..64 {
-        let name = format!(".starry-rename-exchange-{i}");
-        if lookup_optional(dir, &name)?.is_none() {
-            return Ok(name);
-        }
-    }
-    Err(AxError::AlreadyExists)
-}
-
-fn rename_exchange(
-    old_dir: &Location,
-    old_name: &str,
-    new_dir: &Location,
-    new_name: &str,
-) -> AxResult<()> {
-    old_dir.lookup_no_follow(old_name)?;
-    new_dir.lookup_no_follow(new_name)?;
-
-    let tmp_name = choose_rename_exchange_tmp_name(old_dir)?;
-    old_dir.rename(old_name, old_dir, &tmp_name)?;
-    if let Err(err) = new_dir.rename(new_name, old_dir, old_name) {
-        let _ = old_dir.rename(&tmp_name, old_dir, old_name);
-        return Err(err);
-    }
-    if let Err(err) = old_dir.rename(&tmp_name, new_dir, new_name) {
-        let _ = old_dir.rename(old_name, new_dir, new_name);
-        let _ = old_dir.rename(&tmp_name, old_dir, old_name);
-        return Err(err);
-    }
-    Ok(())
 }
 
 fn check_link_count_limit(target: &Location) -> AxResult<()> {
@@ -624,24 +644,37 @@ pub fn sys_linkat(
             AT_SYMLINK_NOFOLLOW
         };
 
-    let old = resolve_at(old_dirfd, old_path.as_deref(), old_resolve_flags)?
-        .into_file()
-        .ok_or(AxError::BadFileDescriptor)?;
-    let (new_dir, new_name) =
-        with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
-    check_link_dir_access(&new_dir)?;
-
+    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
+    let namespace_guard = FS_CONTEXT.lock();
+    let old = resolve_location_at_locked(
+        &namespace_guard,
+        old_dirfd,
+        old_path.as_deref(),
+        old_resolve_flags,
+    )?;
     if old.is_dir() {
         return Err(AxError::OperationNotPermitted);
     }
+    if old.metadata()?.nlink == 0 {
+        // This kernel has no O_TMPFILE linking protocol.  Do not resurrect an
+        // inode whose last namespace link already committed cache retirement.
+        return Err(AxError::NotFound);
+    }
     check_protected_hardlink(&old)?;
+    let new_context = fs_context_at(&namespace_guard, new_dirfd)?;
+    let (new_dir, new_name) = new_context.resolve_nonexistent(Path::new(&new_path))?;
+    check_link_dir_access(&new_dir)?;
     check_link_count_limit(&old)?;
     if new_dir.lookup_no_follow(new_name).is_ok() {
         return Err(AxError::AlreadyExists);
     }
-
+    let inotify_dirent = prepare_inotify_location_dirent(&new_dir, new_name, false);
     new_dir.link(new_name, &old)?;
-    notify_inotify_dirent(new_dirfd, &new_path, IN_CREATE, false, 0);
+    drop(namespace_guard);
+    drop(namespace_transaction);
+    if let Some(event) = inotify_dirent {
+        notify_inotify_prepared_dirent(event, IN_CREATE, 0);
+    }
     Ok(0)
 }
 
@@ -669,25 +702,55 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     if remove_dir && path == "." {
         return Err(AxError::InvalidInput);
     }
+    // Linux ignores dirfd for an absolute pathname, including an otherwise
+    // invalid descriptor.  Normalize it before both the mutation and the
+    // read-only-filesystem fallback lookup.
+    let dirfd = effective_dirfd_for_path(dirfd, &path);
 
-    let self_event = prepare_fanotify_delete_self_event(dirfd, &path);
-    let is_dir = self_event
-        .as_ref()
-        .map(fanotify_prepared_event_is_dir)
-        .unwrap_or(remove_dir);
-    let dirent_event = prepare_fanotify_delete_event(dirfd, &path, is_dir);
-    let inotify_target = prepare_inotify_target(dirfd, &path);
-    let target_result = with_fs(dirfd, |fs| {
+    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
+    let remove_result = with_fs(dirfd, |fs| {
         let target = fs.resolve_no_follow(path.as_str())?;
         let parent = target.parent().ok_or(if remove_dir {
             AxError::ResourceBusy
         } else {
             AxError::IsADirectory
         })?;
-        Ok((parent, target.clone(), target.name().to_string()))
+        let target_name = target.name().to_string();
+        check_remove_target_access(&parent, &target, remove_dir)?;
+        let is_dir = target.is_dir();
+        let self_event = prepare_fanotify_location_event(&target, &path, FAN_DELETE_SELF as u64);
+        let dirent_event = prepare_fanotify_dirent_location_event(
+            &parent,
+            Some(&target),
+            &target_name,
+            &path,
+            FAN_DELETE as u64,
+            is_dir,
+        );
+        let inotify_target = prepare_inotify_location_target(&target);
+        let inotify_dirent = prepare_inotify_location_dirent(&parent, &target_name, is_dir);
+        let removed_file_cache = if !is_dir {
+            (target.metadata()?.nlink <= 1).then_some(target.clone())
+        } else {
+            None
+        };
+        if let Some(file) = removed_file_cache.as_ref() {
+            invalidate_removed_file_cache(file)?;
+        }
+        parent.unlink(&target_name, remove_dir)?;
+        if let Some(file) = removed_file_cache.as_ref() {
+            finalize_removed_file_cache(file);
+        }
+        Ok((
+            is_dir,
+            self_event,
+            dirent_event,
+            inotify_target,
+            inotify_dirent,
+        ))
     });
-    let (parent_dir, target, target_name) = match target_result {
-        Ok(result) => result,
+    let (is_dir, self_event, dirent_event, inotify_target, inotify_dirent) = match remove_result {
+        Ok(notifications) => notifications,
         Err(err) if err.canonicalize() == AxError::NotFound => {
             let readonly_parent = with_fs(dirfd, |fs| {
                 let (parent, _) = fs.resolve_parent(Path::new(path.as_str()))?;
@@ -700,16 +763,7 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         }
         Err(err) => return Err(err),
     };
-    check_remove_target_access(&parent_dir, &target, remove_dir)?;
-    let removed_file_cache = if !is_dir {
-        (target.metadata()?.nlink <= 1).then_some(target.clone())
-    } else {
-        None
-    };
-    if let Some(file) = removed_file_cache.as_ref() {
-        invalidate_removed_file_cache(file)?;
-    }
-    parent_dir.unlink(&target_name, remove_dir)?;
+    drop(namespace_transaction);
     let mut self_event = self_event;
     if is_dir {
         if let Some(event) = self_event.take() {
@@ -724,10 +778,10 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
     }
     if let Some(event) = dirent_event {
         notify_fanotify_prepared_event(event);
-    } else {
-        notify_fanotify_delete(dirfd, &path, is_dir);
     }
-    notify_inotify_dirent(dirfd, &path, IN_DELETE, is_dir, 0);
+    if let Some(event) = inotify_dirent {
+        notify_inotify_prepared_dirent(event, IN_DELETE, 0);
+    }
     if let Some(event) = self_event {
         notify_fanotify_prepared_event(event);
     }
@@ -784,6 +838,7 @@ pub fn sys_symlinkat(
     let egid = proc_data.egid();
     check_parent_search_access(new_dirfd, Some(linkpath.as_str()), 0, euid, egid)?;
 
+    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
     with_fs(new_dirfd, |fs| {
         let (dir, name) = fs.resolve_nonexistent(Path::new(linkpath.as_str()))?;
         check_link_dir_access(&dir)?;
@@ -807,6 +862,7 @@ pub fn sys_symlinkat(
         )?;
         Ok(0)
     })?;
+    drop(namespace_transaction);
     notify_inotify_dirent(new_dirfd, &linkpath, IN_CREATE, false, 0);
     Ok(0)
 }
@@ -1258,10 +1314,29 @@ pub fn sys_renameat2(
             AxError::InvalidInput
         });
     }
+    // The VFS has no atomic exchange primitive.  A three-rename emulation can
+    // expose partial namespace state and cannot provide correct rollback or
+    // notification semantics, so do not claim support for RENAME_EXCHANGE.
+    if flags & RENAME_EXCHANGE != 0 {
+        return Err(AxError::OperationNotSupported);
+    }
 
-    let (old_dir, old_name) = with_fs(old_dirfd, |fs| fs.resolve_parent(Path::new(&old_path)))?;
-    let (new_dir, new_name) =
-        with_fs(new_dirfd, |fs| fs.resolve_nonexistent(Path::new(&new_path)))?;
+    // Resolve both original pathnames while holding the same namespace lock
+    // through validation, cache preparation and mutation.  Retaining directory
+    // objects from an earlier unlocked lookup is insufficient because an
+    // ancestor can itself be renamed in that gap.
+    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
+    let namespace_guard = FS_CONTEXT.lock();
+    let old_context = fs_context_at(
+        &namespace_guard,
+        effective_dirfd_for_path(old_dirfd, &old_path),
+    )?;
+    let new_context = fs_context_at(
+        &namespace_guard,
+        effective_dirfd_for_path(new_dirfd, &new_path),
+    )?;
+    let (old_dir, old_name) = old_context.resolve_parent(Path::new(&old_path))?;
+    let (new_dir, new_name) = new_context.resolve_nonexistent(Path::new(&new_path))?;
     check_link_dir_access(&old_dir)?;
     if !old_dir.ptr_eq(&new_dir) {
         check_link_dir_access(&new_dir)?;
@@ -1278,39 +1353,57 @@ pub fn sys_renameat2(
     if flags & RENAME_NOREPLACE != 0 && new_target.is_some() {
         return Err(AxError::AlreadyExists);
     }
-    if flags & RENAME_EXCHANGE != 0 {
-        if new_target.is_none() {
-            return Err(AxError::NotFound);
-        }
-        if same_target {
-            return Ok(0);
-        }
-        rename_exchange(&old_dir, &old_name, &new_dir, new_name)?;
-        return Ok(0);
-    }
     if old_target.is_dir() && !old_dir.ptr_eq(&new_dir) && new_target.is_none() {
         check_link_count_limit(&new_dir)?;
     }
-    let is_dir = fanotify_path_is_dir(old_dirfd, &old_path).unwrap_or(false);
-    let move_from_event = prepare_fanotify_move_from_event(old_dirfd, &old_path, is_dir);
-    let move_self_event = prepare_fanotify_move_self_event(old_dirfd, &old_path);
-    let rename_event =
-        prepare_fanotify_rename_event(old_dirfd, &old_path, new_dirfd, &new_path, is_dir);
-    let path_alias = prepare_fanotify_path_alias(old_dirfd, &old_path, new_dirfd, &new_path);
-    let inotify_target = prepare_inotify_target(old_dirfd, &old_path);
+    let is_dir = old_target.is_dir();
+    let move_from_event = prepare_fanotify_dirent_location_event(
+        &old_dir,
+        Some(&old_target),
+        &old_name,
+        &old_path,
+        FAN_MOVED_FROM as u64,
+        is_dir,
+    );
+    let move_to_event = prepare_fanotify_dirent_location_event(
+        &new_dir,
+        Some(&old_target),
+        new_name,
+        &new_path,
+        FAN_MOVED_TO as u64,
+        is_dir,
+    );
+    let move_self_event =
+        prepare_fanotify_location_event(&old_target, &old_path, FAN_MOVE_SELF as u64);
+    let rename_event = prepare_fanotify_rename_location_event(
+        &old_dir,
+        &old_target,
+        &old_name,
+        &old_path,
+        &new_dir,
+        new_name,
+        is_dir,
+    );
+    let path_alias = prepare_fanotify_location_alias(&old_target, &new_dir, new_name);
+    let inotify_target = prepare_inotify_location_target(&old_target);
+    let inotify_from = prepare_inotify_location_dirent(&old_dir, &old_name, is_dir);
+    let inotify_to = prepare_inotify_location_dirent(&new_dir, new_name, is_dir);
     let cookie = next_inotify_cookie();
-    let replaced_file_cache = new_target.filter(|loc| !loc.is_dir()).and_then(|loc| {
-        loc.metadata()
-            .ok()
-            .is_some_and(|meta| meta.nlink <= 1)
-            .then_some(loc)
-    });
+    let replaced_file_cache = match new_target {
+        Some(loc) if !loc.is_dir() => (loc.metadata()?.nlink <= 1).then_some(loc),
+        _ => None,
+    };
 
     if let Some(file) = replaced_file_cache.as_ref() {
         invalidate_removed_file_cache(file)?;
     }
     old_dir.rename(&old_name, &new_dir, new_name)?;
+    if let Some(file) = replaced_file_cache.as_ref() {
+        finalize_removed_file_cache(file);
+    }
     commit_fanotify_path_alias(path_alias);
+    drop(namespace_guard);
+    drop(namespace_transaction);
     let mut move_self_event = move_self_event;
     if is_dir {
         if let Some(event) = move_self_event.take() {
@@ -1322,12 +1415,16 @@ pub fn sys_renameat2(
     }
     if let Some(event) = move_from_event {
         notify_fanotify_prepared_event(event);
-    } else {
-        notify_fanotify_move_from(old_dirfd, &old_path, is_dir);
     }
-    notify_fanotify_move_to(new_dirfd, &new_path, is_dir);
-    notify_inotify_dirent(old_dirfd, &old_path, IN_MOVED_FROM, is_dir, cookie);
-    notify_inotify_dirent(new_dirfd, &new_path, IN_MOVED_TO, is_dir, cookie);
+    if let Some(event) = move_to_event {
+        notify_fanotify_prepared_event(event);
+    }
+    if let Some(event) = inotify_from {
+        notify_inotify_prepared_dirent(event, IN_MOVED_FROM, cookie);
+    }
+    if let Some(event) = inotify_to {
+        notify_inotify_prepared_dirent(event, IN_MOVED_TO, cookie);
+    }
     if let Some(target) = inotify_target {
         notify_inotify_target(target, IN_MOVE_SELF);
     }

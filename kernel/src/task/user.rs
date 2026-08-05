@@ -41,6 +41,7 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 }
 
                 let reason = uctx.run();
+                let interrupted = matches!(reason, ReturnReason::Interrupt);
 
                 set_timer_state(&curr, TimerState::Kernel);
 
@@ -53,26 +54,32 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     ReturnReason::PageFault(addr, flags) => {
                         let fault_signal = {
                             let aspace_ref = thr.proc_data.aspace();
-                            let mut aspace = aspace_ref.lock();
                             if crate::syscall::is_mmap_sigbus_fault(
                                 thr.proc_data.proc.pid(),
                                 addr,
                                 flags,
                             ) {
                                 Some(Signo::SIGBUS)
-                            } else if aspace.handle_page_fault(addr, flags)
-                                || crate::syscall::try_growdown_fault(
+                            } else if crate::mm::AddrSpace::handle_page_fault_concurrent(
+                                &aspace_ref,
+                                addr,
+                                flags,
+                            ) {
+                                None
+                            } else {
+                                let mut aspace = aspace_ref.lock();
+                                if crate::syscall::try_growdown_fault(
                                     thr.proc_data.proc.pid(),
                                     &mut aspace,
                                     addr,
                                     flags,
-                                )
-                            {
-                                None
-                            } else if aspace.is_accessible_fault(addr, flags) {
-                                Some(Signo::SIGBUS)
-                            } else {
-                                Some(Signo::SIGSEGV)
+                                ) {
+                                    None
+                                } else if aspace.is_accessible_fault(addr, flags) {
+                                    Some(Signo::SIGBUS)
+                                } else {
+                                    Some(Signo::SIGSEGV)
+                                }
                             }
                         };
                         if let Some(signo) = fault_signal {
@@ -114,7 +121,24 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     break;
                 }
 
-                if !unblock_next_signal() {
+                let check_signal = !unblock_next_signal();
+                let signal_pending =
+                    check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();
+                // Syscall and trap handling is complete here, so the saved
+                // user context can migrate without carrying CPU-local kernel
+                // state or locks across the switch. Publish the resulting CPU
+                // through rseq only after migration has completed.
+                let migrated = axtask::rebalance_current();
+                if let Err(err) =
+                    thr.prepare_rseq(&mut uctx, interrupted || signal_pending || migrated)
+                {
+                    warn!("Invalid rseq state: {err:?}");
+                    thr.reset_rseq();
+                    raise_signal_fatal(SignalInfo::new_kernel(Signo::SIGSEGV))
+                        .expect("Failed to send rseq fault signal");
+                }
+
+                if check_signal {
                     while check_signals(thr, &mut uctx, None) {}
                 }
 

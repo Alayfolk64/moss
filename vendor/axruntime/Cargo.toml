@@ -46,7 +46,6 @@ driver-dyn = [
 fs = [
     "dep:axdriver",
     "dep:axfs",
-    "axmm?/fs",
 ]
 input = [
     "dep:axdriver",
@@ -156,3 +155,11 @@ version = "2"
 [dependencies.percpu]
 version = "0.2"
 optional = true
+
+[dependencies.spin]
+version = "0.10"
+features = [
+    "mutex",
+    "spin_mutex",
+]
+default-features = false

@@ -2,10 +2,9 @@ use alloc::sync::Arc;
 
 use axerrno::AxResult;
 use axhal::paging::{MappingFlags, PageSize, PageTableMut};
-use axsync::Mutex;
 use memory_addr::{PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 
-use super::{AddrSpace, Backend, BackendOps};
+use super::{AddrSpaceLock, Backend, BackendOps, finish_unmap_before_reclaim};
 
 /// Linear mapping backend.
 ///
@@ -20,6 +19,19 @@ pub struct LinearBackend {
 impl LinearBackend {
     fn pa(&self, va: VirtAddr) -> PhysAddr {
         PhysAddr::from((va.as_usize() as isize - self.offset) as usize)
+    }
+
+    pub(super) fn merge_compatible(&self, other: &Self) -> bool {
+        self.offset == other.offset
+    }
+
+    pub(super) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+    ) -> AxResult {
+        pt.unmap_region(range.start, range.size())?;
+        Ok(())
     }
 }
 
@@ -38,8 +50,11 @@ impl BackendOps for LinearBackend {
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         let pa_range = PhysAddrRange::from_start_size(self.pa(range.start), range.size());
         debug!("Linear::unmap: {range:?} -> {pa_range:?}");
-        pt.unmap_region(range.start, range.size())?;
-        Ok(())
+        let result = pt
+            .unmap_region(range.start, range.size())
+            .map_err(Into::into);
+        finish_unmap_before_reclaim(pt);
+        result
     }
 
     fn clone_map(
@@ -48,7 +63,7 @@ impl BackendOps for LinearBackend {
         _flags: MappingFlags,
         _old_pt: &mut PageTableMut,
         _new_pt: &mut PageTableMut,
-        _new_aspace: &Arc<Mutex<AddrSpace>>,
+        _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
         Ok(Backend::Linear(self.clone()))
     }

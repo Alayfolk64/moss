@@ -39,6 +39,8 @@ impl Debug for MappingFlags {
 ///
 /// All architecture-specific page table entry types implement this trait.
 pub trait GenericPTE: Debug + Clone + Copy + Sync + Send + Sized {
+    /// Creates a page-table entry from its architecture-specific raw bits.
+    fn from_bits(bits: usize) -> Self;
     /// Creates a page table entry point to a terminate page or block.
     fn new_page(paddr: PhysAddr, flags: MappingFlags, is_huge: bool) -> Self;
     /// Creates a page table entry point to a next level page table.

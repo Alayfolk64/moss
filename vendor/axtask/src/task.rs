@@ -76,6 +76,8 @@ pub struct TaskInner {
     on_cpu: AtomicBool,
     /// Whether this task has ever owned a live or suspended CPU context.
     has_run: AtomicBool,
+    /// Number of times this task has resumed after a real context switch.
+    schedule_count: AtomicU64,
 
     #[cfg(feature = "preempt")]
     need_resched: AtomicBool,
@@ -237,6 +239,17 @@ impl TaskInner {
         self.has_run.store(true, Ordering::Release);
     }
 
+    /// Returns how many times this task has resumed after a context switch.
+    #[inline]
+    pub fn schedule_count(&self) -> u64 {
+        self.schedule_count.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub(crate) fn record_schedule(&self) {
+        self.schedule_count.fetch_add(1, Ordering::Release);
+    }
+
     /// Gets the cpu affinity mask of the task.
     ///
     /// Returns the cpu affinity mask of the task in type [`AxCpuMask`].
@@ -306,6 +319,7 @@ impl TaskInner {
             #[cfg(feature = "smp")]
             on_cpu: AtomicBool::new(false),
             has_run: AtomicBool::new(false),
+            schedule_count: AtomicU64::new(0),
             #[cfg(feature = "preempt")]
             need_resched: AtomicBool::new(false),
             #[cfg(feature = "preempt")]
