@@ -23,8 +23,13 @@ fn wake_waiting_parent(proc_data: &ProcessData) {
     }
 }
 
-fn wait_for_continue(proc_data: &ProcessData) {
+fn wait_for_continue(thr: &Thread) {
+    let proc_data = &thr.proc_data;
     block_on(poll_fn(|cx| {
+        if thr.exec_exit_requested() {
+            return Poll::Ready(());
+        }
+
         let stopped = matches!(
             *proc_data.wait_status.lock(),
             Some(ProcessWaitStatus::Stopped(_))
@@ -33,7 +38,12 @@ fn wait_for_continue(proc_data: &ProcessData) {
             Poll::Ready(())
         } else {
             proc_data.stop_event.register(cx.waker());
-            Poll::Pending
+            let _ = current().poll_interrupt(cx);
+            if thr.exec_exit_requested() {
+                Poll::Ready(())
+            } else {
+                Poll::Pending
+            }
         }
     }));
 }
@@ -72,7 +82,7 @@ pub fn check_signals(
         SignalOSAction::Stop => {
             *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Stopped(signo));
             wake_waiting_parent(&thr.proc_data);
-            wait_for_continue(&thr.proc_data);
+            wait_for_continue(thr);
         }
         SignalOSAction::Continue => {
             *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Continued(signo));

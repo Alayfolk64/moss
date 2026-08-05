@@ -5,10 +5,18 @@ use starry_signal::{SignalInfo, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
 
 use super::{
-    AsThread, TimerState, check_signals, do_exit, raise_signal_fatal, set_timer_state,
+    AsThread, Thread, TimerState, check_signals, do_exit, raise_signal_fatal, set_timer_state,
     unblock_next_signal,
 };
 use crate::syscall::{handle_syscall, ptrace_wait_if_stopped};
+
+fn exit_if_requested_by_exec(thr: &Thread) -> bool {
+    if !thr.exec_exit_requested() {
+        return false;
+    }
+    do_exit(0, false);
+    true
+}
 
 /// Create a new user task.
 pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) -> TaskInner {
@@ -25,12 +33,15 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
             let thr = curr.as_thread();
             while !thr.pending_exit() {
                 ptrace_wait_if_stopped(thr);
+                if exit_if_requested_by_exec(thr) {
+                    break;
+                }
+
                 let reason = uctx.run();
 
                 set_timer_state(&curr, TimerState::Kernel);
 
-                if thr.exec_exit_requested() {
-                    do_exit(0, false);
+                if exit_if_requested_by_exec(thr) {
                     break;
                 }
 
@@ -95,12 +106,23 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     }
                 }
 
+                if exit_if_requested_by_exec(thr) {
+                    break;
+                }
+
                 if !unblock_next_signal() {
                     while check_signals(thr, &mut uctx, None) {}
                 }
 
-                set_timer_state(&curr, TimerState::User);
+                if exit_if_requested_by_exec(thr) {
+                    break;
+                }
+
                 curr.clear_interrupt();
+                if exit_if_requested_by_exec(thr) {
+                    break;
+                }
+                set_timer_state(&curr, TimerState::User);
             }
         },
         name.into(),

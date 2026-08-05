@@ -34,7 +34,7 @@ fn sleep_impl(clock: impl Fn() -> TimeValue, dur: TimeValue) -> (TimeValue, bool
     let deadline = start.checked_add(dur).unwrap_or(TimeValue::MAX);
 
     while clock() < deadline {
-        if has_unblocked_pending_signal() {
+        if current().as_thread().exec_exit_requested() || has_unblocked_pending_signal() {
             return (clock() - start, true);
         }
         axtask::yield_now();

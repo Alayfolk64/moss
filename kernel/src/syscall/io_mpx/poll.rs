@@ -103,6 +103,9 @@ pub(super) fn wait_for_signal_or_timeout(
     let interrupted = block_on(future::timeout(
         timeout,
         poll_fn(|cx| {
+            if thr.exec_exit_requested() {
+                return Poll::Ready(());
+            }
             if check_signals(thr, uctx, old_blocked) {
                 return Poll::Ready(());
             }

@@ -20,7 +20,7 @@ use axpoll::{IoEvents, PollSet, Pollable};
 use axsync::Mutex;
 use axtask::{
     current,
-    future::{block_on, poll_io},
+    future::{block_on, interruptible, poll_io},
 };
 use event_listener::{Event, listener};
 use linux_raw_sys::general::{O_ACCMODE, O_CLOEXEC, O_LARGEFILE, O_NONBLOCK, S_IFDIR, S_IFMT};
@@ -842,7 +842,10 @@ impl FanotifyFd {
             if let Some(response) = self.permission_response(id) {
                 break response;
             }
-            block_on(listener);
+            if block_on(interruptible(listener)).is_err() {
+                self.remove_permission(id);
+                return Err(AxError::Interrupted);
+            }
         };
 
         self.remove_permission(id);

@@ -1330,6 +1330,10 @@ fn handle_setlk(fd: c_int, arg: usize, blocking: bool) -> AxResult<isize> {
         }
         set_wait_dependencies(owner, &conflict_owners);
 
+        if current().as_thread().exec_exit_requested() {
+            clear_wait_dependencies(owner);
+            return Err(AxError::Interrupted);
+        }
         if has_unblocked_pending_signal() {
             clear_wait_dependencies(owner);
             return Err(AxError::Interrupted);
@@ -1600,6 +1604,9 @@ pub fn sys_flock(fd: c_int, operation: c_int) -> AxResult<isize> {
             return Err(AxError::WouldBlock);
         }
         drop(map);
+        if current().as_thread().exec_exit_requested() {
+            return Err(AxError::Interrupted);
+        }
         yield_now();
     }
 }
