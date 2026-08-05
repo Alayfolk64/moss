@@ -16,7 +16,6 @@ use axhal::{
 use axio::prelude::*;
 use axtask::current;
 use extern_trait::extern_trait;
-use kernel_guard::IrqSave;
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use starry_vm::{VmError, VmIo, VmResult, vm_load_until_nul, vm_read_slice, vm_write_slice};
 
@@ -284,8 +283,7 @@ pub fn vm_load_string(ptr: *const c_char) -> AxResult<String> {
     String::from_utf8(bytes).map_err(|_| AxError::IllegalBytes)
 }
 
-#[allow(dead_code)]
-struct Vm(IrqSave);
+struct Vm;
 
 /// Briefly checks if the given memory region is valid user memory.
 pub fn check_access(start: usize, len: usize) -> VmResult {
@@ -301,7 +299,7 @@ pub fn check_access(start: usize, len: usize) -> VmResult {
 #[extern_trait]
 unsafe impl VmIo for Vm {
     fn new() -> Self {
-        Self(IrqSave::new())
+        Self
     }
 
     fn read(&mut self, start: usize, buf: &mut [MaybeUninit<u8>]) -> VmResult {

@@ -111,6 +111,11 @@ x86 = "0.52"
 
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
 riscv = "0.16"
+sbi-rt = "0.0.3"
+
+[target.'cfg(target_arch = "loongarch64")'.dependencies]
+axfeat = { workspace = true, features = ["ipi"] }
+axipi.workspace = true
 
 [target.'cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))'.dependencies]
 axfeat = { workspace = true, features = ["page-alloc-64g"] }
