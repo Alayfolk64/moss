@@ -174,8 +174,19 @@ pub(crate) fn select_run_queue<G: BaseGuard>(task: &AxTaskRef) -> AxRunQueueRef<
     }
     #[cfg(feature = "smp")]
     {
-        // When SMP is enabled, select the run queue based on the task's CPU affinity and load balance.
-        let index = select_run_queue_index(task.cpumask());
+        let cpumask = task.cpumask();
+        let previous_cpu = task.cpu_id() as usize;
+        // Only brand-new tasks need initial placement. Once a task has run,
+        // keep its suspended kernel context on the same CPU unless a new
+        // affinity mask explicitly excludes that CPU.
+        let index = if task.has_run()
+            && previous_cpu < crate::api::active_cpu_num()
+            && cpumask.get(previous_cpu)
+        {
+            previous_cpu
+        } else {
+            select_run_queue_index(cpumask)
+        };
         AxRunQueueRef {
             inner: get_run_queue(index),
             state: irq_state,
@@ -243,6 +254,8 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
             self.inner.cpu_id
         );
         assert!(task.is_ready());
+        #[cfg(feature = "smp")]
+        task.set_cpu_id(self.inner.cpu_id as _);
         self.inner.scheduler.lock().add_task(task);
     }
 
@@ -532,6 +545,9 @@ impl AxRunQueue {
         if prev_task.ptr_eq(&next_task) {
             return;
         }
+        #[cfg(feature = "smp")]
+        next_task.set_cpu_id(self.cpu_id as _);
+        next_task.mark_has_run();
 
         // Claim the task as running, we do this before switching to it
         // such that any running task will have this set.
@@ -623,7 +639,9 @@ fn poll_gc(cx: &mut Context<'_>) -> Poll<()> {
 /// then puts the task to the scheduler of target run queue.
 #[cfg(feature = "smp")]
 pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
-    select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task)
+    let run_queue = select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task);
+    migrated_task.set_cpu_id(run_queue.inner.cpu_id as _);
+    run_queue
         .inner
         .scheduler
         .lock()
@@ -658,6 +676,9 @@ pub(crate) fn init() {
 
     // Put the subsequent execution into the `main` task.
     let main_task = TaskInner::new_init("main".into()).into_arc();
+    #[cfg(feature = "smp")]
+    main_task.set_cpu_id(cpu_id as _);
+    main_task.mark_has_run();
     main_task.set_state(TaskState::Running);
     unsafe { CurrentTask::init_current(main_task) }
 
@@ -674,6 +695,9 @@ pub(crate) fn init_secondary() {
 
     // Put the subsequent execution into the `idle` task.
     let idle_task = TaskInner::new_init("idle".into()).into_arc();
+    #[cfg(feature = "smp")]
+    idle_task.set_cpu_id(cpu_id as _);
+    idle_task.mark_has_run();
     idle_task.set_state(TaskState::Running);
     IDLE_TASK.with_current(|i| {
         i.init_once(idle_task.clone());

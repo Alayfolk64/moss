@@ -508,7 +508,8 @@ pub fn sys_mmap(
 ) -> AxResult<isize> {
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let mut aspace = curr.as_thread().proc_data.aspace.lock();
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    let mut aspace = aspace_ref.lock();
     let permission_flags = MmapProt::from_bits_truncate(prot);
     // TODO: check illegal flags for mmap
     let map_flags = match MmapFlags::from_bits(flags) {
@@ -631,13 +632,7 @@ pub fn sys_mmap(
                 match file.backend()?.clone() {
                     FileBackend::Cached(cache) => {
                         // TODO(mivik): file mmap page size
-                        Backend::new_file(
-                            start,
-                            cache,
-                            file.flags(),
-                            offset,
-                            &curr.as_thread().proc_data.aspace,
-                        )
+                        Backend::new_file(start, cache, file.flags(), offset, &aspace_ref)
                     }
                     FileBackend::Direct(loc) => {
                         let device = loc
@@ -663,13 +658,9 @@ pub fn sys_mmap(
                                     start.as_usize() as isize - range.start.as_usize() as isize,
                                 )
                             }
-                            DeviceMmap::Cache(cache) => Backend::new_file(
-                                start,
-                                cache,
-                                file.flags(),
-                                offset,
-                                &curr.as_thread().proc_data.aspace,
-                            ),
+                            DeviceMmap::Cache(cache) => {
+                                Backend::new_file(start, cache, file.flags(), offset, &aspace_ref)
+                            }
                         }
                     }
                 }
@@ -740,7 +731,8 @@ pub fn sys_munmap(addr: usize, length: usize) -> AxResult<isize> {
         .ok_or(AxError::InvalidInput)?;
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let mut aspace = curr.as_thread().proc_data.aspace.lock();
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    let mut aspace = aspace_ref.lock();
     if !aspace.contains_range(start_addr, length) {
         return Err(AxError::InvalidInput);
     }
@@ -765,7 +757,8 @@ pub fn sys_mprotect(addr: usize, length: usize, prot: u32) -> AxResult<isize> {
 
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let mut aspace = curr.as_thread().proc_data.aspace.lock();
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    let mut aspace = aspace_ref.lock();
     let length = align_up_4k(length);
     let start_addr = VirtAddr::from(addr);
     if permission_flags.contains(MmapProt::WRITE)
@@ -806,7 +799,8 @@ pub fn sys_mremap(
 
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let mut aspace = curr.as_thread().proc_data.aspace.lock();
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    let mut aspace = aspace_ref.lock();
     let old_size = align_up_4k(old_size);
     let new_size = align_up_4k(new_size);
 
@@ -922,7 +916,8 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
     let start = VirtAddr::from(addr);
     let curr = current();
     let pid = curr.as_thread().proc_data.proc.pid();
-    let aspace = curr.as_thread().proc_data.aspace.lock();
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    let aspace = aspace_ref.lock();
     if !aspace.can_access_range(start, length, MappingFlags::USER) {
         return Err(AxError::NoMemory);
     }
@@ -983,7 +978,7 @@ pub fn sys_mlock2(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
     let curr = current();
     let proc_data = &curr.as_thread().proc_data;
     if !proc_data
-        .aspace
+        .aspace()
         .lock()
         .can_access_range(start, locked_len, MappingFlags::USER)
     {

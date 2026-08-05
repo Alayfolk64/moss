@@ -23,8 +23,13 @@ fn wake_waiting_parent(proc_data: &ProcessData) {
     }
 }
 
-fn wait_for_continue(proc_data: &ProcessData) {
+fn wait_for_continue(thr: &Thread) {
+    let proc_data = &thr.proc_data;
     block_on(poll_fn(|cx| {
+        if thr.exec_exit_requested() {
+            return Poll::Ready(());
+        }
+
         let stopped = matches!(
             *proc_data.wait_status.lock(),
             Some(ProcessWaitStatus::Stopped(_))
@@ -33,17 +38,48 @@ fn wait_for_continue(proc_data: &ProcessData) {
             Poll::Ready(())
         } else {
             proc_data.stop_event.register(cx.waker());
-            Poll::Pending
+            // Job-control waits normally wake only through stop_event.  Also
+            // register the task interrupt waker so an exec-exit request can
+            // make a stopped sibling reach normal thread cleanup.
+            let _ = current().poll_interrupt(cx);
+            if thr.exec_exit_requested() {
+                Poll::Ready(())
+            } else {
+                Poll::Pending
+            }
         }
     }));
 }
 
-pub fn check_signals(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Result of checking and dispatching one pending signal.
+pub enum SignalCheckResult {
+    /// No currently unblocked signal was pending.
+    None,
+    /// A userspace handler was installed in the supplied context.
+    Handler,
+    /// A non-handler action, such as stop or termination, was processed.
+    Other,
+}
+
+/// Checks and dispatches one pending signal, preserving its action kind.
+pub fn check_signals_result(
     thr: &Thread,
     uctx: &mut UserContext,
     restore_blocked: Option<SignalSet>,
-) -> bool {
+) -> SignalCheckResult {
+    // Once do_exit has removed the TID, the exec leader may replace the
+    // address space immediately.  Never drain another signal or construct a
+    // user signal frame after either exit state becomes visible.
+    if thr.pending_exit() || thr.exec_exit_requested() {
+        return SignalCheckResult::None;
+    }
+
     crate::syscall::ptrace_wait_if_stopped(thr);
+
+    if thr.pending_exit() || thr.exec_exit_requested() {
+        return SignalCheckResult::None;
+    }
 
     let pid = thr.proc_data.proc.pid();
     if crate::syscall::ptrace_is_traced(pid) {
@@ -51,38 +87,48 @@ pub fn check_signals(
         if let Some(sig) = thr.signal.dequeue_signal(&mask) {
             let signo = sig.signo();
             if crate::syscall::ptrace_intercept_signal(thr, signo) {
-                return true;
+                return SignalCheckResult::Other;
             }
             do_exit(signo as i32, true);
+            return SignalCheckResult::Other;
         }
     }
 
     let Some((sig, os_action)) = thr.signal.check_signals(uctx, restore_blocked) else {
-        return false;
+        return SignalCheckResult::None;
     };
 
     let signo = sig.signo();
     match os_action {
         SignalOSAction::Terminate => {
             do_exit(signo as i32, true);
+            SignalCheckResult::Other
         }
         SignalOSAction::CoreDump => {
             do_exit((signo as i32) | 0x80, true);
+            SignalCheckResult::Other
         }
         SignalOSAction::Stop => {
             *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Stopped(signo));
             wake_waiting_parent(&thr.proc_data);
-            wait_for_continue(&thr.proc_data);
+            wait_for_continue(thr);
+            SignalCheckResult::Other
         }
         SignalOSAction::Continue => {
             *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Continued(signo));
             wake_waiting_parent(&thr.proc_data);
+            SignalCheckResult::Other
         }
-        SignalOSAction::Handler => {
-            // do nothing
-        }
+        SignalOSAction::Handler => SignalCheckResult::Handler,
     }
-    true
+}
+
+pub fn check_signals(
+    thr: &Thread,
+    uctx: &mut UserContext,
+    restore_blocked: Option<SignalSet>,
+) -> bool {
+    check_signals_result(thr, uctx, restore_blocked) != SignalCheckResult::None
 }
 
 static BLOCK_NEXT_SIGNAL_CHECK: AtomicBool = AtomicBool::new(false);

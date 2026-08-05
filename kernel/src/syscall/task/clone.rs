@@ -185,6 +185,11 @@ impl CloneArgs {
         let curr = current();
         let old_proc_data = &curr.as_thread().proc_data;
 
+        let _exec_lock = old_proc_data.exec_lock.lock();
+        if old_proc_data.exec_in_progress() {
+            return Err(AxError::WouldBlock);
+        }
+
         let mut new_task = new_user_task(&curr.name(), new_uctx, set_child_tid);
 
         let tid = new_task.id().as_u64() as Pid;
@@ -195,7 +200,7 @@ impl CloneArgs {
         let new_proc_data = if flags.contains(CloneFlags::THREAD) {
             new_task
                 .ctx_mut()
-                .set_page_table_root(old_proc_data.aspace.lock().page_table_root());
+                .set_page_table_root(old_proc_data.aspace().lock().page_table_root());
             old_proc_data.clone()
         } else {
             let proc = if flags.contains(CloneFlags::PARENT) {
@@ -206,9 +211,10 @@ impl CloneArgs {
             .fork(tid);
 
             let aspace = if flags.contains(CloneFlags::VM) {
-                old_proc_data.aspace.clone()
+                old_proc_data.aspace()
             } else {
-                let mut aspace = old_proc_data.aspace.lock();
+                let old_aspace = old_proc_data.aspace();
+                let mut aspace = old_aspace.lock();
                 let aspace = aspace.try_clone()?;
                 {
                     let mut child_aspace = aspace.lock();

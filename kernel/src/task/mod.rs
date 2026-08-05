@@ -125,8 +125,11 @@ pub struct Thread {
     /// The OOM score adjustment value.
     oom_score_adj: AtomicI32,
 
-    /// Ready to exit
+    /// Ready to exit. Cleanup has completed and the user loop may stop.
     pub exit: Arc<AtomicBool>,
+
+    /// This thread must exit because another thread is executing `execve`.
+    exec_exit: AtomicBool,
 
     /// Indicates whether the thread is currently accessing user memory.
     accessing_user_memory: AtomicBool,
@@ -145,6 +148,7 @@ impl Thread {
             robust_list_head: AtomicUsize::new(0),
             time: AssumeSync(RefCell::new(TimeManager::new())),
             exit: Arc::new(AtomicBool::new(false)),
+            exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),
             accessing_user_memory: AtomicBool::new(false),
             exit_event: Arc::default(),
@@ -186,6 +190,16 @@ impl Thread {
     /// Check if the thread is ready to exit.
     pub fn pending_exit(&self) -> bool {
         self.exit.load(Ordering::Acquire)
+    }
+
+    /// Ask this thread to exit because another thread is executing `execve`.
+    pub fn request_exec_exit(&self) {
+        self.exec_exit.store(true, Ordering::Release);
+    }
+
+    /// Check whether this thread must exit for `execve`.
+    pub fn exec_exit_requested(&self) -> bool {
+        self.exec_exit.load(Ordering::Acquire)
     }
 
     /// Set the thread to exit.
@@ -247,7 +261,13 @@ pub struct ProcessData {
     pub cmdline: RwLock<Arc<Vec<String>>>,
     /// The virtual memory address space.
     // TODO: scopify
-    pub aspace: Arc<Mutex<AddrSpace>>,
+    aspace: RwLock<Arc<Mutex<AddrSpace>>>,
+
+    /// Serializes `clone` and `execve` changes to the thread group.
+    pub exec_lock: Mutex<()>,
+    /// True while this process is replacing its executable image.
+    exec_in_progress: AtomicBool,
+
     /// The resource scope
     pub scope: RwLock<Scope>,
     /// The user heap top
@@ -309,7 +329,9 @@ impl ProcessData {
             proc,
             exe_path: RwLock::new(exe_path),
             cmdline: RwLock::new(cmdline),
-            aspace,
+            aspace: RwLock::new(aspace),
+            exec_lock: Mutex::new(()),
+            exec_in_progress: AtomicBool::new(false),
             scope: RwLock::new(Scope::new()),
             heap_top: AtomicUsize::new(crate::config::USER_HEAP_BASE),
 
@@ -352,6 +374,16 @@ impl ProcessData {
         self.heap_top.load(Ordering::Acquire)
     }
 
+    /// Return a stable reference to the process address space.
+    pub fn aspace(&self) -> Arc<Mutex<AddrSpace>> {
+        self.aspace.read().clone()
+    }
+
+    /// Atomically install a fully constructed replacement address space.
+    pub fn replace_aspace(&self, new_aspace: Arc<Mutex<AddrSpace>>) -> Arc<Mutex<AddrSpace>> {
+        core::mem::replace(&mut *self.aspace.write(), new_aspace)
+    }
+
     /// Set the top address of the user heap.
     pub fn set_heap_top(&self, top: usize) {
         self.heap_top.store(top, Ordering::Release)
@@ -364,7 +396,7 @@ impl ProcessData {
     }
 
     pub fn current_rss_kb(&self) -> usize {
-        self.aspace.lock().resident_set_size() / 1024
+        self.aspace().lock().resident_set_size() / 1024
     }
 
     pub fn child_maxrss_kb(&self) -> usize {
@@ -526,5 +558,15 @@ impl ProcessData {
 
     pub fn set_supplementary_groups(&self, groups: Vec<u32>) {
         *self.supplementary_groups.lock() = groups;
+    }
+
+    /// Check whether this process is replacing its executable image.
+    pub fn exec_in_progress(&self) -> bool {
+        self.exec_in_progress.load(Ordering::Acquire)
+    }
+
+    /// Update the executable-image replacement state.
+    pub fn set_exec_in_progress(&self, value: bool) {
+        self.exec_in_progress.store(value, Ordering::Release);
     }
 }

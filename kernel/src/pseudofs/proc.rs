@@ -66,6 +66,15 @@ fn proc_stat() -> String {
     stat
 }
 
+fn proc_uptime() -> String {
+    let uptime = axhal::time::monotonic_time();
+    format!(
+        "{}.{:02} 0.00\n",
+        uptime.as_secs(),
+        uptime.subsec_millis() / 10
+    )
+}
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -774,7 +783,8 @@ impl SimpleDirOps for ThreadDir {
             .into(),
             "maps" => SimpleFile::new_regular(fs, move || {
                 let pid = task.as_thread().proc_data.proc.pid();
-                let aspace = task.as_thread().proc_data.aspace.lock();
+                let aspace_ref = task.as_thread().proc_data.aspace();
+                let aspace = aspace_ref.lock();
                 Ok(crate::syscall::mmap_proc_maps(pid, &aspace))
             })
             .into(),
@@ -983,6 +993,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
     root.add(
         "stat",
         SimpleFile::new_regular(fs.clone(), || Ok(proc_stat())),
+    );
+    root.add(
+        "uptime",
+        SimpleFile::new_regular(fs.clone(), || Ok(proc_uptime())),
     );
     root.add(
         "meminfo2",

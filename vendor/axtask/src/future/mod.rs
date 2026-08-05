@@ -67,13 +67,16 @@ pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
         match fut.as_mut().poll(&mut cx) {
             Poll::Pending => {
                 let mut rq = current_run_queue::<NoPreemptIrqSave>();
-                let woke = axwaker.woke.lock();
+                let mut woke = axwaker.woke.lock();
                 if !*woke {
                     rq.blocked_resched(woke);
                 } else {
-                    // Immediately woken
+                    // The future woke itself while it was being polled. Clear
+                    // the edge-triggered flag and poll it again immediately;
+                    // yielding here can leave `woke` permanently set and turn
+                    // a single notification into an endless yield loop.
+                    *woke = false;
                     drop(woke);
-                    crate::yield_now();
                 }
             }
             Poll::Ready(output) => break output,

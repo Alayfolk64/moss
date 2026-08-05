@@ -74,6 +74,8 @@ pub struct TaskInner {
     /// Used to indicate whether the task is running on a CPU.
     #[cfg(feature = "smp")]
     on_cpu: AtomicBool,
+    /// Whether this task has ever owned a live or suspended CPU context.
+    has_run: AtomicBool,
 
     #[cfg(feature = "preempt")]
     need_resched: AtomicBool,
@@ -171,15 +173,22 @@ impl TaskInner {
 
     /// Wait for the task to exit, and return the exit code.
     ///
-    /// It will return immediately if the task has already exited (but not dropped).
+    /// On SMP, this also waits until the exited task has switched off its CPU.
     pub fn join(&self) -> i32 {
-        block_on(poll_fn(|cx| {
+        let exit_code = block_on(poll_fn(|cx| {
             if self.state() == TaskState::Exited {
                 return Poll::Ready(self.exit_code.load(Ordering::Acquire));
             }
             self.wait_for_exit.register(cx.waker());
             Poll::Pending
-        }))
+        }));
+
+        #[cfg(feature = "smp")]
+        while self.on_cpu() {
+            core::hint::spin_loop();
+        }
+
+        exit_code
     }
 
     /// Returns a reference to the task extended data.
@@ -215,6 +224,17 @@ impl TaskInner {
     #[inline]
     pub fn cpu_id(&self) -> u32 {
         self.cpu_id.load(Ordering::Acquire)
+    }
+
+    /// Returns whether this task has ever owned a live or suspended CPU context.
+    #[inline]
+    pub fn has_run(&self) -> bool {
+        self.has_run.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub(crate) fn mark_has_run(&self) {
+        self.has_run.store(true, Ordering::Release);
     }
 
     /// Gets the cpu affinity mask of the task.
@@ -285,6 +305,7 @@ impl TaskInner {
             cpu_id: AtomicU32::new(0),
             #[cfg(feature = "smp")]
             on_cpu: AtomicBool::new(false),
+            has_run: AtomicBool::new(false),
             #[cfg(feature = "preempt")]
             need_resched: AtomicBool::new(false),
             #[cfg(feature = "preempt")]

@@ -157,7 +157,7 @@ pub fn ptrace_wait_if_stopped(thr: &Thread) {
     let pid = thr.proc_data.proc.pid();
 
     loop {
-        if thr.pending_exit() {
+        if thr.pending_exit() || thr.exec_exit_requested() {
             return;
         }
 

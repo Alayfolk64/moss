@@ -257,6 +257,10 @@ fn waitid_children(
         }))) {
             Ok(res) => return res,
             Err(_) => {
+                if curr.as_thread().exec_exit_requested() {
+                    return Err(AxError::Interrupted);
+                }
+
                 if let Some(res) = check_children().transpose() {
                     return res;
                 }
@@ -432,6 +436,10 @@ pub fn sys_waitpid(
         }))) {
             Ok(res) => return res,
             Err(_) => {
+                if curr.as_thread().exec_exit_requested() {
+                    return Err(AxError::Interrupted);
+                }
+
                 if let Some(res) = check_ptrace().transpose() {
                     return res;
                 }

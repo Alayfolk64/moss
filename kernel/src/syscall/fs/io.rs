@@ -65,6 +65,9 @@ pub fn sys_dummy_fd(sysno: Sysno) -> AxResult<isize> {
 fn should_retry_interrupted_read() -> bool {
     let curr = current();
     let thread = curr.as_thread();
+    if thread.exec_exit_requested() {
+        return false;
+    }
     let signal = &thread.signal;
     let pending = signal.pending() & !signal.blocked();
     if pending.is_empty() {
