@@ -74,6 +74,8 @@ pub struct TaskInner {
     /// Used to indicate whether the task is running on a CPU.
     #[cfg(feature = "smp")]
     on_cpu: AtomicBool,
+    /// Whether this task has ever owned a live or suspended CPU context.
+    has_run: AtomicBool,
 
     #[cfg(feature = "preempt")]
     need_resched: AtomicBool,
@@ -224,6 +226,17 @@ impl TaskInner {
         self.cpu_id.load(Ordering::Acquire)
     }
 
+    /// Returns whether this task has ever owned a live or suspended CPU context.
+    #[inline]
+    pub fn has_run(&self) -> bool {
+        self.has_run.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    pub(crate) fn mark_has_run(&self) {
+        self.has_run.store(true, Ordering::Release);
+    }
+
     /// Gets the cpu affinity mask of the task.
     ///
     /// Returns the cpu affinity mask of the task in type [`AxCpuMask`].
@@ -292,6 +305,7 @@ impl TaskInner {
             cpu_id: AtomicU32::new(0),
             #[cfg(feature = "smp")]
             on_cpu: AtomicBool::new(false),
+            has_run: AtomicBool::new(false),
             #[cfg(feature = "preempt")]
             need_resched: AtomicBool::new(false),
             #[cfg(feature = "preempt")]

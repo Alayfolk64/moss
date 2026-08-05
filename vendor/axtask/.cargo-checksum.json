@@ -9,8 +9,8 @@
     "src/future/poll.rs": "af5b325b189a663c70ec88e795907e062c20738719bc3e1395bd9c917bc125d9",
     "src/future/time.rs": "2874295ff82921cc8d0f19b0ab788e07cf6ccbb603b11814fa8bc561312ec463",
     "src/lib.rs": "a5163ebab338565bcec633c7c459703276d30871b9e866ddacf907bd21373214",
-    "src/run_queue.rs": "ad1618f7aa0ff0331ee0956537c6d8f47f9e1f08ca0f6644c36d0131fb2bc579",
-    "src/task.rs": "12d65f550bcd7492eeae8f066808b595504a8ab933448464ff69ca2026cf42c2",
+    "src/run_queue.rs": "2de5c403f27a8833eb62ef9ee8bef1b775b424cb29b4411ab1a9405f66b66bbf",
+    "src/task.rs": "daff407a84244145f0051524652a5d531e937603450eba4a7b67f7fd23faa8f5",
     "src/tests.rs": "ca380c7c0be79182c421e765fddf8e15e81d5d11e244998ad5fef1cce222e3a1",
     "src/timers.rs": "05b0cf8ef103e0e4c207d2f5bec757f981a4e70b697228c0d9893b304bbad747",
     "src/wait_queue.rs": "5314ffe462225599eebf9d33502787a07f80e6ec3f222146d5fe842b7343c6cb"

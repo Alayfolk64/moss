@@ -176,10 +176,10 @@ pub(crate) fn select_run_queue<G: BaseGuard>(task: &AxTaskRef) -> AxRunQueueRef<
     {
         let cpumask = task.cpumask();
         let previous_cpu = task.cpu_id() as usize;
-        // A blocked task carries a suspended kernel context. Keep that context
-        // on its previous CPU unless a new affinity mask explicitly excludes
-        // it. Brand-new tasks remain round-robin distributed.
-        let index = if task.state() == TaskState::Blocked
+        // Only brand-new tasks need initial placement. Once a task has run,
+        // keep its suspended kernel context on the same CPU unless a new
+        // affinity mask explicitly excludes that CPU.
+        let index = if task.has_run()
             && previous_cpu < crate::api::active_cpu_num()
             && cpumask.get(previous_cpu)
         {
@@ -545,6 +545,9 @@ impl AxRunQueue {
         if prev_task.ptr_eq(&next_task) {
             return;
         }
+        #[cfg(feature = "smp")]
+        next_task.set_cpu_id(self.cpu_id as _);
+        next_task.mark_has_run();
 
         // Claim the task as running, we do this before switching to it
         // such that any running task will have this set.
@@ -673,6 +676,9 @@ pub(crate) fn init() {
 
     // Put the subsequent execution into the `main` task.
     let main_task = TaskInner::new_init("main".into()).into_arc();
+    #[cfg(feature = "smp")]
+    main_task.set_cpu_id(cpu_id as _);
+    main_task.mark_has_run();
     main_task.set_state(TaskState::Running);
     unsafe { CurrentTask::init_current(main_task) }
 
@@ -689,6 +695,9 @@ pub(crate) fn init_secondary() {
 
     // Put the subsequent execution into the `idle` task.
     let idle_task = TaskInner::new_init("idle".into()).into_arc();
+    #[cfg(feature = "smp")]
+    idle_task.set_cpu_id(cpu_id as _);
+    idle_task.mark_has_run();
     idle_task.set_state(TaskState::Running);
     IDLE_TASK.with_current(|i| {
         i.init_once(idle_task.clone());
