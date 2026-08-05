@@ -174,8 +174,19 @@ pub(crate) fn select_run_queue<G: BaseGuard>(task: &AxTaskRef) -> AxRunQueueRef<
     }
     #[cfg(feature = "smp")]
     {
-        // When SMP is enabled, select the run queue based on the task's CPU affinity and load balance.
-        let index = select_run_queue_index(task.cpumask());
+        let cpumask = task.cpumask();
+        let previous_cpu = task.cpu_id() as usize;
+        // A blocked task carries a suspended kernel context. Keep that context
+        // on its previous CPU unless a new affinity mask explicitly excludes
+        // it. Brand-new tasks remain round-robin distributed.
+        let index = if task.state() == TaskState::Blocked
+            && previous_cpu < crate::api::active_cpu_num()
+            && cpumask.get(previous_cpu)
+        {
+            previous_cpu
+        } else {
+            select_run_queue_index(cpumask)
+        };
         AxRunQueueRef {
             inner: get_run_queue(index),
             state: irq_state,
@@ -243,6 +254,8 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
             self.inner.cpu_id
         );
         assert!(task.is_ready());
+        #[cfg(feature = "smp")]
+        task.set_cpu_id(self.inner.cpu_id as _);
         self.inner.scheduler.lock().add_task(task);
     }
 
@@ -623,7 +636,9 @@ fn poll_gc(cx: &mut Context<'_>) -> Poll<()> {
 /// then puts the task to the scheduler of target run queue.
 #[cfg(feature = "smp")]
 pub(crate) fn migrate_entry(migrated_task: AxTaskRef) {
-    select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task)
+    let run_queue = select_run_queue::<kernel_guard::NoPreemptIrqSave>(&migrated_task);
+    migrated_task.set_cpu_id(run_queue.inner.cpu_id as _);
+    run_queue
         .inner
         .scheduler
         .lock()
