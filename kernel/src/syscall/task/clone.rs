@@ -314,6 +314,9 @@ impl CloneArgs {
         new_proc_data.proc.add_thread(tid);
 
         let thr = Thread::new(tid, new_proc_data.clone());
+        if !flags.contains(CloneFlags::VM) {
+            thr.inherit_rseq_from(curr.as_thread());
+        }
         if flags.contains(CloneFlags::CHILD_CLEARTID) {
             thr.set_clear_child_tid(child_tid);
         }

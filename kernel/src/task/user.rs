@@ -41,6 +41,7 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 }
 
                 let reason = uctx.run();
+                let interrupted = matches!(reason, ReturnReason::Interrupt);
 
                 set_timer_state(&curr, TimerState::Kernel);
 
@@ -120,12 +121,24 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                     break;
                 }
 
+                let check_signal = !unblock_next_signal();
+                let signal_pending =
+                    check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();
                 // Syscall and trap handling is complete here, so the saved
                 // user context can migrate without carrying CPU-local kernel
-                // state or locks across the switch.
-                axtask::rebalance_current();
+                // state or locks across the switch. Publish the resulting CPU
+                // through rseq only after migration has completed.
+                let migrated = axtask::rebalance_current();
+                if let Err(err) =
+                    thr.prepare_rseq(&mut uctx, interrupted || signal_pending || migrated)
+                {
+                    warn!("Invalid rseq state: {err:?}");
+                    thr.reset_rseq();
+                    raise_signal_fatal(SignalInfo::new_kernel(Signo::SIGSEGV))
+                        .expect("Failed to send rseq fault signal");
+                }
 
-                if !unblock_next_signal() {
+                if check_signal {
                     while check_signals(thr, &mut uctx, None) {}
                 }
 

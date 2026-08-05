@@ -3,6 +3,7 @@
 mod futex;
 mod ops;
 mod resources;
+mod rseq;
 mod signal;
 mod stat;
 mod timer;
@@ -27,7 +28,7 @@ use starry_signal::{
     api::{ProcessSignalManager, SignalActions, ThreadSignalManager},
 };
 
-pub use self::{futex::*, ops::*, resources::*, signal::*, stat::*, timer::*, user::*};
+pub use self::{futex::*, ops::*, resources::*, rseq::*, signal::*, stat::*, timer::*, user::*};
 use crate::mm::AddrSpaceLock;
 
 #[derive(Debug, Clone, Copy)]
@@ -134,6 +135,9 @@ pub struct Thread {
     /// Indicates whether the thread is currently accessing user memory.
     accessing_user_memory: AtomicBool,
 
+    /// Restartable-sequence registration for this thread.
+    rseq: SpinNoIrq<Option<RseqRegistration>>,
+
     /// Self exit event
     pub exit_event: Arc<PollSet>,
 }
@@ -151,6 +155,7 @@ impl Thread {
             exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),
             accessing_user_memory: AtomicBool::new(false),
+            rseq: SpinNoIrq::new(None),
             exit_event: Arc::default(),
         })
     }
@@ -300,6 +305,7 @@ pub struct ProcessData {
 
     personality: AtomicUsize,
     membarrier_state: AtomicU32,
+    rseq_abort_generation: AtomicU64,
     sched_policy: AtomicU32,
     sched_priority: AtomicI32,
 
@@ -354,6 +360,7 @@ impl ProcessData {
             namespaces: SpinNoIrq::new(ProcessNamespaces::init()),
             personality: AtomicUsize::new(0),
             membarrier_state: AtomicU32::new(0),
+            rseq_abort_generation: AtomicU64::new(0),
             sched_policy: AtomicU32::new(0),
             sched_priority: AtomicI32::new(0),
 
@@ -477,6 +484,14 @@ impl ProcessData {
 
     pub fn add_membarrier_state(&self, state: u32) {
         self.membarrier_state.fetch_or(state, Ordering::SeqCst);
+    }
+
+    pub fn rseq_abort_generation(&self) -> u64 {
+        self.rseq_abort_generation.load(Ordering::Acquire)
+    }
+
+    pub fn request_rseq_abort(&self) {
+        self.rseq_abort_generation.fetch_add(1, Ordering::AcqRel);
     }
 
     pub fn sched_policy(&self) -> u32 {

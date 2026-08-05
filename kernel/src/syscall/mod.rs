@@ -629,6 +629,12 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             sys_get_robust_list(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
         }
         Sysno::set_robust_list => sys_set_robust_list(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::rseq => sys_rseq(
+            uctx.arg0(),
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+        ),
 
         // sys
         Sysno::getuid => sys_getuid(),

@@ -333,6 +333,7 @@ fn execve_common(
     // They can become dangling once the address space is replaced.
     curr.as_thread().set_clear_child_tid(0);
     curr.as_thread().set_robust_list_head(0);
+    curr.as_thread().reset_rseq();
 
     close_cloexec_files_for_current_process();
 
