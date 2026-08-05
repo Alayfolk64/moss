@@ -57,6 +57,7 @@ qemu = [
     "starry-kernel/net",
 ]
 shell-init = []
+pre-init = []
 timerfd-debug-init = []
 smp = ["axfeat/smp"]
 
