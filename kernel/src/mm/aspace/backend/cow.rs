@@ -20,7 +20,7 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
     AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
-    alloc_frame, dealloc_frame, finish_unmap_before_reclaim, pages_in,
+    UnmapGather, alloc_frame, dealloc_frame, finish_unmap_before_reclaim, pages_in,
 };
 
 struct FrameRefCnt(usize);
@@ -281,7 +281,7 @@ fn alloc_referenced_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     Ok(frame)
 }
 
-fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
+pub(super) fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
     let frame_ref = FRAME_TABLE
         .lock()
         .get_frame_ref(frame)
@@ -290,6 +290,31 @@ fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
 }
 
 impl CowBackend {
+    pub(super) fn unmap_present_into(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+        gather: &mut UnmapGather,
+    ) -> AxResult {
+        for vaddr in pages_in(range, self.size)? {
+            let (paddr, _, page_size) = match pt.query(vaddr) {
+                Ok(mapping) => mapping,
+                Err(PagingError::NotMapped) => continue,
+                Err(err) => return Err(err.into()),
+            };
+            if page_size != self.size || FRAME_TABLE.lock().get_frame_ref(paddr).is_none() {
+                return Err(AxError::BadAddress);
+            }
+            let (unmapped, _, unmapped_size) = pt.unmap(vaddr)?;
+            if unmapped != paddr || unmapped_size != self.size {
+                return Err(AxError::BadAddress);
+            }
+            gather.push_anonymous(paddr, self.size, pt);
+            self.dec_mapped_pages();
+        }
+        Ok(())
+    }
+
     fn clone_for_fork(&self, new_aspace: &Arc<AddrSpaceLock>) -> Self {
         let backend = Self {
             start: self.start,

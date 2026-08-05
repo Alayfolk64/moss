@@ -1,5 +1,5 @@
 //! Memory mapping backends.
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use axalloc::{UsageKind, global_allocator};
 use axerrno::{AxError, AxResult};
@@ -30,6 +30,39 @@ fn finish_unmap_before_reclaim(pt: &mut PageTableMut<'_>) {
     crate::mm::flush_tlb_on_all_cpus(root, None);
     #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]
     let _ = root;
+}
+
+/// Anonymous frames whose PTEs have been removed but whose storage must stay
+/// alive until every CPU has acknowledged the shared TLB invalidation.
+pub(crate) struct UnmapGather {
+    pages: Vec<(PhysAddr, PageSize)>,
+}
+
+impl UnmapGather {
+    const MAX_PAGES: usize = 256;
+
+    pub(crate) const fn new() -> Self {
+        Self { pages: Vec::new() }
+    }
+
+    pub(crate) fn push_anonymous(
+        &mut self,
+        paddr: PhysAddr,
+        page_size: PageSize,
+        pt: &mut PageTableMut<'_>,
+    ) {
+        self.pages.push((paddr, page_size));
+        if self.pages.len() >= Self::MAX_PAGES {
+            self.finish(pt);
+        }
+    }
+
+    pub(crate) fn finish(&mut self, pt: &mut PageTableMut<'_>) {
+        finish_unmap_before_reclaim(pt);
+        for (paddr, page_size) in self.pages.drain(..) {
+            cow::drop_referenced_frame(paddr, page_size);
+        }
+    }
 }
 
 /// Result of the short, locked preparation phase of a page fault.
@@ -148,6 +181,22 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Unmaps one VMA while destroying an entire address space. The caller
+    /// retains every backend owner until the shared gather has completed.
+    pub(crate) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+        gather: &mut UnmapGather,
+    ) -> AxResult {
+        match self {
+            Self::Cow(backend) => backend.unmap_present_into(range, pt, gather),
+            Self::File(backend) => backend.unmap_for_clear(range, pt),
+            Self::Linear(backend) => backend.unmap_for_clear(range, pt),
+            Self::Shared(backend) => backend.unmap_for_clear(range, pt),
+        }
+    }
+
     pub(crate) fn default_vma_kind(&self) -> (bool, bool, bool) {
         match self {
             Self::Linear(_) => (false, false, false),

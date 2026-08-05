@@ -83,6 +83,20 @@ impl SharedBackend {
         debug_assert!(start.is_aligned(self.pages.size));
         divide_page(start - self.start, self.pages.size)
     }
+
+    pub(super) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+    ) -> AxResult {
+        for vaddr in pages_in(range, self.pages.size)? {
+            match pt.unmap(vaddr) {
+                Ok(_) | Err(PagingError::NotMapped) => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(())
+    }
 }
 
 impl BackendOps for SharedBackend {

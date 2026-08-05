@@ -24,6 +24,15 @@ impl LinearBackend {
     pub(super) fn merge_compatible(&self, other: &Self) -> bool {
         self.offset == other.offset
     }
+
+    pub(super) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+    ) -> AxResult {
+        pt.unmap_region(range.start, range.size())?;
+        Ok(())
+    }
 }
 
 impl BackendOps for LinearBackend {

@@ -172,6 +172,20 @@ impl FileBackendInner {
 #[derive(Clone)]
 pub struct FileBackend(Arc<FileBackendInner>);
 impl FileBackend {
+    pub(super) fn unmap_for_clear(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+    ) -> AxResult {
+        for addr in pages_in(range, PageSize::Size4K)? {
+            match pt.unmap(addr) {
+                Ok(_) | Err(PagingError::NotMapped) => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn merge_compatible(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
