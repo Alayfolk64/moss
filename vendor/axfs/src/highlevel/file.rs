@@ -1,6 +1,6 @@
 use alloc::{
     boxed::Box,
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -388,6 +388,67 @@ struct PendingEviction {
     restore_after_writeback: bool,
 }
 
+/// Authoritative detached pages plus an ordered index of tokens which normal
+/// cache activity may retire opportunistically.  Both collections live under
+/// one mutex so selecting or moving a token cannot observe a stale index.
+struct PendingEvictions {
+    entries: BTreeMap<u32, PendingEviction>,
+    normal_pages: BTreeSet<u32>,
+}
+
+impl PendingEvictions {
+    fn new() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+            normal_pages: BTreeSet::new(),
+        }
+    }
+
+    fn contains_key(&self, pn: &u32) -> bool {
+        self.entries.contains_key(pn)
+    }
+
+    fn get(&self, pn: &u32) -> Option<&PendingEviction> {
+        self.entries.get(pn)
+    }
+
+    fn get_mut(&mut self, pn: &u32) -> Option<&mut PendingEviction> {
+        self.entries.get_mut(pn)
+    }
+
+    fn insert(&mut self, pn: u32, entry: PendingEviction) -> Option<PendingEviction> {
+        let normal = !entry.restore_after_writeback;
+        let previous = self.entries.insert(pn, entry);
+        if normal {
+            self.normal_pages.insert(pn);
+        } else {
+            self.normal_pages.remove(&pn);
+        }
+        previous
+    }
+
+    fn remove(&mut self, pn: &u32) -> Option<PendingEviction> {
+        self.normal_pages.remove(pn);
+        self.entries.remove(pn)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = (&u32, &PendingEviction)> {
+        self.entries.iter()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    fn next_normal(&self, cursor: u32) -> Option<u32> {
+        self.normal_pages
+            .range(cursor..)
+            .next()
+            .or_else(|| self.normal_pages.iter().next())
+            .copied()
+    }
+}
+
 /// Stable identity for a page detached from the LRU but still pinned by the
 /// file cache until all mappings and final writeback have completed.
 #[derive(Clone, Copy)]
@@ -421,8 +482,11 @@ struct CachedFileShared {
     evict_listeners: Mutex<LinkedList<EvictListenerAdapter>>,
     /// Pages whose mappings could not all be invalidated immediately.  Keeping
     /// the frames here prevents stale PTEs from becoming use-after-free aliases.
-    pending_evictions: Mutex<BTreeMap<u32, PendingEviction>>,
+    pending_evictions: Mutex<PendingEvictions>,
     next_eviction_generation: AtomicUsize,
+    /// Page-number cursor for bounded, fair opportunistic retirement.  A hot
+    /// cache path must not rescan every blocked token on each access.
+    next_normal_eviction_retry: AtomicUsize,
     /// Keeps detached pages from being reloaded by the same inode operation.
     cache_op: Mutex<()>,
     /// Serializes complete dirty-page synchronization lifecycles.  In
@@ -456,8 +520,9 @@ impl CachedFileShared {
                 NonZeroUsize::new(DEFAULT_LOCAL_FILE_CACHE_PAGES).unwrap(),
             )),
             evict_listeners: Mutex::new(LinkedList::default()),
-            pending_evictions: Mutex::new(BTreeMap::new()),
+            pending_evictions: Mutex::new(PendingEvictions::new()),
             next_eviction_generation: AtomicUsize::new(1),
+            next_normal_eviction_retry: AtomicUsize::new(0),
             cache_op: Mutex::new(()),
             writeback_op: Mutex::new(()),
             append_lock: RwLock::new(()),
@@ -472,8 +537,9 @@ impl CachedFileShared {
         Self {
             page_cache: Mutex::new(LruCache::unbounded()),
             evict_listeners: Mutex::new(LinkedList::default()),
-            pending_evictions: Mutex::new(BTreeMap::new()),
+            pending_evictions: Mutex::new(PendingEvictions::new()),
             next_eviction_generation: AtomicUsize::new(1),
+            next_normal_eviction_retry: AtomicUsize::new(0),
             cache_op: Mutex::new(()),
             writeback_op: Mutex::new(()),
             append_lock: RwLock::new(()),
@@ -1106,7 +1172,62 @@ impl CachedFile {
         let Some(_writeback_guard) = self.shared().writeback_op.try_lock() else {
             return Ok(());
         };
-        self.retry_pending_evictions_matching(false)
+
+        // Ordinary reads, writes and faults call this function in their hot
+        // path. Retrying the whole pending map here turns one contended token
+        // into O(pending * listeners) work on every page access and can prevent
+        // the operation which owns the contended address-space lock from ever
+        // running. Advance at most one normal token per call, rotating the
+        // starting page so one busy mapping cannot starve later tokens.
+        let cursor = self
+            .shared()
+            .next_normal_eviction_retry
+            .load(Ordering::Relaxed) as u32;
+        let candidate = {
+            let pending = self.shared().pending_evictions.lock();
+            pending.next_normal(cursor).map(|pn| {
+                let entry = pending
+                    .get(&pn)
+                    .expect("normal pending-eviction index is stale");
+                (
+                    PageEviction {
+                        pn,
+                        paddr: entry.page.paddr(),
+                        generation: entry.generation,
+                    },
+                    entry.needs_invalidation,
+                )
+            })
+        };
+        let Some((eviction, needs_invalidation)) = candidate else {
+            return Ok(());
+        };
+        self.shared().next_normal_eviction_retry.store(
+            eviction.pn.checked_add(1).unwrap_or(0) as usize,
+            Ordering::Relaxed,
+        );
+
+        if needs_invalidation
+            && !self.notify_evict_listeners_except(
+                eviction.pn,
+                eviction.paddr,
+                None,
+                false,
+            )
+        {
+            return Err(VfsError::WouldBlock);
+        }
+        match self.finish_evicted_writeback_with_wait(eviction, false) {
+            Err(VfsError::WouldBlock) => Err(VfsError::WouldBlock),
+            Err(err) => {
+                warn!(
+                    "Failed to finish pending page eviction {}: {err:?}",
+                    eviction.pn
+                );
+                Err(err)
+            }
+            Ok(()) => Ok(()),
+        }
     }
 
     /// Returns with `cache_op` held only after every pending token visible at
@@ -1328,6 +1449,14 @@ impl CachedFile {
             return match result {
                 Ok(value) => match finish_result {
                     Ok(()) => Ok(value),
+                    Err(VfsError::WouldBlock) => {
+                        // Listener or writeback serialization contention is a
+                        // normal deferred-completion state.  The page remains
+                        // pinned in `pending_evictions` and bounded later work
+                        // advances it; printing every transient miss can itself
+                        // dominate a build's serial console path.
+                        Ok(value)
+                    }
                     Err(err) => {
                         // The callback has already consumed input or copied data
                         // into the target page.  A failure while retiring an
