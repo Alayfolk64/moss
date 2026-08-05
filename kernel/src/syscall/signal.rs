@@ -333,7 +333,7 @@ pub fn sys_rt_sigtimedwait(
 
     uctx.set_retval(-LinuxError::EINTR.code() as usize);
     let fut = poll_fn(|cx| {
-        if thr.exec_exit_requested() {
+        if thr.pending_exit() || thr.exec_exit_requested() {
             signal.set_blocked(old_blocked);
             Poll::Ready(None)
         } else if let Some(sig) = signal.dequeue_signal(&set) {
@@ -385,7 +385,7 @@ pub fn sys_rt_sigsuspend(
     uctx.set_retval(-LinuxError::EINTR.code() as usize);
 
     block_on(poll_fn(|cx| {
-        if thr.exec_exit_requested() {
+        if thr.pending_exit() || thr.exec_exit_requested() {
             return Poll::Ready(());
         }
         if check_signals(thr, uctx, Some(old_blocked)) {
@@ -409,7 +409,7 @@ pub fn sys_pause(uctx: &mut UserContext) -> AxResult<isize> {
     uctx.set_retval(-LinuxError::EINTR.code() as usize);
 
     block_on(poll_fn(|cx| {
-        if thr.exec_exit_requested() {
+        if thr.pending_exit() || thr.exec_exit_requested() {
             return Poll::Ready(());
         }
         if check_signals(thr, uctx, None) {

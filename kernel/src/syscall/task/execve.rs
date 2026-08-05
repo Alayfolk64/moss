@@ -9,7 +9,7 @@ use axerrno::{AxError, AxResult, LinuxError};
 use axfs::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{Location, NodeType};
 use axhal::uspace::UserContext;
-use axtask::{current, yield_now};
+use axtask::{TaskState, current, yield_now};
 use kernel_guard::NoPreemptIrqSave;
 use linux_raw_sys::general::{AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, MS_NOEXEC};
 use starry_process::Pid;
@@ -27,7 +27,7 @@ use crate::{
         check_fanotify_open_exec_permission_path, check_fanotify_open_permission_path,
         close_cloexec_files_for_current_process, notify_fanotify_open_exec_path,
     },
-    task::{AsThread, ProcessData, get_task, processes},
+    task::{AsThread, ProcessData, processes, tasks},
 };
 
 struct ExecStateGuard<'a> {
@@ -41,29 +41,50 @@ impl Drop for ExecStateGuard<'_> {
 }
 
 fn terminate_other_threads_for_exec(proc_data: &ProcessData, current_tid: Pid) {
+    // Hold strong references while clone is excluded. This includes a sibling
+    // that removed its TID from Process::threads() but has not switched off
+    // its CPU and the old hardware page-table root yet.
+    let sibling_tasks = tasks()
+        .into_iter()
+        .filter(|task| {
+            task.id().as_u64() as Pid != current_tid
+                && task
+                    .try_as_thread()
+                    .is_some_and(|thread| core::ptr::eq(thread.proc_data.as_ref(), proc_data))
+        })
+        .collect::<Vec<_>>();
+
     loop {
-        let other_tids = proc_data
-            .proc
-            .threads()
-            .into_iter()
-            .filter(|tid| *tid != current_tid)
-            .collect::<Vec<_>>();
-
-        if other_tids.is_empty() {
-            break;
-        }
-
-        for tid in other_tids {
-            if let Ok(task) = get_task(tid)
-                && let Some(thread) = task.try_as_thread()
-            {
+        let mut all_exited = true;
+        for task in &sibling_tasks {
+            if task.state() != TaskState::Exited {
+                all_exited = false;
+                let thread = task
+                    .try_as_thread()
+                    .expect("user task lost its thread state during exec");
                 thread.request_exec_exit();
                 task.interrupt();
             }
         }
-
+        if all_exited {
+            break;
+        }
         yield_now();
     }
+
+    // Exited is published before the final context switch. join() also waits
+    // for on_cpu=false, acknowledging that the old root is no longer active.
+    for task in &sibling_tasks {
+        task.join();
+    }
+
+    debug_assert!(
+        proc_data
+            .proc
+            .threads()
+            .into_iter()
+            .all(|tid| tid == current_tid)
+    );
 }
 
 fn has_exec_permission(loc: &Location, uid: u32, gid: u32) -> AxResult<bool> {

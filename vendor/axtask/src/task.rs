@@ -171,15 +171,22 @@ impl TaskInner {
 
     /// Wait for the task to exit, and return the exit code.
     ///
-    /// It will return immediately if the task has already exited (but not dropped).
+    /// On SMP, this also waits until the exited task has switched off its CPU.
     pub fn join(&self) -> i32 {
-        block_on(poll_fn(|cx| {
+        let exit_code = block_on(poll_fn(|cx| {
             if self.state() == TaskState::Exited {
                 return Poll::Ready(self.exit_code.load(Ordering::Acquire));
             }
             self.wait_for_exit.register(cx.waker());
             Poll::Pending
-        }))
+        }));
+
+        #[cfg(feature = "smp")]
+        while self.on_cpu() {
+            core::hint::spin_loop();
+        }
+
+        exit_code
     }
 
     /// Returns a reference to the task extended data.
