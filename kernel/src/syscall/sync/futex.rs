@@ -96,7 +96,12 @@ pub fn sys_futex(
                 };
                 count = futex.wq.wake(value as _, bitset);
             }
-            axtask::yield_now();
+            // On SMP, the waiter normally belongs to another run queue, so
+            // yielding this CPU only disturbs an unrelated runnable task.
+            // Keep the immediate handoff behavior for a single-CPU guest.
+            if count != 0 && axhal::cpu_num() == 1 {
+                axtask::yield_now();
+            }
             Ok(count as _)
         }
         FUTEX_REQUEUE | FUTEX_CMP_REQUEUE => {
