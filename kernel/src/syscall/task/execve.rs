@@ -10,6 +10,7 @@ use axfs::{FS_CONTEXT, FileFlags};
 use axfs_ng_vfs::{Location, NodeType};
 use axhal::uspace::UserContext;
 use axtask::{current, yield_now};
+use kernel_guard::NoPreemptIrqSave;
 use linux_raw_sys::general::{AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, MS_NOEXEC};
 use starry_process::Pid;
 use starry_vm::vm_load_until_nul;
@@ -272,9 +273,20 @@ fn execve_common(
     let _exec_state_guard = ExecStateGuard { proc_data };
     terminate_other_threads_for_exec(proc_data, current_tid);
 
-    let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
-    axtask::replace_current_page_table(page_table_root);
-    drop(old_aspace);
+    // Keep the old address space locked until this CPU has published and
+    // activated the replacement root. A CLONE_VM peer cannot reclaim it in
+    // the middle of the local commit.
+    let old_aspace_snapshot = proc_data.aspace();
+    let old_aspace_guard = old_aspace_snapshot.lock();
+    {
+        let _commit_guard = NoPreemptIrqSave::new();
+        let old_aspace = proc_data.replace_aspace(Arc::new(axsync::Mutex::new(new_aspace)));
+        debug_assert!(Arc::ptr_eq(&old_aspace, &old_aspace_snapshot));
+        axtask::replace_current_page_table(page_table_root);
+        drop(old_aspace);
+    }
+    drop(old_aspace_guard);
+    drop(old_aspace_snapshot);
 
     curr.set_name(loc.name());
 

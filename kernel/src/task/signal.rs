@@ -72,6 +72,7 @@ pub fn check_signals(
                 return true;
             }
             do_exit(signo as i32, true);
+            return false;
         }
     }
 
@@ -83,9 +84,11 @@ pub fn check_signals(
     match os_action {
         SignalOSAction::Terminate => {
             do_exit(signo as i32, true);
+            return false;
         }
         SignalOSAction::CoreDump => {
             do_exit((signo as i32) | 0x80, true);
+            return false;
         }
         SignalOSAction::Stop => {
             *thr.proc_data.wait_status.lock() = Some(ProcessWaitStatus::Stopped(signo));
