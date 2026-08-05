@@ -315,7 +315,7 @@ pub fn load_user_app(
     args: &[String],
     envs: &[String],
 ) -> AxResult<(VirtAddr, VirtAddr)> {
-    load_user_app_from_source(uspace, path, None, true, args, envs)
+    load_user_app_from_source(uspace, path, None, args, envs)
 }
 
 pub fn load_user_app_from_location(
@@ -325,28 +325,19 @@ pub fn load_user_app_from_location(
     args: &[String],
     envs: &[String],
 ) -> AxResult<(VirtAddr, VirtAddr)> {
-    load_user_app_from_source(uspace, Some(path), Some(loc), false, args, envs)
+    load_user_app_from_source(uspace, Some(path), Some(loc), args, envs)
 }
 
 fn load_user_app_from_source(
     uspace: &mut AddrSpace,
     path: Option<&str>,
     loc: Option<Location>,
-    shell_suffix_fallback: bool,
     args: &[String],
     envs: &[String],
 ) -> AxResult<(VirtAddr, VirtAddr)> {
     let path = path
         .or_else(|| args.first().map(String::as_str))
         .ok_or(AxError::InvalidInput)?;
-
-    // FIXME: impl `/proc/self/exe` to let busybox retry running
-    if shell_suffix_fallback && path.ends_with(".sh") {
-        let new_args: Vec<String> = iter::once("/bin/sh".to_owned())
-            .chain(args.iter().cloned())
-            .collect();
-        return load_user_app(uspace, None, &new_args, envs);
-    }
 
     let load_result = if let Some(loc) = loc {
         ELF_LOADER.lock().load_location(uspace, loc)?
