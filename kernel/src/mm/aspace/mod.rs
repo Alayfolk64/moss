@@ -1,4 +1,4 @@
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use core::{
     fmt,
     ops::DerefMut,
@@ -13,6 +13,7 @@ use axhal::{
 };
 use axtask::yield_now;
 use event_listener::{Event, listener};
+use kspin::SpinNoIrq;
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
@@ -292,6 +293,45 @@ impl AddrSpaceLock {
     pub(crate) fn try_lock(&self) -> Option<BlockingRwLockWriteGuard<'_, AddrSpace>> {
         self.inner.try_write()
     }
+}
+
+static RECLAIM_QUEUE: SpinNoIrq<VecDeque<Arc<AddrSpaceLock>>> = SpinNoIrq::new(VecDeque::new());
+static RECLAIM_WORKERS: AtomicUsize = AtomicUsize::new(0);
+
+fn start_reclaim_worker() {
+    loop {
+        let workers = RECLAIM_WORKERS.load(Ordering::Acquire);
+        if workers >= axhal::cpu_num() || RECLAIM_QUEUE.lock().is_empty() {
+            return;
+        }
+        if RECLAIM_WORKERS
+            .compare_exchange_weak(workers, workers + 1, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            continue;
+        }
+
+        axtask::spawn(|| {
+            loop {
+                let Some(aspace) = RECLAIM_QUEUE.lock().pop_front() else {
+                    RECLAIM_WORKERS.fetch_sub(1, Ordering::AcqRel);
+                    // An enqueue can race with the empty observation while all
+                    // workers are leaving. Recheck after publishing the new
+                    // worker count so that queued work cannot be stranded.
+                    start_reclaim_worker();
+                    return;
+                };
+                aspace.lock().clear();
+            }
+        });
+        return;
+    }
+}
+
+/// Clears a dead address space outside the exit or execve critical path.
+pub(crate) fn defer_address_space_reclaim(aspace: Arc<AddrSpaceLock>) {
+    RECLAIM_QUEUE.lock().push_back(aspace);
+    start_reclaim_worker();
 }
 
 impl AddrSpace {
