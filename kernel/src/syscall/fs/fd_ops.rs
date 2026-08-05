@@ -50,7 +50,7 @@ use crate::{
         sys::{sys_getegid, sys_geteuid},
         task::current_has_cap,
     },
-    task::{AsThread, processes},
+    task::AsThread,
 };
 
 /// Convert open flags to [`OpenOptions`].
@@ -682,6 +682,29 @@ bitflags! {
     }
 }
 
+/// Gives the current process a private copy of its descriptor table.
+///
+/// File descriptions themselves remain shared, as required by dup/fork
+/// semantics. Replacing the table lets exit and exec close this process's
+/// descriptors without mutating a live process that used `CLONE_FILES`.
+pub fn unshare_current_fd_table() {
+    let cloned = FD_TABLE.read().clone();
+
+    // The running task keeps a leaked scope read guard between context
+    // switches. Temporarily leave the scope before taking its write lock.
+    let curr = current();
+    let thr = curr.as_thread();
+    let _preempt_guard = NoPreempt::new();
+    ActiveScope::set_global();
+    unsafe { thr.proc_data.scope.force_read_decrement() };
+    let mut scope = thr.proc_data.scope.write();
+    *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
+    drop(scope);
+    let scope = thr.proc_data.scope.read();
+    unsafe { ActiveScope::set(&scope) };
+    core::mem::forget(scope);
+}
+
 pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     if last < first {
         return Err(AxError::InvalidInput);
@@ -693,24 +716,7 @@ pub fn sys_close_range(first: u32, last: u32, flags: u32) -> AxResult<isize> {
     let last = last as usize;
 
     if flags.contains(CloseRangeFlags::UNSHARE) {
-        // 1) Snapshot current FD table.
-        let cloned = FD_TABLE.read().clone();
-
-        // 2) Detach current task's scope-local FD table pointer.
-        // The running task keeps a leaked scope read-lock (see TaskExt::on_enter/on_leave),
-        // so we must temporarily drop it before taking scope.write(). Keep preemption
-        // disabled during this window to avoid task switch with a mismatched lock count.
-        let curr = current();
-        let thr = curr.as_thread();
-        let _preempt_guard = NoPreempt::new();
-        ActiveScope::set_global();
-        unsafe { thr.proc_data.scope.force_read_decrement() };
-        let mut scope = thr.proc_data.scope.write();
-        *FD_TABLE.scope_mut(&mut scope) = Arc::new(spin::RwLock::new(cloned));
-        drop(scope);
-        let scope = thr.proc_data.scope.read();
-        unsafe { ActiveScope::set(&scope) };
-        core::mem::forget(scope);
+        unshare_current_fd_table();
     }
 
     let mut fd_table = FD_TABLE.write();
@@ -1190,20 +1196,6 @@ fn release_bsd_flocks_for_closed_files(files: &[Arc<dyn FileLike>]) {
     }
 }
 
-fn current_fd_table_shared_by_live_process() -> bool {
-    let fd_table_ref = FD_TABLE.clone();
-    let curr_pid = current().as_thread().proc_data.proc.pid();
-
-    processes().iter().any(|proc_data| {
-        if proc_data.proc.pid() == curr_pid || proc_data.proc.is_zombie() {
-            return false;
-        }
-        let scope = proc_data.scope.read();
-        let other_fd_table = FD_TABLE.scope(&scope).clone();
-        Arc::ptr_eq(&fd_table_ref, &other_fd_table)
-    })
-}
-
 fn current_file_likes() -> Vec<Arc<dyn FileLike>> {
     let fd_table = FD_TABLE.read();
     fd_table
@@ -1229,10 +1221,10 @@ fn close_current_fd_table() {
 }
 
 pub fn close_all_files_for_current_process() {
-    if current_fd_table_shared_by_live_process() {
-        return;
-    }
-
+    // A process sharing its table through CLONE_FILES must drop only its own
+    // references. Skipping cleanup leaves pipe writers alive in zombies and
+    // can deadlock a parent that reads until EOF before calling wait().
+    unshare_current_fd_table();
     let file_likes = current_file_likes();
     release_file_likes_for_process_exit(&file_likes);
     close_current_fd_table();
