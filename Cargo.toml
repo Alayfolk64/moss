@@ -59,7 +59,6 @@ qemu = [
 ]
 shell-init = []
 pre-init = []
-timerfd-debug-init = []
 smp = ["axfeat/smp"]
 
 vf2 = ["axfeat/driver-sdmmc"]

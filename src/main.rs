@@ -6,36 +6,18 @@ extern crate alloc;
 
 use alloc::{borrow::ToOwned, vec::Vec};
 
-#[cfg(feature = "timerfd-debug-init")]
-pub const INIT_SCRIPT: &str = include_str!("init_timerfd_debug.sh");
-#[cfg(all(not(feature = "timerfd-debug-init"), feature = "pre-init"))]
+#[cfg(feature = "pre-init")]
 pub const INIT_SCRIPT: &str = include_str!("init.sh");
-#[cfg(all(
-    not(feature = "timerfd-debug-init"),
-    not(feature = "pre-init"),
-    feature = "shell-init"
-))]
+#[cfg(all(not(feature = "pre-init"), feature = "shell-init"))]
 pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
-#[cfg(all(
-    not(feature = "timerfd-debug-init"),
-    not(feature = "pre-init"),
-    not(feature = "shell-init")
-))]
+#[cfg(all(not(feature = "pre-init"), not(feature = "shell-init")))]
 pub const INIT_SCRIPT: &str = include_str!("init_final.sh");
 #[cfg(feature = "pre-init")]
 pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases.sh");
 
-#[cfg(any(
-    feature = "timerfd-debug-init",
-    feature = "pre-init",
-    feature = "shell-init"
-))]
+#[cfg(any(feature = "pre-init", feature = "shell-init"))]
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
-#[cfg(not(any(
-    feature = "timerfd-debug-init",
-    feature = "pre-init",
-    feature = "shell-init"
-)))]
+#[cfg(not(any(feature = "pre-init", feature = "shell-init")))]
 pub const CMDLINE: &[&str] = &["/bin/bash", "-c", INIT_SCRIPT];
 
 #[cfg(feature = "pre-init")]

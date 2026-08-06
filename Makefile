@@ -203,40 +203,6 @@ debug-la:
 		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
 		-rtc base=utc -S -s 2>&1 | tee $(OUTPUT_LA)
 
-debug-rv-timerfd:
-	$(MAKE) ARCH=riscv64 DWARF=y APP_FEATURES="qemu timerfd-debug-init" kernel-rv
-	@img="$(A)/sdcard-rv.img"; \
-	tmp_img="$(A)/tmp-rv-shell.img"; \
-	if [ ! -f "$$img" ]; then \
-		$(MAKE) --no-print-directory prepare-sdcard-rv; \
-	fi; \
-	rm -f "$$tmp_img"; \
-	cp -f "$$img" "$$tmp_img"
-	@printf "    \033[36mDebug image\033[0m: kernel-rv.dbg.elf\n"
-	@printf "    \033[36mGDB\033[0m: $(GDB) kernel-rv.dbg.elf -ex 'target remote localhost:1234'\n"
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default \
-		-drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 \
-		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-		-no-reboot -device virtio-net-device,netdev=net \
-		-netdev user,id=net -rtc base=utc -S -s 2>&1 | tee $(OUTPUT_RV)
-
-debug-la-timerfd:
-	$(MAKE) ARCH=loongarch64 BUS=pci DWARF=y APP_FEATURES="qemu timerfd-debug-init" kernel-la
-	@img="$(A)/sdcard-la.img"; \
-	tmp_img="$(A)/tmp-la-shell.img"; \
-	if [ ! -f "$$img" ]; then \
-		$(MAKE) --no-print-directory prepare-sdcard-la; \
-	fi; \
-	rm -f "$$tmp_img"; \
-	cp -f "$$img" "$$tmp_img"
-	@printf "    \033[36mDebug image\033[0m: kernel-la.dbg.elf\n"
-	@printf "    \033[36mGDB\033[0m: $(GDB) kernel-la.dbg.elf -ex 'target remote localhost:1234'\n"
-	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 \
-		-drive file=tmp-la-shell.img,if=none,format=raw,id=x0 \
-		-device virtio-blk-pci,drive=x0 -no-reboot \
-		-device virtio-net-pci,netdev=net0 -netdev user,id=net0 \
-		-rtc base=utc -S -s 2>&1 | tee $(OUTPUT_LA)
-
 contest-run-rv: defconfig
 	@test -f "$(A)/sdcard-rv.img" || (echo "missing image: $(A)/sdcard-rv.img" && exit 1)
 	@$(MAKE) -C make run ARCH=riscv64 BLK=y NET=n BUS=mmio DISK_IMG=$(A)/sdcard-rv.img
@@ -314,4 +280,4 @@ docker:
 	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la debug-rv debug-la debug-rv-timerfd debug-la-timerfd contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
