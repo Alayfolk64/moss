@@ -1,54 +1,139 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 170" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 510" role="img" aria-labelledby="title desc">
+  <title id="title">只读文件页直接映射：旧链路与新链路</title>
+  <desc id="desc">上方为逐页私有复制的旧链路，下方为只读直接映射及实际写入时的 COW 链路。</desc>
   <defs>
-    <marker id="a" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4 Z" fill="#888"/></marker>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/>
+    </marker>
+    <marker id="cow-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#bf6b2b"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#64748b" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      text { font-family: KaiTi, STKaiti, 楷体, serif; }
+      .latin { font-family: "Times New Roman", Times, serif; }
+      .row { stroke-width: 1.5; }
+      .node { stroke-width: 1.5; }
+      .row-label { font-size: 22px; font-weight: 700; }
+      .node-text { font-size: 20px; }
+      .small { font-size: 18px; }
+      .code { font-size: 16px; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .cow-arrow { stroke: #bf6b2b; stroke-width: 2; fill: none; marker-end: url(#cow-arrow); }
+    </style>
   </defs>
-  <rect width="620" height="170" fill="#fcfcfc" rx="2"/>
 
-  <!-- ===== OLD PATH ===== -->
-  <rect x="10" y="14" width="600" height="62" rx="6" fill="#fef5f5" stroke="#e74c3c" stroke-width="1.5"/>
-  <text x="22" y="34" fill="#c0392b" font-size="12" font-weight="bold">旧</text>
+  <rect width="1120" height="510" rx="10" fill="#ffffff"/>
 
-  <rect x="40" y="30" width="64" height="28" rx="4" fill="#ddd" stroke="#aaa" stroke-width="1"/>
-  <text x="72" y="49" text-anchor="middle" fill="#444" font-size="12">磁盘</text>
+  <!-- old MAP_PRIVATE read-fault path -->
+  <rect class="row" x="12" y="16" width="1096" height="132" rx="12" fill="#fff8f7" stroke="#f1b6ae"/>
+  <rect x="22" y="43" width="82" height="78" rx="10" fill="#fff0ee" stroke="#df6b5d" stroke-width="1.5"/>
+  <text class="row-label" x="63" y="75" text-anchor="middle" fill="#b84437">旧链路</text>
+  <text class="small" x="63" y="100" text-anchor="middle" fill="#b84437">逐页复制</text>
 
-  <line x1="104" y1="44" x2="118" y2="44" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+  <g filter="url(#shadow)">
+    <rect class="node" x="130" y="50" width="136" height="64" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text" x="198" y="78" text-anchor="middle" fill="#334155"><tspan class="latin">MAP_PRIVATE</tspan></text>
+    <text class="small" x="198" y="101" text-anchor="middle" fill="#334155">文件读缺页</text>
 
-  <rect x="122" y="30" width="96" height="28" rx="4" fill="#fff" stroke="#e74c3c" stroke-width="1.3"/>
-  <text x="170" y="49" text-anchor="middle" fill="#c0392b" font-size="11">Page Cache</text>
+    <rect class="node" x="290" y="50" width="136" height="64" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="358" y="78" text-anchor="middle" fill="#b84437">读取文件页</text>
+    <text class="small" x="358" y="101" text-anchor="middle" fill="#b84437"><tspan class="latin">Page Cache / I/O</tspan></text>
 
-  <line x1="218" y1="44" x2="232" y2="44" stroke="#e74c3c" stroke-width="2" marker-end="url(#a)"/>
-  <text x="225" y="39" text-anchor="middle" fill="#e74c3c" font-size="9">memcpy</text>
+    <rect class="node" x="450" y="50" width="136" height="64" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="518" y="88" text-anchor="middle" fill="#aa362b">分配私有页</text>
 
-  <rect x="238" y="28" width="112" height="32" rx="4" fill="#fdebd0" stroke="#e67e22" stroke-width="1.3"/>
-  <text x="294" y="49" text-anchor="middle" fill="#a04000" font-size="11">分配私有页 + 复制</text>
+    <rect class="node" x="610" y="50" width="136" height="64" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text latin" x="678" y="78" text-anchor="middle" fill="#aa362b">memcpy</text>
+    <text class="small" x="678" y="101" text-anchor="middle" fill="#aa362b"><tspan class="latin">4 KiB</tspan> 数据</text>
 
-  <line x1="350" y1="44" x2="364" y2="44" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect class="node" x="770" y="50" width="136" height="64" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="838" y="78" text-anchor="middle" fill="#b84437">安装私有页</text>
+    <text class="small latin" x="838" y="101" text-anchor="middle" fill="#b84437">PTE</text>
 
-  <rect x="368" y="30" width="64" height="28" rx="4" fill="#fff" stroke="#e74c3c" stroke-width="1.3"/>
-  <text x="400" y="49" text-anchor="middle" fill="#c0392b" font-size="12">PTE</text>
+    <rect class="node" x="930" y="50" width="136" height="64" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="998" y="78" text-anchor="middle" fill="#69428b">每个进程</text>
+    <text class="small" x="998" y="101" text-anchor="middle" fill="#69428b">持有独立副本</text>
+  </g>
 
-  <text x="450" y="40" fill="#c0392b" font-size="10">每进程各复制一份，只读也是浪费</text>
-  <text x="450" y="56" fill="#c0392b" font-size="10">分配 + memcpy 4 KiB + 引用计数操作</text>
+  <path class="arrow" d="M266 82 H284"/>
+  <path class="arrow" d="M426 82 H444"/>
+  <path class="arrow" d="M586 82 H604"/>
+  <path class="arrow" d="M746 82 H764"/>
+  <path class="arrow" d="M906 82 H924"/>
 
-  <!-- ===== NEW PATH ===== -->
-  <rect x="10" y="94" width="600" height="62" rx="6" fill="#f0faf3" stroke="#27ae60" stroke-width="1.5"/>
-  <text x="22" y="114" fill="#1e8449" font-size="12" font-weight="bold">新</text>
+  <!-- new read-only direct-map path and the optional COW write path -->
+  <rect class="row" x="12" y="172" width="1096" height="320" rx="12" fill="#f5f9fd" stroke="#9fc2df"/>
+  <rect x="22" y="279" width="82" height="92" rx="10" fill="#eaf4fb" stroke="#4d8dbf" stroke-width="1.5"/>
+  <text class="row-label" x="63" y="315" text-anchor="middle" fill="#356a9c">新链路</text>
+  <text class="small" x="63" y="340" text-anchor="middle" fill="#356a9c">只读直映</text>
 
-  <rect x="40" y="110" width="64" height="28" rx="4" fill="#ddd" stroke="#aaa" stroke-width="1"/>
-  <text x="72" y="129" text-anchor="middle" fill="#444" font-size="12">磁盘</text>
+  <!-- first line: read-only fast path -->
+  <g filter="url(#shadow)">
+    <rect class="node" x="130" y="208" width="136" height="68" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text" x="198" y="238" text-anchor="middle" fill="#334155"><tspan class="latin">MAP_PRIVATE</tspan></text>
+    <text class="small" x="198" y="262" text-anchor="middle" fill="#334155">文件读缺页</text>
 
-  <line x1="104" y1="124" x2="118" y2="124" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+    <rect class="node" x="290" y="208" width="136" height="68" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="358" y="238" text-anchor="middle" fill="#356a9c">获取稳定页引用</text>
+    <text class="small latin code" x="358" y="262" text-anchor="middle" fill="#356a9c">page_ref_at</text>
 
-  <rect x="122" y="108" width="116" height="32" rx="4" fill="#d6eaf8" stroke="#2980b9" stroke-width="1.3"/>
-  <text x="180" y="129" text-anchor="middle" fill="#1a5276" font-size="11">Folio / Page Cache</text>
+    <rect class="node" x="450" y="208" width="136" height="68" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="518" y="238" text-anchor="middle" fill="#356a9c">派生兄弟页</text>
+    <text class="small latin" x="518" y="262" text-anchor="middle" fill="#356a9c">FolioPageRef</text>
 
-  <line x1="238" y1="124" x2="254" y2="124" stroke="#27ae60" stroke-width="2" marker-end="url(#a)"/>
-  <text x="246" y="119" text-anchor="middle" fill="#1e8449" font-size="9">直接映射</text>
+    <rect class="node" x="610" y="208" width="136" height="68" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="678" y="238" text-anchor="middle" fill="#356a9c">提交前校验</text>
+    <text class="small" x="678" y="262" text-anchor="middle" fill="#356a9c">校验未被截断</text>
 
-  <rect x="260" y="108" width="164" height="32" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
-  <text x="342" y="123" text-anchor="middle" fill="#1e8449" font-size="11">Folio 物理页 → 只读 PTE</text>
-  <text x="342" y="138" text-anchor="middle" fill="#1e8449" font-size="9">进程 A / B / C 共享同一物理页</text>
+    <rect class="node" x="770" y="208" width="136" height="68" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="838" y="238" text-anchor="middle" fill="#25824a">原子安装只读</text>
+    <text class="small latin" x="838" y="262" text-anchor="middle" fill="#25824a">PTE: flags - WRITE</text>
 
-  <text x="445" y="120" fill="#a04000" font-size="10">写时触发 COW：</text>
-  <text x="445" y="136" fill="#a04000" font-size="10">才分配私有页 + 复制</text>
+    <rect class="node" x="930" y="208" width="136" height="68" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="998" y="238" text-anchor="middle" fill="#25824a">保存页引用</text>
+    <text class="small latin" x="998" y="262" text-anchor="middle" fill="#25824a">FilePageRefs</text>
+  </g>
+
+  <path class="arrow" d="M266 242 H284"/>
+  <path class="arrow" d="M426 242 H444"/>
+  <path class="arrow" d="M586 242 H604"/>
+  <path class="arrow" d="M746 242 H764"/>
+  <path class="arrow" d="M906 242 H924"/>
+
+  <!-- bend into the second line only when the process writes -->
+  <path class="cow-arrow" d="M998 276 V326"/>
+
+  <g filter="url(#shadow)">
+    <rect class="node" x="930" y="334" width="136" height="68" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="998" y="364" text-anchor="middle" fill="#9a571f">真正写入</text>
+    <text class="small" x="998" y="388" text-anchor="middle" fill="#9a571f">触发 <tspan class="latin">COW</tspan> 缺页</text>
+
+    <rect class="node" x="770" y="334" width="136" height="68" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="838" y="364" text-anchor="middle" fill="#9a571f">查找原页引用</text>
+    <text class="small latin" x="838" y="388" text-anchor="middle" fill="#9a571f">FolioPageRef</text>
+
+    <rect class="node" x="610" y="334" width="136" height="68" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="678" y="374" text-anchor="middle" fill="#9a571f">分配私有页</text>
+
+    <rect class="node" x="450" y="334" width="136" height="68" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="518" y="364" text-anchor="middle" fill="#9a571f">复制原页数据</text>
+    <text class="small" x="518" y="388" text-anchor="middle" fill="#9a571f"><tspan class="latin">folio</tspan> → 私有页</text>
+
+    <rect class="node" x="290" y="334" width="136" height="68" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="358" y="364" text-anchor="middle" fill="#9a571f">原子替换为</text>
+    <text class="small" x="358" y="388" text-anchor="middle" fill="#9a571f">可写 <tspan class="latin">PTE</tspan></text>
+
+    <rect class="node" x="130" y="334" width="136" height="68" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="198" y="364" text-anchor="middle" fill="#9a571f">移除页引用</text>
+    <text class="small" x="198" y="388" text-anchor="middle" fill="#9a571f">完成写时复制</text>
+  </g>
+
+  <path class="cow-arrow" d="M930 368 H912"/>
+  <path class="cow-arrow" d="M770 368 H752"/>
+  <path class="cow-arrow" d="M610 368 H592"/>
+  <path class="cow-arrow" d="M450 368 H432"/>
+  <path class="cow-arrow" d="M290 368 H272"/>
 </svg>

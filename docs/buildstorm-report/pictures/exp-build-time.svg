@@ -1,103 +1,82 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
-  <defs>
-    <linearGradient id="bar" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3498db"/><stop offset="100%" stop-color="#2980b9"/>
-    </linearGradient>
-  </defs>
-  <rect width="640" height="300" fill="#fafbfc" rx="4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 430" role="img" aria-labelledby="title desc">
+  <title id="title">BuildStorm compile time by optimization stage</title>
+  <desc id="desc">Bars show compile time in seconds. The line shows cumulative change from the baseline.</desc>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #243447; }
+    .muted { fill: #607080; }
+    .grid { stroke: #d9e1e8; stroke-width: 1; }
+    .axis { stroke: #647586; stroke-width: 1.25; }
+    .bar { fill: #3b82c4; }
+    .final { fill: #17805c; }
+    .line { fill: none; stroke: #d45b58; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .point { fill: #fff; stroke: #d45b58; stroke-width: 2.5; }
+  </style>
+  <rect width="760" height="430" fill="#ffffff"/>
+  <text x="380" y="30" text-anchor="middle" font-size="18" font-weight="700">BuildStorm Compile Time by Optimization Stage</text>
+  <text x="380" y="52" text-anchor="middle" font-size="11" class="muted">Bars: elapsed time (seconds)  |  Line: cumulative change from baseline</text>
 
-  <!-- Left Y axis (time) -->
-  <line x1="62" y1="30" x2="62" y2="245" stroke="#555" stroke-width="1.5"/>
-  <!-- Right Y axis (%) -->
-  <line x1="600" y1="30" x2="600" y2="245" stroke="#555" stroke-width="1.5"/>
-  <!-- X axis -->
-  <line x1="62" y1="245" x2="600" y2="245" stroke="#555" stroke-width="1.5"/>
+  <!-- Plot area: x=82..650, y=82..330 -->
+  <line x1="82" y1="330" x2="650" y2="330" class="grid"/>
+  <line x1="82" y1="268" x2="650" y2="268" class="grid"/>
+  <line x1="82" y1="206" x2="650" y2="206" class="grid"/>
+  <line x1="82" y1="144" x2="650" y2="144" class="grid"/>
+  <line x1="82" y1="82" x2="650" y2="82" class="grid"/>
+  <line x1="82" y1="82" x2="82" y2="330" class="axis"/>
+  <line x1="650" y1="82" x2="650" y2="330" class="axis"/>
+  <line x1="82" y1="330" x2="650" y2="330" class="axis"/>
 
-  <!-- Y grid lines -->
-  <line x1="62" y1="245" x2="600" y2="245" stroke="#e0e0e0" stroke-width="0.5"/>
-  <line x1="62" y1="191" x2="600" y2="191" stroke="#e0e0e0" stroke-width="0.5"/>
-  <line x1="62" y1="137" x2="600" y2="137" stroke="#e0e0e0" stroke-width="0.5"/>
-  <line x1="62" y1="84" x2="600" y2="84" stroke="#e0e0e0" stroke-width="0.5"/>
-  <line x1="62" y1="30" x2="600" y2="30" stroke="#e0e0e0" stroke-width="0.5"/>
+  <text x="69" y="334" text-anchor="end" font-size="11" class="muted">0</text>
+  <text x="69" y="272" text-anchor="end" font-size="11" class="muted">400</text>
+  <text x="69" y="210" text-anchor="end" font-size="11" class="muted">800</text>
+  <text x="69" y="148" text-anchor="end" font-size="11" class="muted">1200</text>
+  <text x="69" y="86" text-anchor="end" font-size="11" class="muted">1600</text>
+  <text x="665" y="334" font-size="11" fill="#b64b4b">0%</text>
+  <text x="665" y="272" font-size="11" fill="#b64b4b">-25%</text>
+  <text x="665" y="210" font-size="11" fill="#b64b4b">-50%</text>
+  <text x="665" y="148" font-size="11" fill="#b64b4b">-75%</text>
+  <text x="665" y="86" font-size="11" fill="#b64b4b">-100%</text>
+  <text x="25" y="206" text-anchor="middle" font-size="11" class="muted" transform="rotate(-90 25 206)">Compile time (s)</text>
+  <text x="728" y="206" text-anchor="middle" font-size="11" fill="#b64b4b" transform="rotate(90 728 206)">Cumulative change from baseline (%)</text>
 
-  <!-- Left Y labels (time) -->
-  <text x="56" y="249" text-anchor="end" fill="#555" font-size="9">0</text>
-  <text x="56" y="195" text-anchor="end" fill="#555" font-size="9">400</text>
-  <text x="56" y="141" text-anchor="end" fill="#555" font-size="9">800</text>
-  <text x="56" y="87" text-anchor="end" fill="#555" font-size="9">1200</text>
-  <text x="56" y="34" text-anchor="end" fill="#555" font-size="9">1600</text>
+  <!-- Bars use the table values with a 1600 s scale. -->
+  <rect x="99" y="93.7" width="48" height="236.3" rx="3" class="bar"/>
+  <rect x="168" y="166.0" width="48" height="164.0" rx="3" class="bar"/>
+  <rect x="237" y="144.4" width="48" height="185.6" rx="3" class="bar"/>
+  <rect x="306" y="193.8" width="48" height="136.2" rx="3" class="bar"/>
+  <rect x="375" y="210.5" width="48" height="119.5" rx="3" class="bar"/>
+  <rect x="444" y="211.7" width="48" height="118.3" rx="3" class="bar"/>
+  <rect x="513" y="232.7" width="48" height="97.3" rx="3" class="bar"/>
+  <rect x="582" y="258.7" width="48" height="71.3" rx="3" class="final"/>
 
-  <!-- Right Y labels (%) -->
-  <text x="606" y="249" fill="#e74c3c" font-size="9">0%</text>
-  <text x="606" y="195" fill="#e74c3c" font-size="9">-25%</text>
-  <text x="606" y="141" fill="#e74c3c" font-size="9">-50%</text>
-  <text x="606" y="87" fill="#e74c3c" font-size="9">-75%</text>
+  <g font-size="11" text-anchor="middle" font-weight="700">
+    <text x="123" y="86">1524.50</text><text x="192" y="158">1058.68</text>
+    <text x="261" y="136">1197.38</text><text x="330" y="185">879.17</text>
+    <text x="399" y="194">772.47</text><text x="468" y="195">765.18</text>
+    <text x="537" y="224">628.53</text><text x="606" y="250" fill="#17805c">460.76</text>
+  </g>
 
-  <!-- Bars: 8 stages, height = time/1600 * 215 -->
-  <!-- 00-U:1524.50→205, 01:1058.68→142, 02:1197.38→161, 03:879.17→118, 04:772.47→104, 05:765.18→103, 06:628.53→84, 07-10:460.76→62 -->
-  <rect x="75" y="40" width="44" height="205" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="97" y="33" text-anchor="middle" fill="#2c3e50" font-size="9" font-weight="bold">1525</text>
-
-  <rect x="133" y="103" width="44" height="142" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="155" y="96" text-anchor="middle" fill="#2c3e50" font-size="9">1059</text>
-
-  <rect x="191" y="84" width="44" height="161" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="213" y="77" text-anchor="middle" fill="#2c3e50" font-size="9">1197</text>
-
-  <rect x="249" y="127" width="44" height="118" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="271" y="120" text-anchor="middle" fill="#2c3e50" font-size="9">879</text>
-
-  <rect x="307" y="141" width="44" height="104" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="329" y="134" text-anchor="middle" fill="#2c3e50" font-size="9">772</text>
-
-  <rect x="365" y="142" width="44" height="103" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="387" y="135" text-anchor="middle" fill="#2c3e50" font-size="9">765</text>
-
-  <rect x="423" y="161" width="44" height="84" fill="url(#bar)" rx="2" opacity="0.9"/>
-  <text x="445" y="154" text-anchor="middle" fill="#2c3e50" font-size="9">629</text>
-
-  <rect x="481" y="183" width="44" height="62" fill="#27ae60" rx="2" opacity="0.9"/>
-  <text x="503" y="176" text-anchor="middle" fill="#1e8449" font-size="9" font-weight="bold">461</text>
-
-  <!-- Line for relative-to-baseline % -->
-  <!-- y = 245 + (%/100) * 215, where 0%→245, -100%→30 -->
-  <!-- 00:0→245, 01:-30.56→179, 02:-21.46→199, 03:-42.33→154, 04:-49.33→139, 05:-49.81→138, 06:-58.77→119, 07-10:-69.78→95 -->
-  <polyline points="97,245 155,179 213,199 271,154 329,139 387,138 445,119 503,95"
-    fill="none" stroke="#e74c3c" stroke-width="2.2" stroke-linejoin="round"/>
-  <!-- dots -->
-  <circle cx="97" cy="245" r="4" fill="#e74c3c"/>
-  <circle cx="155" cy="179" r="4" fill="#e74c3c"/>
-  <circle cx="213" cy="199" r="4" fill="#e74c3c"/>
-  <circle cx="271" cy="154" r="4" fill="#e74c3c"/>
-  <circle cx="329" cy="139" r="4" fill="#e74c3c"/>
-  <circle cx="387" cy="138" r="4" fill="#e74c3c"/>
-  <circle cx="445" cy="119" r="4" fill="#e74c3c"/>
-  <circle cx="503" cy="95" r="4" fill="#e74c3c"/>
-
-  <!-- Percentage labels near dots -->
-  <text x="97" y="238" text-anchor="middle" fill="#e74c3c" font-size="8">0%</text>
-  <text x="155" y="172" text-anchor="middle" fill="#e74c3c" font-size="8">-31%</text>
-  <text x="213" y="192" text-anchor="middle" fill="#e74c3c" font-size="8">-21%</text>
-  <text x="271" y="147" text-anchor="middle" fill="#e74c3c" font-size="8">-42%</text>
-  <text x="329" y="132" text-anchor="middle" fill="#e74c3c" font-size="8">-49%</text>
-  <text x="387" y="131" text-anchor="middle" fill="#e74c3c" font-size="8">-50%</text>
-  <text x="445" y="112" text-anchor="middle" fill="#e74c3c" font-size="8">-59%</text>
-  <text x="503" y="88" text-anchor="middle" fill="#e74c3c" font-size="8">-70%</text>
-
-  <!-- X labels -->
-  <text x="97" y="261" text-anchor="middle" fill="#555" font-size="8.5">00-U</text>
-  <text x="155" y="261" text-anchor="middle" fill="#555" font-size="8.5">01</text>
-  <text x="213" y="261" text-anchor="middle" fill="#555" font-size="8.5">02</text>
-  <text x="271" y="261" text-anchor="middle" fill="#555" font-size="8.5">03</text>
-  <text x="329" y="261" text-anchor="middle" fill="#555" font-size="8.5">04</text>
-  <text x="387" y="261" text-anchor="middle" fill="#555" font-size="8.5">05</text>
-  <text x="445" y="261" text-anchor="middle" fill="#555" font-size="8.5">06</text>
-  <text x="503" y="261" text-anchor="middle" fill="#555" font-size="8.5">07-10</text>
-
-  <!-- Legend -->
-  <rect x="72" y="275" width="10" height="10" fill="#3498db" rx="1"/>
-  <text x="87" y="284" fill="#555" font-size="9">编译耗时 (s) — 柱，左轴</text>
-  <line x1="195" y1="280" x2="218" y2="280" stroke="#e74c3c" stroke-width="2"/>
-  <circle cx="207" cy="280" r="3" fill="#e74c3c"/>
-  <text x="224" y="284" fill="#555" font-size="9">相对基线 (%) — 折线，右轴</text>
+  <!-- Cumulative change line, mapped from 0% (y=330) to -100% (y=82). -->
+  <!-- The right-axis scale maps 0% to y=330 and -100% to y=82. -->
+  <polyline points="123,330 192,254.2 261,276.8 330,225.0 399,207.7 468,206.5 537,184.3 606,157.0" class="line"/>
+  <g>
+    <circle cx="123" cy="330" r="5" class="point"/><circle cx="192" cy="254.2" r="5" class="point"/>
+    <circle cx="261" cy="276.8" r="5" class="point"/><circle cx="330" cy="225.0" r="5" class="point"/>
+    <circle cx="399" cy="207.7" r="5" class="point"/><circle cx="468" cy="206.5" r="5" class="point"/>
+    <circle cx="537" cy="184.3" r="5" class="point"/><circle cx="606" cy="157.0" r="5" class="point"/>
+  </g>
+  <g font-size="10" text-anchor="middle" fill="#b64b4b">
+    <text x="123" y="320">0.00%</text><text x="192" y="244">-30.56%</text>
+    <text x="261" y="267">-21.46%</text><text x="330" y="215">-42.33%</text>
+    <text x="399" y="222">-49.33%</text><text x="468" y="223">-49.81%</text>
+    <text x="537" y="175">-58.77%</text><text x="606" y="148">-69.78%</text>
+  </g>
+  <g font-size="11" text-anchor="middle" class="muted">
+    <text x="123" y="350">00-U</text><text x="192" y="350">01</text><text x="261" y="350">02</text><text x="330" y="350">03</text>
+    <text x="399" y="350">04</text><text x="468" y="350">05</text><text x="537" y="350">06</text><text x="606" y="350">07-10</text>
+  </g>
+  <text x="366" y="374" text-anchor="middle" font-size="11" class="muted">Optimization stage</text>
+  <g transform="translate(216 397)" font-size="11">
+    <rect width="13" height="13" rx="2" class="bar"/><text x="20" y="11">Compile time (s)</text>
+    <line x1="157" y1="7" x2="180" y2="7" class="line"/><circle cx="168.5" cy="7" r="4" class="point"/><text x="188" y="11">Cumulative change (%)</text>
+  </g>
 </svg>

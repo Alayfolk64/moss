@@ -1,67 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 260" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 700">
   <defs>
-    <marker id="a" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4 Z" fill="#888"/></marker>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/></marker>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#64748b" flood-opacity="0.16"/></filter>
+    <style>
+      text { font-family: KaiTi, STKaiti, 楷体, serif; }
+      .latin { font-family: "Times New Roman", Times, serif; }
+      .row { stroke-width: 1.5; }
+      .node { stroke-width: 1.5; }
+      .row-label { font-size: 22px; font-weight: 700; }
+      .node-text { font-size: 20px; }
+      .small { font-size: 18px; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
   </defs>
-  <rect width="620" height="260" fill="#fcfcfc" rx="2"/>
+  <rect width="1120" height="700" rx="10" fill="#ffffff"/>
 
-  <!-- ===== OLD PATH ===== -->
-  <rect x="10" y="10" width="600" height="105" rx="6" fill="#fef5f5" stroke="#e74c3c" stroke-width="1.5"/>
-  <text x="22" y="30" fill="#c0392b" font-size="12" font-weight="bold">旧：前台同步逐页回收</text>
+  <!-- old synchronous reclaim, wrapped -->
+  <rect class="row" x="12" y="16" width="1096" height="320" rx="12" fill="#fff8f7" stroke="#f1b6ae"/>
+  <rect x="24" y="126" width="104" height="100" rx="10" fill="#fff0ee" stroke="#df6b5d" stroke-width="1.5"/>
+  <text class="row-label" x="76" y="165" text-anchor="middle" fill="#b84437">旧链路</text><text class="small" x="76" y="192" text-anchor="middle" fill="#b84437">前台逐页</text>
+  <g filter="url(#shadow)">
+    <rect class="node" x="160" y="55" width="170" height="70" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text latin" x="245" y="84" text-anchor="middle" fill="#334155">exit / exec</text><text class="small" x="245" y="109" text-anchor="middle" fill="#334155">前台线程</text>
+    <rect class="node" x="390" y="55" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="475" y="84" text-anchor="middle" fill="#69428b">获取 <tspan class="latin">AddrSpace</tspan></text><text class="small" x="475" y="109" text-anchor="middle" fill="#69428b">写锁</text>
+    <rect class="node" x="620" y="55" width="170" height="70" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="705" y="84" text-anchor="middle" fill="#b84437">逐个 <tspan class="latin">area</tspan></text><text class="small" x="705" y="109" text-anchor="middle" fill="#b84437">遍历虚拟区间</text>
+    <rect class="node" x="850" y="55" width="170" height="70" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="935" y="84" text-anchor="middle" fill="#aa362b">逐 <tspan class="latin">4 KiB</tspan> 页面</text><text class="small" x="935" y="109" text-anchor="middle" fill="#aa362b">盲扫整个区间</text>
 
-  <rect x="28" y="40" width="100" height="30" rx="4" fill="#f4ecf7" stroke="#8e44ad" stroke-width="1.3"/>
-  <text x="78" y="60" text-anchor="middle" fill="#6c3483" font-size="10">退出线程</text>
+    <rect class="node" x="850" y="215" width="170" height="70" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="935" y="244" text-anchor="middle" fill="#b84437">每页清除 <tspan class="latin">PTE</tspan></text><text class="small latin" x="935" y="269" text-anchor="middle" fill="#b84437">pt.unmap</text>
+    <rect class="node" x="620" y="215" width="170" height="70" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="705" y="244" text-anchor="middle" fill="#aa362b">每页完成修改</text><text class="small latin" x="705" y="269" text-anchor="middle" fill="#aa362b">pt.finish</text>
+    <rect class="node" x="390" y="215" width="170" height="70" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="475" y="244" text-anchor="middle" fill="#aa362b">全核 <tspan class="latin">TLB</tspan> 刷新</text><text class="small latin" x="475" y="269" text-anchor="middle" fill="#aa362b">shootdown</text>
+    <rect class="node" x="160" y="215" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="245" y="244" text-anchor="middle" fill="#69428b">逐页释放</text><text class="small latin" x="245" y="269" text-anchor="middle" fill="#69428b">frame / folio</text>
+  </g>
+  <path class="arrow" d="M330 90 H382"/><path class="arrow" d="M560 90 H612"/><path class="arrow" d="M790 90 H842"/>
+  <path class="arrow" d="M935 125 V207"/><path class="arrow" d="M850 250 H798"/><path class="arrow" d="M620 250 H568"/><path class="arrow" d="M390 250 H338"/>
 
-  <line x1="128" y1="55" x2="140" y2="55" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+  <!-- new asynchronous batched reclaim, wrapped -->
+  <rect class="row" x="12" y="364" width="1096" height="320" rx="12" fill="#f5fbf7" stroke="#a9d9b9"/>
+  <rect x="24" y="474" width="104" height="100" rx="10" fill="#e9f8ef" stroke="#48a86b" stroke-width="1.5"/>
+  <text class="row-label" x="76" y="513" text-anchor="middle" fill="#25824a">新链路</text><text class="small" x="76" y="540" text-anchor="middle" fill="#25824a">异步批量</text>
+  <g filter="url(#shadow)">
+    <rect class="node" x="140" y="403" width="150" height="70" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text latin" x="215" y="432" text-anchor="middle" fill="#334155">exit / exec</text><text class="small" x="215" y="457" text-anchor="middle" fill="#334155">前台线程</text>
+    <rect class="node" x="335" y="403" width="150" height="70" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="410" y="432" text-anchor="middle" fill="#356a9c">延迟回收</text><text class="small" x="410" y="457" text-anchor="middle" fill="#356a9c">提交地址空间</text>
+    <rect class="node" x="530" y="403" width="150" height="70" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="605" y="432" text-anchor="middle" fill="#356a9c">加入回收队列</text><text class="small" x="605" y="457" text-anchor="middle" fill="#356a9c">前台立即返回</text>
+    <rect class="node" x="725" y="403" width="150" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text latin" x="800" y="432" text-anchor="middle" fill="#69428b">worker</text><text class="small" x="800" y="457" text-anchor="middle" fill="#69428b">获取写锁并回收</text>
+    <rect class="node" x="920" y="403" width="150" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="995" y="432" text-anchor="middle" fill="#25824a">跳到驻留页</text><text class="small" x="995" y="457" text-anchor="middle" fill="#25824a">跳过空洞区间</text>
 
-  <rect x="144" y="38" width="130" height="34" rx="4" fill="#fdf2f2" stroke="#e74c3c" stroke-width="1.5"/>
-  <text x="209" y="52" text-anchor="middle" fill="#c0392b" font-size="9.5">持写锁逐 area</text>
-  <text x="209" y="66" text-anchor="middle" fill="#c0392b" font-size="9.5">逐 4KiB 页盲扫</text>
-
-  <line x1="274" y1="55" x2="286" y2="55" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <rect x="290" y="38" width="118" height="34" rx="4" fill="#fdebd0" stroke="#e67e22" stroke-width="1.3"/>
-  <text x="349" y="52" text-anchor="middle" fill="#a04000" font-size="9.5">每页 pt.unmap</text>
-  <text x="349" y="66" text-anchor="middle" fill="#a04000" font-size="9.5">+ pt.finish (TLB刷新)</text>
-
-  <line x1="408" y1="55" x2="420" y2="55" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <rect x="424" y="42" width="95" height="28" rx="4" fill="#ddd" stroke="#aaa" stroke-width="1"/>
-  <text x="471" y="61" text-anchor="middle" fill="#444" font-size="10">逐页释放 frame</text>
-
-  <text x="40" y="95" fill="#c0392b" font-size="9.5">TLB 刷新: 每页一次全核 RFENCE，10 万页 = 10 万次 IPI</text>
-  <text x="40" y="110" fill="#c0392b" font-size="9.5">前台线程全程持锁，阻塞其他操作</text>
-
-  <!-- ===== NEW PATH ===== -->
-  <rect x="10" y="130" width="600" height="115" rx="6" fill="#f0faf3" stroke="#27ae60" stroke-width="1.5"/>
-  <text x="22" y="150" fill="#1e8449" font-size="12" font-weight="bold">新：异步批量回收 + 定向 TLB</text>
-
-  <rect x="28" y="160" width="100" height="28" rx="4" fill="#d5dbdb" stroke="#95a5a6" stroke-width="1"/>
-  <text x="78" y="179" text-anchor="middle" fill="#444" font-size="10">退出线程</text>
-
-  <line x1="128" y1="174" x2="142" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <rect x="146" y="158" width="108" height="32" rx="4" fill="#d6eaf8" stroke="#2980b9" stroke-width="1.3"/>
-  <text x="200" y="172" text-anchor="middle" fill="#1a5276" font-size="9.5">投入回收队列</text>
-  <text x="200" y="186" text-anchor="middle" fill="#1a5276" font-size="9.5">前台立即返回</text>
-
-  <line x1="254" y1="174" x2="268" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <rect x="272" y="158" width="88" height="32" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
-  <text x="316" y="172" text-anchor="middle" fill="#1e8449" font-size="9.5">后台 worker</text>
-  <text x="316" y="186" text-anchor="middle" fill="#1e8449" font-size="9.5">取地址空间</text>
-
-  <line x1="360" y1="174" x2="374" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <rect x="378" y="156" width="108" height="36" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
-  <text x="432" y="170" text-anchor="middle" fill="#1e8449" font-size="9.5">next_present</text>
-  <text x="432" y="184" text-anchor="middle" fill="#1e8449" font-size="9.5">跳空洞 + 清 PTE</text>
-
-  <line x1="486" y1="174" x2="500" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <rect x="504" y="156" width="96" height="36" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
-  <text x="552" y="170" text-anchor="middle" fill="#1e8449" font-size="9.5">UnmapGather</text>
-  <text x="552" y="184" text-anchor="middle" fill="#1e8449" font-size="9.5">累积 8192 页</text>
-
-  <text x="40" y="215" fill="#1e8449" font-size="9.5">TLB 刷新: 每 8192 页一次 shootdown → 10 万页仅约 12 次 IPI</text>
-  <text x="40" y="232" fill="#1e8449" font-size="9.5">active-root: 仅向真正运行该地址空间的 CPU 发送 TLB 刷新，进一步减少无关 IPI</text>
+    <rect class="node" x="850" y="563" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="935" y="592" text-anchor="middle" fill="#25824a">清除 <tspan class="latin">PTE</tspan></text><text class="small" x="935" y="617" text-anchor="middle" fill="#25824a">保留页引用</text>
+    <rect class="node" x="620" y="563" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text latin" x="705" y="592" text-anchor="middle" fill="#25824a">UnmapGather</text><text class="small" x="705" y="617" text-anchor="middle" fill="#25824a">累积 <tspan class="latin">8192</tspan> 项</text>
+    <rect class="node" x="390" y="563" width="170" height="70" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text latin" x="475" y="592" text-anchor="middle" fill="#9a571f">active-root</text><text class="small" x="475" y="617" text-anchor="middle" fill="#9a571f">定向 <tspan class="latin">TLB</tspan> 刷新</text>
+    <rect class="node" x="160" y="563" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="245" y="592" text-anchor="middle" fill="#25824a">批量释放</text><text class="small latin" x="245" y="617" text-anchor="middle" fill="#25824a">frame / folio</text>
+  </g>
+  <path class="arrow" d="M290 438 H327"/><path class="arrow" d="M485 438 H522"/><path class="arrow" d="M680 438 H717"/><path class="arrow" d="M875 438 H912"/>
+  <path class="arrow" d="M995 473 V520 H935 V555"/><path class="arrow" d="M850 598 H798"/><path class="arrow" d="M620 598 H568"/><path class="arrow" d="M390 598 H338"/>
 </svg>

@@ -1,58 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
-  <defs>
-    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#2ecc71"/><stop offset="100%" stop-color="#27ae60"/>
-    </linearGradient>
-  </defs>
-  <rect width="600" height="260" fill="#fafbfc" rx="4"/>
-
-  <line x1="60" y1="30" x2="60" y2="210" stroke="#555" stroke-width="1.5"/>
-  <line x1="60" y1="210" x2="580" y2="210" stroke="#555" stroke-width="1.5"/>
-
-  <!-- Y grid and labels -->
-  <line x1="60" y1="210" x2="580" y2="210" stroke="#e8e8e8" stroke-width="0.5"/>
-  <line x1="60" y1="165" x2="580" y2="165" stroke="#e8e8e8" stroke-width="0.5"/>
-  <line x1="60" y1="120" x2="580" y2="120" stroke="#e8e8e8" stroke-width="0.5"/>
-  <line x1="60" y1="75" x2="580" y2="75" stroke="#e8e8e8" stroke-width="0.5"/>
-  <line x1="60" y1="30" x2="580" y2="30" stroke="#e8e8e8" stroke-width="0.5"/>
-
-  <text x="52" y="214" text-anchor="end" fill="#555" font-size="9">0</text>
-  <text x="52" y="169" text-anchor="end" fill="#555" font-size="9">10</text>
-  <text x="52" y="124" text-anchor="end" fill="#555" font-size="9">20</text>
-  <text x="52" y="79" text-anchor="end" fill="#555" font-size="9">30</text>
-  <text x="52" y="34" text-anchor="end" fill="#555" font-size="9">40</text>
-
-  <!-- Bars: 6-8核占比%. Height = %/50 * 180 -->
-  <!-- 00-U:6.23→22, 01:22.38→81, 02:17.70→64, 03:32.61→117, 04:32.21→116, 05:31.46→113, 06:42.93→155 -->
-  <rect x="75" y="188" width="44" height="22" fill="url(#b)" rx="2" opacity="0.9"/>
-  <text x="97" y="181" text-anchor="middle" fill="#2c3e50" font-size="9">6.2</text>
-
-  <rect x="140" y="129" width="44" height="81" fill="url(#b)" rx="2" opacity="0.9"/>
-  <text x="162" y="122" text-anchor="middle" fill="#2c3e50" font-size="9">22.4</text>
-
-  <rect x="205" y="146" width="44" height="64" fill="url(#b)" rx="2" opacity="0.9"/>
-  <text x="227" y="139" text-anchor="middle" fill="#2c3e50" font-size="9">17.7</text>
-
-  <rect x="270" y="93" width="44" height="117" fill="url(#b)" rx="2" opacity="0.9"/>
-  <text x="292" y="86" text-anchor="middle" fill="#2c3e50" font-size="9">32.6</text>
-
-  <rect x="335" y="94" width="44" height="116" fill="url(#b)" rx="2" opacity="0.9"/>
-  <text x="357" y="87" text-anchor="middle" fill="#2c3e50" font-size="9">32.2</text>
-
-  <rect x="400" y="97" width="44" height="113" fill="url(#b)" rx="2" opacity="0.9"/>
-  <text x="422" y="90" text-anchor="middle" fill="#2c3e50" font-size="9">31.5</text>
-
-  <rect x="465" y="55" width="44" height="155" fill="#1abc9c" rx="2" opacity="0.9"/>
-  <text x="487" y="48" text-anchor="middle" fill="#16a085" font-size="10" font-weight="bold">42.9</text>
-
-  <!-- X labels -->
-  <text x="97" y="226" text-anchor="middle" fill="#555" font-size="8.5">00-U</text>
-  <text x="162" y="226" text-anchor="middle" fill="#555" font-size="8.5">01</text>
-  <text x="227" y="226" text-anchor="middle" fill="#555" font-size="8.5">02</text>
-  <text x="292" y="226" text-anchor="middle" fill="#555" font-size="8.5">03</text>
-  <text x="357" y="226" text-anchor="middle" fill="#555" font-size="8.5">04</text>
-  <text x="422" y="226" text-anchor="middle" fill="#555" font-size="8.5">05</text>
-  <text x="487" y="226" text-anchor="middle" fill="#555" font-size="8.5">06</text>
-
-  <text x="320" y="248" text-anchor="middle" fill="#888" font-size="9">6～8 核时间占比 (%) — 越高说明更多核被同时利用</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 390" role="img" aria-labelledby="title desc">
+  <title id="title">Time with six to eight CPU cores active</title>
+  <desc id="desc">Percentage of measured time during which six to eight cores were active at each optimization stage.</desc>
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #243447; }
+    .muted { fill: #607080; }
+    .grid { stroke: #d9e1e8; stroke-width: 1; }
+    .axis { stroke: #647586; stroke-width: 1.25; }
+    .bar { fill: #2f8f83; }
+    .final { fill: #176b61; }
+  </style>
+  <rect width="700" height="390" fill="#ffffff"/>
+  <text x="350" y="30" text-anchor="middle" font-size="18" font-weight="700">High Parallelism by Optimization Stage</text>
+  <text x="350" y="52" text-anchor="middle" font-size="11" class="muted">Share of time with 6–8 CPU cores active</text>
+  <!-- Plot area: x=78..640, y=82..300; scale 0..50%. -->
+  <line x1="78" y1="300" x2="640" y2="300" class="grid"/><line x1="78" y1="256.4" x2="640" y2="256.4" class="grid"/>
+  <line x1="78" y1="212.8" x2="640" y2="212.8" class="grid"/><line x1="78" y1="169.2" x2="640" y2="169.2" class="grid"/>
+  <line x1="78" y1="125.6" x2="640" y2="125.6" class="grid"/><line x1="78" y1="82" x2="640" y2="82" class="grid"/>
+  <line x1="78" y1="82" x2="78" y2="300" class="axis"/><line x1="78" y1="300" x2="640" y2="300" class="axis"/>
+  <g font-size="11" text-anchor="end" class="muted">
+    <text x="66" y="304">0%</text><text x="66" y="260">10%</text><text x="66" y="217">20%</text>
+    <text x="66" y="173">30%</text><text x="66" y="130">40%</text><text x="66" y="86">50%</text>
+  </g>
+  <text x="24" y="191" text-anchor="middle" font-size="11" class="muted" transform="rotate(-90 24 191)">Time with 6–8 cores active (%)</text>
+  <!-- Values: 6.23, 22.38, 17.70, 32.61, 32.21, 31.46, 42.93. -->
+  <rect x="101" y="272.9" width="50" height="27.1" rx="3" class="bar"/><rect x="174" y="202.4" width="50" height="97.6" rx="3" class="bar"/>
+  <rect x="247" y="222.9" width="50" height="77.1" rx="3" class="bar"/><rect x="320" y="157.7" width="50" height="142.3" rx="3" class="bar"/>
+  <rect x="393" y="159.5" width="50" height="140.5" rx="3" class="bar"/><rect x="466" y="162.8" width="50" height="137.2" rx="3" class="bar"/>
+  <rect x="539" y="112.4" width="50" height="187.6" rx="3" class="final"/>
+  <g font-size="11" text-anchor="middle" font-weight="700">
+    <text x="126" y="264">6.23%</text><text x="199" y="194">22.38%</text><text x="272" y="215">17.70%</text>
+    <text x="345" y="149">32.61%</text><text x="418" y="151">32.21%</text><text x="491" y="155">31.46%</text><text x="564" y="104" fill="#176b61">42.93%</text>
+  </g>
+  <g font-size="11" text-anchor="middle" class="muted">
+    <text x="126" y="322">00-U</text><text x="199" y="322">01</text><text x="272" y="322">02</text><text x="345" y="322">03</text>
+    <text x="418" y="322">04</text><text x="491" y="322">05</text><text x="564" y="322">06</text>
+  </g>
+  <text x="350" y="348" text-anchor="middle" font-size="11" class="muted">Optimization stage</text>
 </svg>

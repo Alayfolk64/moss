@@ -1,86 +1,99 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 750" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 790" role="img" aria-labelledby="title desc">
+  <title id="title">AddrSpace 三段式缺页处理流程</title>
+  <desc id="desc">缺页处理依次经过 prepare、execute 和 commit 三个阶段，慢操作在 AddrSpace 锁外执行。</desc>
   <defs>
-    <marker id="a" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
-      <path d="M0,0 L6,2 L0,4 Z" fill="#999"/>
+    <marker id="arrow" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#8795a1"/>
     </marker>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="145%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#172b3a" flood-opacity="0.10"/>
+    </filter>
   </defs>
+  <style>
+    text { font-family: KaiTi, STKaiti, "楷体", serif; fill: #293846; }
+    .latin { font-family: "Times New Roman", Times, serif; }
+.body { font-size: 17px; }
+.phase-title { font-family: "Times New Roman", Times, serif; font-size: 18px; font-weight: 700; fill: #ffffff; }
+.phase-note { font-size: 16.5px; }
+.node-text { font-size: 17.5px; }
+.small { font-size: 15px; }
+    .flow { stroke: #8795a1; stroke-width: 1.35; marker-end: url(#arrow); }
+  </style>
 
-  <rect width="640" height="750" fill="#fcfcfc" rx="2"/>
+  <rect width="680" height="790" fill="#ffffff"/>
 
-  <!-- ===== ENTRY ===== -->
-  <rect x="190" y="16" width="260" height="32" rx="6" fill="#f0f0f0" stroke="#ccc" stroke-width="1"/>
-  <text x="320" y="37" text-anchor="middle" fill="#333" font-size="13.5">用户态触发 Page Fault</text>
-  <line x1="320" y1="48" x2="320" y2="63" stroke="#999" stroke-width="1.2" marker-end="url(#a)"/>
+  <!-- Entry -->
+  <g filter="url(#shadow)">
+    <rect x="185" y="18" width="310" height="36" rx="6" fill="#f3f6f8" stroke="#cbd5dc" stroke-width="1.1"/>
+    <text x="340" y="41" text-anchor="middle" class="node-text">用户态触发 <tspan class="latin">Page Fault</tspan></text>
+  </g>
+  <line x1="340" y1="54" x2="340" y2="70" class="flow"/>
 
-  <!-- ===== Lock AddrSpace (entry) ===== -->
-  <rect x="180" y="66" width="280" height="30" rx="5" fill="#fff" stroke="#e74c3c" stroke-width="1.6"/>
-  <text x="320" y="86" text-anchor="middle" fill="#c0392b" font-size="13">获取 AddrSpace 读锁</text>
-  <line x1="320" y1="96" x2="320" y2="112" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
+  <rect x="205" y="74" width="270" height="32" rx="5" fill="#fff8ee" stroke="#c77d22" stroke-width="1.3"/>
+  <text x="340" y="95" text-anchor="middle" class="node-text" fill="#925b17">获取 <tspan class="latin">AddrSpace</tspan> 读锁</text>
+  <line x1="340" y1="106" x2="340" y2="121" class="flow"/>
 
-  <!-- ================================================================ -->
-  <!-- PREPARE phase (light red)                                        -->
-  <!-- ================================================================ -->
-  <rect x="40" y="116" width="560" height="130" rx="8" fill="#fef5f5" stroke="#e74c3c" stroke-width="1.8"/>
-  <rect x="40" y="116" width="180" height="30" rx="8" fill="#e74c3c"/>
-  <rect x="212" y="138" width="8" height="8" fill="#e74c3c"/>
-  <text x="130" y="136" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="bold">Phase 1 — prepare</text>
-  <text x="300" y="136" fill="#c0392b" font-size="12">持 AddrSpace 读锁，只做判断，不做任何可能阻塞的操作</text>
+  <!-- Phase 1 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="125" width="600" height="144" rx="7" fill="#fff8f7" stroke="#c85b57" stroke-width="1.35"/>
+    <path d="M47 125 H218 V159 H40 V132 A7 7 0 0 1 47 125 Z" fill="#c85b57"/>
+    <text x="129" y="147" text-anchor="middle" class="phase-title">Phase 1 · prepare</text>
+    <text x="238" y="147" class="phase-note" fill="#9d4643">持 <tspan class="latin">AddrSpace</tspan> 读锁，只做快速检查</text>
+  </g>
+  <g class="body" fill="#713e3c">
+    <circle cx="78" cy="181" r="3" fill="#c85b57"/><text x="92" y="186">检查用户地址，定位目标 <tspan class="latin">VMA</tspan></text>
+    <circle cx="78" cy="207" r="3" fill="#c85b57"/><text x="92" y="212">校验 <tspan class="latin">VMA</tspan> 的读、写、执行权限</text>
+    <circle cx="78" cy="233" r="3" fill="#c85b57"/><text x="92" y="238">检查 <tspan class="latin">PTE</tspan> 是否已被其他线程安装</text>
+    <circle cx="78" cy="259" r="3" fill="#c85b57"/><text x="92" y="264">记录提交前提，构造 <tspan class="latin">FaultPlan</tspan></text>
+  </g>
+  <line x1="340" y1="269" x2="340" y2="284" class="flow"/>
 
-  <text x="120" y="168" fill="#922b21" font-size="12.5">• 检查地址是否在用户空间内，定位目标 VMA</text>
-  <text x="120" y="192" fill="#922b21" font-size="12.5">• 校验 VMA 权限（读 / 写 / 执行）是否允许本次访问</text>
-  <text x="120" y="216" fill="#922b21" font-size="12.5">• 检查 PTE 是否已被其他线程安装（快速返回）</text>
-  <text x="120" y="240" fill="#922b21" font-size="12.5">• 记录 VMA 范围、文件偏移、旧 PTE 值等提交前提 → 构造 FaultPlan</text>
+  <!-- Lock boundary -->
+  <rect x="212" y="288" width="256" height="31" rx="5" fill="#fff8ee" stroke="#c77d22" stroke-width="1.2"/>
+  <text x="340" y="308" text-anchor="middle" class="node-text" fill="#925b17">释放 <tspan class="latin">AddrSpace</tspan> 读锁</text>
+  <line x1="340" y1="319" x2="340" y2="334" class="flow"/>
 
-  <line x1="320" y1="246" x2="320" y2="262" stroke="#999" stroke-width="1.2" marker-end="url(#a)"/>
+  <!-- Phase 2 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="338" width="600" height="177" rx="7" fill="#f5fbf8" stroke="#35866b" stroke-width="1.35"/>
+    <path d="M47 338 H218 V372 H40 V345 A7 7 0 0 1 47 338 Z" fill="#35866b"/>
+    <text x="129" y="360" text-anchor="middle" class="phase-title">Phase 2 · execute</text>
+    <text x="238" y="360" class="phase-note" fill="#2e705b">不持有 <tspan class="latin">AddrSpace</tspan> 锁，并发执行慢操作</text>
+  </g>
+  <g class="body" fill="#315f50">
+    <circle cx="78" cy="394" r="3" fill="#35866b"/><text x="92" y="399">分配物理页：优先命中 <tspan class="latin">PCP</tspan>，未命中则批量 <tspan class="latin">refill</tspan></text>
+    <circle cx="78" cy="421" r="3" fill="#35866b"/><text x="92" y="426">查找或创建 <tspan class="latin">folio</tspan>，共享同一个 <tspan class="latin">loader</tspan></text>
+    <circle cx="78" cy="448" r="3" fill="#35866b"/><text x="92" y="453">进入 <tspan class="latin">ext4</tspan>，查询 <tspan class="latin">extent block mapping</tspan></text>
+    <circle cx="78" cy="475" r="3" fill="#35866b"/><text x="92" y="480">提交块设备请求，等待磁盘 <tspan class="latin">I/O</tspan> 完成</text>
+    <circle cx="78" cy="502" r="3" fill="#35866b"/><text x="92" y="507"><tspan class="latin">COW</tspan> 复制：页缓存数据复制到进程私有页</text>
+  </g>
+  <line x1="340" y1="515" x2="340" y2="530" class="flow"/>
 
-  <!-- Unlock then re-lock indicator -->
-  <rect x="200" y="265" width="240" height="28" rx="5" fill="#fdebd0" stroke="#e67e22" stroke-width="1.2"/>
-  <text x="320" y="284" text-anchor="middle" fill="#a04000" font-size="12.5">释放 AddrSpace 读锁，进入无锁阶段</text>
-  <line x1="320" y1="293" x2="320" y2="310" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
+  <!-- Lock boundary -->
+  <rect x="212" y="534" width="256" height="31" rx="5" fill="#fff8ee" stroke="#c77d22" stroke-width="1.2"/>
+  <text x="340" y="554" text-anchor="middle" class="node-text" fill="#925b17">重新获取 <tspan class="latin">AddrSpace</tspan> 读锁</text>
+  <line x1="340" y1="565" x2="340" y2="580" class="flow"/>
 
-  <!-- ================================================================ -->
-  <!-- EXECUTE phase (light green)                                      -->
-  <!-- ================================================================ -->
-  <rect x="40" y="314" width="560" height="168" rx="8" fill="#f0faf3" stroke="#27ae60" stroke-width="1.8"/>
-  <rect x="40" y="314" width="180" height="30" rx="8" fill="#27ae60"/>
-  <rect x="212" y="336" width="8" height="8" fill="#27ae60"/>
-  <text x="130" y="334" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="bold">Phase 2 — execute</text>
-  <text x="310" y="334" fill="#1e8449" font-size="12">不持有 AddrSpace 锁，并发执行慢操作</text>
+  <!-- Phase 3 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="584" width="600" height="137" rx="7" fill="#f5f9fc" stroke="#397fba" stroke-width="1.35"/>
+    <path d="M47 584 H218 V618 H40 V591 A7 7 0 0 1 47 584 Z" fill="#397fba"/>
+    <text x="129" y="606" text-anchor="middle" class="phase-title">Phase 3 · commit</text>
+    <text x="238" y="606" class="phase-note" fill="#2e6d9e">重新持读锁，验证并原子提交</text>
+  </g>
+  <g class="body" fill="#345e7d">
+    <circle cx="78" cy="642" r="3" fill="#397fba"/><text x="92" y="647">再次定位 <tspan class="latin">VMA</tspan> 并校验权限</text>
+    <circle cx="78" cy="669" r="3" fill="#397fba"/><text x="92" y="674">确认 <tspan class="latin">prepare</tspan> 阶段记录的前提仍然成立</text>
+    <circle cx="78" cy="696" r="3" fill="#397fba"/><text x="92" y="701"><tspan class="latin">CAS</tspan> 安装 <tspan class="latin">PTE</tspan>，登记 <tspan class="latin">frame / folio</tspan> 所有权</text>
+  </g>
+  <line x1="340" y1="721" x2="340" y2="736" class="flow"/>
 
-  <text x="120" y="366" fill="#1e8449" font-size="12.5">• 分配物理页（优先命中 PCP 本地缓存，miss 时批量 refill）</text>
-  <text x="120" y="390" fill="#1e8449" font-size="12.5">• 查找 / 创建 folio 页缓存，多个缺页线程共享一个 loader</text>
-  <text x="120" y="414" fill="#1e8449" font-size="12.5">• 进入 ext4 文件系统，查询 extent block mapping</text>
-  <text x="120" y="438" fill="#1e8449" font-size="12.5">• 提交块设备请求，等待磁盘 I/O 完成</text>
-  <text x="120" y="462" fill="#1e8449" font-size="12.5">• COW 复制：将页缓存数据复制到进程私有物理页</text>
-
-  <line x1="320" y1="482" x2="320" y2="498" stroke="#999" stroke-width="1.2" marker-end="url(#a)"/>
-
-  <!-- Re-acquire lock -->
-  <rect x="200" y="501" width="240" height="28" rx="5" fill="#fdebd0" stroke="#e67e22" stroke-width="1.2"/>
-  <text x="320" y="520" text-anchor="middle" fill="#a04000" font-size="12.5">重新获取 AddrSpace 读锁</text>
-  <line x1="320" y1="529" x2="320" y2="546" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
-
-  <!-- ================================================================ -->
-  <!-- COMMIT phase (light blue)                                        -->
-  <!-- ================================================================ -->
-  <rect x="40" y="550" width="560" height="130" rx="8" fill="#eef6fc" stroke="#2980b9" stroke-width="1.8"/>
-  <rect x="40" y="550" width="180" height="30" rx="8" fill="#2980b9"/>
-  <rect x="212" y="572" width="8" height="8" fill="#2980b9"/>
-  <text x="130" y="570" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="bold">Phase 3 — commit</text>
-  <text x="305" y="570" fill="#1a5276" font-size="12">重新持有 AddrSpace 读锁，验证并原子提交</text>
-
-  <text x="120" y="602" fill="#1a5276" font-size="12.5">• 再次定位 VMA 并重新校验权限（execute 期间可能已变化）</text>
-  <text x="120" y="626" fill="#1a5276" font-size="12.5">• 确认 prepare 时记录的前提条件仍然成立</text>
-  <text x="120" y="650" fill="#1a5276" font-size="12.5">• CAS 原子操作安装 PTE，同时登记 frame / folio 所有权</text>
-
-  <line x1="320" y1="680" x2="320" y2="696" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
-
-  <!-- ===== RESULT ===== -->
-  <rect x="190" y="699" width="260" height="30" rx="6" fill="#f0f0f0" stroke="#ccc" stroke-width="1"/>
-  <text x="320" y="719" text-anchor="middle" fill="#333" font-size="13.5">返回用户态，重试故障指令</text>
-
-  <!-- ===== FALLBACK NOTE (right side) ===== -->
-  <rect x="480" y="705" width="140" height="42" rx="5" fill="#fef9e7" stroke="#f39c12" stroke-width="1" stroke-dasharray="4,2"/>
-  <text x="550" y="722" text-anchor="middle" fill="#7d6608" font-size="10.5">Stale 时有限重试</text>
-  <text x="550" y="740" text-anchor="middle" fill="#7d6608" font-size="10.5">极端情况退回写锁</text>
+  <!-- Result and fallback -->
+  <g filter="url(#shadow)">
+    <rect x="190" y="740" width="300" height="34" rx="6" fill="#f3f6f8" stroke="#cbd5dc" stroke-width="1.1"/>
+    <text x="340" y="762" text-anchor="middle" class="node-text">返回用户态，重试故障指令</text>
+  </g>
+  <rect x="512" y="735" width="148" height="45" rx="5" fill="#fffaf0" stroke="#c77d22" stroke-width="1" stroke-dasharray="5 3"/>
+  <text x="586" y="754" text-anchor="middle" class="small" fill="#925b17"><tspan class="latin">Stale</tspan> 时最多重试 <tspan class="latin">4</tspan> 次</text>
+  <text x="586" y="770" text-anchor="middle" class="small" fill="#925b17">之后退回写锁路径</text>
 </svg>
