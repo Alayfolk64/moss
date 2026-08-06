@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{collections::BTreeMap, sync::Arc};
 use core::{
     slice,
     sync::atomic::{AtomicUsize, Ordering},
@@ -7,169 +7,83 @@ use core::{
 use axerrno::{AxError, AxResult};
 use axfs::{FileBackend, FolioPageRef};
 use axhal::{
-    mem::{phys_ram_ranges, phys_to_virt},
+    mem::phys_to_virt,
     paging::{MappingFlags, PageSize, PageTable, PageTableMut, PagingError},
 };
 use axsync::Mutex;
-use kspin::SpinNoPreempt;
+use kspin::SpinNoIrq;
 use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
-use spin::Once;
 
 use super::{
     AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
     UnmapGather, alloc_frame, dealloc_frame, finish_unmap_before_reclaim, pages_in,
 };
 
+struct FrameRefCnt(usize);
+
+impl FrameRefCnt {
+    // This function may lock FRAME_TABLE again, so the caller should drop the lock first.
+    fn drop_frame(&mut self, paddr: PhysAddr, page_size: PageSize) {
+        assert!(self.0 > 0, "dropping unreferenced frame");
+        self.0 -= 1;
+        if self.0 == 0 {
+            // Remove the frame from FRAME_TABLE before deallocating it to avoid a race:
+            // if we dealloc the frame first, another thread could allocate the same
+            // physical frame before we remove the table entry. This function assumes
+            // the caller is not holding the FRAME_TABLE lock, so it is safe to lock
+            // FRAME_TABLE here and perform the removal.
+            frame_table(paddr).lock().remove_frame(paddr);
+            dealloc_frame(paddr, page_size);
+        }
+    }
+}
+
+struct FrameTableRefCount {
+    table: BTreeMap<PhysAddr, Arc<SpinNoIrq<FrameRefCnt>>>,
+}
+
+impl FrameTableRefCount {
+    const INITIAL_CNT: usize = 1;
+
+    const fn new() -> Self {
+        Self {
+            table: BTreeMap::new(),
+        }
+    }
+
+    fn get_frame_ref(&mut self, paddr: PhysAddr) -> Option<Arc<SpinNoIrq<FrameRefCnt>>> {
+        self.table.get(&paddr).cloned()
+    }
+
+    fn init_frame(&mut self, paddr: PhysAddr) {
+        assert!(
+            !self.table.contains_key(&paddr),
+            "initializing already referenced frame"
+        );
+        self.table.insert(
+            paddr,
+            Arc::new(SpinNoIrq::new(FrameRefCnt(Self::INITIAL_CNT))),
+        );
+    }
+
+    fn remove_frame(&mut self, paddr: PhysAddr) {
+        assert!(
+            self.table.contains_key(&paddr),
+            "removing unreferenced frame"
+        );
+        self.table.remove(&paddr);
+    }
+}
+
 const FRAME_TABLE_SHARDS: usize = 64;
 const FILE_PAGE_SHARDS: usize = 64;
 
-#[derive(Clone, Copy)]
-struct FrameRefRange {
-    start_pfn: usize,
-    end_pfn: usize,
-    index_base: usize,
-}
+static FRAME_TABLE: [SpinNoIrq<FrameTableRefCount>; FRAME_TABLE_SHARDS] =
+    [const { SpinNoIrq::new(FrameTableRefCount::new()) }; FRAME_TABLE_SHARDS];
 
-#[derive(Clone, Copy)]
-struct FrameRefLocation {
-    shard: usize,
-    slot: usize,
-}
-
-/// Anonymous-frame reference counts indexed directly by physical page.
-///
-/// The compact logical index excludes holes between physical RAM ranges.
-/// Consecutive logical pages are striped across independently locked vectors,
-/// preserving parallel access without a tree lookup and `Arc` per frame.
-struct FrameRefTable {
-    ranges: Vec<FrameRefRange>,
-    shards: [SpinNoPreempt<Vec<usize>>; FRAME_TABLE_SHARDS],
-}
-
-impl FrameRefTable {
-    const INITIAL_COUNT: usize = 1;
-
-    fn new() -> Self {
-        let page_size = memory_addr::PAGE_SIZE_4K;
-        let mut physical_ranges = phys_ram_ranges().to_vec();
-        physical_ranges.sort_unstable_by_key(|&(start, _)| start);
-
-        let mut ranges = Vec::with_capacity(physical_ranges.len());
-        let mut total_pages = 0usize;
-        let mut previous_end = 0usize;
-        for (range_index, (start, size)) in physical_ranges.into_iter().enumerate() {
-            let end = start
-                .checked_add(size)
-                .expect("physical RAM range overflow");
-            assert_eq!(start % page_size, 0, "unaligned physical RAM start");
-            assert_eq!(end % page_size, 0, "unaligned physical RAM end");
-            assert!(
-                range_index == 0 || start >= previous_end,
-                "overlapping physical RAM ranges"
-            );
-
-            let start_pfn = start / page_size;
-            let end_pfn = end / page_size;
-            let page_count = end_pfn - start_pfn;
-            ranges.push(FrameRefRange {
-                start_pfn,
-                end_pfn,
-                index_base: total_pages,
-            });
-            total_pages = total_pages
-                .checked_add(page_count)
-                .expect("physical page count overflow");
-            previous_end = end;
-        }
-
-        assert!(total_pages > 0, "no physical RAM for frame reference table");
-        let shards = core::array::from_fn(|shard| {
-            let len = total_pages
-                .saturating_sub(shard)
-                .div_ceil(FRAME_TABLE_SHARDS);
-            SpinNoPreempt::new(alloc::vec![0; len])
-        });
-
-        Self { ranges, shards }
-    }
-
-    fn location(&self, paddr: PhysAddr) -> Option<FrameRefLocation> {
-        if !paddr.is_aligned(memory_addr::PAGE_SIZE_4K) {
-            return None;
-        }
-        let pfn = paddr.as_usize() / memory_addr::PAGE_SIZE_4K;
-        let range = self
-            .ranges
-            .iter()
-            .find(|range| pfn >= range.start_pfn && pfn < range.end_pfn)?;
-        let index = range.index_base + pfn - range.start_pfn;
-        Some(FrameRefLocation {
-            shard: index % FRAME_TABLE_SHARDS,
-            slot: index / FRAME_TABLE_SHARDS,
-        })
-    }
-
-    fn count(&self, paddr: PhysAddr) -> Option<usize> {
-        self.with_count(paddr, core::convert::identity)
-    }
-
-    /// Calls `f` while the frame's shard remains locked.
-    ///
-    /// A stable count is required when an exclusive COW mapping is upgraded:
-    /// fork must not add a reference between the count check and PTE update.
-    fn with_count<R>(&self, paddr: PhysAddr, f: impl FnOnce(usize) -> R) -> Option<R> {
-        let location = self.location(paddr)?;
-        let counts = self.shards[location.shard].lock();
-        let count = counts[location.slot];
-        if count == 0 { None } else { Some(f(count)) }
-    }
-
-    /// Reserves one mapping or temporary COW pin and returns the new count.
-    fn reference_frame(&self, paddr: PhysAddr) -> Option<usize> {
-        let location = self.location(paddr)?;
-        let mut counts = self.shards[location.shard].lock();
-        let count = &mut counts[location.slot];
-        if *count == 0 {
-            return None;
-        }
-        let next = count.checked_add(1)?;
-        *count = next;
-        Some(next)
-    }
-
-    fn init_frame(&self, paddr: PhysAddr) {
-        let location = self
-            .location(paddr)
-            .expect("allocated frame outside physical RAM");
-        let mut counts = self.shards[location.shard].lock();
-        let count = &mut counts[location.slot];
-        assert_eq!(*count, 0, "initializing already referenced frame");
-        *count = Self::INITIAL_COUNT;
-    }
-
-    /// Releases one reference and reports whether the count reached zero.
-    fn release_frame(&self, paddr: PhysAddr) -> bool {
-        let location = self
-            .location(paddr)
-            .expect("released frame outside physical RAM");
-        let mut counts = self.shards[location.shard].lock();
-        let count = &mut counts[location.slot];
-        assert!(*count > 0, "dropping unreferenced frame");
-        *count -= 1;
-        *count == 0
-    }
-}
-
-static FRAME_REFS: Once<FrameRefTable> = Once::new();
-
-pub(crate) fn init_frame_ref_table() {
-    FRAME_REFS.call_once(FrameRefTable::new);
-}
-
-fn frame_refs() -> &'static FrameRefTable {
-    FRAME_REFS
-        .get()
-        .expect("frame reference table is not initialized")
+fn frame_table(paddr: PhysAddr) -> &'static SpinNoIrq<FrameTableRefCount> {
+    let index = (paddr.as_usize() / memory_addr::PAGE_SIZE_4K) % FRAME_TABLE_SHARDS;
+    &FRAME_TABLE[index]
 }
 
 struct FilePageRefs {
@@ -333,14 +247,16 @@ impl Drop for CowFaultPlan {
 
 fn alloc_referenced_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     let frame = alloc_frame(zeroed, size)?;
-    frame_refs().init_frame(frame);
+    frame_table(frame).lock().init_frame(frame);
     Ok(frame)
 }
 
 pub(super) fn drop_referenced_frame(frame: PhysAddr, size: PageSize) {
-    if frame_refs().release_frame(frame) {
-        dealloc_frame(frame, size);
-    }
+    let frame_ref = frame_table(frame)
+        .lock()
+        .get_frame_ref(frame)
+        .expect("referenced frame must be present");
+    frame_ref.lock().drop_frame(frame, size);
 }
 
 impl CowBackend {
@@ -418,7 +334,7 @@ impl CowBackend {
                     self.file_pages.insert(vaddr, page.clone());
                     return Err(AxError::BadAddress);
                 }
-            } else if frame_refs().count(paddr).is_none() {
+            } else if frame_table(paddr).lock().get_frame_ref(paddr).is_none() {
                 return Err(AxError::BadAddress);
             }
 
@@ -477,16 +393,17 @@ impl CowBackend {
                         }
                         CowFaultSource::File(page)
                     } else {
-                        let Some(count) = frame_refs().reference_frame(paddr) else {
+                        let Some(frame_ref) = frame_table(paddr).lock().get_frame_ref(paddr) else {
                             return FaultPreparation::Fallback;
                         };
-                        // A new count of two means the PTE was the only owner.
-                        // Undo the temporary pin and let the locked fallback
-                        // path upgrade permissions without copying.
-                        if count == 2 {
-                            drop_referenced_frame(paddr, self.size);
+                        let mut frame_ref = frame_ref.lock();
+                        if frame_ref.0 == 1 {
                             return FaultPreparation::Fallback;
                         }
+                        let Some(count) = frame_ref.0.checked_add(1) else {
+                            return FaultPreparation::Fallback;
+                        };
+                        frame_ref.0 = count;
                         CowFaultSource::Anonymous(paddr)
                     };
                     FaultPreparation::Cow(CowFaultPlan {
@@ -679,21 +596,19 @@ impl CowBackend {
         old_pt: &mut PageTableMut,
         new_pt: &mut PageTableMut,
     ) -> AxResult {
-        if frame_refs().reference_frame(paddr).is_none() {
-            warn!("failed to reserve frame reference");
+        let frame = frame_table(paddr)
+            .lock()
+            .get_frame_ref(paddr)
+            .ok_or(AxError::BadAddress)?;
+        let mut frame = frame.lock();
+        assert!(frame.0 > 0, "referencing unreferenced frame");
+        let Some(new_ref_cnt) = frame.0.checked_add(1) else {
+            warn!("frame reference count overflow");
             return Err(AxError::BadAddress);
-        }
-
-        // Reserve the child's reference before publishing its PTE. Roll the
-        // reservation back if either page-table operation fails.
-        if let Err(err) = old_pt.protect(vaddr, flags) {
-            drop_referenced_frame(paddr, self.size);
-            return Err(err.into());
-        }
-        if let Err(err) = new_pt.map(vaddr, paddr, self.size, flags) {
-            drop_referenced_frame(paddr, self.size);
-            return Err(err.into());
-        }
+        };
+        old_pt.protect(vaddr, flags)?;
+        new_pt.map(vaddr, paddr, self.size, flags)?;
+        frame.0 = new_ref_cnt;
         Ok(())
     }
 
@@ -720,11 +635,11 @@ impl CowBackend {
                         continue;
                     }
 
-                    if frame_refs().count(frame).is_none() {
+                    let Some(frame_ref) = frame_table(frame).lock().get_frame_ref(frame) else {
                         warn!("rollback COW clone found unreferenced frame: {frame:?}");
                         continue;
-                    }
-                    drop_referenced_frame(frame, self.size);
+                    };
+                    frame_ref.lock().drop_frame(frame, self.size);
                     self.dec_mapped_pages();
                 }
                 Err(PagingError::NotMapped) => {}
@@ -770,36 +685,37 @@ impl CowBackend {
             return Ok(());
         }
 
-        let exclusive = frame_refs()
-            .with_count(paddr, |count| -> AxResult<bool> {
-                if count != 1 {
-                    return Ok(false);
-                }
-                // Serialize the exclusivity check with fork's reference
-                // reservation before making this PTE writable.
+        let frame_ref = frame_table(paddr)
+            .lock()
+            .get_frame_ref(paddr)
+            .ok_or(AxError::BadAddress)?;
+        let frame = frame_ref.lock();
+        assert!(frame.0 > 0, "invalid frame reference count");
+        match frame.0 {
+            1 => {
+                // Only one reference, just upgrade the permissions.
                 pt.protect(vaddr, flags)?;
-                Ok(true)
-            })
-            .ok_or(AxError::BadAddress)??;
-        if exclusive {
-            return Ok(());
+                return Ok(());
+            }
+            _ => {
+                // Multiple references, need to copy the frame.
+                let new_frame = self.alloc_new_frame(false)?;
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        phys_to_virt(paddr).as_ptr(),
+                        phys_to_virt(new_frame).as_mut_ptr(),
+                        self.size as _,
+                    );
+                }
+                if let Err(err) = pt.remap(vaddr, new_frame, flags) {
+                    self.drop_new_frame(new_frame);
+                    return Err(err.into());
+                }
+                drop(frame);
+                finish_unmap_before_reclaim(pt);
+                frame_ref.lock().drop_frame(paddr, self.size);
+            }
         }
-
-        // The current PTE keeps the shared frame alive while it is copied.
-        let new_frame = self.alloc_new_frame(false)?;
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                phys_to_virt(paddr).as_ptr(),
-                phys_to_virt(new_frame).as_mut_ptr(),
-                self.size as _,
-            );
-        }
-        if let Err(err) = pt.remap(vaddr, new_frame, flags) {
-            self.drop_new_frame(new_frame);
-            return Err(err.into());
-        }
-        finish_unmap_before_reclaim(pt);
-        drop_referenced_frame(paddr, self.size);
 
         Ok(())
     }

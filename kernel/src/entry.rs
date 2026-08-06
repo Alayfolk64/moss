@@ -74,11 +74,6 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
 
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
-    // The allocator and DT-derived RAM map are ready before this entry point.
-    // Build the direct anonymous-frame reference index before the first user
-    // address space can allocate a COW page.
-    crate::mm::init_frame_ref_table();
-
     #[cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))]
     crate::mm::init_tlb_shootdown();
 
