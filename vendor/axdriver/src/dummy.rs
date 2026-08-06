@@ -3,8 +3,9 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
-use super::prelude::*;
 use cfg_if::cfg_if;
+
+use super::prelude::*;
 
 cfg_if! {
     if #[cfg(net_dev = "dummy")] {
@@ -56,13 +57,13 @@ cfg_if! {
             fn block_size(&self) -> usize {
                 0
             }
-            fn read_block(&mut self, _: u64, _: &mut [u8]) -> DevResult {
+            fn read_block(&self, _: u64, _: &mut [u8]) -> DevResult {
                 Err(DevError::Unsupported)
             }
-            fn write_block(&mut self, _: u64, _: &[u8]) -> DevResult {
+            fn write_block(&self, _: u64, _: &[u8]) -> DevResult {
                 Err(DevError::Unsupported)
             }
-            fn flush(&mut self) -> DevResult {
+            fn flush(&self) -> DevResult {
                 Err(DevError::Unsupported)
             }
         }

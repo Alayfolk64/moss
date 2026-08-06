@@ -28,11 +28,11 @@ impl BlockDriverOps for Block {
     fn block_size(&self) -> usize {
         self.queue.lock().block_size()
     }
-    fn flush(&mut self) -> DevResult {
+    fn flush(&self) -> DevResult {
         Ok(())
     }
 
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
         let blk_count = buf.len() / self.block_size();
         let blocks = self
             .queue
@@ -48,7 +48,7 @@ impl BlockDriverOps for Block {
         Ok(())
     }
 
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
         let blocks = self.queue.lock().write_blocks_blocking(block_id as _, buf);
         for block in blocks {
             block.map_err(maping_blk_err_to_dev_err)?;

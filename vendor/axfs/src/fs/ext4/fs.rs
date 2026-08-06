@@ -5,7 +5,7 @@ use axdriver::AxBlockDevice;
 use axfs_ng_vfs::{
     DirEntry, DirNode, Filesystem, FilesystemOps, Reference, StatFs, VfsResult, path::MAX_NAME_LEN,
 };
-use kspin::{SpinNoPreempt as Mutex, SpinNoPreemptGuard as MutexGuard};
+use axsync::{Mutex, MutexGuard};
 use lwext4_rust::{FsConfig, ffi::EXT4_ROOT_INO};
 
 use super::{

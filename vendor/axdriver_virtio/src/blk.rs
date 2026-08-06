@@ -1,12 +1,13 @@
 use axdriver_base::{BaseDriverOps, DevResult, DeviceType};
 use axdriver_block::BlockDriverOps;
-use virtio_drivers::{device::blk::VirtIOBlk as InnerDev, transport::Transport, Hal};
+use spin::Mutex;
+use virtio_drivers::{Hal, device::blk::VirtIOBlk as InnerDev, transport::Transport};
 
 use crate::as_dev_err;
 
 /// The VirtIO block device driver.
 pub struct VirtIoBlkDev<H: Hal, T: Transport> {
-    inner: InnerDev<H, T>,
+    inner: Mutex<InnerDev<H, T>>,
 }
 
 unsafe impl<H: Hal, T: Transport> Send for VirtIoBlkDev<H, T> {}
@@ -17,7 +18,7 @@ impl<H: Hal, T: Transport> VirtIoBlkDev<H, T> {
     /// an error if any step fails.
     pub fn try_new(transport: T) -> DevResult<Self> {
         Ok(Self {
-            inner: InnerDev::new(transport).map_err(as_dev_err)?,
+            inner: Mutex::new(InnerDev::new(transport).map_err(as_dev_err)?),
         })
     }
 }
@@ -35,7 +36,7 @@ impl<H: Hal, T: Transport> BaseDriverOps for VirtIoBlkDev<H, T> {
 impl<H: Hal, T: Transport> BlockDriverOps for VirtIoBlkDev<H, T> {
     #[inline]
     fn num_blocks(&self) -> u64 {
-        self.inner.capacity()
+        self.inner.lock().capacity()
     }
 
     #[inline]
@@ -43,19 +44,21 @@ impl<H: Hal, T: Transport> BlockDriverOps for VirtIoBlkDev<H, T> {
         virtio_drivers::device::blk::SECTOR_SIZE
     }
 
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
         self.inner
+            .lock()
             .read_blocks(block_id as _, buf)
             .map_err(as_dev_err)
     }
 
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
         self.inner
+            .lock()
             .write_blocks(block_id as _, buf)
             .map_err(as_dev_err)
     }
 
-    fn flush(&mut self) -> DevResult {
+    fn flush(&self) -> DevResult {
         Ok(())
     }
 }

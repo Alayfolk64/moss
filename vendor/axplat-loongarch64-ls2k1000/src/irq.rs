@@ -13,6 +13,7 @@ use crate::{
         LIOINTC_IRQ_BASE, LIOINTC_IRQS_PER_CONTROLLER, LioIntcResource, MAX_LIOINTC, resources,
         uncached_addr,
     },
+    irq_state::first_pending_source,
 };
 
 const MAX_IRQ_COUNT: usize = LIOINTC_IRQ_BASE + MAX_LIOINTC * LIOINTC_IRQS_PER_CONTROLLER;
@@ -121,22 +122,20 @@ pub(crate) fn init() {
 }
 
 fn handle_liointc(controller: LioIntc) -> Option<usize> {
-    let mut pending = controller.pending();
-    let first = pending.trailing_zeros();
-    if first == u32::BITS {
+    let pending = controller.pending();
+    let Some(source) = first_pending_source(pending) else {
         debug!("Spurious LS2K1000 LIOINTC interrupt");
         return None;
+    };
+    let irq = controller.resource.irq_base + source;
+    if !IRQ_HANDLERS.handle(irq) {
+        controller.set_enable(source, false);
+        warn!("Unhandled LS2K1000 device IRQ {irq}; masked source {source}");
     }
-    while pending != 0 {
-        let source = pending.trailing_zeros() as usize;
-        pending &= !(1_u32 << source);
-        let irq = controller.resource.irq_base + source;
-        if !IRQ_HANDLERS.handle(irq) {
-            controller.set_enable(source, false);
-            warn!("Unhandled LS2K1000 device IRQ {irq}; masked source {source}");
-        }
-    }
-    Some(controller.resource.irq_base + first as usize)
+    // Return the exact IRQ whose handler ran. Other pending level sources
+    // remain asserted and retrigger, allowing the generic post-IRQ hook to
+    // wake the correct per-device PollSet for every source.
+    Some(irq)
 }
 
 fn send_ipi(cpu_id: usize) {

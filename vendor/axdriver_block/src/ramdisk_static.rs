@@ -1,16 +1,24 @@
 //! A RAM disk driver backed by a static slice.
 
-use core::ops::{Deref, DerefMut};
-
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
+use spin::Mutex;
 
-use crate::BlockDriverOps;
+use crate::{BlockDriverOps, block_range::checked_block_range};
 
 const BLOCK_SIZE: usize = 512;
 
 /// A RAM disk backed by a static slice.
-#[derive(Default)]
-pub struct RamDisk(&'static mut [u8]);
+pub struct RamDisk {
+    data: Mutex<&'static mut [u8]>,
+}
+
+impl Default for RamDisk {
+    fn default() -> Self {
+        Self {
+            data: Mutex::new(&mut []),
+        }
+    }
+}
 
 impl RamDisk {
     /// Creates a new RAM disk from the given static buffer.
@@ -21,21 +29,9 @@ impl RamDisk {
     pub fn new(buf: &'static mut [u8]) -> Self {
         assert!(buf.as_ptr().addr() & (BLOCK_SIZE - 1) == 0);
         assert!(buf.len() % BLOCK_SIZE == 0);
-        RamDisk(buf)
-    }
-}
-
-impl Deref for RamDisk {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.0
-    }
-}
-
-impl DerefMut for RamDisk {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0
+        RamDisk {
+            data: Mutex::new(buf),
+        }
     }
 }
 
@@ -52,7 +48,7 @@ impl BaseDriverOps for RamDisk {
 impl BlockDriverOps for RamDisk {
     #[inline]
     fn num_blocks(&self) -> u64 {
-        (self.len() / BLOCK_SIZE) as u64
+        (self.data.lock().len() / BLOCK_SIZE) as u64
     }
 
     #[inline]
@@ -60,31 +56,29 @@ impl BlockDriverOps for RamDisk {
         BLOCK_SIZE
     }
 
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
         if buf.len() % BLOCK_SIZE != 0 {
             return Err(DevError::InvalidParam);
         }
-        let offset = block_id as usize * BLOCK_SIZE;
-        if offset + buf.len() > self.len() {
-            return Err(DevError::Io);
-        }
-        buf.copy_from_slice(&self[offset..offset + buf.len()]);
+        let data = self.data.lock();
+        let range =
+            checked_block_range(block_id, buf.len(), BLOCK_SIZE, data.len()).ok_or(DevError::Io)?;
+        buf.copy_from_slice(&data[range]);
         Ok(())
     }
 
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
         if buf.len() % BLOCK_SIZE != 0 {
             return Err(DevError::InvalidParam);
         }
-        let offset = block_id as usize * BLOCK_SIZE;
-        if offset + buf.len() > self.len() {
-            return Err(DevError::Io);
-        }
-        self[offset..offset + buf.len()].copy_from_slice(buf);
+        let mut data = self.data.lock();
+        let range =
+            checked_block_range(block_id, buf.len(), BLOCK_SIZE, data.len()).ok_or(DevError::Io)?;
+        data[range].copy_from_slice(buf);
         Ok(())
     }
 
-    fn flush(&mut self) -> DevResult {
+    fn flush(&self) -> DevResult {
         Ok(())
     }
 }

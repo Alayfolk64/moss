@@ -192,7 +192,7 @@ impl BlockDriverOps for LoopFileBlockDevice {
         LOOP_BLOCK_SIZE
     }
 
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
         let offset = self.checked_range(block_id, buf.len())?;
         let mut done = 0;
         while done < buf.len() {
@@ -208,7 +208,7 @@ impl BlockDriverOps for LoopFileBlockDevice {
         Ok(())
     }
 
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
         let offset = self.checked_range(block_id, buf.len())?;
         let mut done = 0;
         while done < buf.len() {
@@ -224,7 +224,7 @@ impl BlockDriverOps for LoopFileBlockDevice {
         Ok(())
     }
 
-    fn flush(&mut self) -> DevResult {
+    fn flush(&self) -> DevResult {
         self.file.sync(false).map_err(|_| DevError::Io)
     }
 }

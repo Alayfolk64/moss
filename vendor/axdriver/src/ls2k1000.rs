@@ -1,18 +1,28 @@
 //! LS2K1000 integrated devices discovered from the firmware device tree.
 
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
+use core::{
+    ptr,
+    sync::atomic::{AtomicPtr, Ordering},
+    time::Duration,
+};
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
-use axdriver_block::{BlockDriverOps, ahci::AhciDriver};
+use axdriver_block::{
+    BlockDriverOps,
+    ahci::{AhciDriver, AhciIrqHandle},
+};
 use axdriver_net::dwmac_ls2k1000::{DwmacConfig, DwmacHal, DwmacLs2k1000};
 use fdt_parser::{Fdt, Node, Status};
 
-use crate::{AxDeviceEnum, drivers::DriverProbe};
+use crate::{
+    AxDeviceEnum,
+    drivers::DriverProbe,
+    ls2k1000_irq::{LIOINTC_IRQS_PER_CONTROLLER, translated_liointc_irq},
+};
 
 const UNCACHED_DMW_BASE: usize = 0x8000_0000_0000_0000;
 const PHYS_ADDR_MASK: usize = (1usize << 48) - 1;
-const LIOINTC_IRQ_BASE: usize = 16;
-const LIOINTC_IRQS_PER_CONTROLLER: usize = 32;
 
 fn enabled(node: &Node<'_>) -> bool {
     node.status() != Some(Status::Disabled)
@@ -53,7 +63,7 @@ fn translated_irq(fdt: &Fdt<'_>, node: &Node<'_>) -> Option<usize> {
     ])
     .filter(enabled)
     .position(|controller| controller.phandle() == Some(parent))
-    .map(|index| LIOINTC_IRQ_BASE + index * LIOINTC_IRQS_PER_CONTROLLER + source)
+    .and_then(|index| translated_liointc_irq(index, source))
 }
 
 fn dma_mask(node: &Node<'_>) -> Option<u64> {
@@ -67,6 +77,9 @@ fn dma_mask(node: &Node<'_>) -> Option<u64> {
 
 struct AhciHalImpl;
 
+static AHCI_WAIT_QUEUE: axtask::WaitQueue = axtask::WaitQueue::new();
+static AHCI_IRQ_HANDLE: AtomicPtr<AhciIrqHandle<AhciHalImpl>> = AtomicPtr::new(ptr::null_mut());
+
 impl axdriver_block::ahci::AhciHal for AhciHalImpl {
     fn virt_to_phys(virtual_address: usize) -> usize {
         axhal::mem::virt_to_phys(virtual_address.into()).as_usize()
@@ -79,9 +92,27 @@ impl axdriver_block::ahci::AhciHal for AhciHalImpl {
     fn flush_dcache() {
         unsafe { core::arch::asm!("dbar 0", options(nostack, preserves_flags)) };
     }
+
+    fn wait_for_event<F>(timeout_ms: u64, condition: F) -> bool
+    where
+        F: FnMut() -> bool,
+    {
+        !AHCI_WAIT_QUEUE.wait_timeout_until(Duration::from_millis(timeout_ms), condition)
+    }
+
+    fn notify_event() {
+        AHCI_WAIT_QUEUE.notify_all(false);
+    }
 }
 
 type RawAhci = AhciDriver<AhciHalImpl>;
+
+fn handle_ahci_interrupt() {
+    let handle = AHCI_IRQ_HANDLE.load(Ordering::Acquire);
+    if !handle.is_null() {
+        unsafe { &*handle }.handle_interrupt();
+    }
+}
 
 #[derive(Clone, Debug)]
 struct Partition {
@@ -100,7 +131,7 @@ fn le_u64(bytes: &[u8]) -> u64 {
     u64::from_le_bytes(bytes[..8].try_into().unwrap())
 }
 
-fn read_bytes(dev: &mut RawAhci, offset: u64, output: &mut [u8]) -> DevResult {
+fn read_bytes(dev: &RawAhci, offset: u64, output: &mut [u8]) -> DevResult {
     let block_size = dev.block_size();
     let mut done = 0;
     while done < output.len() {
@@ -118,13 +149,28 @@ fn read_bytes(dev: &mut RawAhci, offset: u64, output: &mut [u8]) -> DevResult {
 
 fn guid_string(bytes: &[u8]) -> String {
     format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        bytes[3], bytes[2], bytes[1], bytes[0], bytes[5], bytes[4], bytes[7], bytes[6],
-        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:\
+         02x}{:02x}{:02x}",
+        bytes[3],
+        bytes[2],
+        bytes[1],
+        bytes[0],
+        bytes[5],
+        bytes[4],
+        bytes[7],
+        bytes[6],
+        bytes[8],
+        bytes[9],
+        bytes[10],
+        bytes[11],
+        bytes[12],
+        bytes[13],
+        bytes[14],
+        bytes[15]
     )
 }
 
-fn gpt_partitions(dev: &mut RawAhci) -> DevResult<Vec<Partition>> {
+fn gpt_partitions(dev: &RawAhci) -> DevResult<Vec<Partition>> {
     let block_size = dev.block_size();
     let mut header = vec![0u8; block_size];
     dev.read_block(1, &mut header)?;
@@ -175,7 +221,7 @@ fn gpt_partitions(dev: &mut RawAhci) -> DevResult<Vec<Partition>> {
     Ok(partitions)
 }
 
-fn partitions(dev: &mut RawAhci) -> DevResult<Vec<Partition>> {
+fn partitions(dev: &RawAhci) -> DevResult<Vec<Partition>> {
     let mut sector = vec![0u8; dev.block_size()];
     if sector.len() < 512 {
         return Err(DevError::Unsupported);
@@ -212,7 +258,7 @@ fn partitions(dev: &mut RawAhci) -> DevResult<Vec<Partition>> {
     Ok(result)
 }
 
-fn is_ext4(dev: &mut RawAhci, start_lba: u64) -> bool {
+fn is_ext4(dev: &RawAhci, start_lba: u64) -> bool {
     let offset = match start_lba
         .checked_mul(dev.block_size() as u64)
         .and_then(|value| value.checked_add(1024 + 56))
@@ -230,7 +276,7 @@ fn root_argument() -> Option<&'static str> {
         .find_map(|argument| argument.strip_prefix("root="))
 }
 
-fn select_partition(dev: &mut RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
+fn select_partition(dev: &RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
     let available = partitions(dev)?;
     if let Some(root) = root_argument() {
         if root == "/dev/sda" {
@@ -247,7 +293,11 @@ fn select_partition(dev: &mut RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
                 .find(|partition| partition.number == number)
                 .ok_or(DevError::InvalidParam)?;
             return is_ext4(dev, partition.start_lba)
-                .then_some((partition.start_lba, partition.blocks, Some(partition.number)))
+                .then_some((
+                    partition.start_lba,
+                    partition.blocks,
+                    Some(partition.number),
+                ))
                 .ok_or(DevError::BadState);
         }
         if let Some(partuuid) = root.strip_prefix("PARTUUID=") {
@@ -256,7 +306,11 @@ fn select_partition(dev: &mut RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
                 .find(|partition| partition.partuuid.eq_ignore_ascii_case(partuuid))
                 .ok_or(DevError::InvalidParam)?;
             return is_ext4(dev, partition.start_lba)
-                .then_some((partition.start_lba, partition.blocks, Some(partition.number)))
+                .then_some((
+                    partition.start_lba,
+                    partition.blocks,
+                    Some(partition.number),
+                ))
                 .ok_or(DevError::BadState);
         }
         if let Some(label) = root.strip_prefix("PARTLABEL=") {
@@ -265,7 +319,11 @@ fn select_partition(dev: &mut RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
                 .find(|partition| partition.label == label)
                 .ok_or(DevError::InvalidParam)?;
             return is_ext4(dev, partition.start_lba)
-                .then_some((partition.start_lba, partition.blocks, Some(partition.number)))
+                .then_some((
+                    partition.start_lba,
+                    partition.blocks,
+                    Some(partition.number),
+                ))
                 .ok_or(DevError::BadState);
         }
         return Err(DevError::Unsupported);
@@ -276,7 +334,11 @@ fn select_partition(dev: &mut RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
         .filter(|partition| is_ext4(dev, partition.start_lba))
         .collect::<Vec<_>>();
     match candidates.as_slice() {
-        [partition] => Ok((partition.start_lba, partition.blocks, Some(partition.number))),
+        [partition] => Ok((
+            partition.start_lba,
+            partition.blocks,
+            Some(partition.number),
+        )),
         [] if is_ext4(dev, 0) => Ok((0, dev.num_blocks(), None)),
         _ => Err(DevError::BadState),
     }
@@ -307,7 +369,7 @@ impl BlockDriverOps for Ls2kAhciDevice {
         self.inner.block_size()
     }
 
-    fn read_block(&mut self, block_id: u64, buffer: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buffer: &mut [u8]) -> DevResult {
         let count = buffer.len().div_ceil(self.block_size()) as u64;
         if block_id >= self.blocks || count > self.blocks - block_id {
             return Err(DevError::InvalidParam);
@@ -315,7 +377,7 @@ impl BlockDriverOps for Ls2kAhciDevice {
         self.inner.read_block(self.start_lba + block_id, buffer)
     }
 
-    fn write_block(&mut self, block_id: u64, buffer: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buffer: &[u8]) -> DevResult {
         let count = buffer.len().div_ceil(self.block_size()) as u64;
         if block_id >= self.blocks || count > self.blocks - block_id {
             return Err(DevError::InvalidParam);
@@ -323,7 +385,7 @@ impl BlockDriverOps for Ls2kAhciDevice {
         self.inner.write_block(self.start_lba + block_id, buffer)
     }
 
-    fn flush(&mut self) -> DevResult {
+    fn flush(&self) -> DevResult {
         self.inner.flush()
     }
 }
@@ -342,15 +404,38 @@ impl DriverProbe for Ls2kAhciDriver {
             .find(enabled)?;
         let (paddr, size) = first_reg(&node).expect("enabled AHCI node has no reg property");
         assert!(size >= 0x1100, "AHCI register window is too small");
-        let irq = translated_irq(fdt, &node);
+        let irq = translated_irq(fdt, &node)
+            .expect("enabled LS2K1000 AHCI node requires a translated DT IRQ");
         let mask = dma_mask(&node).unwrap_or(u32::MAX as u64);
-        assert!(mask >= u32::MAX as u64, "AHCI DMA mask is narrower than 32 bits");
-        let mut inner = unsafe { RawAhci::try_new(uncached_addr(paddr)) }
-            .expect("failed to initialize DT-discovered LS2K1000 AHCI");
-        let (start_lba, blocks, partition) = select_partition(&mut inner)
-            .expect("root= does not select one usable AHCI ext4 partition");
+        assert!(
+            mask >= u32::MAX as u64,
+            "AHCI DMA mask is narrower than 32 bits"
+        );
+        let prepared = unsafe { RawAhci::prepare(uncached_addr(paddr)) }
+            .expect("failed to prepare DT-discovered LS2K1000 AHCI");
+        let handle = Box::into_raw(Box::new(prepared.irq_handle()));
+        if AHCI_IRQ_HANDLE
+            .compare_exchange(ptr::null_mut(), handle, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            drop(unsafe { Box::from_raw(handle) });
+            panic!("only one LS2K1000 AHCI controller is supported");
+        }
+        if !axhal::irq::register(irq, handle_ahci_interrupt) {
+            AHCI_IRQ_HANDLE.store(ptr::null_mut(), Ordering::Release);
+            drop(unsafe { Box::from_raw(handle) });
+            panic!("failed to register LS2K1000 AHCI IRQ {irq}");
+        }
+        prepared.enable_interrupts();
+        let inner = prepared
+            .identify()
+            .expect("failed to identify DT-discovered LS2K1000 AHCI disk");
+        let (start_lba, blocks, partition) =
+            select_partition(&inner).expect("root= does not select one usable AHCI ext4 partition");
         info!(
-            "LS2K1000 AHCI from DTB: paddr={paddr:#x}, size={size:#x}, irq={irq:?}, dma_mask={mask:#x}, root_partition={partition:?}, start_lba={start_lba}, blocks={blocks}"
+            "LS2K1000 AHCI from DTB: paddr={paddr:#x}, size={size:#x}, irq={irq}, \
+             dma_mask={mask:#x}, root_partition={partition:?}, start_lba={start_lba}, \
+             blocks={blocks}"
         );
         Some(AxDeviceEnum::from_block(Ls2kAhciDevice {
             inner,
@@ -409,10 +494,18 @@ impl DriverProbe for Ls2kGmacDriver {
         let mac_address = node
             .find_property("local-mac-address")
             .or_else(|| node.find_property("mac-address"))
-            .and_then(|property| property.raw_value().get(..6).and_then(|mac| mac.try_into().ok()));
+            .and_then(|property| {
+                property
+                    .raw_value()
+                    .get(..6)
+                    .and_then(|mac| mac.try_into().ok())
+            });
         let irq = translated_irq(fdt, &node);
         let mask = dma_mask(&node).unwrap_or(u32::MAX as u64);
-        assert!(mask >= u32::MAX as u64, "GMAC0 DMA mask is narrower than 32 bits");
+        assert!(
+            mask >= u32::MAX as u64,
+            "GMAC0 DMA mask is narrower than 32 bits"
+        );
         let device = unsafe {
             Ls2kGmacDevice::try_new(
                 uncached_addr(paddr),
@@ -424,8 +517,19 @@ impl DriverProbe for Ls2kGmacDriver {
             )
         }
         .expect("failed to initialize DT-discovered LS2K1000 GMAC0");
+        let mut device = device;
+        if let Some(irq) = irq {
+            if axhal::irq::register(irq, axdriver_net::dwmac_ls2k1000::handle_interrupt) {
+                device.enable_interrupt_mode();
+            } else {
+                warn!("LS2K1000 GMAC0 IRQ {irq} registration failed; using polling mode");
+            }
+        } else {
+            warn!("LS2K1000 GMAC0 has no DT IRQ; using polling mode");
+        }
         info!(
-            "LS2K1000 GMAC0 from DTB: paddr={paddr:#x}, size={size:#x}, irq={irq:?}, phy_mode={phy_mode}, phy_address={phy_address}, dma_mask={mask:#x}"
+            "LS2K1000 GMAC0 from DTB: paddr={paddr:#x}, size={size:#x}, irq={irq:?}, \
+             phy_mode={phy_mode}, phy_address={phy_address}, dma_mask={mask:#x}"
         );
         Some(AxDeviceEnum::from_net(device))
     }
@@ -438,7 +542,9 @@ mod tests {
     #[test]
     fn formats_gpt_guid_with_mixed_endian_fields() {
         assert_eq!(
-            guid_string(&[0x78, 0x56, 0x34, 0x12, 0xbc, 0x9a, 0xf0, 0xde, 1, 2, 3, 4, 5, 6, 7, 8]),
+            guid_string(&[
+                0x78, 0x56, 0x34, 0x12, 0xbc, 0x9a, 0xf0, 0xde, 1, 2, 3, 4, 5, 6, 7, 8
+            ]),
             "12345678-9abc-def0-0102-030405060708"
         );
     }

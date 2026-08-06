@@ -2,14 +2,22 @@
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
 use simple_ahci::AhciDriver as SimpleAhciDriver;
-pub use simple_ahci::Hal as AhciHal;
+pub use simple_ahci::{AhciIrqHandle, Hal as AhciHal};
 
 use crate::BlockDriverOps;
 
 /// AHCI driver based on the `simple_ahci` crate.
 pub struct AhciDriver<H: AhciHal>(SimpleAhciDriver<H>);
 
+/// An AHCI controller whose MMIO and DMA structures are initialized while
+/// device interrupts remain disabled.
+pub struct PreparedAhciDriver<H: AhciHal>(simple_ahci::PreparedAhci<H>);
+
 impl<H: AhciHal> AhciDriver<H> {
+    pub unsafe fn prepare(base: usize) -> Option<PreparedAhciDriver<H>> {
+        unsafe { SimpleAhciDriver::<H>::prepare(base) }.map(PreparedAhciDriver)
+    }
+
     /// Try to construct a new AHCI driver from the given MMIO base address.
     ///
     /// # Safety
@@ -21,6 +29,20 @@ impl<H: AhciHal> AhciDriver<H> {
     /// - The AHCI controller hardware is present and functional at the given address.
     pub unsafe fn try_new(base: usize) -> Option<Self> {
         unsafe { SimpleAhciDriver::<H>::try_new(base) }.map(AhciDriver)
+    }
+}
+
+impl<H: AhciHal> PreparedAhciDriver<H> {
+    pub fn irq_handle(&self) -> AhciIrqHandle<H> {
+        self.0.irq_handle()
+    }
+
+    pub fn enable_interrupts(&self) {
+        self.0.enable_interrupts();
+    }
+
+    pub fn identify(self) -> Option<AhciDriver<H>> {
+        self.0.identify().map(AhciDriver)
     }
 }
 
@@ -43,7 +65,7 @@ impl<H: AhciHal> BlockDriverOps for AhciDriver<H> {
         self.0.capacity()
     }
 
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
         if buf.len() % self.block_size() != 0 {
             return Err(DevError::InvalidParam);
         }
@@ -57,7 +79,7 @@ impl<H: AhciHal> BlockDriverOps for AhciDriver<H> {
         }
     }
 
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
         if buf.len() % self.block_size() != 0 {
             return Err(DevError::InvalidParam);
         }
@@ -71,7 +93,7 @@ impl<H: AhciHal> BlockDriverOps for AhciDriver<H> {
         }
     }
 
-    fn flush(&mut self) -> DevResult {
-        Ok(())
+    fn flush(&self) -> DevResult {
+        self.0.flush().then_some(()).ok_or(DevError::Io)
     }
 }

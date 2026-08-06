@@ -1,13 +1,16 @@
 //! SD card driver for raspi4
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
-use bcm2835_sdhci::Bcm2835SDhci::{EmmcCtl, BLOCK_SIZE};
-use bcm2835_sdhci::SDHCIError;
+use bcm2835_sdhci::{
+    Bcm2835SDhci::{BLOCK_SIZE, EmmcCtl},
+    SDHCIError,
+};
+use spin::Mutex;
 
 use crate::BlockDriverOps;
 
 /// BCM2835 SDHCI driver (Raspberry Pi SD card).
-pub struct SDHCIDriver(EmmcCtl);
+pub struct SDHCIDriver(Mutex<EmmcCtl>);
 
 impl SDHCIDriver {
     /// Initialize the SDHCI driver, returns `Ok` if successful.
@@ -15,7 +18,7 @@ impl SDHCIDriver {
         let mut ctrl = EmmcCtl::new();
         if ctrl.init() == 0 {
             log::info!("BCM2835 sdhci: successfully initialized");
-            Ok(SDHCIDriver(ctrl))
+            Ok(SDHCIDriver(Mutex::new(ctrl)))
         } else {
             log::warn!("BCM2835 sdhci: init failed");
             Err(DevError::Io)
@@ -47,7 +50,7 @@ impl BaseDriverOps for SDHCIDriver {
 }
 
 impl BlockDriverOps for SDHCIDriver {
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
         if buf.len() < BLOCK_SIZE {
             return Err(DevError::InvalidParam);
         }
@@ -56,11 +59,12 @@ impl BlockDriverOps for SDHCIDriver {
             return Err(DevError::InvalidParam);
         }
         self.0
+            .lock()
             .read_block(block_id as u32, 1, aligned_buf)
             .map_err(deal_sdhci_err)
     }
 
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
         if buf.len() < BLOCK_SIZE {
             return Err(DevError::Io);
         }
@@ -69,20 +73,21 @@ impl BlockDriverOps for SDHCIDriver {
             return Err(DevError::InvalidParam);
         }
         self.0
+            .lock()
             .write_block(block_id as u32, 1, aligned_buf)
             .map_err(deal_sdhci_err)
     }
-    fn flush(&mut self) -> DevResult {
+    fn flush(&self) -> DevResult {
         Ok(())
     }
 
     #[inline]
     fn num_blocks(&self) -> u64 {
-        self.0.get_block_num()
+        self.0.lock().get_block_num()
     }
 
     #[inline]
     fn block_size(&self) -> usize {
-        self.0.get_block_size()
+        self.0.lock().get_block_size()
     }
 }

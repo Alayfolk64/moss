@@ -266,6 +266,12 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
     #[cfg(feature = "ipi")]
     axipi::init();
 
+    #[cfg(feature = "irq")]
+    {
+        info!("Initialize interrupt handlers...");
+        init_interrupt();
+    }
+
     #[cfg(any(feature = "fs", feature = "net", feature = "display"))]
     {
         #[allow(unused_variables)]
@@ -331,12 +337,6 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
 
     #[cfg(feature = "smp")]
     self::mp::start_secondary_cpus(hardware_cpu_id);
-
-    #[cfg(feature = "irq")]
-    {
-        info!("Initialize interrupt handlers...");
-        init_interrupt();
-    }
 
     #[cfg(all(feature = "tls", not(feature = "multitask")))]
     {
@@ -428,7 +428,11 @@ fn init_interrupt() {
         axipi::ipi_handler();
     });
 
-    // Enable IRQs before starting app
+    // Prime the first scheduler tick before drivers begin issuing commands
+    // that may sleep on interrupt-backed wait queues.
+    update_timer();
+
+    // Enable IRQs before driver and filesystem initialization.
     axhal::asm::enable_irqs();
 }
 

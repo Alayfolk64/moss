@@ -20,6 +20,8 @@ mod fdt;
 mod init;
 #[cfg(feature = "irq")]
 mod irq;
+#[cfg(feature = "irq")]
+mod irq_state;
 mod mem;
 #[cfg(feature = "smp")]
 mod mp;

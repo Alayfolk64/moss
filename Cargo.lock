@@ -291,6 +291,7 @@ dependencies = [
  "axdriver_pci",
  "axdriver_virtio",
  "axhal",
+ "axtask",
  "cfg-if",
  "crate_interface",
  "fdt-parser",
@@ -312,6 +313,7 @@ dependencies = [
  "log",
  "simple-ahci",
  "simple-sdmmc",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -362,6 +364,7 @@ dependencies = [
  "axdriver_input",
  "axdriver_net",
  "log",
+ "spin 0.9.8",
  "virtio-drivers",
 ]
 
@@ -2175,6 +2178,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitfield-struct",
  "log",
+ "spin 0.9.8",
  "volatile 0.6.1",
 ]
 

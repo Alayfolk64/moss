@@ -3,6 +3,9 @@
 #![no_std]
 #![cfg_attr(doc, feature(doc_cfg))]
 
+#[cfg(any(feature = "ramdisk", feature = "ramdisk-static"))]
+mod block_range;
+
 #[cfg(feature = "bcm2835-sdhci")]
 pub mod bcm2835sdhci;
 
@@ -33,14 +36,14 @@ pub trait BlockDriverOps: BaseDriverOps {
     ///
     /// The size of the buffer may exceed the block size, in which case multiple
     /// contiguous blocks will be read.
-    fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult;
+    fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult;
 
     /// Writes blocked data to the given block.
     ///
     /// The size of the buffer may exceed the block size, in which case multiple
     /// contiguous blocks will be written.
-    fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult;
+    fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult;
 
     /// Flushes the device to write all pending data to the storage.
-    fn flush(&mut self) -> DevResult;
+    fn flush(&self) -> DevResult;
 }

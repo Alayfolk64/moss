@@ -93,6 +93,7 @@ ls2k1000 = [
     "net",
     "dep:axhal",
     "dep:fdt-parser",
+    "dep:axtask",
     "axdriver_block/ahci",
     "axdriver_net/dwmac-ls2k1000",
 ]
@@ -173,6 +174,10 @@ optional = true
 
 [dependencies.axdriver_net]
 version = "0.1.4-preview.3"
+optional = true
+
+[dependencies.axtask]
+version = "0.2.2-preview.3"
 optional = true
 
 [dependencies.axdriver_pci]
