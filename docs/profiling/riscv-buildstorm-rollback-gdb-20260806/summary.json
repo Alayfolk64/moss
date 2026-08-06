@@ -1,0 +1,314 @@
+{
+  "method": "qemu-gdb-all-vcpu",
+  "interval_seconds": 0.75,
+  "attempts": 535,
+  "failures": 180,
+  "all_vcpu_samples": 2840,
+  "active_vcpu_samples": 1764,
+  "idle_vcpu_samples": 1076,
+  "active_percent": 62.11267605633803,
+  "top_active_leaves": [
+    {
+      "leaf": "[guest-user-or-unknown]",
+      "samples": 1449,
+      "percent": 82.14285714285714
+    },
+    {
+      "leaf": "trap_vector_base",
+      "samples": 216,
+      "percent": 12.244897959183673
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::map<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<optimized out>, vaddr=..., target=..., page_size=<optimized out>, flags=...)",
+      "samples": 5,
+      "percent": 0.2834467120181406
+    },
+    {
+      "leaf": "kernel_guard::imp::{impl#2}::release (state=2)",
+      "samples": 5,
+      "percent": 0.2834467120181406
+    },
+    {
+      "leaf": "crc32 (tab=<optimized out>, size=<optimized out>, buf=<optimized out>, crc=<optimized out>)",
+      "samples": 5,
+      "percent": 0.2834467120181406
+    },
+    {
+      "leaf": "axhal::percpu::CURRENT_TASK_PTR_WRAPPER::read_current_raw",
+      "samples": 5,
+      "percent": 0.2834467120181406
+    },
+    {
+      "leaf": "axplat_riscv64_qemu_virt::mem::{impl#0}::phys_to_virt::__MemIf_phys_to_virt (paddr=...)",
+      "samples": 4,
+      "percent": 0.22675736961451248
+    },
+    {
+      "leaf": "alloc::sync::{impl#28}::clone<kspin::base::BaseSpinLock<kernel_guard::NoPreemptIrqSave, starry_kernel::mm::aspace::backend::cow::FrameRefCnt>, alloc::alloc::Global> (self=<optimized out>)",
+      "samples": 4,
+      "percent": 0.22675736961451248
+    },
+    {
+      "leaf": "kernel_guard::NoPreemptIrqSave::new",
+      "samples": 3,
+      "percent": 0.17006802721088435
+    },
+    {
+      "leaf": "alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Immut, memory_addr::addr::PhysAddr, alloc::sync::Arc<kspin::base::BaseSpinLock<kernel_guard::NoPreemptIrqSave, starry_kernel::mm::aspace::backend::cow::FrameRefCnt>, alloc::alloc::Global>, alloc::collections::btree::node::marker::LeafOrInternal>::find_key_index<alloc::collections::btree::node::marker::Immut, memory_addr::addr::PhysAddr, alloc::sync::Arc<kspin::base::BaseSpinLock<kernel_guard::NoPreemptIrqSave, starry_kernel::mm::aspace::backend::cow::FrameRefCnt>, alloc::alloc::Global>, alloc::collections::btree::node::marker::LeafOrInternal, memory_addr::addr::PhysAddr> (start_index=0, self=<optimized out>, key=<optimized out>)",
+      "samples": 3,
+      "percent": 0.17006802721088435
+    },
+    {
+      "leaf": "alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, memory_addr::addr::VirtAddr, axfs::highlevel::file::FolioPageRef, alloc::collections::btree::node::marker::LeafOrInternal>::find_key_index<alloc::collections::btree::node::marker::Mut, memory_addr::addr::VirtAddr, axfs::highlevel::file::FolioPageRef, alloc::collections::btree::node::marker::LeafOrInternal, memory_addr::addr::VirtAddr> (start_index=0, self=<optimized out>, key=<optimized out>)",
+      "samples": 3,
+      "percent": 0.17006802721088435
+    },
+    {
+      "leaf": "page_table_entry::arch::riscv::{impl#3}::is_huge (self=<optimized out>)",
+      "samples": 3,
+      "percent": 0.17006802721088435
+    },
+    {
+      "leaf": "starry_kernel::mm::aspace::backend::cow::CowBackend::share_existing_at (self=<optimized out>, vaddr=..., paddr=..., flags=..., old_pt=<optimized out>, new_pt=<optimized out>)",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::get_entry_mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<error reading variable: Cannot access memory",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::query<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<optimized out>, vaddr=...)",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "axtask::task::TaskInner::enable_preempt (self=<error reading variable: Cannot access memory",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_table_mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (entry=<optimized out>, self=<error reading variable: Cannot access memory",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::get_entry<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (vaddr=<optimized out>, self=<optimized out>)",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_table_paddr<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (entry=..., self=<optimized out>)",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "kernel_guard::imp::{impl#2}::release (state=0)",
+      "samples": 2,
+      "percent": 0.11337868480725624
+    },
+    {
+      "leaf": "alloc::collections::btree::map::{impl#0}::drop<u32, alloc::sync::Arc<axfs::highlevel::file::Folio, alloc::alloc::Global>, alloc::alloc::Global> (self=<optimized out>)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_present_in_table<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<optimized out>, table=..., level=<optimized out>, start=<optimized out>, end=<optimized out>)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "axtask::task::CurrentTask::from_raw_ptr (ptr=0xffffffc08e11e410)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "core::sync::atomic::atomic_compare_exchange_weak<u64> (dst=<optimized out>, old=<optimized out>, new=<optimized out>, success=<optimized out>, failure=<optimized out>)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "virtio_drivers::queue::VirtQueue<axdriver::virtio::VirtIoHalImpl, 16>::can_pop<axdriver::virtio::VirtIoHalImpl, 16> (self=<error reading variable: Cannot access memory",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "axplat_riscv64_qemu_virt::time::{impl#0}::current_ticks::__TimeIf_current_ticks",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_table_mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (entry=0xffffffc0d2e3a008, self=<error reading variable: Cannot access memory",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "starry_kernel::task::timer::TimeManager::poll<starry_kernel::task::ops::poll_timer::{closure_env#0}> (self=<optimized out>, owner=<optimized out>, emitter=...)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "page_table_entry::arch::riscv::{impl#3}::paddr (self=<optimized out>)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    },
+    {
+      "leaf": "page_table_entry::arch::riscv::{impl#3}::set_flags (self=0xffffffc09fb8eef0, flags=..., _is_huge=<optimized out>)",
+      "samples": 1,
+      "percent": 0.05668934240362812
+    }
+  ],
+  "top_all_leaves": [
+    {
+      "leaf": "[guest-user-or-unknown]",
+      "samples": 1449,
+      "percent": 51.021126760563384
+    },
+    {
+      "leaf": "axtask::run_queue::current_run_queue<kernel_guard::NoPreemptIrqSave>",
+      "samples": 1076,
+      "percent": 37.88732394366197
+    },
+    {
+      "leaf": "trap_vector_base",
+      "samples": 216,
+      "percent": 7.605633802816901
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::map<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<optimized out>, vaddr=..., target=..., page_size=<optimized out>, flags=...)",
+      "samples": 5,
+      "percent": 0.176056338028169
+    },
+    {
+      "leaf": "kernel_guard::imp::{impl#2}::release (state=2)",
+      "samples": 5,
+      "percent": 0.176056338028169
+    },
+    {
+      "leaf": "crc32 (tab=<optimized out>, size=<optimized out>, buf=<optimized out>, crc=<optimized out>)",
+      "samples": 5,
+      "percent": 0.176056338028169
+    },
+    {
+      "leaf": "axhal::percpu::CURRENT_TASK_PTR_WRAPPER::read_current_raw",
+      "samples": 5,
+      "percent": 0.176056338028169
+    },
+    {
+      "leaf": "axplat_riscv64_qemu_virt::mem::{impl#0}::phys_to_virt::__MemIf_phys_to_virt (paddr=...)",
+      "samples": 4,
+      "percent": 0.14084507042253522
+    },
+    {
+      "leaf": "alloc::sync::{impl#28}::clone<kspin::base::BaseSpinLock<kernel_guard::NoPreemptIrqSave, starry_kernel::mm::aspace::backend::cow::FrameRefCnt>, alloc::alloc::Global> (self=<optimized out>)",
+      "samples": 4,
+      "percent": 0.14084507042253522
+    },
+    {
+      "leaf": "kernel_guard::NoPreemptIrqSave::new",
+      "samples": 3,
+      "percent": 0.1056338028169014
+    },
+    {
+      "leaf": "alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Immut, memory_addr::addr::PhysAddr, alloc::sync::Arc<kspin::base::BaseSpinLock<kernel_guard::NoPreemptIrqSave, starry_kernel::mm::aspace::backend::cow::FrameRefCnt>, alloc::alloc::Global>, alloc::collections::btree::node::marker::LeafOrInternal>::find_key_index<alloc::collections::btree::node::marker::Immut, memory_addr::addr::PhysAddr, alloc::sync::Arc<kspin::base::BaseSpinLock<kernel_guard::NoPreemptIrqSave, starry_kernel::mm::aspace::backend::cow::FrameRefCnt>, alloc::alloc::Global>, alloc::collections::btree::node::marker::LeafOrInternal, memory_addr::addr::PhysAddr> (start_index=0, self=<optimized out>, key=<optimized out>)",
+      "samples": 3,
+      "percent": 0.1056338028169014
+    },
+    {
+      "leaf": "alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Mut, memory_addr::addr::VirtAddr, axfs::highlevel::file::FolioPageRef, alloc::collections::btree::node::marker::LeafOrInternal>::find_key_index<alloc::collections::btree::node::marker::Mut, memory_addr::addr::VirtAddr, axfs::highlevel::file::FolioPageRef, alloc::collections::btree::node::marker::LeafOrInternal, memory_addr::addr::VirtAddr> (start_index=0, self=<optimized out>, key=<optimized out>)",
+      "samples": 3,
+      "percent": 0.1056338028169014
+    },
+    {
+      "leaf": "page_table_entry::arch::riscv::{impl#3}::is_huge (self=<optimized out>)",
+      "samples": 3,
+      "percent": 0.1056338028169014
+    },
+    {
+      "leaf": "starry_kernel::mm::aspace::backend::cow::CowBackend::share_existing_at (self=<optimized out>, vaddr=..., paddr=..., flags=..., old_pt=<optimized out>, new_pt=<optimized out>)",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::get_entry_mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<error reading variable: Cannot access memory",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::query<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<optimized out>, vaddr=...)",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "axtask::task::TaskInner::enable_preempt (self=<error reading variable: Cannot access memory",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_table_mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (entry=<optimized out>, self=<error reading variable: Cannot access memory",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::get_entry<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (vaddr=<optimized out>, self=<optimized out>)",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_table_paddr<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (entry=..., self=<optimized out>)",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "kernel_guard::imp::{impl#2}::release (state=0)",
+      "samples": 2,
+      "percent": 0.07042253521126761
+    },
+    {
+      "leaf": "alloc::collections::btree::map::{impl#0}::drop<u32, alloc::sync::Arc<axfs::highlevel::file::Folio, alloc::alloc::Global>, alloc::alloc::Global> (self=<optimized out>)",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_present_in_table<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (self=<optimized out>, table=..., level=<optimized out>, start=<optimized out>, end=<optimized out>)",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "axtask::task::CurrentTask::from_raw_ptr (ptr=0xffffffc08e11e410)",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "core::sync::atomic::atomic_compare_exchange_weak<u64> (dst=<optimized out>, old=<optimized out>, new=<optimized out>, success=<optimized out>, failure=<optimized out>)",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "virtio_drivers::queue::VirtQueue<axdriver::virtio::VirtIoHalImpl, 16>::can_pop<axdriver::virtio::VirtIoHalImpl, 16> (self=<error reading variable: Cannot access memory",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "axplat_riscv64_qemu_virt::time::{impl#0}::current_ticks::__TimeIf_current_ticks",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "page_table_multiarch::bits64::PageTable64Mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl>::next_table_mut<page_table_multiarch::arch::riscv::Sv39MetaData<memory_addr::addr::VirtAddr>, page_table_entry::arch::riscv::Rv64PTE, axhal::paging::PagingHandlerImpl> (entry=0xffffffc0d2e3a008, self=<error reading variable: Cannot access memory",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "starry_kernel::task::timer::TimeManager::poll<starry_kernel::task::ops::poll_timer::{closure_env#0}> (self=<optimized out>, owner=<optimized out>, emitter=...)",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    },
+    {
+      "leaf": "page_table_entry::arch::riscv::{impl#3}::paddr (self=<optimized out>)",
+      "samples": 1,
+      "percent": 0.035211267605633804
+    }
+  ]
+}

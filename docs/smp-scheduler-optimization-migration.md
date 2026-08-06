@@ -104,3 +104,17 @@ BUILDSTORM_COMPILE mode=multi ok=true ...
 ```
 
 `smp-scheduler-optimization` 中未迁移的探测功能、临时手册、火焰图原始产物和无法单独证明收益的试验代码不进入 main。后续优化应从当前稳定标签继续，每一项单独提交、单独评测。
+
+## 7. 每核页缓存实验与回退
+
+`fa7aac9f perf: 引入每核页分配缓存并优化连续页搜索` 将每核 order-0
+页缓存、原子 usage 统计、连续页 next-fit 和匿名页/folio 接入作为第一组
+独立实验。RISC-V 8 核完整通过 cagent 与 BuildStorm，但第 1 轮
+`BUILDSTORM_COMPILE` 为 516.08 秒，明显慢于无探测稳定均值 483.23 秒。
+第 2 轮在用户决定回退后中止，没有把不完整数据作为结果。
+
+实验由 `65430442 revert: 回退每核页分配缓存性能实验` 完整回退，源码净
+效果恢复到 `a2f3320d`。随后对回退基线运行外部 GDB 火焰图，确认当前可
+解析的内核样本主要集中在 fork/clone 的 COW 页表复制和退出时的逐页回收，
+而不是 order-0 页分配器。详细数据和 SVG 见
+[RISC-V 回退基线外部 GDB 火焰图报告](profiling/riscv-buildstorm-rollback-gdb-20260806/report.md)。
