@@ -1,22 +1,24 @@
-//! Polling Synopsys DWMAC 3.70a driver for Loongson 2K1000LA.
+//! Synopsys DWMAC 3.70a driver for Loongson 2K1000LA.
 //!
 //! The register programming and enhanced-descriptor layout are adapted from
 //! the upstream StarryOS LS2K1000 driver.  Only the queue-facing layer is
 //! different: this crate implements the older `NetDriverOps` API used by MOSS.
-//! Polling is deliberate for the first hardware validation so DMA/MAC bring-up
-//! remains independent from interrupt delivery.
+//! The device starts in polling mode and switches to interrupt-driven deferred
+//! polling only after the platform successfully registers its DT-provided IRQ.
 
 use alloc::sync::Arc;
 use core::{
     marker::PhantomData,
     ptr::{read_volatile, write_volatile},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
 };
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
 use log::{info, warn};
 
-use crate::{EthernetAddress, NetBuf, NetBufPool, NetBufPtr, NetDriverOps};
+use crate::{
+    EthernetAddress, NetBuf, NetBufPool, NetBufPtr, NetDriverOps, dwmac_ls2k1000_state::*,
+};
 
 // Keep the upstream queue depth of 128. The buffers live in a static DMA
 // section so the resulting 512 KiB allocation never lands on a kernel stack.
@@ -135,6 +137,9 @@ struct DmaBuffers {
 }
 
 static DMA_STORAGE_TAKEN: AtomicBool = AtomicBool::new(false);
+static DMA_MMIO_BASE: AtomicUsize = AtomicUsize::new(0);
+static DMA_IRQ_EVENTS: AtomicU32 = AtomicU32::new(0);
+static DMA_IRQ_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[unsafe(link_section = ".dma_uncached")]
 static mut DMA_RINGS: DescriptorRings = DescriptorRings {
@@ -157,7 +162,8 @@ pub struct DwmacLs2k1000<H: DwmacHal> {
     rings: &'static mut DescriptorRings,
     buffers: &'static mut DmaBuffers,
     rx_index: usize,
-    tx_index: usize,
+    tx_ring: TxRingState,
+    irq_active: bool,
     net_pool: Arc<NetBufPool>,
     _hal: PhantomData<H>,
 }
@@ -188,7 +194,8 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             rings: unsafe { &mut *core::ptr::addr_of_mut!(DMA_RINGS) },
             buffers: unsafe { &mut *core::ptr::addr_of_mut!(DMA_BUFFERS) },
             rx_index: 0,
-            tx_index: 0,
+            tx_ring: TxRingState::new(RING_SIZE),
+            irq_active: false,
             net_pool: NetBufPool::new(NET_BUFFER_COUNT, NET_BUFFER_LEN)?,
             _hal: PhantomData,
         };
@@ -206,13 +213,14 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
         dev.reset_dma()?;
         dev.initialize_descriptors()?;
         dev.initialize_mac();
+        DMA_MMIO_BASE.store(base, Ordering::Release);
 
-        let phy_status = dev
-            .mdio_read(dev.phy_address, PHY_BMSR)
-            .unwrap_or(0xffff);
+        let phy_status = dev.mdio_read(dev.phy_address, PHY_BMSR).unwrap_or(0xffff);
         let rgmii = dev.read_reg(GMAC_RGSMII_STATUS);
         info!(
-            "LS2K1000 GMAC0 initialized (StarryOS hardware sequence, polling): version={:#010x}, mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}, phy0_bmsr={:#06x}, rgmii={:#010x}, link={}",
+            "LS2K1000 GMAC0 initialized (interrupts initially disabled): version={:#010x}, \
+             mac={:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}, phy0_bmsr={:#06x}, rgmii={:#010x}, \
+             link={}",
             dev.read_reg(GMAC_VERSION),
             dev.mac[0],
             dev.mac[1],
@@ -225,6 +233,20 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             phy_status & PHY_BMSR_LINK != 0,
         );
         Ok(dev)
+    }
+
+    /// Enables DMA interrupts after the platform IRQ handler has been
+    /// registered successfully.
+    pub fn enable_interrupt_mode(&mut self) {
+        if self.irq.is_none() {
+            return;
+        }
+        self.write_reg(DMA_STATUS, DMA_STATUS_HANDLED);
+        DMA_IRQ_EVENTS.store(0, Ordering::Release);
+        DMA_IRQ_ACTIVE.store(true, Ordering::Release);
+        self.irq_active = true;
+        self.write_reg(DMA_INTERRUPT_ENABLE, DMA_IRQ_DEFAULT);
+        H::dma_barrier();
     }
 
     fn initialize_descriptors(&mut self) -> DevResult {
@@ -357,8 +379,6 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             H::dma_barrier();
             unsafe { write_volatile(&mut self.rings.rx[index].status, DESC_OWN) };
             H::dma_barrier();
-            let dma_status = self.read_reg(DMA_STATUS);
-            self.write_reg(DMA_STATUS, dma_status);
             self.write_reg(DMA_RX_POLL_DEMAND, 0);
             if let Some(packet) = result {
                 return Ok(packet);
@@ -373,7 +393,8 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
         if !(1..=NET_BUFFER_LEN).contains(&len) {
             return Err(DevError::InvalidParam);
         }
-        let index = self.tx_index;
+        self.reclaim_tx();
+        let index = self.tx_ring.submit_index().ok_or(DevError::Again)?;
         if unsafe { read_volatile(&self.rings.tx[index].status) } & DESC_OWN != 0 {
             return Err(DevError::Again);
         }
@@ -399,40 +420,111 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             write_volatile(&mut self.rings.tx[index].status, status | DESC_OWN);
         }
         H::dma_barrier();
-        self.write_reg(DMA_TX_POLL_DEMAND, 0);
-
-        // Synchronous completion lets ownership of the stack-provided buffer
-        // return immediately and keeps the initial driver simple.
-        let deadline = H::current_ms().saturating_add(100);
-        while unsafe { read_volatile(&self.rings.tx[index].status) } & DESC_OWN != 0 {
-            if H::current_ms() >= deadline {
-                let dma_status = self.read_reg(DMA_STATUS);
-                warn!(
-                    "LS2K1000 GMAC0 TX timed out: desc={:#010x}, dma_status={:#010x}",
-                    unsafe { read_volatile(&self.rings.tx[index].status) },
-                    dma_status
-                );
-                return Err(DevError::Io);
-            }
-            core::hint::spin_loop();
-        }
-        H::dma_barrier();
-        let completed_status = unsafe { read_volatile(&self.rings.tx[index].status) };
-        unsafe {
-            write_volatile(
-                &mut self.rings.tx[index].status,
-                if ring_end { TX_DESC_END_RING } else { 0 },
+        if self.irq_active {
+            self.write_reg(
+                DMA_INTERRUPT_ENABLE,
+                self.read_reg(DMA_INTERRUPT_ENABLE) | DMA_IRQ_TX | DMA_STATUS_NIS,
             );
-            write_volatile(&mut self.rings.tx[index].length, 0);
         }
-        let dma_status = self.read_reg(DMA_STATUS);
-        self.write_reg(DMA_STATUS, dma_status);
-        self.tx_index = (index + 1) % RING_SIZE;
-        if completed_status & RX_DESC_ERROR != 0 {
-            warn!("LS2K1000 GMAC0 TX descriptor error {index}: status={completed_status:#010x}");
-            return Err(DevError::Io);
-        }
+        self.write_reg(DMA_TX_POLL_DEMAND, 0);
+        let reserved = self.tx_ring.reserve();
+        debug_assert_eq!(reserved, Some(index));
         Ok(())
+    }
+
+    fn reclaim_tx(&mut self) {
+        while self.tx_ring.in_flight() != 0 {
+            let index = self.tx_ring.clean_index();
+            H::dma_barrier();
+            let status = unsafe { read_volatile(&self.rings.tx[index].status) };
+            if status & DESC_OWN != 0 {
+                break;
+            }
+            if status & RX_DESC_ERROR != 0 {
+                warn!("LS2K1000 GMAC0 TX descriptor error {index}: status={status:#010x}");
+            }
+            unsafe {
+                write_volatile(
+                    &mut self.rings.tx[index].status,
+                    if index + 1 == RING_SIZE {
+                        TX_DESC_END_RING
+                    } else {
+                        0
+                    },
+                );
+                write_volatile(&mut self.rings.tx[index].length, 0);
+            }
+            let completed = self.tx_ring.complete_one();
+            debug_assert!(completed);
+        }
+    }
+
+    fn finish_interrupt_poll(&mut self) -> bool {
+        self.reclaim_tx();
+        if !self.irq_active {
+            return false;
+        }
+
+        let events = DMA_IRQ_EVENTS.swap(0, Ordering::AcqRel);
+        if events & DMA_STATUS_FBI != 0 {
+            warn!("LS2K1000 GMAC0 fatal DMA bus error; resetting DMA queues");
+            self.write_reg(DMA_INTERRUPT_ENABLE, 0);
+            self.stop_tx_rx();
+            if self.reset_dma().is_ok() {
+                self.rx_index = 0;
+                self.tx_ring = TxRingState::new(RING_SIZE);
+                if self.initialize_descriptors().is_ok() {
+                    self.initialize_mac();
+                    self.enable_interrupt_mode();
+                    return false;
+                }
+            }
+            warn!("LS2K1000 GMAC0 DMA recovery failed; switching to polling mode");
+            DMA_IRQ_ACTIVE.store(false, Ordering::Release);
+            self.irq_active = false;
+            return false;
+        }
+        if events & DMA_STATUS_RU != 0 {
+            self.write_reg(DMA_RX_POLL_DEMAND, 0);
+        }
+        if events & DMA_STATUS_TU != 0 {
+            self.write_reg(DMA_TX_POLL_DEMAND, 0);
+        }
+
+        H::dma_barrier();
+        let rx_ready =
+            unsafe { read_volatile(&self.rings.rx[self.rx_index].status) } & DESC_OWN == 0;
+        let tx_ready = self.tx_ring.in_flight() != 0
+            && unsafe { read_volatile(&self.rings.tx[self.tx_ring.clean_index()].status) }
+                & DESC_OWN
+                == 0;
+        if rx_ready || tx_ready {
+            DMA_IRQ_EVENTS.fetch_or(
+                (if rx_ready { DMA_STATUS_RX } else { 0 })
+                    | if tx_ready { DMA_STATUS_TX } else { 0 },
+                Ordering::Release,
+            );
+            return true;
+        }
+
+        let mut enable = self.read_reg(DMA_INTERRUPT_ENABLE) | DMA_IRQ_RX | DMA_IRQ_ERRORS;
+        if self.tx_ring.in_flight() != 0 {
+            enable |= DMA_IRQ_TX;
+        } else {
+            enable &= !DMA_IRQ_TX;
+        }
+        enable |= DMA_STATUS_NIS;
+        self.write_reg(DMA_INTERRUPT_ENABLE, enable);
+        H::dma_barrier();
+
+        let status = self.read_reg(DMA_STATUS) & DMA_STATUS_HANDLED;
+        if status != 0 {
+            self.write_reg(DMA_INTERRUPT_ENABLE, masked_irq_enable(enable, status));
+            self.write_reg(DMA_STATUS, status);
+            DMA_IRQ_EVENTS.fetch_or(status, Ordering::Release);
+            return true;
+        }
+        false
     }
 
     fn rgmii_mode(&self) -> (u32, u32) {
@@ -443,7 +535,7 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             // GMII mode rather than interpreting an all-zero register as 10M.
             return (0, GMAC_CONTROL_FULL_DUPLEX);
         }
-        let duplex = if status & 1 != 0 || status == 0 {
+        let duplex = if status & 1 != 0 {
             GMAC_CONTROL_FULL_DUPLEX
         } else {
             0
@@ -528,11 +620,7 @@ impl<H: DwmacHal> BaseDriverOps for DwmacLs2k1000<H> {
     }
 
     fn irq_num(&self) -> Option<usize> {
-        // The current queue implementation is polling. Keep the parsed IRQ in
-        // the device state, but do not advertise it until DMA IRQ acknowledge
-        // and recovery are wired to NetDriverOps.
-        let _ = self.irq;
-        None
+        if self.irq_active { self.irq } else { None }
     }
 }
 
@@ -542,7 +630,9 @@ impl<H: DwmacHal> NetDriverOps for DwmacLs2k1000<H> {
     }
 
     fn can_transmit(&self) -> bool {
-        (unsafe { read_volatile(&self.rings.tx[self.tx_index].status) } & DESC_OWN) == 0
+        self.tx_ring.submit_index().is_some_and(|index| {
+            (unsafe { read_volatile(&self.rings.tx[index].status) } & DESC_OWN) == 0
+        })
     }
 
     fn can_receive(&self) -> bool {
@@ -564,6 +654,7 @@ impl<H: DwmacHal> NetDriverOps for DwmacLs2k1000<H> {
     }
 
     fn recycle_tx_buffers(&mut self) -> DevResult {
+        self.reclaim_tx();
         Ok(())
     }
 
@@ -583,4 +674,43 @@ impl<H: DwmacHal> NetDriverOps for DwmacLs2k1000<H> {
         buffer.set_packet_len(size);
         Ok(buffer.into_buf_ptr())
     }
+
+    fn poll_complete(&mut self) -> bool {
+        self.finish_interrupt_poll()
+    }
+}
+
+/// Handles the singleton LS2K1000 GMAC DMA interrupt.
+///
+/// The hard handler only acknowledges hardware and publishes deferred work;
+/// descriptor processing is performed by `NetDriverOps::poll_complete`.
+pub fn handle_interrupt() {
+    if !DMA_IRQ_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
+    let base = DMA_MMIO_BASE.load(Ordering::Acquire);
+    if base == 0 {
+        return;
+    }
+    let read = |offset: usize| unsafe {
+        (base as *const u8)
+            .add(offset)
+            .cast::<u32>()
+            .read_volatile()
+    };
+    let write = |offset: usize, value: u32| unsafe {
+        (base as *mut u8)
+            .add(offset)
+            .cast::<u32>()
+            .write_volatile(value)
+    };
+    let status = read(DMA_STATUS) & DMA_STATUS_HANDLED;
+    if status == 0 {
+        return;
+    }
+    let enable = masked_irq_enable(read(DMA_INTERRUPT_ENABLE), status);
+    write(DMA_INTERRUPT_ENABLE, enable);
+    write(DMA_STATUS, status);
+    core::sync::atomic::fence(Ordering::SeqCst);
+    DMA_IRQ_EVENTS.fetch_or(status, Ordering::Release);
 }

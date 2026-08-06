@@ -97,6 +97,7 @@ impl Router {
     pub fn poll(&mut self, timestamp: Instant) {
         for dev in &mut self.devices {
             while !self.rx_buffer.is_full() && dev.recv(&mut self.rx_buffer, timestamp) {}
+            self.poll_next |= dev.poll_complete();
         }
     }
 

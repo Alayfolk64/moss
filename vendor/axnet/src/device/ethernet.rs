@@ -345,6 +345,13 @@ impl Device for EthernetDevice {
         false
     }
 
+    fn poll_complete(&mut self) -> bool {
+        if let Err(err) = self.inner.recycle_tx_buffers() {
+            warn!("recycle_tx_buffers failed: {:?}", err);
+        }
+        self.inner.poll_complete()
+    }
+
     fn register_waker(&self, waker: &Waker) {
         if let Some(irq) = self.inner.irq_num() {
             register_irq_waker(irq, waker);

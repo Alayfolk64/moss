@@ -29,5 +29,10 @@ pub trait Device: Send + Sync {
     /// up packet processing.
     fn send(&mut self, next_hop: IpAddress, packet: &[u8], timestamp: Instant) -> bool;
 
+    /// Finishes one deferred device poll cycle.
+    fn poll_complete(&mut self) -> bool {
+        false
+    }
+
     fn register_waker(&self, waker: &Waker);
 }

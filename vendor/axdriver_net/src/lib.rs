@@ -7,6 +7,8 @@ extern crate alloc;
 
 #[cfg(feature = "dwmac-ls2k1000")]
 pub mod dwmac_ls2k1000;
+#[cfg(feature = "dwmac-ls2k1000")]
+mod dwmac_ls2k1000_state;
 
 #[cfg(feature = "fxmac")]
 /// fxmac driver for PhytiumPi
@@ -68,4 +70,14 @@ pub trait NetDriverOps: BaseDriverOps {
     /// Allocate a memory buffer of a specified size for network transmission,
     /// returns [`DevResult`]
     fn alloc_tx_buffer(&mut self, size: usize) -> DevResult<NetBufPtr>;
+
+    /// Completes a deferred interrupt poll cycle.
+    ///
+    /// Drivers that mask device interrupts in their hard IRQ handler should
+    /// reclaim completed work here and re-enable interrupts once their queues
+    /// are drained. Returns `true` when more work is already pending and the
+    /// caller should poll again without sleeping.
+    fn poll_complete(&mut self) -> bool {
+        false
+    }
 }
