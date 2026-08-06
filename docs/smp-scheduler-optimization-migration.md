@@ -118,3 +118,17 @@ BUILDSTORM_COMPILE mode=multi ok=true ...
 解析的内核样本主要集中在 fork/clone 的 COW 页表复制和退出时的逐页回收，
 而不是 order-0 页分配器。详细数据和 SVG 见
 [RISC-V 回退基线外部 GDB 火焰图报告](profiling/riscv-buildstorm-rollback-gdb-20260806/report.md)。
+
+## 8. COW 物理页直接引用表实验与回退
+
+`8e217bf7 perf: 用物理页直接索引COW引用计数` 单独迁移了优化仓库中的
+匿名 frame 直接索引表。RV 两轮 cagent 与 BuildStorm 均通过，但耗时为
+494.66 和 489.98 秒，均值 492.32 秒，比稳定均值 483.23 秒慢 1.88%。
+LA 一轮为 376.94 秒，比稳定均值快 0.46%，低于 1% 判断线，不能作为可靠
+正收益。两种架构的 QEMU 峰值分别为 802% 和 1189%，不存在少核退化。
+
+实验由 `b1ccbd58 revert: 回退COW物理页直接索引实验` 完整回退。该结果
+说明不能把优化仓库中组合后的 COW 收益直接归因到引用表；后续从匿名
+`CowBackend` 避免创建空 file-page 分片开始，继续保持单点迁移。完整日志、
+哈希和分析见
+[COW 物理页直接引用表实验报告](profiling/cow-frame-ref-table-20260806/report.md)。
