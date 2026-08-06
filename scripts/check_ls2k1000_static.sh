@@ -12,14 +12,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for tool in dtc fdtget llvm-readelf od rg; do
+for tool in dtc fdtget llvm-readelf od rg rustc; do
     command -v "$tool" >/dev/null || {
         echo "missing required tool: $tool" >&2
         exit 1
     }
 done
 
-echo "[1/5] compile and inspect the LS2K1000LA DT fixture"
+echo "[1/6] compile and inspect the LS2K1000LA DT fixture"
 dtc -Wunique_unit_address -Wunit_address_vs_reg \
     -I dts -O dtb -o "$dtb" "$fixture"
 
@@ -42,10 +42,35 @@ done < <(fdtget -l "$dtb" /cpus)
 [[ $(fdtget -t s "$dtb" /chosen stdout-path) == serial0:115200n8 ]]
 [[ $(fdtget -t s "$dtb" /soc/serial@1fe20000 compatible) == *ns16550a* ]]
 [[ $(fdtget -t s "$dtb" /soc/ahci@400e0000 compatible) == *loongson,ls-ahci* ]]
+[[ $(fdtget -t i "$dtb" /soc/ahci@400e0000 interrupts) == 19 ]]
 [[ $(fdtget -t s "$dtb" /soc/ethernet@40040000 status) == okay ]]
+[[ $(fdtget -t i "$dtb" /soc/ethernet@40040000 interrupts) == 12 ]]
+[[ $(fdtget -t s "$dtb" /soc/ethernet@40040000 phy-mode) == rgmii ]]
 [[ $(fdtget -t s "$dtb" /soc/ethernet@40050000 status) == disabled ]]
+[[ $(fdtget -t s "$dtb" /soc/rtc@1fe27800 status) == okay ]]
+[[ $(fdtget -t i "$dtb" /soc/rtc@1fe27800 interrupts) == 20 ]]
+[[ $(fdtget -t s "$dtb" /reboot compatible) == syscon-reboot ]]
+[[ $(fdtget -t s "$dtb" /poweroff compatible) == syscon-poweroff ]]
 
-echo "[2/5] reject fixed LS2K1000 peripheral addresses in production sources"
+echo "[2/6] run host-side peripheral state-machine tests"
+test_bin_dir="$repo_root/target/driver-tests"
+mkdir -p "$test_bin_dir"
+state_tests=(
+    "vendor/simple-ahci/src/completion.rs:ahci-completion-tests"
+    "vendor/axdriver_block/src/block_range.rs:block-range-tests"
+    "vendor/axdriver_net/src/dwmac_ls2k1000_state.rs:dwmac-state-tests"
+    "vendor/axdriver/src/ls2k1000_irq.rs:ls2k1000-irq-tests"
+    "vendor/axplat-loongarch64-ls2k1000/src/irq_state.rs:liointc-state-tests"
+)
+for entry in "${state_tests[@]}"; do
+    source_file=${entry%%:*}
+    test_name=${entry##*:}
+    rustc --edition 2024 --test -A dead-code \
+        "$repo_root/$source_file" -o "$test_bin_dir/$test_name"
+    "$test_bin_dir/$test_name" --quiet
+done
+
+echo "[3/6] reject fixed LS2K1000 peripheral addresses in production sources"
 production_paths=(
     "$repo_root/Cargo.toml"
     "$repo_root/Makefile"
@@ -61,7 +86,7 @@ if rg -n -i '0x(1fe2_?0000|1fe0_?1400|1fe0_?1040|1fe2_?7800|1fe2_?7000|400e_?000
     exit 1
 fi
 
-echo "[3/5] build the two-core board image"
+echo "[4/6] build the two-core board image"
 make -C "$repo_root" kernel-la-2k1000
 
 [[ -s "$image" ]] || {
@@ -73,11 +98,11 @@ make -C "$repo_root" kernel-la-2k1000
     exit 1
 }
 
-echo "[4/5] validate the boot header and ELF architecture"
+echo "[5/6] validate the boot header and ELF architecture"
 [[ $(od -An -tx1 -N2 "$image" | tr -d '[:space:]') == 4d5a ]]
 llvm-readelf -h "$elf" | rg -q 'Machine:[[:space:]]+LoongArch'
 
-echo "[5/5] validate the uncached DMA section"
+echo "[6/6] validate the uncached DMA section"
 dma_section=$(llvm-readelf -SW "$elf" | awk '$3 == ".dma_uncached" { print; found = 1 } END { exit !found }')
 [[ "$dma_section" == *" WA "* ]]
 [[ "$dma_section" != *" AX "* ]]
