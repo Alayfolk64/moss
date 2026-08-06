@@ -1,0 +1,148 @@
+/dts-v1/;
+
+/ {
+    model = "MOSS LS2K1000LA static-validation fixture";
+    compatible = "loongson,ls2k";
+    #address-cells = <2>;
+    #size-cells = <2>;
+
+    aliases {
+        serial0 = &uart0;
+        ethernet0 = &gmac0;
+    };
+
+    chosen {
+        stdout-path = "serial0:115200n8";
+        bootargs = "earlycon root=PARTLABEL=moss-root rw";
+    };
+
+    reboot {
+        compatible = "syscon-reboot";
+        regmap = <&syscon>;
+        offset = <0x30>;
+        mask = <1>;
+    };
+
+    poweroff {
+        compatible = "syscon-poweroff";
+        regmap = <&syscon>;
+        offset = <0x14>;
+        mask = <0x3c00>;
+        value = <0x3c00>;
+    };
+
+    memory@200000 {
+        device_type = "memory";
+        reg = <0 0x00200000 0 0x0ee00000>,
+              <0 0x90000000 0 0x30000000>;
+    };
+
+    cpus {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        cpu@0 {
+            device_type = "cpu";
+            compatible = "loongarch";
+            reg = <0>;
+        };
+
+        cpu@1 {
+            device_type = "cpu";
+            compatible = "loongarch";
+            reg = <1>;
+        };
+
+        cpu@2 {
+            device_type = "cpu";
+            compatible = "loongarch";
+            reg = <2>;
+            status = "disabled";
+        };
+    };
+
+    cpu_intc: interrupt-controller {
+        compatible = "loongson,cpu-interrupt-controller";
+        interrupt-controller;
+        #interrupt-cells = <1>;
+    };
+
+    liointc: interrupt-controller@1fe01400 {
+        compatible = "loongson,2k1000-icu";
+        interrupt-controller;
+        #interrupt-cells = <1>;
+        reg = <0 0x1fe01400 0 0x40>,
+              <0 0x1fe01040 0 0x10>;
+        interrupt-parent = <&cpu_intc>;
+        interrupts = <3>;
+    };
+
+    soc {
+        compatible = "simple-bus";
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+        dma-coherent;
+
+        uart0: serial@1fe20000 {
+            compatible = "ns16550a";
+            reg = <0 0x1fe20000 0 0x10>;
+            reg-io-width = <1>;
+            reg-shift = <0>;
+            clock-frequency = <100000000>;
+            interrupt-parent = <&liointc>;
+            interrupts = <0>;
+            status = "okay";
+        };
+
+        syscon: syscon@1fe27000 {
+            compatible = "syscon";
+            reg = <0 0x1fe27000 0 0x58>;
+        };
+
+        ahci@400e0000 {
+            compatible = "loongson,ls-ahci", "snps,spear-ahci";
+            reg = <0 0x400e0000 0 0x10000>;
+            interrupt-parent = <&liointc>;
+            interrupts = <19>;
+            dma-mask = <0 0xffffffff>;
+            status = "okay";
+        };
+
+        rtc@1fe27800 {
+            compatible = "loongson,ls2k-rtc";
+            reg = <0 0x1fe27800 0 0x100>;
+            interrupt-parent = <&liointc>;
+            interrupts = <20>;
+            status = "okay";
+        };
+
+        gmac0: ethernet@40040000 {
+            compatible = "snps,dwmac-3.70a", "ls,ls-gmac";
+            reg = <0 0x40040000 0 0x8000>;
+            interrupt-parent = <&liointc>;
+            interrupts = <12>;
+            phy-mode = "rgmii";
+            phy-handle = <&phy0>;
+            local-mac-address = [02 4d 4f 53 53 00];
+            dma-mask = <0 0xffffffff>;
+            status = "okay";
+
+            mdio {
+                #address-cells = <1>;
+                #size-cells = <0>;
+
+                phy0: ethernet-phy@0 {
+                    compatible = "ethernet-phy-ieee802.3-c22";
+                    reg = <0>;
+                };
+            };
+        };
+
+        ethernet@40050000 {
+            compatible = "snps,dwmac-3.70a";
+            reg = <0 0x40050000 0 0x8000>;
+            status = "disabled";
+        };
+    };
+};

@@ -78,6 +78,7 @@ makeclean:
 	@$(MAKE) -C make makeclean
 	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin \
 		$(A)/kernel-rv.dbg.elf $(A)/kernel-la.dbg.elf \
+		$(A)/moss-2k1000la.bin $(A)/.axconfig.ls2k1000.toml \
 		$(A)/kernel-rv.bin.o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S \
 		$(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin \
 		$(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin
@@ -125,6 +126,18 @@ build run debug disasm: toolchain defconfig
 	@$(MAKE) -C make $@
 
 all: kernel-rv kernel-la
+
+kernel-la-2k1000: toolchain
+	$(MAKE) -C make \
+		ARCH=loongarch64 \
+		MYPLAT=axplat-loongarch64-ls2k1000 \
+		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
+		OUT_CONFIG=$(A)/.axconfig.ls2k1000.toml \
+		APP_FEATURES="ls2k1000" \
+		LOG=info BUS=mmio BLK=n NET=n VSOCK=n MEM=2G \
+		CPU_CAPACITY=2 SMP=2 defconfig build
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la.bin
+	@printf "    \033[36mLS2K1000LA image\033[0m: moss-2k1000la.bin\n"
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
@@ -280,4 +293,4 @@ docker:
 	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker

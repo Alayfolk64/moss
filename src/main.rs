@@ -59,3 +59,6 @@ fn main() {
 
 #[cfg(feature = "vf2")]
 extern crate axplat_riscv64_visionfive2;
+
+#[cfg(feature = "ls2k1000")]
+extern crate axplat_loongarch64_ls2k1000;

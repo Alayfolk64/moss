@@ -57,6 +57,17 @@ qemu = [
     "axfeat/bus-pci",
     "starry-kernel/net",
 ]
+ls2k1000 = [
+    "axfeat/myplat",
+    "axfeat/driver-ls2k1000",
+    "starry-kernel/net",
+    "starry-kernel/ls2k1000",
+    "dep:axplat-loongarch64-ls2k1000",
+    "axplat-loongarch64-ls2k1000/fp-simd",
+    "axplat-loongarch64-ls2k1000/irq",
+    "axplat-loongarch64-ls2k1000/rtc",
+    "axplat-loongarch64-ls2k1000/smp",
+]
 shell-init = []
 pre-init = []
 smp = ["axfeat/smp"]
@@ -66,14 +77,18 @@ vf2 = ["axfeat/driver-sdmmc"]
 [[bin]]
 name = "starryos"
 path = "src/main.rs"
-required-features = ["qemu"]
 
 [dependencies]
 axfeat.workspace = true
 starry-kernel.workspace = true
+axplat-loongarch64-ls2k1000 = { path = "vendor/axplat-loongarch64-ls2k1000", optional = true }
 
 [patch.crates-io]
 axcpu = { path = "vendor/axcpu" }
+axfeat = { path = "vendor/axfeat" }
+axdriver = { path = "vendor/axdriver" }
+axdriver_block = { path = "vendor/axdriver_block" }
+axdriver_net = { path = "vendor/axdriver_net" }
 axhal = { path = "vendor/axhal" }
 axplat = { path = "vendor/axplat" }
 axfs = { path = "vendor/axfs" }

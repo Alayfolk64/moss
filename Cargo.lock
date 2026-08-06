@@ -280,8 +280,6 @@ dependencies = [
 [[package]]
 name = "axdriver"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0fb1b9104560a2ea0342fbd82820910d380f47dab08ef5213cf112c65429cbd"
 dependencies = [
  "axalloc",
  "axconfig",
@@ -295,6 +293,7 @@ dependencies = [
  "axhal",
  "cfg-if",
  "crate_interface",
+ "fdt-parser",
  "log",
  "smallvec",
 ]
@@ -308,11 +307,10 @@ checksum = "c4614d9e505dae224e4e4cb934c8fa916d77ecfb7b770a8bf8eac78bdeec3dba"
 [[package]]
 name = "axdriver_block"
 version = "0.1.4-preview.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cccf23999a9dff620ef87c08c571509d2e90cc9dc80f932381b0fd949f020f9"
 dependencies = [
  "axdriver_base",
  "log",
+ "simple-ahci",
  "simple-sdmmc",
 ]
 
@@ -338,8 +336,6 @@ dependencies = [
 [[package]]
 name = "axdriver_net"
 version = "0.1.4-preview.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dca0cded4fdabcf9176616b636d310a7179a89e31a6dd221d9ea7a6678ffaea4"
 dependencies = [
  "axdriver_base",
  "log",
@@ -392,8 +388,6 @@ dependencies = [
 [[package]]
 name = "axfeat"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b7c2b83ebecd5a9c20baf9ce20a785f87a163053f8cbf3b59480df195a285d"
 dependencies = [
  "axalloc",
  "axbacktrace",
@@ -620,6 +614,22 @@ dependencies = [
  "axplat",
  "axplat-aarch64-peripherals",
  "log",
+ "page_table_entry",
+]
+
+[[package]]
+name = "axplat-loongarch64-ls2k1000"
+version = "0.1.0"
+dependencies = [
+ "axconfig-macros",
+ "axcpu",
+ "axplat",
+ "chrono",
+ "fdt-parser",
+ "kspin",
+ "lazyinit",
+ "log",
+ "loongArch64",
  "page_table_entry",
 ]
 
@@ -2159,6 +2169,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "simple-ahci"
+version = "0.1.1-preview.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bitfield-struct",
+ "log",
+ "volatile 0.6.1",
+]
+
+[[package]]
 name = "simple-sdmmc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2341,6 +2361,7 @@ name = "starryos"
 version = "0.2.0-preview.2"
 dependencies = [
  "axfeat",
+ "axplat-loongarch64-ls2k1000",
  "starry-kernel",
 ]
 
