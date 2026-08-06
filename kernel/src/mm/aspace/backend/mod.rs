@@ -18,7 +18,10 @@ mod linear;
 mod shared;
 
 pub use self::shared::SharedPages;
-pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan};
+pub(crate) use self::{
+    cow::{CowFaultPlan, init_frame_ref_table},
+    file::FileFaultPlan,
+};
 use super::{AddrSpace, AddrSpaceLock};
 
 /// Completes local page-table invalidations and, on SMP architectures with a
