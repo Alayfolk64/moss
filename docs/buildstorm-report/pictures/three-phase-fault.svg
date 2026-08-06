@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 750" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
+  <defs>
+    <marker id="a" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+      <path d="M0,0 L6,2 L0,4 Z" fill="#999"/>
+    </marker>
+  </defs>
+
+  <rect width="640" height="750" fill="#fcfcfc" rx="2"/>
+
+  <!-- ===== ENTRY ===== -->
+  <rect x="190" y="16" width="260" height="32" rx="6" fill="#f0f0f0" stroke="#ccc" stroke-width="1"/>
+  <text x="320" y="37" text-anchor="middle" fill="#333" font-size="13.5">用户态触发 Page Fault</text>
+  <line x1="320" y1="48" x2="320" y2="63" stroke="#999" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <!-- ===== Lock AddrSpace (entry) ===== -->
+  <rect x="180" y="66" width="280" height="30" rx="5" fill="#fff" stroke="#e74c3c" stroke-width="1.6"/>
+  <text x="320" y="86" text-anchor="middle" fill="#c0392b" font-size="13">获取 AddrSpace 读锁</text>
+  <line x1="320" y1="96" x2="320" y2="112" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
+
+  <!-- ================================================================ -->
+  <!-- PREPARE phase (light red)                                        -->
+  <!-- ================================================================ -->
+  <rect x="40" y="116" width="560" height="130" rx="8" fill="#fef5f5" stroke="#e74c3c" stroke-width="1.8"/>
+  <rect x="40" y="116" width="180" height="30" rx="8" fill="#e74c3c"/>
+  <rect x="212" y="138" width="8" height="8" fill="#e74c3c"/>
+  <text x="130" y="136" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="bold">Phase 1 — prepare</text>
+  <text x="300" y="136" fill="#c0392b" font-size="12">持 AddrSpace 读锁，只做判断，不做任何可能阻塞的操作</text>
+
+  <text x="120" y="168" fill="#922b21" font-size="12.5">• 检查地址是否在用户空间内，定位目标 VMA</text>
+  <text x="120" y="192" fill="#922b21" font-size="12.5">• 校验 VMA 权限（读 / 写 / 执行）是否允许本次访问</text>
+  <text x="120" y="216" fill="#922b21" font-size="12.5">• 检查 PTE 是否已被其他线程安装（快速返回）</text>
+  <text x="120" y="240" fill="#922b21" font-size="12.5">• 记录 VMA 范围、文件偏移、旧 PTE 值等提交前提 → 构造 FaultPlan</text>
+
+  <line x1="320" y1="246" x2="320" y2="262" stroke="#999" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <!-- Unlock then re-lock indicator -->
+  <rect x="200" y="265" width="240" height="28" rx="5" fill="#fdebd0" stroke="#e67e22" stroke-width="1.2"/>
+  <text x="320" y="284" text-anchor="middle" fill="#a04000" font-size="12.5">释放 AddrSpace 读锁，进入无锁阶段</text>
+  <line x1="320" y1="293" x2="320" y2="310" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
+
+  <!-- ================================================================ -->
+  <!-- EXECUTE phase (light green)                                      -->
+  <!-- ================================================================ -->
+  <rect x="40" y="314" width="560" height="168" rx="8" fill="#f0faf3" stroke="#27ae60" stroke-width="1.8"/>
+  <rect x="40" y="314" width="180" height="30" rx="8" fill="#27ae60"/>
+  <rect x="212" y="336" width="8" height="8" fill="#27ae60"/>
+  <text x="130" y="334" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="bold">Phase 2 — execute</text>
+  <text x="310" y="334" fill="#1e8449" font-size="12">不持有 AddrSpace 锁，并发执行慢操作</text>
+
+  <text x="120" y="366" fill="#1e8449" font-size="12.5">• 分配物理页（优先命中 PCP 本地缓存，miss 时批量 refill）</text>
+  <text x="120" y="390" fill="#1e8449" font-size="12.5">• 查找 / 创建 folio 页缓存，多个缺页线程共享一个 loader</text>
+  <text x="120" y="414" fill="#1e8449" font-size="12.5">• 进入 ext4 文件系统，查询 extent block mapping</text>
+  <text x="120" y="438" fill="#1e8449" font-size="12.5">• 提交块设备请求，等待磁盘 I/O 完成</text>
+  <text x="120" y="462" fill="#1e8449" font-size="12.5">• COW 复制：将页缓存数据复制到进程私有物理页</text>
+
+  <line x1="320" y1="482" x2="320" y2="498" stroke="#999" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <!-- Re-acquire lock -->
+  <rect x="200" y="501" width="240" height="28" rx="5" fill="#fdebd0" stroke="#e67e22" stroke-width="1.2"/>
+  <text x="320" y="520" text-anchor="middle" fill="#a04000" font-size="12.5">重新获取 AddrSpace 读锁</text>
+  <line x1="320" y1="529" x2="320" y2="546" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
+
+  <!-- ================================================================ -->
+  <!-- COMMIT phase (light blue)                                        -->
+  <!-- ================================================================ -->
+  <rect x="40" y="550" width="560" height="130" rx="8" fill="#eef6fc" stroke="#2980b9" stroke-width="1.8"/>
+  <rect x="40" y="550" width="180" height="30" rx="8" fill="#2980b9"/>
+  <rect x="212" y="572" width="8" height="8" fill="#2980b9"/>
+  <text x="130" y="570" text-anchor="middle" fill="#fff" font-size="13.5" font-weight="bold">Phase 3 — commit</text>
+  <text x="305" y="570" fill="#1a5276" font-size="12">重新持有 AddrSpace 读锁，验证并原子提交</text>
+
+  <text x="120" y="602" fill="#1a5276" font-size="12.5">• 再次定位 VMA 并重新校验权限（execute 期间可能已变化）</text>
+  <text x="120" y="626" fill="#1a5276" font-size="12.5">• 确认 prepare 时记录的前提条件仍然成立</text>
+  <text x="120" y="650" fill="#1a5276" font-size="12.5">• CAS 原子操作安装 PTE，同时登记 frame / folio 所有权</text>
+
+  <line x1="320" y1="680" x2="320" y2="696" stroke="#999" stroke-width="1" marker-end="url(#a)"/>
+
+  <!-- ===== RESULT ===== -->
+  <rect x="190" y="699" width="260" height="30" rx="6" fill="#f0f0f0" stroke="#ccc" stroke-width="1"/>
+  <text x="320" y="719" text-anchor="middle" fill="#333" font-size="13.5">返回用户态，重试故障指令</text>
+
+  <!-- ===== FALLBACK NOTE (right side) ===== -->
+  <rect x="480" y="705" width="140" height="42" rx="5" fill="#fef9e7" stroke="#f39c12" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="550" y="722" text-anchor="middle" fill="#7d6608" font-size="10.5">Stale 时有限重试</text>
+  <text x="550" y="740" text-anchor="middle" fill="#7d6608" font-size="10.5">极端情况退回写锁</text>
+</svg>

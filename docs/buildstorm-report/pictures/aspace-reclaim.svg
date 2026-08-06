@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 260" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
+  <defs>
+    <marker id="a" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4 Z" fill="#888"/></marker>
+  </defs>
+  <rect width="620" height="260" fill="#fcfcfc" rx="2"/>
+
+  <!-- ===== OLD PATH ===== -->
+  <rect x="10" y="10" width="600" height="105" rx="6" fill="#fef5f5" stroke="#e74c3c" stroke-width="1.5"/>
+  <text x="22" y="30" fill="#c0392b" font-size="12" font-weight="bold">旧：前台同步逐页回收</text>
+
+  <rect x="28" y="40" width="100" height="30" rx="4" fill="#f4ecf7" stroke="#8e44ad" stroke-width="1.3"/>
+  <text x="78" y="60" text-anchor="middle" fill="#6c3483" font-size="10">退出线程</text>
+
+  <line x1="128" y1="55" x2="140" y2="55" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="144" y="38" width="130" height="34" rx="4" fill="#fdf2f2" stroke="#e74c3c" stroke-width="1.5"/>
+  <text x="209" y="52" text-anchor="middle" fill="#c0392b" font-size="9.5">持写锁逐 area</text>
+  <text x="209" y="66" text-anchor="middle" fill="#c0392b" font-size="9.5">逐 4KiB 页盲扫</text>
+
+  <line x1="274" y1="55" x2="286" y2="55" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="290" y="38" width="118" height="34" rx="4" fill="#fdebd0" stroke="#e67e22" stroke-width="1.3"/>
+  <text x="349" y="52" text-anchor="middle" fill="#a04000" font-size="9.5">每页 pt.unmap</text>
+  <text x="349" y="66" text-anchor="middle" fill="#a04000" font-size="9.5">+ pt.finish (TLB刷新)</text>
+
+  <line x1="408" y1="55" x2="420" y2="55" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="424" y="42" width="95" height="28" rx="4" fill="#ddd" stroke="#aaa" stroke-width="1"/>
+  <text x="471" y="61" text-anchor="middle" fill="#444" font-size="10">逐页释放 frame</text>
+
+  <text x="40" y="95" fill="#c0392b" font-size="9.5">TLB 刷新: 每页一次全核 RFENCE，10 万页 = 10 万次 IPI</text>
+  <text x="40" y="110" fill="#c0392b" font-size="9.5">前台线程全程持锁，阻塞其他操作</text>
+
+  <!-- ===== NEW PATH ===== -->
+  <rect x="10" y="130" width="600" height="115" rx="6" fill="#f0faf3" stroke="#27ae60" stroke-width="1.5"/>
+  <text x="22" y="150" fill="#1e8449" font-size="12" font-weight="bold">新：异步批量回收 + 定向 TLB</text>
+
+  <rect x="28" y="160" width="100" height="28" rx="4" fill="#d5dbdb" stroke="#95a5a6" stroke-width="1"/>
+  <text x="78" y="179" text-anchor="middle" fill="#444" font-size="10">退出线程</text>
+
+  <line x1="128" y1="174" x2="142" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="146" y="158" width="108" height="32" rx="4" fill="#d6eaf8" stroke="#2980b9" stroke-width="1.3"/>
+  <text x="200" y="172" text-anchor="middle" fill="#1a5276" font-size="9.5">投入回收队列</text>
+  <text x="200" y="186" text-anchor="middle" fill="#1a5276" font-size="9.5">前台立即返回</text>
+
+  <line x1="254" y1="174" x2="268" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="272" y="158" width="88" height="32" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
+  <text x="316" y="172" text-anchor="middle" fill="#1e8449" font-size="9.5">后台 worker</text>
+  <text x="316" y="186" text-anchor="middle" fill="#1e8449" font-size="9.5">取地址空间</text>
+
+  <line x1="360" y1="174" x2="374" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="378" y="156" width="108" height="36" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
+  <text x="432" y="170" text-anchor="middle" fill="#1e8449" font-size="9.5">next_present</text>
+  <text x="432" y="184" text-anchor="middle" fill="#1e8449" font-size="9.5">跳空洞 + 清 PTE</text>
+
+  <line x1="486" y1="174" x2="500" y2="174" stroke="#888" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="504" y="156" width="96" height="36" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.3"/>
+  <text x="552" y="170" text-anchor="middle" fill="#1e8449" font-size="9.5">UnmapGather</text>
+  <text x="552" y="184" text-anchor="middle" fill="#1e8449" font-size="9.5">累积 8192 页</text>
+
+  <text x="40" y="215" fill="#1e8449" font-size="9.5">TLB 刷新: 每 8192 页一次 shootdown → 10 万页仅约 12 次 IPI</text>
+  <text x="40" y="232" fill="#1e8449" font-size="9.5">active-root: 仅向真正运行该地址空间的 CPU 发送 TLB 刷新，进一步减少无关 IPI</text>
+</svg>

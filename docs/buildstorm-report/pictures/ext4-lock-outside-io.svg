@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 170" font-family="KaiTi,STKaiti,楷体,Times New Roman,serif">
+  <defs>
+    <marker id="a" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4 Z" fill="#888"/></marker>
+  </defs>
+  <rect width="620" height="170" fill="#fcfcfc" rx="2"/>
+
+  <!-- ===== OLD PATH ===== -->
+  <rect x="10" y="14" width="600" height="62" rx="6" fill="#fef5f5" stroke="#e74c3c" stroke-width="1.5"/>
+  <text x="22" y="34" fill="#c0392b" font-size="12" font-weight="bold">旧</text>
+
+  <rect x="40" y="26" width="80" height="36" rx="4" fill="#f4ecf7" stroke="#8e44ad" stroke-width="1.5"/>
+  <text x="80" y="42" text-anchor="middle" fill="#6c3483" font-size="11">进入 ext4</text>
+  <text x="80" y="56" text-anchor="middle" fill="#6c3483" font-size="11">获取全局锁</text>
+
+  <line x1="120" y1="44" x2="134" y2="44" stroke="#8e44ad" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="138" y="28" width="104" height="32" rx="4" fill="#fff" stroke="#8e44ad" stroke-width="1.3"/>
+  <text x="190" y="43" text-anchor="middle" fill="#6c3483" font-size="11">查询 extent</text>
+  <text x="190" y="57" text-anchor="middle" fill="#6c3483" font-size="10">逻辑块→物理块</text>
+
+  <line x1="242" y1="44" x2="256" y2="44" stroke="#8e44ad" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="260" y="26" width="112" height="36" rx="4" fill="#fdf2f2" stroke="#e74c3c" stroke-width="1.8"/>
+  <text x="316" y="42" text-anchor="middle" fill="#c0392b" font-size="11" font-weight="bold">提交 I/O</text>
+  <text x="316" y="56" text-anchor="middle" fill="#c0392b" font-size="11" font-weight="bold">等待磁盘</text>
+
+  <line x1="372" y1="44" x2="386" y2="44" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="390" y="30" width="72" height="28" rx="4" fill="#ddd" stroke="#aaa" stroke-width="1"/>
+  <text x="426" y="49" text-anchor="middle" fill="#444" font-size="11">释放锁</text>
+
+  <text x="480" y="38" fill="#c0392b" font-size="10">I/O 在锁内，串行化其他文件</text>
+  <text x="480" y="54" fill="#c0392b" font-size="10">不同文件也得排队等待</text>
+
+  <!-- ===== NEW PATH ===== -->
+  <rect x="10" y="94" width="600" height="62" rx="6" fill="#f0faf3" stroke="#27ae60" stroke-width="1.5"/>
+  <text x="22" y="114" fill="#1e8449" font-size="12" font-weight="bold">新</text>
+
+  <rect x="40" y="106" width="80" height="36" rx="4" fill="#f4ecf7" stroke="#8e44ad" stroke-width="1.5"/>
+  <text x="80" y="122" text-anchor="middle" fill="#6c3483" font-size="11">进入 ext4</text>
+  <text x="80" y="136" text-anchor="middle" fill="#6c3483" font-size="11">获取全局锁</text>
+
+  <line x1="120" y1="124" x2="134" y2="124" stroke="#8e44ad" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="138" y="106" width="116" height="36" rx="4" fill="#fff" stroke="#8e44ad" stroke-width="1.3"/>
+  <text x="196" y="120" text-anchor="middle" fill="#6c3483" font-size="11">查询"文件这部分</text>
+  <text x="196" y="136" text-anchor="middle" fill="#6c3483" font-size="11">在哪些磁盘块"</text>
+
+  <line x1="254" y1="124" x2="268" y2="124" stroke="#8e44ad" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="272" y="108" width="88" height="32" rx="4" fill="#f8f4fa" stroke="#8e44ad" stroke-width="1.3"/>
+  <text x="316" y="123" text-anchor="middle" fill="#6c3483" font-size="11">记录 extent</text>
+  <text x="316" y="137" text-anchor="middle" fill="#6c3483" font-size="10">释放 ext4 锁</text>
+
+  <line x1="360" y1="124" x2="376" y2="124" stroke="#27ae60" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="380" y="106" width="100" height="36" rx="4" fill="#d5f5e3" stroke="#27ae60" stroke-width="1.5"/>
+  <text x="430" y="122" text-anchor="middle" fill="#1e8449" font-size="11" font-weight="bold">锁外 I/O</text>
+  <text x="430" y="136" text-anchor="middle" fill="#1e8449" font-size="11" font-weight="bold">等待磁盘</text>
+
+  <text x="498" y="118" fill="#1e8449" font-size="10">I/O 在锁外，其他文件</text>
+  <text x="498" y="134" fill="#1e8449" font-size="10">可并发查询 extent</text>
+</svg>
