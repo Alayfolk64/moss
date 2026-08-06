@@ -5,7 +5,7 @@ use axsync::Mutex;
 use axtask::current;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
-use linux_raw_sys::general::{__user_cap_data_struct, __user_cap_header_struct};
+use linux_raw_sys::general::{__user_cap_data_struct, __user_cap_header_struct, CAP_LAST_CAP};
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use crate::{
@@ -17,6 +17,7 @@ const CAPABILITY_VERSION_1: u32 = 0x19980330;
 const CAPABILITY_VERSION_2: u32 = 0x20071026;
 const CAPABILITY_VERSION_3: u32 = 0x20080522;
 const CAP_SETPCAP: u32 = 8;
+const CAP_MASK: u64 = (1u64 << (CAP_LAST_CAP + 1)) - 1;
 
 #[derive(Clone, Copy, Debug)]
 struct CapState {
@@ -32,7 +33,7 @@ impl Default for CapState {
             effective: u32::MAX as u64,
             permitted: u32::MAX as u64,
             inheritable: 0,
-            bounding: u32::MAX as u64,
+            bounding: CAP_MASK,
         }
     }
 }
@@ -358,14 +359,21 @@ pub fn sys_prctl(
         }
         PR_SET_SECCOMP => {}
         PR_MCE_KILL => {}
-        x if x == PR_CAPBSET_DROP || x == 24 => {
-            let cap = arg2 as u32;
-            if cap >= 64 {
+        PR_CAPBSET_READ => {
+            if arg2 > CAP_LAST_CAP as usize {
+                return Err(AxError::InvalidInput);
+            }
+            let pid = current_pid();
+            let state = get_state(pid);
+            return Ok(((state.bounding & (1u64 << arg2)) != 0) as isize);
+        }
+        PR_CAPBSET_DROP => {
+            if arg2 > CAP_LAST_CAP as usize {
                 return Err(AxError::InvalidInput);
             }
             let pid = current_pid();
             let mut state = get_state(pid);
-            state.bounding &= !(1u64 << cap);
+            state.bounding &= !(1u64 << arg2);
             set_state(pid, state);
         }
         PR_SET_MM => {
