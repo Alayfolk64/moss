@@ -15,12 +15,11 @@ use core::{
     alloc::{GlobalAlloc, Layout},
     fmt,
     ptr::NonNull,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[allow(unused_imports)]
 use axallocator::{AllocResult, BaseAllocator, BitmapPageAllocator, ByteAllocator, PageAllocator};
-use kspin::{NoPreemptIrqSave, SpinIrq, SpinNoIrq};
+use kspin::SpinNoIrq;
 use strum::{IntoStaticStr, VariantArray};
 
 const PAGE_SIZE: usize = 0x1000;
@@ -28,9 +27,6 @@ const MIN_HEAP_SIZE: usize = 0x8000; // 32 K
 
 mod page;
 pub use page::GlobalPage;
-
-mod pcp;
-use pcp::{PCP_CPU_SLOTS, PerCpuPageCache};
 
 #[cfg(feature = "tracking")]
 mod tracking;
@@ -73,36 +69,20 @@ pub enum UsageKind {
 pub struct Usages([usize; UsageKind::VARIANTS.len()]);
 
 impl Usages {
+    const fn new() -> Self {
+        Self([0; UsageKind::VARIANTS.len()])
+    }
+
+    fn alloc(&mut self, kind: UsageKind, size: usize) {
+        self.0[kind as usize] += size;
+    }
+
+    fn dealloc(&mut self, kind: UsageKind, size: usize) {
+        self.0[kind as usize] -= size;
+    }
+
     pub fn get(&self, kind: UsageKind) -> usize {
         self.0[kind as usize]
-    }
-}
-
-/// Lock-free accounting counters.
-///
-/// These values are diagnostic statistics and do not publish allocator
-/// ownership, so relaxed operations are sufficient. A snapshot may observe
-/// different categories at slightly different instants.
-struct AtomicUsages([AtomicUsize; UsageKind::VARIANTS.len()]);
-
-impl AtomicUsages {
-    const fn new() -> Self {
-        Self([const { AtomicUsize::new(0) }; UsageKind::VARIANTS.len()])
-    }
-
-    fn alloc(&self, kind: UsageKind, size: usize) {
-        self.0[kind as usize].fetch_add(size, Ordering::Relaxed);
-    }
-
-    fn dealloc(&self, kind: UsageKind, size: usize) {
-        let old = self.0[kind as usize].fetch_sub(size, Ordering::Relaxed);
-        debug_assert!(old >= size, "usage counter underflow");
-    }
-
-    fn snapshot(&self) -> Usages {
-        Usages(core::array::from_fn(|index| {
-            self.0[index].load(Ordering::Relaxed)
-        }))
     }
 }
 
@@ -131,19 +111,7 @@ pub struct GlobalAllocator {
     balloc: SpinNoIrq<DefaultByteAllocator>,
     #[cfg(not(feature = "level-1"))]
     palloc: SpinNoIrq<BitmapPageAllocator<PAGE_SIZE>>,
-    page_caches: [SpinIrq<PerCpuPageCache>; PCP_CPU_SLOTS],
-    page_cache_counts: [CacheAlignedCount; PCP_CPU_SLOTS],
-    managed_pages: AtomicUsize,
-    usages: AtomicUsages,
-}
-
-#[repr(align(64))]
-struct CacheAlignedCount(AtomicUsize);
-
-impl CacheAlignedCount {
-    const fn new() -> Self {
-        Self(AtomicUsize::new(0))
-    }
+    usages: SpinNoIrq<Usages>,
 }
 
 impl Default for GlobalAllocator {
@@ -159,10 +127,7 @@ impl GlobalAllocator {
             balloc: SpinNoIrq::new(DefaultByteAllocator::new()),
             #[cfg(not(feature = "level-1"))]
             palloc: SpinNoIrq::new(BitmapPageAllocator::new()),
-            page_caches: [const { SpinIrq::new(PerCpuPageCache::new()) }; PCP_CPU_SLOTS],
-            page_cache_counts: [const { CacheAlignedCount::new() }; PCP_CPU_SLOTS],
-            managed_pages: AtomicUsize::new(0),
-            usages: AtomicUsages::new(),
+            usages: SpinNoIrq::new(Usages::new()),
         }
     }
 
@@ -190,8 +155,6 @@ impl GlobalAllocator {
         {
             let init_heap_size = MIN_HEAP_SIZE;
             self.palloc.lock().init(start_vaddr, size);
-            self.managed_pages
-                .store(size / PAGE_SIZE, Ordering::Relaxed);
             let heap_ptr = self
                 .alloc_pages(init_heap_size / PAGE_SIZE, PAGE_SIZE, UsageKind::RustHeap)
                 .unwrap();
@@ -201,8 +164,6 @@ impl GlobalAllocator {
         #[cfg(feature = "level-1")]
         {
             self.balloc.lock().init(start_vaddr, size);
-            self.managed_pages
-                .store(size / PAGE_SIZE, Ordering::Relaxed);
         }
     }
 
@@ -210,13 +171,7 @@ impl GlobalAllocator {
     ///
     /// It will add the whole region to the byte allocator.
     pub fn add_memory(&self, start_vaddr: usize, size: usize) -> AllocResult {
-        let result = self.balloc.lock().add_memory(start_vaddr, size);
-        #[cfg(feature = "level-1")]
-        if result.is_ok() {
-            self.managed_pages
-                .fetch_add(size / PAGE_SIZE, Ordering::Relaxed);
-        }
-        result
+        self.balloc.lock().add_memory(start_vaddr, size)
     }
 
     /// Allocate arbitrary number of bytes. Returns the left bound of the
@@ -241,8 +196,7 @@ impl GlobalAllocator {
         // single-level allocator: only use the byte allocator.
         let mut balloc = self.balloc.lock();
         let ptr = balloc.alloc(layout)?;
-        drop(balloc);
-        self.usages.alloc(UsageKind::RustHeap, layout.size());
+        self.usages.lock().alloc(UsageKind::RustHeap, layout.size());
         Ok(ptr)
     }
 
@@ -252,8 +206,7 @@ impl GlobalAllocator {
         let mut balloc = self.balloc.lock();
         loop {
             if let Ok(ptr) = balloc.alloc(layout) {
-                drop(balloc);
-                self.usages.alloc(UsageKind::RustHeap, layout.size());
+                self.usages.lock().alloc(UsageKind::RustHeap, layout.size());
                 return Ok(ptr);
             } else {
                 let old_size = balloc.total_bytes();
@@ -299,8 +252,10 @@ impl GlobalAllocator {
     ///
     /// [`alloc`]: GlobalAllocator::alloc
     pub fn dealloc(&self, pos: NonNull<u8>, layout: Layout) {
-        self.balloc.lock().dealloc(pos, layout);
-        self.usages.dealloc(UsageKind::RustHeap, layout.size());
+        self.usages
+            .lock()
+            .dealloc(UsageKind::RustHeap, layout.size());
+        self.balloc.lock().dealloc(pos, layout)
     }
 
     /// Allocates contiguous pages.
@@ -315,232 +270,22 @@ impl GlobalAllocator {
         align_pow2: usize,
         kind: UsageKind,
     ) -> AllocResult<usize> {
-        let addr = match self.allocate_pages_raw(num_pages, align_pow2) {
-            Ok(addr) => addr,
-            Err(first_error) => {
-                self.drain_page_caches();
-                self.allocate_pages_raw(num_pages, align_pow2)
-                    .map_err(|_| first_error)?
-            }
-        };
-
-        if cfg!(feature = "level-1") || !matches!(kind, UsageKind::RustHeap) {
-            self.usages.alloc(kind, num_pages * PAGE_SIZE);
-        }
-        Ok(addr)
-    }
-
-    fn allocate_pages_raw(&self, num_pages: usize, align_pow2: usize) -> AllocResult<usize> {
         #[cfg(feature = "level-1")]
         {
             // single-level allocator: allocate from the byte allocator.
             let mut balloc = self.balloc.lock();
             let layout = Layout::from_size_align(num_pages * PAGE_SIZE, align_pow2).unwrap();
             let ptr = balloc.alloc(layout)?;
+            self.usages.lock().alloc(kind, num_pages * PAGE_SIZE);
             Ok(ptr.as_ptr() as usize)
         }
         #[cfg(not(feature = "level-1"))]
         {
-            self.palloc.lock().alloc_pages(num_pages, align_pow2)
-        }
-    }
-
-    /// Allocates one order-0 page through the per-CPU page cache.
-    pub fn alloc_page_cached(
-        &self,
-        cpu_id: usize,
-        cpu_count: usize,
-        kind: UsageKind,
-    ) -> AllocResult<usize> {
-        let total_pages = self.total_pages();
-        let slot = cpu_id % PCP_CPU_SLOTS;
-
-        let page = {
-            let mut cache = self.page_caches[slot].lock();
-            let page = cache.try_allocate(total_pages, cpu_count, kind);
-            self.page_cache_counts[slot]
-                .0
-                .store(cache.count(), Ordering::Relaxed);
-            page
-        };
-        if let Some(page) = page {
-            return Ok(page);
-        }
-
-        self.alloc_page_cached_slow(slot, total_pages, cpu_count, kind)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn alloc_page_cached_slow(
-        &self,
-        slot: usize,
-        total_pages: usize,
-        cpu_count: usize,
-        kind: UsageKind,
-    ) -> AllocResult<usize> {
-        if let Some(page) = self.refill_page_cache(slot, total_pages, cpu_count, kind) {
-            return Ok(page);
-        }
-
-        self.drain_page_caches();
-        match self.refill_page_cache(slot, total_pages, cpu_count, kind) {
-            Some(page) => Ok(page),
-            None => self.alloc_pages(1, PAGE_SIZE, kind),
-        }
-    }
-
-    fn refill_page_cache(
-        &self,
-        slot: usize,
-        total_pages: usize,
-        cpu_count: usize,
-        kind: UsageKind,
-    ) -> Option<usize> {
-        // Refill can acquire the global page allocator while the PCP slot is
-        // locked. Keep preemption disabled across that nested lock; the common
-        // hit path only needs the slot's IRQ-only guard.
-        let _preempt_guard = NoPreemptIrqSave::new();
-        let mut cache = self.page_caches[slot].lock();
-        let page = cache.allocate(self, total_pages, cpu_count, kind);
-        self.page_cache_counts[slot]
-            .0
-            .store(cache.count(), Ordering::Relaxed);
-        page
-    }
-
-    /// Returns one order-0 page to the per-CPU page cache.
-    pub fn dealloc_page_cached(
-        &self,
-        cpu_id: usize,
-        cpu_count: usize,
-        page: usize,
-        kind: UsageKind,
-    ) {
-        assert_ne!(page, 0, "cached page address is null");
-        assert_eq!(page % PAGE_SIZE, 0, "cached page is not page-aligned");
-
-        let total_pages = self.total_pages();
-        let slot = cpu_id % PCP_CPU_SLOTS;
-        let _preempt_guard = NoPreemptIrqSave::new();
-        let mut cache = self.page_caches[slot].lock();
-        cache.release(self, total_pages, cpu_count, page, kind);
-        self.page_cache_counts[slot]
-            .0
-            .store(cache.count(), Ordering::Relaxed);
-    }
-
-    /// Drains all per-CPU order-0 page caches into the global page allocator.
-    ///
-    /// This is called automatically before retrying a failed global page
-    /// allocation, so cached pages cannot cause an avoidable OOM or prevent a
-    /// high-order contiguous allocation.
-    pub fn drain_page_caches(&self) -> usize {
-        let _preempt_guard = NoPreemptIrqSave::new();
-        let mut drained = 0;
-        for (slot, cache) in self.page_caches.iter().enumerate() {
-            let mut cache = cache.lock();
-            drained += cache.drain_all(self);
-            self.page_cache_counts[slot]
-                .0
-                .store(cache.count(), Ordering::Relaxed);
-        }
-        drained
-    }
-
-    fn cached_page_count(&self) -> usize {
-        self.page_cache_counts
-            .iter()
-            .map(|count| count.0.load(Ordering::Relaxed))
-            .sum()
-    }
-
-    fn allocate_page_list(&self, pages: usize, kind: UsageKind) -> (usize, usize) {
-        let (head, allocated) = {
-            #[cfg(feature = "level-1")]
-            {
-                let layout = Layout::from_size_align(PAGE_SIZE, PAGE_SIZE).unwrap();
-                let mut balloc = self.balloc.lock();
-                let mut head = 0;
-                let mut allocated = 0;
-                for _ in 0..pages {
-                    let Ok(ptr) = balloc.alloc(layout) else {
-                        break;
-                    };
-                    let page = ptr.as_ptr() as usize;
-                    unsafe { (page as *mut usize).write(head) };
-                    head = page;
-                    allocated += 1;
-                }
-                (head, allocated)
+            let addr = self.palloc.lock().alloc_pages(num_pages, align_pow2)?;
+            if !matches!(kind, UsageKind::RustHeap) {
+                self.usages.lock().alloc(kind, num_pages * PAGE_SIZE);
             }
-            #[cfg(not(feature = "level-1"))]
-            {
-                let mut palloc = self.palloc.lock();
-                let mut head = 0;
-                let mut allocated = 0;
-                for _ in 0..pages {
-                    let Ok(addr) = palloc.alloc_pages(1, PAGE_SIZE) else {
-                        break;
-                    };
-                    unsafe { (addr as *mut usize).write(head) };
-                    head = addr;
-                    allocated += 1;
-                }
-                (head, allocated)
-            }
-        };
-
-        if allocated != 0 && !matches!(kind, UsageKind::RustHeap) {
-            self.usages.alloc(kind, allocated * PAGE_SIZE);
-        }
-        (head, allocated)
-    }
-
-    fn deallocate_page_lists(&self, heads: &[usize], counts: &[usize]) {
-        assert_eq!(heads.len(), UsageKind::VARIANTS.len());
-        assert_eq!(heads.len(), counts.len());
-        let total: usize = counts.iter().sum();
-        if total == 0 {
-            return;
-        }
-
-        #[cfg(feature = "level-1")]
-        {
-            let layout = Layout::from_size_align(PAGE_SIZE, PAGE_SIZE).unwrap();
-            let mut balloc = self.balloc.lock();
-            for (&head, &count) in heads.iter().zip(counts) {
-                let mut page = head;
-                for _ in 0..count {
-                    debug_assert_ne!(page, 0);
-                    let next = unsafe { (page as *const usize).read() };
-                    let ptr = NonNull::new(page as *mut u8).unwrap();
-                    balloc.dealloc(ptr, layout);
-                    page = next;
-                }
-                debug_assert_eq!(page, 0);
-            }
-        }
-        #[cfg(not(feature = "level-1"))]
-        {
-            let mut palloc = self.palloc.lock();
-            for (&head, &count) in heads.iter().zip(counts) {
-                let mut page = head;
-                for _ in 0..count {
-                    debug_assert_ne!(page, 0);
-                    let next = unsafe { (page as *const usize).read() };
-                    palloc.dealloc_pages(page, 1);
-                    page = next;
-                }
-                debug_assert_eq!(page, 0);
-            }
-        }
-
-        for &kind in UsageKind::VARIANTS {
-            let pages = counts[kind as usize];
-            if pages != 0 && !matches!(kind, UsageKind::RustHeap) {
-                self.usages.dealloc(kind, pages * PAGE_SIZE);
-            }
+            Ok(addr)
         }
     }
 
@@ -565,31 +310,15 @@ impl GlobalAllocator {
         }
         #[cfg(not(feature = "level-1"))]
         {
-            let addr = match self.allocate_pages_at_raw(start, num_pages, align_pow2) {
-                Ok(addr) => addr,
-                Err(first_error) => {
-                    self.drain_page_caches();
-                    self.allocate_pages_at_raw(start, num_pages, align_pow2)
-                        .map_err(|_| first_error)?
-                }
-            };
+            let addr = self
+                .palloc
+                .lock()
+                .alloc_pages_at(start, num_pages, align_pow2)?;
             if !matches!(kind, UsageKind::RustHeap) {
-                self.usages.alloc(kind, num_pages * PAGE_SIZE);
+                self.usages.lock().alloc(kind, num_pages * PAGE_SIZE);
             }
             Ok(addr)
         }
-    }
-
-    #[cfg(not(feature = "level-1"))]
-    fn allocate_pages_at_raw(
-        &self,
-        start: usize,
-        num_pages: usize,
-        align_pow2: usize,
-    ) -> AllocResult<usize> {
-        self.palloc
-            .lock()
-            .alloc_pages_at(start, num_pages, align_pow2)
     }
 
     /// Gives back the allocated pages starts from `pos` to the page allocator.
@@ -600,6 +329,7 @@ impl GlobalAllocator {
     ///
     /// [`alloc_pages`]: GlobalAllocator::alloc_pages
     pub fn dealloc_pages(&self, pos: usize, num_pages: usize, kind: UsageKind) {
+        self.usages.lock().dealloc(kind, num_pages * PAGE_SIZE);
         #[cfg(feature = "level-1")]
         {
             // single-level allocator: deallocate to the byte allocator.
@@ -610,7 +340,6 @@ impl GlobalAllocator {
         }
         #[cfg(not(feature = "level-1"))]
         self.palloc.lock().dealloc_pages(pos, num_pages);
-        self.usages.dealloc(kind, num_pages * PAGE_SIZE);
     }
 
     /// Returns the number of allocated bytes in the byte allocator.
@@ -625,38 +354,29 @@ impl GlobalAllocator {
 
     /// Returns the number of allocated pages in the page allocator.
     pub fn used_pages(&self) -> usize {
-        let cached = self.cached_page_count();
         #[cfg(feature = "level-1")]
         {
-            self.used_bytes().div_ceil(PAGE_SIZE).saturating_sub(cached)
+            self.used_bytes().div_ceil(PAGE_SIZE)
         }
         #[cfg(not(feature = "level-1"))]
         {
-            self.palloc.lock().used_pages().saturating_sub(cached)
+            self.palloc.lock().used_pages()
         }
     }
 
     /// Returns the number of available pages in the page allocator.
     pub fn available_pages(&self) -> usize {
-        let cached = self.cached_page_count();
         #[cfg(feature = "level-1")]
         {
-            self.available_bytes().div_ceil(PAGE_SIZE) + cached
+            self.available_bytes().div_ceil(PAGE_SIZE)
         }
         #[cfg(not(feature = "level-1"))]
-        {
-            self.palloc.lock().available_pages() + cached
-        }
-    }
-
-    /// Returns the number of pages managed by the allocator.
-    pub fn total_pages(&self) -> usize {
-        self.managed_pages.load(Ordering::Relaxed)
+        self.palloc.lock().available_pages()
     }
 
     /// Returns the usage statistics of the allocator.
     pub fn usages(&self) -> Usages {
-        self.usages.snapshot()
+        *self.usages.lock()
     }
 }
 

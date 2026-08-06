@@ -116,23 +116,11 @@ fn divide_page(size: usize, page_size: PageSize) -> usize {
 fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     let page_size = size as usize;
     let num_pages = page_size / PAGE_SIZE_4K;
-    let vaddr = if size == PageSize::Size4K {
-        VirtAddr::from(
-            global_allocator()
-                .alloc_page_cached(
-                    axhal::percpu::this_cpu_id(),
-                    axhal::cpu_num(),
-                    UsageKind::VirtMem,
-                )
-                .map_err(|_| AxError::NoMemory)?,
-        )
-    } else {
-        VirtAddr::from(
-            global_allocator()
-                .alloc_pages(num_pages, page_size, UsageKind::VirtMem)
-                .map_err(|_| AxError::NoMemory)?,
-        )
-    };
+    let vaddr = VirtAddr::from(
+        global_allocator()
+            .alloc_pages(num_pages, page_size, UsageKind::VirtMem)
+            .map_err(|_| AxError::NoMemory)?,
+    );
     if zeroed {
         unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, page_size) };
     }
@@ -143,18 +131,9 @@ fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
 
 fn dealloc_frame(frame: PhysAddr, align: PageSize) {
     let vaddr = phys_to_virt(frame);
-    if align == PageSize::Size4K {
-        global_allocator().dealloc_page_cached(
-            axhal::percpu::this_cpu_id(),
-            axhal::cpu_num(),
-            vaddr.as_usize(),
-            UsageKind::VirtMem,
-        );
-    } else {
-        let page_size: usize = align.into();
-        let num_pages = page_size / PAGE_SIZE_4K;
-        global_allocator().dealloc_pages(vaddr.as_usize(), num_pages, UsageKind::VirtMem);
-    }
+    let page_size: usize = align.into();
+    let num_pages = page_size / PAGE_SIZE_4K;
+    global_allocator().dealloc_pages(vaddr.as_usize(), num_pages, UsageKind::VirtMem);
 }
 
 fn pages_in(range: VirtAddrRange, align: PageSize) -> AxResult<DynPageIter<VirtAddr>> {
