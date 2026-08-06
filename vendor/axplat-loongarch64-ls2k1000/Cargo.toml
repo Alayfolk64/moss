@@ -1,0 +1,26 @@
+[package]
+name = "axplat-loongarch64-ls2k1000"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+license = "Apache-2.0"
+description = "Minimal ArceOS platform support for the Loongson 2K1000LA board"
+
+[features]
+default = []
+fp-simd = ["axcpu/fp-simd"]
+irq = ["axplat/irq"]
+rtc = ["dep:chrono"]
+smp = ["axplat/smp", "kspin/smp"]
+
+[dependencies]
+axconfig-macros = "0.2"
+axcpu = "0.3.0-preview.2"
+axplat = ">=0.3.0-preview.2, <0.3.0"
+chrono = { version = "0.4", optional = true, default-features = false }
+fdt-parser = "0.4"
+kspin = "0.1"
+lazyinit = "0.2"
+log = "0.4"
+loongArch64 = "0.2.4"
+page_table_entry = "0.5"

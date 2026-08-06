@@ -169,16 +169,14 @@ fn is_init_ok() -> bool {
 #[cfg_attr(not(test), axplat::main)]
 pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
     unsafe { axhal::mem::clear_bss() };
-    // QEMU virt numbers the boot CPU densely. Initialize the early console
-    // before parsing the complete topology so any DT error remains visible.
-    axhal::percpu::init_primary(hardware_cpu_id);
+    // The device-tree topology always moves the firmware boot CPU to logical
+    // slot zero. Establish that per-CPU base before trap/platform setup, whose
+    // early paths may already access per-CPU state.
+    axhal::percpu::init_primary(0);
     axhal::init_early(hardware_cpu_id, arg);
     let cpu_id = axhal::cpu_logical_id(hardware_cpu_id)
         .expect("boot CPU is missing from the device-tree topology");
-    assert_eq!(
-        cpu_id, hardware_cpu_id,
-        "boot CPU requires non-identity logical remapping before percpu init"
-    );
+    assert_eq!(cpu_id, 0, "boot CPU must occupy logical CPU slot zero");
 
     ax_println!("{}", LOGO);
     ax_println!(

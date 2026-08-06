@@ -11,6 +11,7 @@ repository.workspace = true
 [features]
 dev-log = []
 input = ["dep:axinput", "axfeat/input"]
+ls2k1000 = []
 memtrack = ["axfeat/dwarf", "axalloc/tracking", "dep:gimli", "dep:axbacktrace"]
 net = ["axfeat/net", "dep:axnet"]
 

@@ -11,6 +11,12 @@ pub trait PowerIf {
     #[cfg(feature = "smp")]
     fn cpu_boot(cpu_id: usize, stack_top_paddr: usize);
 
+    /// Reboot the whole system. Platforms without a reset mechanism fall back
+    /// to their safe power-off implementation.
+    fn system_reset() -> ! {
+        Self::system_off()
+    }
+
     /// Shutdown the whole system.
     fn system_off() -> !;
 }

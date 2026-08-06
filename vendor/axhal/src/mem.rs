@@ -225,9 +225,24 @@ pub fn init() {
     });
     push(PhysMemRegion {
         paddr: virt_to_phys(addr_of_sym!(_sdata).into()),
-        size: addr_of_sym!(_edata) - addr_of_sym!(_sdata),
+        size: addr_of_sym!(_sdma_uncached) - addr_of_sym!(_sdata),
         flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::WRITE,
-        name: ".data .tdata .tbss .percpu",
+        name: ".data",
+    });
+    push(PhysMemRegion {
+        paddr: virt_to_phys(addr_of_sym!(_sdma_uncached).into()),
+        size: addr_of_sym!(_edma_uncached) - addr_of_sym!(_sdma_uncached),
+        flags: MemRegionFlags::RESERVED
+            | MemRegionFlags::READ
+            | MemRegionFlags::WRITE
+            | MemRegionFlags::UNCACHED,
+        name: ".dma_uncached",
+    });
+    push(PhysMemRegion {
+        paddr: virt_to_phys(addr_of_sym!(_edma_uncached).into()),
+        size: addr_of_sym!(_edata) - addr_of_sym!(_edma_uncached),
+        flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::WRITE,
+        name: ".tdata .tbss .percpu",
     });
     push(PhysMemRegion {
         paddr: virt_to_phys(addr_of_sym!(boot_stack).into()),
@@ -282,6 +297,8 @@ unsafe extern "C" {
     fn _srodata();
     fn _erodata();
     fn _sdata();
+    fn _sdma_uncached();
+    fn _edma_uncached();
     fn _edata();
     fn _sbss();
     fn _ebss();

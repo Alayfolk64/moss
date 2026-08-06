@@ -53,6 +53,14 @@ SECTIONS
         _ex_table_end = .;
     }
 
+    . = ALIGN(4K);
+    _sdma_uncached = .;
+    .dma_uncached : ALIGN(4K) {
+        *(.dma_uncached .dma_uncached.*)
+        . = ALIGN(4K);
+    }
+    _edma_uncached = .;
+
     .tdata : ALIGN(0x10) {
         _stdata = .;
         *(.tdata .tdata.*)

@@ -1,0 +1,43 @@
+# Loongson 2K1000LA board configuration used by `make kernel-la-2k1000`.
+arch = "loongarch64"
+platform = "loongarch64-ls2k1000"
+package = "axplat-loongarch64-ls2k1000"
+
+[plat]
+# Capacity only. Enabled CPUs and their hardware IDs come from the DTB.
+cpu-num = 2
+
+# The vendor U-Boot reports 256 MiB at PA 0 and 1792 MiB at PA 0x9000_0000.
+low-memory-base = 0x0
+low-memory-size = 0x1000_0000
+high-memory-base = 0x9000_0000
+phys-memory-size = 0x8000_0000
+
+# DMW0/1 are used during early boot.  The LA264 implements fewer virtual
+# address bits than QEMU, so 0xffff_8000_0000_0000 is not canonical on the
+# board.  Keep the low 39 address bits clear in the final offset so the boot
+# page-table indices remain identical to the physical block indices.
+phys-boot-offset = "0x9000_0000_0000_0000"
+phys-virt-offset = "0xffff_ff80_0000_0000"
+phys-bus-offset = 0
+
+# TFTP loads the raw image here.  The first 64 bytes are the LoongArch MZ boot
+# header, so the executable entry is 0x9800_0040.
+kernel-base-paddr = 0x9800_0000
+kernel-base-vaddr = "0xffff_ff80_9800_0000"
+kernel-aspace-base = "0xffff_ff80_0000_0000"
+kernel-aspace-size = "0x0000_007f_ffff_f000"
+boot-stack-size = 0x40000
+
+[devices]
+# Device MMIO is discovered from enabled DT nodes and mapped by each driver.
+mmio-ranges = [] # [(uint, uint)]
+virtio-mmio-ranges = [] # [(uint, uint)]
+pci-ecam-base = 0
+pci-bus-end = 0
+pci-ranges = [[0, 0], [0, 0]] # [(uint, uint)]
+
+# LA64 architectural timer interrupt line.  The frequency is discovered with
+# CPUCFG by loongArch64::time::get_timer_freq().
+timer-irq = 11
+ipi-irq = 12

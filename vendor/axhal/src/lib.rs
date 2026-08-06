@@ -85,7 +85,7 @@ pub mod console {
 pub mod power {
     #[cfg(feature = "smp")]
     pub use axplat::power::cpu_boot;
-    pub use axplat::power::system_off;
+    pub use axplat::power::{system_off, system_reset};
 }
 
 /// Trap handling.
@@ -122,7 +122,7 @@ pub fn init_early(cpu_id: usize, arg: usize) {
 
 /// Returns the number of CPUs available at runtime.
 ///
-/// QEMU's device tree is authoritative. `axconfig::plat::CPU_NUM` only sizes
+/// The device tree is authoritative. `axconfig::plat::CPU_NUM` only sizes
 /// fixed per-CPU storage and therefore acts as a hard capacity.
 pub fn cpu_num() -> usize {
     #[cfg(feature = "smp")]
@@ -135,8 +135,8 @@ pub fn cpu_num() -> usize {
         }
 
         let capacity = axconfig::plat::CPU_NUM;
-        let detected = dtb::cpu_count()
-            .expect("QEMU SMP requires a valid CPU topology in the device tree");
+        let detected =
+            dtb::cpu_count().expect("SMP requires a valid CPU topology in the device tree");
         assert!(
             detected <= capacity,
             "device tree declares {detected} CPUs, exceeding build capacity {capacity}"
@@ -151,13 +151,18 @@ pub fn cpu_num() -> usize {
 
 /// Translates a dense logical CPU index to its firmware-visible identifier.
 pub fn cpu_hardware_id(logical_id: usize) -> usize {
-    assert!(logical_id < cpu_num(), "logical CPU ID is out of range");
-    logical_id
+    *dtb::cpu_hardware_ids()
+        .expect("CPU topology is unavailable")
+        .get(logical_id)
+        .expect("logical CPU ID is out of range")
 }
 
 /// Translates a firmware-visible CPU identifier to a dense logical index.
 pub fn cpu_logical_id(hardware_id: usize) -> Option<usize> {
-    (hardware_id < cpu_num()).then_some(hardware_id)
+    dtb::cpu_hardware_ids()?
+        .iter()
+        .take(cpu_num())
+        .position(|id| *id == hardware_id)
 }
 
 macro_rules! addr_of_sym {
