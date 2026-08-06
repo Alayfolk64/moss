@@ -559,6 +559,22 @@ impl AddrSpace {
         result
     }
 
+    /// Drops resident pages in a mapped range without removing its memory
+    /// areas. Later accesses fault the pages back in from zero or their file.
+    pub fn discard_pages(&mut self, mut start: VirtAddr, size: usize) -> AxResult {
+        self.validate_region(start, size)?;
+        let end = start + size;
+        let mut modify = self.pt.modify();
+
+        while start < end {
+            let area = self.areas.find(start).ok_or(AxError::NoMemory)?;
+            let range = VirtAddrRange::new(start, area.end().min(end));
+            area.backend().discard(range, &mut modify)?;
+            start = range.end;
+        }
+        Ok(())
+    }
+
     /// To process data in this area with the given function.
     ///
     /// Now it supports reading and writing data in the given interval.
