@@ -25,6 +25,24 @@ pub trait BitAlloc: Default {
         align_log2: usize,
     ) -> Option<usize>;
 
+    /// Allocate a free block by searching at or after `start`.
+    ///
+    /// This supports next-fit users which retain a search cursor instead of
+    /// rescanning the same occupied prefix for every contiguous allocation.
+    fn alloc_contiguous_from(
+        &mut self,
+        start: usize,
+        size: usize,
+        align_log2: usize,
+    ) -> Option<usize>
+    where
+        Self: Sized,
+    {
+        find_contiguous(self, start, Self::CAP, size, align_log2).inspect(|&base| {
+            self.remove(base..base + size);
+        })
+    }
+
     /// Find a index not less than a given key, where the bit is free.
     fn next(&self, key: usize) -> Option<usize>;
 
@@ -127,7 +145,7 @@ impl<T: BitAlloc> BitAlloc for BitAllocCascade16<T> {
                 self.remove(base..base + size);
                 base
             }),
-            None => find_contiguous(self, Self::CAP, size, align_log2).inspect(|&base| {
+            None => find_contiguous(self, 0, Self::CAP, size, align_log2).inspect(|&base| {
                 self.remove(base..base + size);
             }),
         }
@@ -267,7 +285,7 @@ impl BitAlloc for BitAlloc16 {
                 self.remove(base..base + size);
                 base
             }),
-            None => find_contiguous(self, Self::CAP, size, align_log2).inspect(|&base| {
+            None => find_contiguous(self, 0, Self::CAP, size, align_log2).inspect(|&base| {
                 self.remove(base..base + size);
             }),
         }
@@ -309,15 +327,20 @@ impl BitAlloc for BitAlloc16 {
 
 fn find_contiguous(
     ba: &impl BitAlloc,
+    start: usize,
     capacity: usize,
     size: usize,
     align_log2: usize,
 ) -> Option<usize> {
-    if align_log2 >= 64 || capacity < (1 << align_log2) || ba.is_empty() {
+    if align_log2 >= 64
+        || start >= capacity
+        || capacity < (1 << align_log2)
+        || ba.is_empty()
+    {
         return None;
     }
 
-    let mut base = 0;
+    let mut base = start;
     // First, we need to make sure that base is aligned.
     if let Some(start) = ba.next(base) {
         base = align_up_log2(start, align_log2);
@@ -503,7 +526,10 @@ mod tests {
         ba0.remove(3..6);
         assert_eq!(ba0.next(0), Some(0));
         assert_eq!(ba0.alloc_contiguous(None, 1, 1), Some(0));
-        assert_eq!(find_contiguous(&ba0, BitAlloc4K::CAP, 2, 0), Some(1));
+        assert_eq!(
+            find_contiguous(&ba0, 0, BitAlloc4K::CAP, 2, 0),
+            Some(1)
+        );
 
         let mut ba = BitAlloc4K::default();
         assert_eq!(BitAlloc4K::CAP, 4096);
@@ -514,7 +540,10 @@ mod tests {
         assert_eq!(ba.next(0), Some(1));
         assert_eq!(ba.next(1), Some(1));
         assert_eq!(ba.next(2), Some(2));
-        assert_eq!(find_contiguous(&ba, BitAlloc4K::CAP, 2, 0), Some(1));
+        assert_eq!(
+            find_contiguous(&ba, 0, BitAlloc4K::CAP, 2, 0),
+            Some(1)
+        );
         assert_eq!(ba.alloc_contiguous(None, 2, 0), Some(1));
         assert_eq!(ba.alloc_contiguous(None, 2, 3), Some(8));
         ba.remove(0..4096 - 64);

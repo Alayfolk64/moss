@@ -488,7 +488,11 @@ fn local_large_folio_cache() -> &'static SpinNoIrq<LocalLargeFolioCache> {
 
 fn alloc_page_frame() -> VfsResult<VirtAddr> {
     global_allocator()
-        .alloc_pages(1, PAGE_SIZE, UsageKind::PageCache)
+        .alloc_page_cached(
+            axhal::percpu::this_cpu_id(),
+            axhal::cpu_num(),
+            UsageKind::PageCache,
+        )
         .map(VirtAddr::from)
         .inspect_err(|err| warn!("Failed to allocate page cache: {err:?}"))
         .map_err(|_| VfsError::NoMemory)
@@ -503,7 +507,12 @@ struct FolioFrame {
 impl Drop for FolioFrame {
     fn drop(&mut self) {
         if self.pages == 1 {
-            global_allocator().dealloc_pages(self.addr.as_usize(), 1, UsageKind::PageCache);
+            global_allocator().dealloc_page_cached(
+                axhal::percpu::this_cpu_id(),
+                axhal::cpu_num(),
+                self.addr.as_usize(),
+                UsageKind::PageCache,
+            );
             return;
         }
         if self.pages.is_power_of_two() {
