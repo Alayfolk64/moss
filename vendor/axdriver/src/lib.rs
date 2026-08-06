@@ -61,7 +61,7 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(feature = "dyn")]
+#[cfg(any(feature = "dyn", feature = "ls2k1000"))]
 extern crate alloc;
 
 #[macro_use]
@@ -78,6 +78,9 @@ mod virtio;
 
 #[cfg(feature = "ixgbe")]
 mod ixgbe;
+
+#[cfg(feature = "ls2k1000")]
+mod ls2k1000;
 
 #[cfg(feature = "dyn")]
 mod dyn_drivers;

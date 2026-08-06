@@ -65,6 +65,7 @@ driver-dyn = [
 ]
 driver-fxmac = ["axdriver?/fxmac"]
 driver-ixgbe = ["axdriver?/ixgbe"]
+driver-ls2k1000 = ["axdriver?/ls2k1000"]
 driver-ramdisk = [
     "axdriver?/ramdisk",
     "axfs?/use-ramdisk",

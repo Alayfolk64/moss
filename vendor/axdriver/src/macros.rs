@@ -55,9 +55,19 @@ macro_rules! for_each_drivers {
             type $drv_type = <virtio::VirtIoNet as VirtIoDevMeta>::Driver;
             $code
         }
+        #[cfg(net_dev = "ls2k1000")]
+        {
+            type $drv_type = crate::ls2k1000::Ls2kGmacDriver;
+            $code
+        }
         #[cfg(block_dev = "virtio-blk")]
         {
             type $drv_type = <virtio::VirtIoBlk as VirtIoDevMeta>::Driver;
+            $code
+        }
+        #[cfg(block_dev = "ls2k1000")]
+        {
+            type $drv_type = crate::ls2k1000::Ls2kAhciDriver;
             $code
         }
         #[cfg(display_dev = "virtio-gpu")]

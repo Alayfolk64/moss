@@ -44,6 +44,7 @@ repository = "https://github.com/arceos-org/axdriver_crates"
 
 [features]
 default = []
+dwmac-ls2k1000 = []
 fxmac = ["dep:fxmac_rs"]
 ixgbe = ["dep:ixgbe-driver"]
 

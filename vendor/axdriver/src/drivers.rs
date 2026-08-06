@@ -33,6 +33,18 @@ pub trait DriverProbe {
     }
 }
 
+#[cfg(net_dev = "ls2k1000")]
+register_net_driver!(
+    crate::ls2k1000::Ls2kGmacDriver,
+    crate::ls2k1000::Ls2kGmacDevice
+);
+
+#[cfg(block_dev = "ls2k1000")]
+register_block_driver!(
+    crate::ls2k1000::Ls2kAhciDriver,
+    crate::ls2k1000::Ls2kAhciDevice
+);
+
 #[cfg(net_dev = "virtio-net")]
 register_net_driver!(
     <virtio::VirtIoNet as VirtIoDevMeta>::Driver,

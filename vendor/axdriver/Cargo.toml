@@ -88,6 +88,14 @@ ixgbe = [
     "dep:axdma",
     "axdriver_net/ixgbe",
 ]
+ls2k1000 = [
+    "block",
+    "net",
+    "dep:axhal",
+    "dep:fdt-parser",
+    "axdriver_block/ahci",
+    "axdriver_net/dwmac-ls2k1000",
+]
 net = ["dep:axdriver_net"]
 ramdisk = [
     "block",
@@ -204,6 +212,10 @@ optional = true
 
 [dependencies.log]
 version = "0.4"
+
+[dependencies.fdt-parser]
+version = "0.4"
+optional = true
 
 [dependencies.memory_addr]
 version = "0.4"
