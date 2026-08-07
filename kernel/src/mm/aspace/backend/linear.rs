@@ -4,7 +4,7 @@ use axerrno::AxResult;
 use axhal::paging::{MappingFlags, PageSize, PageTableMut};
 use memory_addr::{PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange};
 
-use super::{AddrSpaceLock, Backend, BackendOps, finish_unmap_before_reclaim};
+use super::{AddrSpaceLock, Backend, BackendOps};
 
 /// Linear mapping backend.
 ///
@@ -24,15 +24,6 @@ impl LinearBackend {
     pub(super) fn merge_compatible(&self, other: &Self) -> bool {
         self.offset == other.offset
     }
-
-    pub(super) fn unmap_for_clear(
-        &self,
-        range: VirtAddrRange,
-        pt: &mut PageTableMut<'_>,
-    ) -> AxResult {
-        pt.unmap_region(range.start, range.size())?;
-        Ok(())
-    }
 }
 
 impl BackendOps for LinearBackend {
@@ -50,11 +41,8 @@ impl BackendOps for LinearBackend {
     fn unmap(&self, range: VirtAddrRange, pt: &mut PageTableMut) -> AxResult {
         let pa_range = PhysAddrRange::from_start_size(self.pa(range.start), range.size());
         debug!("Linear::unmap: {range:?} -> {pa_range:?}");
-        let result = pt
-            .unmap_region(range.start, range.size())
-            .map_err(Into::into);
-        finish_unmap_before_reclaim(pt);
-        result
+        pt.unmap_region(range.start, range.size())?;
+        Ok(())
     }
 
     fn clone_map(

@@ -16,7 +16,7 @@ use memory_addr::{MemoryAddr, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
     AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
-    UnmapGather, alloc_frame, dealloc_frame, finish_unmap_before_reclaim, pages_in,
+    UnmapGather, alloc_frame, dealloc_frame, pages_in,
 };
 
 struct FrameRefCnt(usize);
@@ -481,11 +481,6 @@ impl CowBackend {
                         }
                         None
                     };
-                    // The leaf CAS replaced the physical frame. Before the
-                    // old PTE reference can be released, every RISC-V hart
-                    // must stop using a possibly cached translation to it.
-                    #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
-                    crate::mm::flush_tlb_on_all_cpus(pt.root_paddr(), Some(plan.vaddr));
                     if file_source {
                         drop(mapped_file_page.expect("validated file-page pin disappeared"));
                     } else {
@@ -613,38 +608,8 @@ impl CowBackend {
     }
 
     fn rollback_shared_range(&self, range: VirtAddrRange, pt: &mut PageTableMut) {
-        let Ok(pages) = pages_in(range, self.size) else {
-            return;
-        };
-
-        for vaddr in pages {
-            match pt.unmap(vaddr) {
-                Ok((frame, _flags, page_size)) => {
-                    finish_unmap_before_reclaim(pt);
-                    let file_page = self.file_pages.remove(vaddr);
-                    if page_size != self.size {
-                        warn!("rollback COW clone got unexpected page size: {page_size:?}");
-                        continue;
-                    }
-
-                    if let Some(page) = file_page {
-                        if page.paddr() != frame {
-                            warn!("rollback COW clone got mismatched cached frame");
-                        }
-                        self.dec_mapped_pages();
-                        continue;
-                    }
-
-                    let Some(frame_ref) = frame_table(frame).lock().get_frame_ref(frame) else {
-                        warn!("rollback COW clone found unreferenced frame: {frame:?}");
-                        continue;
-                    };
-                    frame_ref.lock().drop_frame(frame, self.size);
-                    self.dec_mapped_pages();
-                }
-                Err(PagingError::NotMapped) => {}
-                Err(err) => warn!("rollback COW clone failed to unmap {vaddr:?}: {err:?}"),
-            }
+        if let Err(err) = self.unmap_present(range, pt) {
+            warn!("rollback COW clone failed to unmap {range:?}: {err:?}");
         }
     }
 
@@ -680,7 +645,7 @@ impl CowBackend {
                 self.file_pages.insert(vaddr, page);
                 return Err(err.into());
             }
-            finish_unmap_before_reclaim(pt);
+            pt.finish();
             drop(page);
             return Ok(());
         }
@@ -712,7 +677,7 @@ impl CowBackend {
                     return Err(err.into());
                 }
                 drop(frame);
-                finish_unmap_before_reclaim(pt);
+                pt.finish();
                 frame_ref.lock().drop_frame(paddr, self.size);
             }
         }

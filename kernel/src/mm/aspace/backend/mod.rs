@@ -21,17 +21,11 @@ pub use self::shared::SharedPages;
 pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan};
 use super::{AddrSpace, AddrSpaceLock};
 
-/// Completes local page-table invalidations and, on SMP architectures with a
-/// synchronous primitive, removes stale translations from CPUs running this
-/// page table before a backend can reclaim the unmapped storage.
-fn finish_unmap_before_reclaim(pt: &mut PageTableMut<'_>) {
-    let root = pt.root_paddr();
-    pt.finish();
-    #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
-    crate::mm::flush_tlb_on_all_cpus(root, None);
-    #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]
-    let _ = root;
-}
+/// Number of resident PTEs removed before one TLB flush and deferred release.
+///
+/// The gather counts actual mappings rather than virtual range size, so sparse
+/// address spaces do not reserve or flush empty pages.
+const UNMAP_GATHER_PAGES: usize = 8192;
 
 /// Page owners whose PTEs have been removed but whose storage must stay alive
 /// until every CPU has acknowledged the shared TLB invalidation.
@@ -48,8 +42,6 @@ pub(crate) struct UnmapGather {
 }
 
 impl UnmapGather {
-    const MAX_PAGES: usize = 256;
-
     pub(crate) const fn new() -> Self {
         Self { pages: Vec::new() }
     }
@@ -62,20 +54,22 @@ impl UnmapGather {
     ) {
         self.pages
             .push(DeferredUnmapPage::Anonymous { paddr, page_size });
-        if self.pages.len() >= Self::MAX_PAGES {
-            self.finish(pt);
-        }
+        self.finish_if_full(pt);
     }
 
     pub(crate) fn push_file(&mut self, page: FolioPageRef, pt: &mut PageTableMut<'_>) {
         self.pages.push(DeferredUnmapPage::File(page));
-        if self.pages.len() >= Self::MAX_PAGES {
+        self.finish_if_full(pt);
+    }
+
+    fn finish_if_full(&mut self, pt: &mut PageTableMut<'_>) {
+        if self.pages.len() >= UNMAP_GATHER_PAGES {
             self.finish(pt);
         }
     }
 
     pub(crate) fn finish(&mut self, pt: &mut PageTableMut<'_>) {
-        finish_unmap_before_reclaim(pt);
+        pt.finish();
         for page in self.pages.drain(..) {
             match page {
                 DeferredUnmapPage::Anonymous { paddr, page_size } => {
@@ -242,8 +236,8 @@ impl Backend {
         match self {
             Self::Cow(backend) => backend.unmap_present_into(range, pt, gather),
             Self::File(backend) => backend.unmap_present_into(range, pt, gather),
-            Self::Linear(backend) => backend.unmap_for_clear(range, pt),
-            Self::Shared(backend) => backend.unmap_for_clear(range, pt),
+            Self::Linear(backend) => BackendOps::unmap(backend, range, pt),
+            Self::Shared(backend) => BackendOps::unmap(backend, range, pt),
         }
     }
 

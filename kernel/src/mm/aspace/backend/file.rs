@@ -16,7 +16,7 @@ use memory_addr::{MemoryAddr, PAGE_SIZE_4K, PhysAddr, VirtAddr, VirtAddrRange};
 
 use super::{
     AddrSpace, AddrSpaceLock, Backend, BackendOps, FaultCommit, FaultPreparation, PopulateCallback,
-    UnmapGather, finish_unmap_before_reclaim, pages_in,
+    UnmapGather, pages_in,
 };
 
 const NO_FAULT_PAGE: u32 = u32::MAX;
@@ -169,9 +169,8 @@ impl FileBackendInner {
                 return;
             }
         }
-        let mut modify = pt.modify();
-        match modify.unmap(vaddr) {
-            Ok(_) => finish_unmap_before_reclaim(&mut modify),
+        match pt.modify().unmap(vaddr) {
+            Ok(_) => {}
             Err(PagingError::NotMapped) => {}
             Err(err) => {
                 warn!("Failed to unmap page {:?}: {:?}", vaddr, err);
