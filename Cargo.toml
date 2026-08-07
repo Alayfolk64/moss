@@ -89,6 +89,7 @@ axfeat = { path = "vendor/axfeat" }
 axdriver = { path = "vendor/axdriver" }
 axdriver_block = { path = "vendor/axdriver_block" }
 axdriver_net = { path = "vendor/axdriver_net" }
+axdriver_virtio = { path = "vendor/axdriver_virtio" }
 axhal = { path = "vendor/axhal" }
 axplat = { path = "vendor/axplat" }
 axfs = { path = "vendor/axfs" }
@@ -102,6 +103,7 @@ lwext4_rust = { path = "third_party/lwext4_rust" }
 starry-smoltcp = { path = "vendor/starry-smoltcp" }
 starry-process = { path = "vendor/starry-process" }
 starry-signal = { path = "vendor/starry-signal" }
+virtio-drivers = { path = "vendor/virtio-drivers" }
 
 [package.metadata.vendor-filter]
 platforms = ["riscv64gc-unknown-none-elf", "loongarch64-unknown-none-softfloat"]

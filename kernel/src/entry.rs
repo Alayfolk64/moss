@@ -5,7 +5,7 @@ use alloc::{
     vec::Vec,
 };
 
-use axfs::FS_CONTEXT;
+use axfs::{FS_CONTEXT, enable_async_block_io};
 use axhal::uspace::UserContext;
 use axtask::{AxTaskExt, spawn_task};
 use starry_process::{Pid, Process};
@@ -74,6 +74,10 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
 
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
+    // Rootfs is mounted before all run queues are online. From this point on,
+    // block completions may safely execute in their own task.
+    enable_async_block_io();
+
     #[cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))]
     crate::mm::init_tlb_shootdown();
 

@@ -51,8 +51,8 @@ cfg_if! {
             const DEVICE_TYPE: DeviceType = DeviceType::Block;
             type Device = axdriver_virtio::VirtIoBlkDev<VirtIoHalImpl, VirtIoTransport>;
 
-            fn try_new(transport: VirtIoTransport, _irq: Option<usize>) -> DevResult<AxDeviceEnum> {
-                Ok(AxDeviceEnum::from_block(Self::Device::try_new(transport)?))
+            fn try_new(transport: VirtIoTransport, irq: Option<usize>) -> DevResult<AxDeviceEnum> {
+                Ok(AxDeviceEnum::from_block(Self::Device::try_new_with_irq(transport, irq)?))
             }
         }
     }
@@ -114,7 +114,18 @@ impl<D: VirtIoDevMeta> DriverProbe for VirtIoDriver<D> {
             axdriver_virtio::probe_mmio_device(base_vaddr.as_mut_ptr(), mmio_size)
             && ty == D::DEVICE_TYPE
         {
-            match D::try_new(transport, None) {
+            // QEMU's RISC-V virt machine wires virtio-mmio transports at
+            // 0x10001000..0x10008000 to PLIC IRQs 1..8.
+            #[cfg(target_arch = "riscv64")]
+            let irq = mmio_base
+                .checked_sub(0x1000_1000)
+                .filter(|offset| offset.is_multiple_of(0x1000))
+                .map(|offset| offset / 0x1000 + 1)
+                .filter(|irq| (1..=8).contains(irq));
+            #[cfg(not(target_arch = "riscv64"))]
+            let irq = None;
+
+            match D::try_new(transport, irq) {
                 Ok(dev) => return Some(dev),
                 Err(e) => {
                     warn!(
