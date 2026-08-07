@@ -918,49 +918,32 @@ impl BackendOps for CowBackend {
 
         let cow_flags = flags - MappingFlags::WRITE;
 
-        for vaddr in pages_in(range, self.size)? {
-            // Copy data from old memory area to new memory area.
-            match old_pt.query(vaddr) {
-                Ok((paddr, _, page_size)) => {
-                    assert_eq!(page_size, self.size);
-                    // If the page is mapped in the old page table:
-                    // - Update its permissions in the old page table using `flags`.
-                    // - Map the same physical page into the new page table at the same
-                    // virtual address, with the same page size and `flags`.
-                    let file_page = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr));
-                    let result = if let Some(page) = file_page {
-                        if page.paddr() != paddr {
-                            Err(AxError::BadAddress)
-                        } else {
-                            (|| -> AxResult {
-                                old_pt.protect(vaddr, cow_flags)?;
-                                new_pt.map(vaddr, paddr, self.size, cow_flags)?;
-                                new_backend
-                                    .file_pages
-                                    .as_ref()
-                                    .expect("file-backed clone lost its ownership table")
-                                    .insert(vaddr, page);
-                                Ok(())
-                            })()
-                        }
-                    } else {
-                        self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt)
-                    };
-                    if let Err(err) = result {
-                        new_backend
-                            .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
-                        return Err(err);
-                    }
-                    new_backend.mapped_pages.fetch_add(1, Ordering::Relaxed);
-                }
-                // If the page is not mapped, skip it.
-                Err(PagingError::NotMapped) => {}
-                Err(_) => {
+        let mut cursor = range.start;
+        while let Some((vaddr, paddr, page_flags, page_size)) =
+            old_pt.next_present_mapping(cursor, range.end)
+        {
+            if vaddr < range.start || vaddr >= range.end || page_size != self.size {
+                new_backend.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                return Err(AxError::BadAddress);
+            }
+            cursor = vaddr + page_size as usize;
+
+            // A clean page mapped directly from the file folio can be rebuilt
+            // by the child's first fault. Do not copy its PTE or pin here.
+            if let Some(page) = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr)) {
+                if page.paddr() != paddr || page_flags.contains(MappingFlags::WRITE) {
                     new_backend
                         .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
                     return Err(AxError::BadAddress);
                 }
-            };
+                continue;
+            }
+
+            if let Err(err) = self.share_existing_at(vaddr, paddr, cow_flags, old_pt, new_pt) {
+                new_backend.rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                return Err(err);
+            }
+            new_backend.mapped_pages.fetch_add(1, Ordering::Relaxed);
         }
 
         Ok(Backend::Cow(new_backend))
