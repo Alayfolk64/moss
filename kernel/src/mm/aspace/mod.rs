@@ -1002,6 +1002,29 @@ impl AddrSpace {
                         pt,
                     )
                 }
+                FaultPreparation::Shared(mut plan) => {
+                    if let Err(err) = plan.execute() {
+                        warn!("Failed to prepare shared page for {vaddr:?}: {err}");
+                        return false;
+                    }
+
+                    let guard = aspace.read();
+                    let Self { areas, pt, .. } = &*guard;
+                    let Some(area) = areas.find(vaddr) else {
+                        return false;
+                    };
+                    if !area.flags().contains(access_flags) {
+                        return false;
+                    }
+                    let flags = area.flags();
+                    area.backend().commit_shared_fault(
+                        &mut plan,
+                        area.va_range(),
+                        flags,
+                        access_flags,
+                        pt,
+                    )
+                }
             };
 
             match committed {
@@ -1015,7 +1038,7 @@ impl AddrSpace {
                 }
                 Ok(FaultCommit::Stale) => break,
                 Err(err) => {
-                    warn!("Failed to commit private page for {vaddr:?}: {err}");
+                    warn!("Failed to commit page for {vaddr:?}: {err}");
                     return false;
                 }
             }

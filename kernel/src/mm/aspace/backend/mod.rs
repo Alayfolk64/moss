@@ -22,7 +22,7 @@ mod linear;
 mod shared;
 
 pub use self::shared::SharedPages;
-pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan};
+pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan, shared::SharedFaultPlan};
 use super::{AddrSpace, AddrSpaceLock};
 
 /// Number of resident PTEs removed before one TLB flush and deferred release.
@@ -96,6 +96,8 @@ pub(crate) enum FaultPreparation {
     Cow(CowFaultPlan),
     /// A shared file folio can be loaded while no address-space lock is held.
     File(FileFaultPlan),
+    /// A shared anonymous page can be allocated while no address-space lock is held.
+    Shared(SharedFaultPlan),
     /// This backend or fault shape still needs the original exclusive path.
     Fallback,
 }
@@ -350,6 +352,9 @@ impl Backend {
             Self::File(backend) => {
                 backend.prepare_fault(vaddr, area_range, flags, access_flags, pt)
             }
+            Self::Shared(backend) => {
+                backend.prepare_fault(vaddr, area_range, flags, access_flags, pt)
+            }
             _ => FaultPreparation::Fallback,
         }
     }
@@ -378,6 +383,22 @@ impl Backend {
     ) -> AxResult<FaultCommit> {
         match self {
             Self::File(backend) => backend.commit_fault(plan, area_range, flags, access_flags, pt),
+            _ => Ok(FaultCommit::Stale),
+        }
+    }
+
+    pub(crate) fn commit_shared_fault(
+        &self,
+        plan: &mut SharedFaultPlan,
+        area_range: VirtAddrRange,
+        flags: MappingFlags,
+        access_flags: MappingFlags,
+        pt: &PageTable,
+    ) -> AxResult<FaultCommit> {
+        match self {
+            Self::Shared(backend) => {
+                backend.commit_fault(plan, area_range, flags, access_flags, pt)
+            }
             _ => Ok(FaultCommit::Stale),
         }
     }
