@@ -44,6 +44,9 @@ version = "0.2"
 [dependencies.axpoll]
 version = "0.1"
 
+[dependencies.axsync]
+version = "0.2.2-preview.1"
+
 [dependencies.bitflags]
 version = "2.10"
 

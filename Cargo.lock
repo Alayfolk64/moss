@@ -440,6 +440,7 @@ version = "0.1.1"
 dependencies = [
  "axerrno 0.2.2",
  "axpoll",
+ "axsync",
  "bitflags 2.11.0",
  "cfg-if",
  "hashbrown",
