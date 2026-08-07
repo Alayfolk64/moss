@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 700">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/></marker>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#64748b" flood-opacity="0.16"/></filter>
+    <style>
+      text { font-family: KaiTi, STKaiti, 楷体, serif; }
+      .latin { font-family: "Times New Roman", Times, serif; }
+      .row { stroke-width: 1.5; }
+      .node { stroke-width: 1.5; }
+      .row-label { font-size: 22px; font-weight: 700; }
+      .node-text { font-size: 20px; }
+      .small { font-size: 18px; }
+      .code { font-size: 16px; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1120" height="700" rx="10" fill="#ffffff"/>
+
+  <!-- old path, wrapped -->
+  <rect class="row" x="12" y="16" width="1096" height="320" rx="12" fill="#fff8f7" stroke="#f1b6ae"/>
+  <rect x="24" y="126" width="104" height="100" rx="10" fill="#fff0ee" stroke="#df6b5d" stroke-width="1.5"/>
+  <text class="row-label" x="76" y="165" text-anchor="middle" fill="#b84437">旧链路</text>
+  <text class="small" x="76" y="192" text-anchor="middle" fill="#b84437">全局扫描</text>
+  <g filter="url(#shadow)">
+    <rect class="node" x="160" y="55" width="170" height="70" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text latin" x="245" y="84" text-anchor="middle" fill="#334155">mprotect</text><text class="small" x="245" y="109" text-anchor="middle" fill="#334155">权限修改请求</text>
+    <rect class="node" x="390" y="55" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="475" y="84" text-anchor="middle" fill="#69428b">获取 <tspan class="latin">AddrSpace</tspan></text><text class="small" x="475" y="109" text-anchor="middle" fill="#69428b">写锁</text>
+    <rect class="node" x="620" y="55" width="170" height="70" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="705" y="84" text-anchor="middle" fill="#b84437">锁住全局记录表</text><text class="small latin" x="705" y="109" text-anchor="middle" fill="#b84437">MMAP_RECORDS</text>
+    <rect class="node" x="850" y="55" width="170" height="70" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="935" y="84" text-anchor="middle" fill="#aa362b">扫描全部记录</text><text class="small" x="935" y="109" text-anchor="middle" fill="#aa362b">校验权限上限</text>
+
+    <rect class="node" x="850" y="215" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="935" y="244" text-anchor="middle" fill="#69428b">修改目标 <tspan class="latin">PTE</tspan></text><text class="small" x="935" y="269" text-anchor="middle" fill="#69428b">更新页表权限</text>
+    <rect class="node" x="620" y="215" width="170" height="70" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="705" y="244" text-anchor="middle" fill="#b84437">再次锁住</text><text class="small" x="705" y="269" text-anchor="middle" fill="#b84437">全局记录表</text>
+    <rect class="node" x="390" y="215" width="170" height="70" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="475" y="244" text-anchor="middle" fill="#aa362b">再次全量扫描</text><text class="small" x="475" y="269" text-anchor="middle" fill="#aa362b">重建记录表</text>
+    <rect class="node" x="160" y="215" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="245" y="256" text-anchor="middle" fill="#69428b">释放写锁</text>
+  </g>
+  <path class="arrow" d="M330 90 H382"/><path class="arrow" d="M560 90 H612"/><path class="arrow" d="M790 90 H842"/>
+  <path class="arrow" d="M935 125 V207"/><path class="arrow" d="M850 250 H798"/><path class="arrow" d="M620 250 H568"/><path class="arrow" d="M390 250 H338"/>
+
+  <!-- new path, wrapped -->
+  <rect class="row" x="12" y="364" width="1096" height="320" rx="12" fill="#f5fbf7" stroke="#a9d9b9"/>
+  <rect x="24" y="474" width="104" height="100" rx="10" fill="#e9f8ef" stroke="#48a86b" stroke-width="1.5"/>
+  <text class="row-label" x="76" y="513" text-anchor="middle" fill="#25824a">新链路</text>
+  <text class="small" x="76" y="540" text-anchor="middle" fill="#25824a">局部区间</text>
+  <g filter="url(#shadow)">
+    <rect class="node" x="160" y="403" width="170" height="70" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text latin" x="245" y="432" text-anchor="middle" fill="#334155">mprotect</text><text class="small" x="245" y="457" text-anchor="middle" fill="#334155">权限修改请求</text>
+    <rect class="node" x="390" y="403" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="475" y="432" text-anchor="middle" fill="#69428b">获取 <tspan class="latin">AddrSpace</tspan></text><text class="small" x="475" y="457" text-anchor="middle" fill="#69428b">写锁</text>
+    <rect class="node" x="620" y="403" width="170" height="70" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="705" y="432" text-anchor="middle" fill="#356a9c">定位目标区间</text><text class="small" x="705" y="457" text-anchor="middle" fill="#356a9c">覆盖的 <tspan class="latin">VMA</tspan></text>
+    <rect class="node" x="850" y="403" width="170" height="70" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="935" y="432" text-anchor="middle" fill="#356a9c">第一遍校验</text><text class="small latin" x="935" y="457" text-anchor="middle" fill="#356a9c">may_flags</text>
+
+    <rect class="node" x="850" y="563" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="935" y="592" text-anchor="middle" fill="#25824a">第二遍更新 <tspan class="latin">PTE</tspan></text><text class="small latin code" x="935" y="617" text-anchor="middle" fill="#25824a">protect_subrange</text>
+    <rect class="node" x="620" y="563" width="170" height="70" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text latin" x="705" y="592" text-anchor="middle" fill="#9a571f">TLB shootdown</text><text class="small" x="705" y="617" text-anchor="middle" fill="#9a571f">完成页表更新</text>
+    <rect class="node" x="390" y="563" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="475" y="592" text-anchor="middle" fill="#25824a">分裂边界</text><text class="small" x="475" y="617" text-anchor="middle" fill="#25824a">更新元数据</text>
+    <rect class="node" x="160" y="563" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="245" y="592" text-anchor="middle" fill="#25824a">合并相邻 <tspan class="latin">VMA</tspan></text><text class="small" x="245" y="617" text-anchor="middle" fill="#25824a">释放写锁</text>
+  </g>
+  <path class="arrow" d="M330 438 H382"/><path class="arrow" d="M560 438 H612"/><path class="arrow" d="M790 438 H842"/>
+  <path class="arrow" d="M935 473 V555"/><path class="arrow" d="M850 598 H798"/><path class="arrow" d="M620 598 H568"/><path class="arrow" d="M390 598 H338"/>
+</svg>

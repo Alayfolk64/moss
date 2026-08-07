@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 790" role="img" aria-labelledby="title desc">
+  <title id="title">AddrSpace 三段式缺页处理流程</title>
+  <desc id="desc">缺页处理依次经过 prepare、execute 和 commit 三个阶段，慢操作在 AddrSpace 锁外执行。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#8795a1"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="145%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#172b3a" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+  <style>
+    text { font-family: KaiTi, STKaiti, "楷体", serif; fill: #293846; }
+    .latin { font-family: "Times New Roman", Times, serif; }
+.body { font-size: 17px; }
+.phase-title { font-family: "Times New Roman", Times, serif; font-size: 18px; font-weight: 700; fill: #ffffff; }
+.phase-note { font-size: 16.5px; }
+.node-text { font-size: 17.5px; }
+.small { font-size: 15px; }
+    .flow { stroke: #8795a1; stroke-width: 1.35; marker-end: url(#arrow); }
+  </style>
+
+  <rect width="680" height="790" fill="#ffffff"/>
+
+  <!-- Entry -->
+  <g filter="url(#shadow)">
+    <rect x="185" y="18" width="310" height="36" rx="6" fill="#f3f6f8" stroke="#cbd5dc" stroke-width="1.1"/>
+    <text x="340" y="41" text-anchor="middle" class="node-text">用户态触发 <tspan class="latin">Page Fault</tspan></text>
+  </g>
+  <line x1="340" y1="54" x2="340" y2="70" class="flow"/>
+
+  <rect x="205" y="74" width="270" height="32" rx="5" fill="#fff8ee" stroke="#c77d22" stroke-width="1.3"/>
+  <text x="340" y="95" text-anchor="middle" class="node-text" fill="#925b17">获取 <tspan class="latin">AddrSpace</tspan> 读锁</text>
+  <line x1="340" y1="106" x2="340" y2="121" class="flow"/>
+
+  <!-- Phase 1 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="125" width="600" height="144" rx="7" fill="#fff8f7" stroke="#c85b57" stroke-width="1.35"/>
+    <path d="M47 125 H218 V159 H40 V132 A7 7 0 0 1 47 125 Z" fill="#c85b57"/>
+    <text x="129" y="147" text-anchor="middle" class="phase-title">Phase 1 · prepare</text>
+    <text x="238" y="147" class="phase-note" fill="#9d4643">持 <tspan class="latin">AddrSpace</tspan> 读锁，只做快速检查</text>
+  </g>
+  <g class="body" fill="#713e3c">
+    <circle cx="78" cy="181" r="3" fill="#c85b57"/><text x="92" y="186">检查用户地址，定位目标 <tspan class="latin">VMA</tspan></text>
+    <circle cx="78" cy="207" r="3" fill="#c85b57"/><text x="92" y="212">校验 <tspan class="latin">VMA</tspan> 的读、写、执行权限</text>
+    <circle cx="78" cy="233" r="3" fill="#c85b57"/><text x="92" y="238">检查 <tspan class="latin">PTE</tspan> 是否已被其他线程安装</text>
+    <circle cx="78" cy="259" r="3" fill="#c85b57"/><text x="92" y="264">记录提交前提，构造 <tspan class="latin">FaultPlan</tspan></text>
+  </g>
+  <line x1="340" y1="269" x2="340" y2="284" class="flow"/>
+
+  <!-- Lock boundary -->
+  <rect x="212" y="288" width="256" height="31" rx="5" fill="#fff8ee" stroke="#c77d22" stroke-width="1.2"/>
+  <text x="340" y="308" text-anchor="middle" class="node-text" fill="#925b17">释放 <tspan class="latin">AddrSpace</tspan> 读锁</text>
+  <line x1="340" y1="319" x2="340" y2="334" class="flow"/>
+
+  <!-- Phase 2 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="338" width="600" height="177" rx="7" fill="#f5fbf8" stroke="#35866b" stroke-width="1.35"/>
+    <path d="M47 338 H218 V372 H40 V345 A7 7 0 0 1 47 338 Z" fill="#35866b"/>
+    <text x="129" y="360" text-anchor="middle" class="phase-title">Phase 2 · execute</text>
+    <text x="238" y="360" class="phase-note" fill="#2e705b">不持有 <tspan class="latin">AddrSpace</tspan> 锁，并发执行慢操作</text>
+  </g>
+  <g class="body" fill="#315f50">
+    <circle cx="78" cy="394" r="3" fill="#35866b"/><text x="92" y="399">分配物理页：优先命中 <tspan class="latin">PCP</tspan>，未命中则批量 <tspan class="latin">refill</tspan></text>
+    <circle cx="78" cy="421" r="3" fill="#35866b"/><text x="92" y="426">查找或创建 <tspan class="latin">folio</tspan>，共享同一个 <tspan class="latin">loader</tspan></text>
+    <circle cx="78" cy="448" r="3" fill="#35866b"/><text x="92" y="453">进入 <tspan class="latin">ext4</tspan>，查询 <tspan class="latin">extent block mapping</tspan></text>
+    <circle cx="78" cy="475" r="3" fill="#35866b"/><text x="92" y="480">提交块设备请求，等待磁盘 <tspan class="latin">I/O</tspan> 完成</text>
+    <circle cx="78" cy="502" r="3" fill="#35866b"/><text x="92" y="507"><tspan class="latin">COW</tspan> 复制：页缓存数据复制到进程私有页</text>
+  </g>
+  <line x1="340" y1="515" x2="340" y2="530" class="flow"/>
+
+  <!-- Lock boundary -->
+  <rect x="212" y="534" width="256" height="31" rx="5" fill="#fff8ee" stroke="#c77d22" stroke-width="1.2"/>
+  <text x="340" y="554" text-anchor="middle" class="node-text" fill="#925b17">重新获取 <tspan class="latin">AddrSpace</tspan> 读锁</text>
+  <line x1="340" y1="565" x2="340" y2="580" class="flow"/>
+
+  <!-- Phase 3 -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="584" width="600" height="137" rx="7" fill="#f5f9fc" stroke="#397fba" stroke-width="1.35"/>
+    <path d="M47 584 H218 V618 H40 V591 A7 7 0 0 1 47 584 Z" fill="#397fba"/>
+    <text x="129" y="606" text-anchor="middle" class="phase-title">Phase 3 · commit</text>
+    <text x="238" y="606" class="phase-note" fill="#2e6d9e">重新持读锁，验证并原子提交</text>
+  </g>
+  <g class="body" fill="#345e7d">
+    <circle cx="78" cy="642" r="3" fill="#397fba"/><text x="92" y="647">再次定位 <tspan class="latin">VMA</tspan> 并校验权限</text>
+    <circle cx="78" cy="669" r="3" fill="#397fba"/><text x="92" y="674">确认 <tspan class="latin">prepare</tspan> 阶段记录的前提仍然成立</text>
+    <circle cx="78" cy="696" r="3" fill="#397fba"/><text x="92" y="701"><tspan class="latin">CAS</tspan> 安装 <tspan class="latin">PTE</tspan>，登记 <tspan class="latin">frame / folio</tspan> 所有权</text>
+  </g>
+  <line x1="340" y1="721" x2="340" y2="736" class="flow"/>
+
+  <!-- Result and fallback -->
+  <g filter="url(#shadow)">
+    <rect x="190" y="740" width="300" height="34" rx="6" fill="#f3f6f8" stroke="#cbd5dc" stroke-width="1.1"/>
+    <text x="340" y="762" text-anchor="middle" class="node-text">返回用户态，重试故障指令</text>
+  </g>
+  <rect x="512" y="735" width="148" height="45" rx="5" fill="#fffaf0" stroke="#c77d22" stroke-width="1" stroke-dasharray="5 3"/>
+  <text x="586" y="754" text-anchor="middle" class="small" fill="#925b17"><tspan class="latin">Stale</tspan> 时最多重试 <tspan class="latin">4</tspan> 次</text>
+  <text x="586" y="770" text-anchor="middle" class="small" fill="#925b17">之后退回写锁路径</text>
+</svg>

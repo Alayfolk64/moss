@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 510">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#64748b" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      text { font-family: KaiTi, STKaiti, 楷体, serif; }
+      .latin { font-family: "Times New Roman", Times, serif; }
+      .row { stroke-width: 1.5; }
+      .node { stroke-width: 1.5; }
+      .row-label { font-size: 22px; font-weight: 700; }
+      .node-text { font-size: 19px; }
+      .small { font-size: 17px; }
+      .arrow { stroke: #64748b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .async-arrow { stroke: #bf6b2b; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1120" height="510" rx="10" fill="#ffffff"/>
+
+  <!-- old synchronous path -->
+  <rect class="row" x="12" y="16" width="1096" height="122" rx="12" fill="#fff8f7" stroke="#f1b6ae"/>
+  <rect x="22" y="38" width="82" height="76" rx="10" fill="#fff0ee" stroke="#df6b5d" stroke-width="1.5"/>
+  <text class="row-label" x="63" y="70" text-anchor="middle" fill="#b84437">旧链路</text>
+  <text class="small" x="63" y="94" text-anchor="middle" fill="#b84437">同步持锁</text>
+
+  <g filter="url(#shadow)">
+    <rect class="node" x="126" y="46" width="128" height="62" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text" x="190" y="83" text-anchor="middle" fill="#334155">块设备请求</text>
+
+    <rect class="node" x="282" y="46" width="128" height="62" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="346" y="83" text-anchor="middle" fill="#69428b">获取设备锁</text>
+
+    <rect class="node" x="438" y="46" width="128" height="62" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="502" y="73" text-anchor="middle" fill="#69428b">同步提交</text>
+    <text class="small latin" x="502" y="96" text-anchor="middle" fill="#69428b">read / write</text>
+
+    <rect class="node" x="594" y="46" width="128" height="62" rx="9" fill="#ffe5e1" stroke="#d65243"/>
+    <text class="node-text" x="658" y="73" text-anchor="middle" fill="#aa362b">锁内等待</text>
+    <text class="small" x="658" y="96" text-anchor="middle" fill="#aa362b">设备 <tspan class="latin">I/O</tspan></text>
+
+    <rect class="node" x="750" y="46" width="128" height="62" rx="9" fill="#fff1ef" stroke="#df6b5d"/>
+    <text class="node-text" x="814" y="83" text-anchor="middle" fill="#b84437">设备完成</text>
+
+    <rect class="node" x="906" y="46" width="128" height="62" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="970" y="83" text-anchor="middle" fill="#69428b">释放设备锁</text>
+  </g>
+
+  <path class="arrow" d="M254 77 H276"/>
+  <path class="arrow" d="M410 77 H432"/>
+  <path class="arrow" d="M566 77 H588"/>
+  <path class="arrow" d="M722 77 H744"/>
+  <path class="arrow" d="M878 77 H900"/>
+
+  <!-- new asynchronous path: four nodes per line -->
+  <rect class="row" x="12" y="178" width="1096" height="314" rx="12" fill="#f5fbf7" stroke="#a9d9b9"/>
+  <rect x="22" y="285" width="82" height="92" rx="10" fill="#e9f8ef" stroke="#48a86b" stroke-width="1.5"/>
+  <text class="row-label" x="63" y="321" text-anchor="middle" fill="#25824a">新链路</text>
+  <text class="small" x="63" y="347" text-anchor="middle" fill="#25824a">异步多在途</text>
+
+  <g filter="url(#shadow)">
+    <rect class="node" x="160" y="216" width="170" height="70" rx="9" fill="#f8fafc" stroke="#94a3b8"/>
+    <text class="node-text" x="245" y="257" text-anchor="middle" fill="#334155">块设备请求</text>
+
+    <rect class="node" x="390" y="216" width="170" height="70" rx="9" fill="#edf5ff" stroke="#5d8ec4"/>
+    <text class="node-text" x="475" y="245" text-anchor="middle" fill="#356a9c">等待队列空位</text>
+    <text class="small latin" x="475" y="270" text-anchor="middle" fill="#356a9c">queue_space</text>
+
+    <rect class="node" x="620" y="216" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="705" y="245" text-anchor="middle" fill="#69428b">获取状态锁</text>
+    <text class="small latin" x="705" y="270" text-anchor="middle" fill="#69428b">state.lock</text>
+
+    <rect class="node" x="850" y="216" width="170" height="70" rx="9" fill="#f2eafb" stroke="#8e63b0"/>
+    <text class="node-text" x="935" y="245" text-anchor="middle" fill="#69428b">登记完成项</text>
+    <text class="small" x="935" y="270" text-anchor="middle" fill="#69428b">提交 <tspan class="latin">descriptor</tspan></text>
+
+    <rect class="node" x="850" y="370" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text" x="935" y="411" text-anchor="middle" fill="#25824a">释放状态锁</text>
+
+    <rect class="node" x="620" y="370" width="170" height="70" rx="9" fill="#e7f8ed" stroke="#48a86b"/>
+    <text class="node-text latin" x="705" y="399" text-anchor="middle" fill="#25824a">Completion</text>
+    <text class="small" x="705" y="424" text-anchor="middle" fill="#25824a">睡眠等待</text>
+
+    <rect class="node" x="390" y="370" width="170" height="70" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text latin" x="475" y="399" text-anchor="middle" fill="#9a571f">complete_one</text>
+    <text class="small" x="475" y="424" text-anchor="middle" fill="#9a571f">回收 <tspan class="latin">descriptor</tspan></text>
+
+    <rect class="node" x="160" y="370" width="170" height="70" rx="9" fill="#fff4e8" stroke="#cf813c"/>
+    <text class="node-text" x="245" y="399" text-anchor="middle" fill="#9a571f">释放队列空位</text>
+    <text class="small" x="245" y="424" text-anchor="middle" fill="#9a571f">按请求 <tspan class="latin">ID</tspan> 唤醒</text>
+  </g>
+
+  <path class="arrow" d="M330 251 H382"/>
+  <path class="arrow" d="M560 251 H612"/>
+  <path class="arrow" d="M790 251 H842"/>
+  <path class="arrow" d="M935 286 V362"/>
+  <path class="async-arrow" d="M850 405 H798"/>
+  <path class="async-arrow" d="M620 405 H568"/>
+  <path class="async-arrow" d="M390 405 H338"/>
+</svg>

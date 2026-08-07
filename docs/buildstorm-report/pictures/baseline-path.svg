@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1600" height="1060" viewBox="0 0 1600 1060" xmlns="http://www.w3.org/2000/svg"
+     font-family="Microsoft YaHei, SimHei, Noto Sans CJK SC, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- 标题 -->
+  <text x="800" y="42" text-anchor="middle" font-size="21" font-weight="bold" fill="#0f172a">
+    Moss 优化前（baseline）关键执行路径总览
+  </text>
+
+  <!-- 图例 -->
+  <g font-size="13" fill="#334155">
+    <text x="330" y="72" text-anchor="middle" font-weight="bold">锁/资源范围图例：</text>
+    <rect x="470" y="60" width="26" height="16" rx="3" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="502" y="73">AddrSpace 独占锁</text>
+    <rect x="648" y="62" width="5" height="14" rx="1" fill="#ea580c"/>
+    <text x="660" y="73">页缓存锁</text>
+    <rect x="758" y="62" width="5" height="14" rx="1" fill="#7c3aed"/>
+    <text x="770" y="73">ext4 全局锁</text>
+    <rect x="880" y="62" width="5" height="14" rx="1" fill="#16a34a"/>
+    <text x="892" y="73">私有页分配/复制</text>
+    <rect x="1048" y="62" width="5" height="14" rx="1" fill="#2563eb"/>
+    <text x="1060" y="73">全局映射记录锁</text>
+  </g>
+
+  <!-- ================= 左面板：文件映射缺页路径 ================= -->
+  <rect x="70" y="110" width="830" height="820" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="485" y="138" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f172a">
+    ① 文件映射缺页路径（一次读缺页的完整调用链）
+  </text>
+
+  <!-- 步骤框：x=140, w=560, h=48 -->
+  <g font-size="14" fill="#0f172a">
+    <!-- 1 -->
+    <rect x="140" y="155" width="560" height="48" rx="10" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="420" y="184" text-anchor="middle" font-weight="600">用户态读/映射文件 → CPU 触发缺页</text>
+    <!-- 2 -->
+    <rect x="140" y="229" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="420" y="246" text-anchor="middle" font-weight="600">获取进程 AddrSpace 独占锁</text>
+    <text x="420" y="265" text-anchor="middle" font-size="11.5" fill="#64748b">handle_page_fault 持锁进入</text>
+    <!-- 3 -->
+    <rect x="140" y="303" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="420" y="322" text-anchor="middle" font-weight="600">查找故障地址对应 VMA、校验权限</text>
+    <text x="420" y="341" text-anchor="middle" font-size="11.5" fill="#64748b">find_area</text>
+    <!-- 4 -->
+    <rect x="140" y="377" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="140" y="381" width="5" height="40" rx="1" fill="#16a34a"/>
+    <text x="420" y="396" text-anchor="middle" font-weight="600">CowBackend::alloc_new_at：分配一张私有物理页</text>
+    <text x="420" y="415" text-anchor="middle" font-size="11.5" fill="#64748b">alloc_frame → 全局分配器（只读页也分配）</text>
+    <!-- 5 -->
+    <rect x="140" y="451" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="140" y="455" width="5" height="40" rx="1" fill="#ea580c"/>
+    <text x="420" y="470" text-anchor="middle" font-weight="600">进入文件页缓存（持有页缓存锁）</text>
+    <text x="420" y="489" text-anchor="middle" font-size="11.5" fill="#64748b">with_page_or_insert_impl</text>
+    <!-- 6 -->
+    <rect x="140" y="525" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="140" y="529" width="5" height="40" rx="1" fill="#ea580c"/>
+    <rect x="147" y="529" width="5" height="40" rx="1" fill="#7c3aed"/>
+    <text x="420" y="544" text-anchor="middle" font-weight="600">页缓存 miss → ext4 read_at（持 ext4 全局锁）</text>
+    <text x="420" y="563" text-anchor="middle" font-size="11.5" fill="#64748b">read_fully_at → Inode::read_at</text>
+    <!-- 7 -->
+    <rect x="140" y="599" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="140" y="603" width="5" height="40" rx="1" fill="#ea580c"/>
+    <rect x="147" y="603" width="5" height="40" rx="1" fill="#7c3aed"/>
+    <text x="420" y="618" text-anchor="middle" font-weight="600">继续拿着锁等待块设备 I/O</text>
+    <text x="420" y="637" text-anchor="middle" font-size="11.5" fill="#64748b">block read（virtio 队列）</text>
+    <!-- 8 -->
+    <rect x="140" y="673" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="140" y="677" width="5" height="40" rx="1" fill="#ea580c"/>
+    <text x="420" y="692" text-anchor="middle" font-weight="600">磁盘数据读入页缓存页</text>
+    <text x="420" y="711" text-anchor="middle" font-size="11.5" fill="#64748b">fill page</text>
+    <!-- 9 -->
+    <rect x="140" y="747" width="560" height="48" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="140" y="751" width="5" height="40" rx="1" fill="#16a34a"/>
+    <text x="420" y="766" text-anchor="middle" font-weight="600">把页缓存页复制 4 KiB 到进程私有页</text>
+    <text x="420" y="785" text-anchor="middle" font-size="11.5" fill="#64748b">只读页也复制（MAP_PRIVATE）</text>
+    <!-- 10 -->
+    <rect x="140" y="821" width="560" height="48" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+    <text x="420" y="850" text-anchor="middle" font-weight="600">安装 PTE → 释放 AddrSpace 锁</text>
+  </g>
+
+  <!-- 主链路箭头 -->
+  <g stroke="#64748b" stroke-width="2">
+    <line x1="420" y1="203" x2="420" y2="227" marker-end="url(#arrow)"/>
+    <line x1="420" y1="277" x2="420" y2="301" marker-end="url(#arrow)"/>
+    <line x1="420" y1="351" x2="420" y2="375" marker-end="url(#arrow)"/>
+    <line x1="420" y1="425" x2="420" y2="449" marker-end="url(#arrow)"/>
+    <line x1="420" y1="499" x2="420" y2="523" marker-end="url(#arrow)"/>
+    <line x1="420" y1="573" x2="420" y2="597" marker-end="url(#arrow)"/>
+    <line x1="420" y1="647" x2="420" y2="671" marker-end="url(#arrow)"/>
+    <line x1="420" y1="721" x2="420" y2="745" marker-end="url(#arrow)"/>
+    <line x1="420" y1="795" x2="420" y2="819" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- 右侧批注 -->
+  <g font-size="12" fill="#b91c1c">
+    <rect x="722" y="225" width="160" height="86" rx="8" fill="#fff1f2" stroke="#fecaca" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="802" y="244" text-anchor="middle">其他线程的缺页、</text>
+    <text x="802" y="262" text-anchor="middle">mmap、munmap、</text>
+    <text x="802" y="280" text-anchor="middle">mprotect 全部排队</text>
+    <text x="802" y="300" text-anchor="middle" font-size="11" fill="#9f1239">（AddrSpace 锁）</text>
+
+    <rect x="722" y="566" width="160" height="86" rx="8" fill="#f5f3ff" stroke="#ddd6fe" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="802" y="585" text-anchor="middle" fill="#6d28d9">磁盘很慢 → ext4</text>
+    <text x="802" y="603" text-anchor="middle" fill="#6d28d9">全局锁长时间被占，</text>
+    <text x="802" y="621" text-anchor="middle" fill="#6d28d9">不同文件的读取也</text>
+    <text x="802" y="639" text-anchor="middle" fill="#6d28d9">被串行化</text>
+
+    <rect x="722" y="700" width="160" height="72" rx="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="802" y="719" text-anchor="middle" fill="#15803d">只读页也分配私有页</text>
+    <text x="802" y="737" text-anchor="middle" fill="#15803d">并复制 4 KiB，</text>
+    <text x="802" y="755" text-anchor="middle" fill="#15803d">永远不被写也白做</text>
+  </g>
+
+  <!-- ================= 右面板：mprotect 路径 ================= -->
+  <rect x="940" y="110" width="590" height="560" rx="14" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1235" y="138" text-anchor="middle" font-size="16" font-weight="bold" fill="#0f172a">
+    ② mprotect 路径（全局记录扫描）
+  </text>
+
+  <g font-size="14" fill="#0f172a">
+    <rect x="980" y="160" width="510" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <text x="1235" y="187" text-anchor="middle" font-weight="600">sys_mprotect 获取 AddrSpace 写锁</text>
+    <rect x="980" y="224" width="510" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="980" y="227" width="5" height="38" rx="1" fill="#2563eb"/>
+    <text x="1235" y="251" text-anchor="middle" font-weight="600">扫描全局 MMAP_RECORDS（所有进程共享）</text>
+    <rect x="980" y="288" width="510" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="980" y="291" width="5" height="38" rx="1" fill="#2563eb"/>
+    <text x="1235" y="315" text-anchor="middle" font-weight="600">MemorySet 从头遍历全部 VMA</text>
+    <rect x="980" y="352" width="510" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="980" y="355" width="5" height="38" rx="1" fill="#2563eb"/>
+    <text x="1235" y="379" text-anchor="middle" font-weight="600">拆分 VMA、修改目标 PTE</text>
+    <rect x="980" y="416" width="510" height="44" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="2"/>
+    <rect x="980" y="419" width="5" height="38" rx="1" fill="#2563eb"/>
+    <text x="1235" y="443" text-anchor="middle" font-weight="600">再锁全局记录并重建 MMAP_RECORDS</text>
+    <rect x="980" y="480" width="510" height="44" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+    <text x="1235" y="507" text-anchor="middle" font-weight="600">释放锁，返回用户态</text>
+  </g>
+
+  <g stroke="#64748b" stroke-width="2">
+    <line x1="1235" y1="204" x2="1235" y2="222" marker-end="url(#arrow)"/>
+    <line x1="1235" y1="268" x2="1235" y2="286" marker-end="url(#arrow)"/>
+    <line x1="1235" y1="332" x2="1235" y2="350" marker-end="url(#arrow)"/>
+    <line x1="1235" y1="396" x2="1235" y2="414" marker-end="url(#arrow)"/>
+    <line x1="1235" y1="460" x2="1235" y2="478" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- mprotect 批注 -->
+  <rect x="940" y="690" width="590" height="120" rx="10" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="1235" y="716" text-anchor="middle" font-size="13" font-weight="bold" fill="#1d4ed8">
+    ⑤ mprotect 旧实现依赖全局 MMAP_RECORDS
+  </text>
+  <text x="1235" y="740" text-anchor="middle" font-size="12.5" fill="#1e40af">
+    平均一次调用扫描约 3.16 万条全局记录；
+  </text>
+  <text x="1235" y="762" text-anchor="middle" font-size="12.5" fill="#1e40af">
+    预构建阶段累计扫描约 897 亿条；
+  </text>
+  <text x="1235" y="784" text-anchor="middle" font-size="12.5" fill="#1e40af">
+    同时 MemorySet 从头遍历全部 VMA
+  </text>
+
+  <!-- ================= 底部瓶颈总览 ================= -->
+  <rect x="70" y="950" width="1460" height="92" rx="12" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+  <text x="90" y="974" font-size="13.5" font-weight="bold" fill="#92400e">瓶颈总览（与火焰图结论一致）</text>
+  <text x="90" y="996" font-size="12.5" fill="#78350f">① 整个缺页过程持有 AddrSpace 独占锁（红）→ mutex 等待 3369.74 s，其他线程全部排队；
+    ② 页缓存锁（橙）内完成 miss 填充与读盘；③ ext4 全局锁（紫）内等待磁盘 I/O（103.89 s）；</text>
+  <text x="90" y="1018" font-size="12.5" fill="#78350f">④ 只读页也分配私有页并复制 4 KiB；⑤ mprotect 全局记录扫描（蓝）。结果：8 个 vCPU 无法并行
+    （timed 非 idle 仅 24.1%，NoPreemptIrqSave::release 占 41.19%）。</text>
+</svg>

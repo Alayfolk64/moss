@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" role="img" aria-labelledby="title desc">
+  <title id="title">单页缓存与 Folio 批量缓存及三种查找状态</title>
+  <desc id="desc">上方等宽对比逐页缓存和 folio 批量缓存，下方等宽展示已就绪、正在加载和缓存未命中三种状态。</desc>
+  <defs>
+    <marker id="red-arrow" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#c45d59"/></marker>
+    <marker id="blue-arrow" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#397fba"/></marker>
+    <marker id="gray-arrow" markerWidth="7" markerHeight="6" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#81909c"/></marker>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="145%"><feDropShadow dx="0" dy="1" stdDeviation="1.3" flood-color="#172b3a" flood-opacity="0.10"/></filter>
+  </defs>
+  <style>
+    text { font-family: KaiTi, STKaiti, "楷体", serif; fill: #293846; }
+    .latin { font-family: "Times New Roman", Times, serif; }
+.panel-title { font-size: 20px; font-weight: 700; }
+.label { font-size: 17.5px; }
+.small { font-size: 15.5px; }
+.state-title { font-size: 19px; font-weight: 700; }
+  </style>
+
+  <rect width="900" height="430" fill="#ffffff"/>
+
+  <!-- Old implementation -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="18" width="405" height="205" rx="7" fill="#fff9f8" stroke="#c45d59" stroke-width="1.3"/>
+    <rect x="30" y="18" width="405" height="42" rx="7" fill="#c45d59"/>
+    <text x="232.5" y="45" text-anchor="middle" font-size="20" font-weight="700" fill="#ffffff">旧实现：逐页缓存</text>
+  </g>
+  <text x="232.5" y="82" text-anchor="middle" class="small">每个 <tspan class="latin">4 KiB</tspan> 页独立加载</text>
+  <g transform="translate(59 100)">
+    <rect x="0" y="0" width="62" height="42" rx="4" fill="#ffffff" stroke="#c45d59"/><text x="31" y="27" text-anchor="middle" class="label"><tspan class="latin">P0</tspan></text>
+    <rect x="88" y="0" width="62" height="42" rx="4" fill="#ffffff" stroke="#c45d59"/><text x="119" y="27" text-anchor="middle" class="label"><tspan class="latin">P1</tspan></text>
+    <rect x="176" y="0" width="62" height="42" rx="4" fill="#ffffff" stroke="#c45d59"/><text x="207" y="27" text-anchor="middle" class="label"><tspan class="latin">P2</tspan></text>
+    <rect x="264" y="0" width="62" height="42" rx="4" fill="#ffffff" stroke="#c45d59"/><text x="295" y="27" text-anchor="middle" class="label"><tspan class="latin">P3</tspan></text>
+    <line x1="31" y1="42" x2="31" y2="65" stroke="#c45d59" stroke-width="1.3" marker-end="url(#red-arrow)"/>
+    <line x1="119" y1="42" x2="119" y2="65" stroke="#c45d59" stroke-width="1.3" marker-end="url(#red-arrow)"/>
+    <line x1="207" y1="42" x2="207" y2="65" stroke="#c45d59" stroke-width="1.3" marker-end="url(#red-arrow)"/>
+    <line x1="295" y1="42" x2="295" y2="65" stroke="#c45d59" stroke-width="1.3" marker-end="url(#red-arrow)"/>
+    <rect x="5" y="69" width="52" height="29" rx="4" fill="#fff2f1" stroke="#c45d59"/><text x="31" y="88" text-anchor="middle" class="small"><tspan class="latin">I/O</tspan></text>
+    <rect x="93" y="69" width="52" height="29" rx="4" fill="#fff2f1" stroke="#c45d59"/><text x="119" y="88" text-anchor="middle" class="small"><tspan class="latin">I/O</tspan></text>
+    <rect x="181" y="69" width="52" height="29" rx="4" fill="#fff2f1" stroke="#c45d59"/><text x="207" y="88" text-anchor="middle" class="small"><tspan class="latin">I/O</tspan></text>
+    <rect x="269" y="69" width="52" height="29" rx="4" fill="#fff2f1" stroke="#c45d59"/><text x="295" y="88" text-anchor="middle" class="small"><tspan class="latin">I/O</tspan></text>
+  </g>
+  <text x="232.5" y="214" text-anchor="middle" class="label" fill="#9b4845"><tspan class="latin">4</tspan> 页，<tspan class="latin">4</tspan> 次 <tspan class="latin">I/O</tspan></text>
+
+  <!-- Folio implementation -->
+  <g filter="url(#shadow)">
+    <rect x="465" y="18" width="405" height="205" rx="7" fill="#f6faff" stroke="#397fba" stroke-width="1.3"/>
+    <rect x="465" y="18" width="405" height="42" rx="7" fill="#397fba"/>
+    <text x="667.5" y="45" text-anchor="middle" font-size="20" font-weight="700" fill="#ffffff">新实现：<tspan class="latin">Folio</tspan> 批量缓存</text>
+  </g>
+  <text x="667.5" y="82" text-anchor="middle" class="small">可变 <tspan class="latin">order 0–4</tspan>；下图以 <tspan class="latin">order = 2</tspan> 为例</text>
+  <rect x="500" y="100" width="270" height="76" rx="6" fill="#eaf4fb" stroke="#397fba" stroke-width="1.5"/>
+  <text x="635" y="120" text-anchor="middle" class="small"><tspan class="latin">1 Folio · 16 KiB</tspan></text>
+  <g transform="translate(518 130)">
+    <rect x="0" y="0" width="50" height="32" rx="3" fill="#ffffff" stroke="#77a9cf"/><text x="25" y="21" text-anchor="middle" class="small"><tspan class="latin">P0</tspan></text>
+    <rect x="61" y="0" width="50" height="32" rx="3" fill="#ffffff" stroke="#77a9cf"/><text x="86" y="21" text-anchor="middle" class="small"><tspan class="latin">P1</tspan></text>
+    <rect x="122" y="0" width="50" height="32" rx="3" fill="#ffffff" stroke="#77a9cf"/><text x="147" y="21" text-anchor="middle" class="small"><tspan class="latin">P2</tspan></text>
+    <rect x="183" y="0" width="50" height="32" rx="3" fill="#ffffff" stroke="#77a9cf"/><text x="208" y="21" text-anchor="middle" class="small"><tspan class="latin">P3</tspan></text>
+  </g>
+  <line x1="770" y1="138" x2="808" y2="138" stroke="#397fba" stroke-width="1.6" marker-end="url(#blue-arrow)"/>
+  <rect x="813" y="119" width="39" height="38" rx="4" fill="#eaf4fb" stroke="#397fba"/>
+  <text x="832.5" y="142" text-anchor="middle" class="small"><tspan class="latin">I/O</tspan></text>
+  <text x="667.5" y="214" text-anchor="middle" class="label" fill="#2e6d9e"><tspan class="latin">4</tspan> 页，<tspan class="latin">1</tspan> 次批量 <tspan class="latin">I/O</tspan></text>
+
+  <!-- Three equally spaced lookup states -->
+  <text x="30" y="257" class="panel-title"><tspan class="latin">Folio</tspan> 查找状态</text>
+  <line x1="143" y1="252" x2="870" y2="252" stroke="#d8e0e6"/>
+
+  <g filter="url(#shadow)">
+    <rect x="30" y="275" width="270" height="125" rx="7" fill="#f5fbf8" stroke="#35866b" stroke-width="1.3"/>
+    <circle cx="60" cy="307" r="13" fill="#35866b"/>
+    <path d="M53 307 L58 312 L68 301" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="83" y="312" class="state-title" fill="#2f725d">已就绪</text>
+    <text x="165" y="340" text-anchor="middle" class="label"><tspan class="latin">uptodate = true</tspan></text>
+    <text x="165" y="360" text-anchor="middle" class="small"><tspan class="latin">truncated = false</tspan></text>
+    <line x1="87" y1="378" x2="118" y2="378" stroke="#35866b" stroke-width="1.3" marker-end="url(#gray-arrow)"/>
+    <text x="193" y="383" text-anchor="middle" class="label">直接返回页引用</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="315" y="275" width="270" height="125" rx="7" fill="#fffaf1" stroke="#c8892f" stroke-width="1.3"/>
+    <circle cx="345" cy="307" r="13" fill="#c8892f"/>
+    <circle cx="339" cy="307" r="2" fill="#ffffff"/><circle cx="345" cy="307" r="2" fill="#ffffff"/><circle cx="351" cy="307" r="2" fill="#ffffff"/>
+    <text x="368" y="312" class="state-title" fill="#93631f">正在加载</text>
+    <text x="450" y="343" text-anchor="middle" class="label"><tspan class="latin">loading = true</tspan></text>
+    <text x="380" y="379" text-anchor="middle" class="small">等待 <tspan class="latin">loader</tspan></text>
+    <line x1="425" y1="375" x2="464" y2="375" stroke="#c8892f" stroke-width="1.3" marker-end="url(#gray-arrow)"/>
+    <text x="516" y="379" text-anchor="middle" class="small">重新校验</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="600" y="275" width="270" height="125" rx="7" fill="#fff8f7" stroke="#c45d59" stroke-width="1.3"/>
+    <circle cx="630" cy="307" r="13" fill="#c45d59"/>
+    <line x1="624" y1="307" x2="636" y2="307" stroke="#ffffff" stroke-width="2"/><line x1="630" y1="301" x2="630" y2="313" stroke="#ffffff" stroke-width="2"/>
+    <text x="653" y="312" class="state-title" fill="#994744">缓存未命中</text>
+    <text x="735" y="343" text-anchor="middle" class="label">创建 <tspan class="latin">loading Folio</tspan></text>
+    <text x="666" y="379" text-anchor="middle" class="small">当前线程加载</text>
+    <line x1="717" y1="375" x2="756" y2="375" stroke="#c45d59" stroke-width="1.3" marker-end="url(#gray-arrow)"/>
+    <text x="811" y="379" text-anchor="middle" class="small">完成并唤醒</text>
+  </g>
+</svg>
