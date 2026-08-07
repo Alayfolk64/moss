@@ -130,7 +130,7 @@
 // ============================================================
 #set page(header: none, footer: none)
 
-#v(2.2cm)
+#v(4.2cm)
 #align(center)[
   #text(font: heading-font, size: 30pt, weight: "bold")[内核设计优化实现文档]
 ]
@@ -138,7 +138,7 @@
 #align(center)[
   #text(font: heading-font, size: 17pt)[BuildStorm 场景下 MossOS 全链路优化]
 ]
-#v(7.2cm)
+#v(10.2cm)
 #align(center)[
   #block(width: 11cm)[
     #set text(size: 13pt)
@@ -154,7 +154,7 @@
     )
   ]
 ]
-#v(6.5cm)
+#v(3.5cm)
 #align(center)[
   #text(size: 13pt, weight: "bold")[2026 年 8 月]
 ]
