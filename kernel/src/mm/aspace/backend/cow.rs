@@ -86,18 +86,68 @@ fn frame_table(paddr: PhysAddr) -> &'static SpinNoIrq<FrameTableRefCount> {
     &FRAME_TABLE[index]
 }
 
+struct FilePageShard {
+    inline: Option<(VirtAddr, FolioPageRef)>,
+    overflow: BTreeMap<VirtAddr, FolioPageRef>,
+}
+
+impl FilePageShard {
+    fn new() -> Self {
+        Self {
+            inline: None,
+            overflow: BTreeMap::new(),
+        }
+    }
+
+    fn get(&self, vaddr: &VirtAddr) -> Option<&FolioPageRef> {
+        if let Some((inline_addr, page)) = self.inline.as_ref()
+            && inline_addr == vaddr
+        {
+            return Some(page);
+        }
+        self.overflow.get(vaddr)
+    }
+
+    fn insert(&mut self, vaddr: VirtAddr, page: FolioPageRef) -> Option<FolioPageRef> {
+        match self.inline.as_mut() {
+            None => {
+                debug_assert!(self.overflow.is_empty());
+                self.inline = Some((vaddr, page));
+                None
+            }
+            Some((inline_addr, inline_page)) if *inline_addr == vaddr => {
+                Some(core::mem::replace(inline_page, page))
+            }
+            Some(_) => self.overflow.insert(vaddr, page),
+        }
+    }
+
+    fn remove(&mut self, vaddr: &VirtAddr) -> Option<FolioPageRef> {
+        if self
+            .inline
+            .as_ref()
+            .is_some_and(|(inline_addr, _)| inline_addr == vaddr)
+        {
+            let (_, page) = self.inline.take()?;
+            self.inline = self.overflow.pop_first();
+            return Some(page);
+        }
+        self.overflow.remove(vaddr)
+    }
+}
+
 struct FilePageRefs {
-    shards: [Mutex<BTreeMap<VirtAddr, FolioPageRef>>; FILE_PAGE_SHARDS],
+    shards: [Mutex<FilePageShard>; FILE_PAGE_SHARDS],
 }
 
 impl FilePageRefs {
     fn new() -> Self {
         Self {
-            shards: [const { Mutex::new(BTreeMap::new()) }; FILE_PAGE_SHARDS],
+            shards: core::array::from_fn(|_| Mutex::new(FilePageShard::new())),
         }
     }
 
-    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, FolioPageRef>> {
+    fn shard(&self, vaddr: VirtAddr) -> &Mutex<FilePageShard> {
         let page = vaddr.as_usize() / memory_addr::PAGE_SIZE_4K;
         &self.shards[page % FILE_PAGE_SHARDS]
     }
@@ -127,7 +177,7 @@ pub struct CowBackend {
     identity: Arc<()>,
     /// Directly mapped file pages need an owning reference for as long as
     /// their PTEs exist. Clones used to split one VMA share this table.
-    file_pages: Arc<FilePageRefs>,
+    file_pages: Option<Arc<FilePageRefs>>,
 }
 
 impl Clone for CowBackend {
@@ -144,6 +194,9 @@ impl Clone for CowBackend {
 }
 
 enum CowFaultSource {
+    /// The PTE owns the only ordinary reference. The extra plan reference
+    /// keeps the frame alive while the address-space lock is released.
+    Exclusive(PhysAddr),
     /// An extra reference pins an anonymous COW source while the address-space
     /// lock is released.
     Anonymous(PhysAddr),
@@ -154,7 +207,7 @@ enum CowFaultSource {
 impl CowFaultSource {
     fn paddr(&self) -> PhysAddr {
         match self {
-            Self::Anonymous(paddr) => *paddr,
+            Self::Exclusive(paddr) | Self::Anonymous(paddr) => *paddr,
             Self::File(page) => page.paddr(),
         }
     }
@@ -177,6 +230,9 @@ pub(crate) struct CowFaultPlan {
 impl CowFaultPlan {
     pub(crate) fn execute(&mut self) -> AxResult {
         if let Some(source) = &self.source {
+            if matches!(source, CowFaultSource::Exclusive(_)) {
+                return Ok(());
+            }
             let frame = alloc_referenced_frame(false, self.size)?;
             self.frame = Some(frame);
             unsafe {
@@ -272,7 +328,9 @@ impl Drop for CowFaultPlan {
         }
         if let Some(source) = self.source.take() {
             match source {
-                CowFaultSource::Anonymous(frame) => drop_referenced_frame(frame, self.size),
+                CowFaultSource::Exclusive(frame) | CowFaultSource::Anonymous(frame) => {
+                    drop_referenced_frame(frame, self.size)
+                }
                 CowFaultSource::File(_) => {}
             }
         }
@@ -309,7 +367,10 @@ impl CowBackend {
             file: self.file.clone(),
             mapped_pages: AtomicUsize::new(0),
             identity: Arc::new(()),
-            file_pages: Arc::new(FilePageRefs::new()),
+            file_pages: self
+                .file_pages
+                .as_ref()
+                .map(|_| Arc::new(FilePageRefs::new())),
         }
     }
 
@@ -352,6 +413,7 @@ impl CowBackend {
         gather: &mut UnmapGather,
     ) -> AxResult {
         let mut cursor = range.start;
+        let file_page_refs = self.file_pages.as_deref();
         while let Some((vaddr, paddr, _flags, page_size)) =
             pt.next_present_mapping(cursor, range.end)
         {
@@ -362,10 +424,12 @@ impl CowBackend {
 
             // Resolve the owner before clearing the PTE. On failure, leave the
             // mapping and its reference intact.
-            let file_page = self.file_pages.remove(vaddr);
+            let file_page = file_page_refs.and_then(|pages| pages.remove(vaddr));
             if let Some(page) = file_page.as_ref() {
                 if page.paddr() != paddr {
-                    self.file_pages.insert(vaddr, page.clone());
+                    file_page_refs
+                        .expect("file page reference table disappeared")
+                        .insert(vaddr, page.clone());
                     return Err(AxError::BadAddress);
                 }
             } else if frame_table(paddr).lock().get_frame_ref(paddr).is_none() {
@@ -379,13 +443,17 @@ impl CowBackend {
                     // The PTE was cleared, but retaining this owner is safer
                     // than exposing a physical page without ownership data.
                     if let Some(page) = file_page {
-                        self.file_pages.insert(vaddr, page);
+                        file_page_refs
+                            .expect("file page reference table disappeared")
+                            .insert(vaddr, page);
                     }
                     return Err(AxError::BadAddress);
                 }
                 Err(err) => {
                     if let Some(page) = file_page {
-                        self.file_pages.insert(vaddr, page);
+                        file_page_refs
+                            .expect("file page reference table disappeared")
+                            .insert(vaddr, page);
                     }
                     return Err(err.into());
                 }
@@ -421,7 +489,8 @@ impl CowBackend {
                     && access_flags.contains(MappingFlags::WRITE)
                     && !page_flags.contains(MappingFlags::WRITE)
                 {
-                    let source = if let Some(page) = self.file_pages.get(vaddr) {
+                    let file_page = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr));
+                    let source = if let Some(page) = file_page {
                         if page.paddr() != paddr {
                             return FaultPreparation::Fallback;
                         }
@@ -431,14 +500,15 @@ impl CowBackend {
                             return FaultPreparation::Fallback;
                         };
                         let mut frame_ref = frame_ref.lock();
-                        if frame_ref.0 == 1 {
-                            return FaultPreparation::Fallback;
-                        }
                         let Some(count) = frame_ref.0.checked_add(1) else {
                             return FaultPreparation::Fallback;
                         };
                         frame_ref.0 = count;
-                        CowFaultSource::Anonymous(paddr)
+                        if count == 2 {
+                            CowFaultSource::Exclusive(paddr)
+                        } else {
+                            CowFaultSource::Anonymous(paddr)
+                        }
                     };
                     FaultPreparation::Cow(CowFaultPlan {
                         identity: self.identity.clone(),
@@ -497,10 +567,39 @@ impl CowBackend {
                         return Ok(FaultCommit::Stale);
                     }
 
+                    if let CowFaultSource::Exclusive(source_paddr) = source {
+                        let Some(frame_ref) = frame_table(*source_paddr)
+                            .lock()
+                            .get_frame_ref(*source_paddr)
+                        else {
+                            return Ok(FaultCommit::Stale);
+                        };
+                        let frame_ref = frame_ref.lock();
+                        // One reference belongs to the PTE and one is the
+                        // temporary pin held by this plan. Holding this lock
+                        // prevents fork from adding another reference between
+                        // the exclusivity check and the permission upgrade.
+                        if frame_ref.0 != 2 {
+                            return Ok(FaultCommit::Stale);
+                        }
+                        if !pt.remap_4k_concurrent_if(
+                            plan.vaddr,
+                            *source_paddr,
+                            *source_paddr,
+                            flags,
+                        )? {
+                            return Ok(FaultCommit::Stale);
+                        }
+                        return Ok(FaultCommit::Handled);
+                    }
+
                     let frame = plan.frame.ok_or(AxError::BadAddress)?;
                     let file_source = matches!(source, CowFaultSource::File(_));
                     let mapped_file_page = if file_source {
-                        let mut file_pages = self.file_pages.shard(plan.vaddr).lock();
+                        let Some(file_page_refs) = self.file_pages.as_ref() else {
+                            return Ok(FaultCommit::Stale);
+                        };
+                        let mut file_pages = file_page_refs.shard(plan.vaddr).lock();
                         let Some(mapped_page) = file_pages.get(&plan.vaddr) else {
                             return Ok(FaultCommit::Stale);
                         };
@@ -538,6 +637,9 @@ impl CowBackend {
                     let Some((file, ..)) = plan.file.as_ref() else {
                         return Ok(FaultCommit::Stale);
                     };
+                    let Some(file_page_refs) = self.file_pages.as_ref() else {
+                        return Ok(FaultCommit::Stale);
+                    };
                     let pages = core::mem::take(&mut plan.file_pages);
                     let validation_page = pages
                         .iter()
@@ -553,7 +655,7 @@ impl CowBackend {
                                 continue;
                             }
                             let mapping_page = page.clone();
-                            let mut file_pages = self.file_pages.shard(addr).lock();
+                            let mut file_pages = file_page_refs.shard(addr).lock();
                             match pt.map_4k_concurrent(
                                 addr,
                                 page.paddr(),
@@ -675,16 +777,21 @@ impl CowBackend {
         flags: MappingFlags,
         pt: &mut PageTableMut,
     ) -> AxResult {
-        if let Some(page) = self.file_pages.remove(vaddr) {
+        let file_page_refs = self.file_pages.as_deref();
+        if let Some(page) = file_page_refs.and_then(|pages| pages.remove(vaddr)) {
             if page.paddr() != paddr {
-                self.file_pages.insert(vaddr, page);
+                file_page_refs
+                    .expect("file page reference table disappeared")
+                    .insert(vaddr, page);
                 return Err(AxError::BadAddress);
             }
 
             let new_frame = match self.alloc_new_frame(false) {
                 Ok(frame) => frame,
                 Err(err) => {
-                    self.file_pages.insert(vaddr, page);
+                    file_page_refs
+                        .expect("file page reference table disappeared")
+                        .insert(vaddr, page);
                     return Err(err);
                 }
             };
@@ -697,7 +804,9 @@ impl CowBackend {
             }
             if let Err(err) = pt.remap(vaddr, new_frame, flags) {
                 self.drop_new_frame(new_frame);
-                self.file_pages.insert(vaddr, page);
+                file_page_refs
+                    .expect("file page reference table disappeared")
+                    .insert(vaddr, page);
                 return Err(err.into());
             }
             pt.finish();
@@ -818,7 +927,7 @@ impl BackendOps for CowBackend {
                     // - Update its permissions in the old page table using `flags`.
                     // - Map the same physical page into the new page table at the same
                     // virtual address, with the same page size and `flags`.
-                    let file_page = self.file_pages.get(vaddr);
+                    let file_page = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr));
                     let result = if let Some(page) = file_page {
                         if page.paddr() != paddr {
                             Err(AxError::BadAddress)
@@ -826,7 +935,11 @@ impl BackendOps for CowBackend {
                             (|| -> AxResult {
                                 old_pt.protect(vaddr, cow_flags)?;
                                 new_pt.map(vaddr, paddr, self.size, cow_flags)?;
-                                new_backend.file_pages.insert(vaddr, page);
+                                new_backend
+                                    .file_pages
+                                    .as_ref()
+                                    .expect("file-backed clone lost its ownership table")
+                                    .insert(vaddr, page);
                                 Ok(())
                             })()
                         }
@@ -868,7 +981,7 @@ impl Backend {
             file: Some((file, file_start, file_end)),
             mapped_pages: AtomicUsize::new(0),
             identity: Arc::new(()),
-            file_pages: Arc::new(FilePageRefs::new()),
+            file_pages: Some(Arc::new(FilePageRefs::new())),
         })
     }
 
@@ -879,7 +992,7 @@ impl Backend {
             file: None,
             mapped_pages: AtomicUsize::new(0),
             identity: Arc::new(()),
-            file_pages: Arc::new(FilePageRefs::new()),
+            file_pages: None,
         })
     }
 }
