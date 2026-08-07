@@ -292,6 +292,11 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
 
     /// Replaces one 4-KiB mapping only if it still points to the expected
     /// physical page.
+    ///
+    /// Replacing the physical frame or restricting an existing mapping needs
+    /// a TLB shootdown on every CPU using this page-table root. Keeping the
+    /// same frame while only adding permissions needs a local invalidation:
+    /// remote CPUs can retain only the older, more restrictive translation.
     pub fn remap_4k_concurrent_if(
         &self,
         vaddr: M::VirtAddr,
@@ -309,10 +314,19 @@ impl<M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64<M, PTE, H
             if old.paddr() != expected_paddr.align_down(PageSize::Size4K) {
                 return Ok(false);
             }
+            let old_flags = old.flags();
             let new_bits = PTE::new_page(target.align_down(PageSize::Size4K), flags, false).bits();
             match slot.compare_exchange(old_bits, new_bits, Ordering::AcqRel, Ordering::Acquire) {
                 Ok(_) => {
-                    M::flush_tlb(Some(vaddr));
+                    let permissions =
+                        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::EXECUTE;
+                    let same_frame = old.paddr() == target.align_down(PageSize::Size4K);
+                    let same_attributes = (old_flags - permissions) == (flags - permissions);
+                    if same_frame && same_attributes && flags.contains(old_flags) {
+                        M::flush_tlb_local(Some(vaddr));
+                    } else {
+                        M::flush_tlb_for(self.root_paddr(), Some(vaddr));
+                    }
                     return Ok(true);
                 }
                 Err(_) => continue,
