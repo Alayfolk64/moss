@@ -1,4 +1,4 @@
-use alloc::{collections::BTreeMap, sync::Arc};
+use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::{
     slice,
     sync::atomic::{AtomicUsize, Ordering},
@@ -165,11 +165,12 @@ pub(crate) struct CowFaultPlan {
     identity: Arc<()>,
     vaddr: VirtAddr,
     mapping_start: VirtAddr,
+    area_range: VirtAddrRange,
     size: PageSize,
     file: Option<(FileBackend, u64, Option<u64>)>,
     access_flags: MappingFlags,
     frame: Option<PhysAddr>,
-    file_page: Option<FolioPageRef>,
+    file_pages: Vec<(VirtAddr, FolioPageRef)>,
     source: Option<CowFaultSource>,
 }
 
@@ -205,17 +206,50 @@ impl CowFaultPlan {
                 .min((self.size as usize - start) as u64) as usize;
 
             // A complete aligned file page can stay in the folio cache and be
-            // installed read-only. A later write fault performs the actual
-            // private copy. Keep this stage deliberately single-page; folio
-            // fault-around is a separate optimization.
+            // installed read-only. Demand-load the faulting page's naturally
+            // aligned folio, then prepare its ready siblings for fault-around.
             if self.size == PageSize::Size4K
                 && !self.access_flags.contains(MappingFlags::WRITE)
                 && start == 0
                 && max_read == self.size as usize
-                && let Some(page) = file.page_ref_at(fault_file_start)?
             {
-                self.file_page = Some(page);
-                return Ok(());
+                let page_size = self.size as usize;
+                if let Some(fault_page) = file.page_ref_at(fault_file_start)? {
+                    let folio_page_offset = fault_page.folio_page_offset();
+                    let window_start = VirtAddr::from(
+                        self.vaddr
+                            .as_usize()
+                            .saturating_sub(folio_page_offset * page_size),
+                    );
+                    let window_end = window_start + fault_page.folio_page_count() * page_size;
+                    let first = window_start
+                        .max(self.area_range.start.align_up(page_size))
+                        .max(self.mapping_start.align_up(page_size));
+                    let last = window_end.min(self.area_range.end.align_down(page_size));
+
+                    // Resolve the demanded address first; sibling mappings are
+                    // optional and must never delay fault completion on error.
+                    self.file_pages.push((self.vaddr, fault_page.clone()));
+                    let mut addr = first;
+                    while addr < last {
+                        if addr != self.vaddr {
+                            let offset = *mapping_file_start
+                                + addr
+                                    .as_usize()
+                                    .saturating_sub(self.mapping_start.as_usize())
+                                    as u64;
+                            let complete = file_end
+                                .is_none_or(|end| offset.saturating_add(page_size as u64) <= end);
+                            let page_in_folio = (addr - window_start) / page_size;
+                            if complete && let Some(page) = fault_page.folio_page_ref(page_in_folio)
+                            {
+                                self.file_pages.push((addr, page));
+                            }
+                        }
+                        addr += page_size;
+                    }
+                    return Ok(());
+                }
             }
 
             let frame = alloc_referenced_frame(true, self.size)?;
@@ -370,7 +404,7 @@ impl CowBackend {
     pub(crate) fn prepare_fault(
         &self,
         vaddr: VirtAddr,
-        _area_range: VirtAddrRange,
+        area_range: VirtAddrRange,
         _flags: MappingFlags,
         access_flags: MappingFlags,
         pt: &PageTable,
@@ -410,11 +444,12 @@ impl CowBackend {
                         identity: self.identity.clone(),
                         vaddr,
                         mapping_start: self.start,
+                        area_range,
                         size: self.size,
                         file: None,
                         access_flags,
                         frame: None,
-                        file_page: None,
+                        file_pages: Vec::new(),
                         source: Some(source),
                     })
                 } else {
@@ -425,11 +460,12 @@ impl CowBackend {
                 identity: self.identity.clone(),
                 vaddr,
                 mapping_start: self.start,
+                area_range,
                 size: self.size,
                 file: self.file.clone(),
                 access_flags,
                 frame: None,
-                file_page: None,
+                file_pages: Vec::new(),
                 source: None,
             }),
             Err(_) => FaultPreparation::Fallback,
@@ -439,7 +475,7 @@ impl CowBackend {
     pub(crate) fn commit_fault(
         &self,
         plan: &mut CowFaultPlan,
-        _area_range: VirtAddrRange,
+        area_range: VirtAddrRange,
         flags: MappingFlags,
         access_flags: MappingFlags,
         pt: &PageTable,
@@ -498,41 +534,60 @@ impl CowBackend {
                 if plan.source.is_some() {
                     return Ok(FaultCommit::Stale);
                 }
-                if let Some(page) = plan.file_page.take() {
-                    let Some((file, mapping_file_start, _)) = plan.file.as_ref() else {
+                if !plan.file_pages.is_empty() {
+                    let Some((file, ..)) = plan.file.as_ref() else {
                         return Ok(FaultCommit::Stale);
                     };
-                    let file_offset = *mapping_file_start
-                        + plan
-                            .vaddr
-                            .as_usize()
-                            .saturating_sub(plan.mapping_start.as_usize())
-                            as u64;
-                    let mapping_page = page.clone();
-                    let mapped = file.with_valid_page_ref(file_offset, &page, || {
-                        let mut file_pages = self.file_pages.shard(plan.vaddr).lock();
-                        match pt.map_4k_concurrent(
-                            plan.vaddr,
-                            page.paddr(),
-                            flags - MappingFlags::WRITE,
-                        ) {
-                            Ok(()) => {
-                                let old = file_pages.insert(plan.vaddr, mapping_page);
-                                assert!(old.is_none(), "publishing duplicate file-page pin");
-                                Ok(true)
+                    let pages = core::mem::take(&mut plan.file_pages);
+                    let validation_page = pages
+                        .iter()
+                        .find(|(addr, _)| *addr == plan.vaddr)
+                        .map(|(_, page)| page.clone())
+                        .ok_or(AxError::BadAddress)?;
+                    let mut installed = 0;
+                    let mut fault_installed = false;
+                    let mut fault_error = None;
+                    let validated = file.with_valid_folio_ref(&validation_page, || {
+                        for (addr, page) in pages {
+                            if !area_range.contains(addr) {
+                                continue;
                             }
-                            Err(PagingError::AlreadyMapped) => Ok(false),
-                            Err(err) => Err(err),
+                            let mapping_page = page.clone();
+                            let mut file_pages = self.file_pages.shard(addr).lock();
+                            match pt.map_4k_concurrent(
+                                addr,
+                                page.paddr(),
+                                flags - MappingFlags::WRITE,
+                            ) {
+                                Ok(()) => {
+                                    let old = file_pages.insert(addr, mapping_page);
+                                    assert!(old.is_none(), "publishing duplicate file-page pin");
+                                    installed += 1;
+                                    fault_installed |= addr == plan.vaddr;
+                                }
+                                Err(PagingError::AlreadyMapped) => {}
+                                Err(err) if addr == plan.vaddr => {
+                                    fault_error = Some(err);
+                                    break;
+                                }
+                                Err(_) => {}
+                            }
                         }
                     });
-                    return match mapped {
-                        Some(Ok(true)) => {
-                            self.mapped_pages.fetch_add(1, Ordering::Relaxed);
-                            Ok(FaultCommit::Handled)
-                        }
-                        Some(Ok(false)) | None => Ok(FaultCommit::Stale),
-                        Some(Err(err)) => Err(err.into()),
-                    };
+                    if validated.is_none() {
+                        return Ok(FaultCommit::Stale);
+                    }
+                    if installed != 0 {
+                        self.mapped_pages.fetch_add(installed, Ordering::Relaxed);
+                    }
+                    if let Some(err) = fault_error {
+                        return Err(err.into());
+                    }
+                    return Ok(if fault_installed {
+                        FaultCommit::Handled
+                    } else {
+                        FaultCommit::Stale
+                    });
                 }
                 let frame = plan.frame.ok_or(AxError::BadAddress)?;
                 match pt.map_4k_concurrent(plan.vaddr, frame, flags) {
