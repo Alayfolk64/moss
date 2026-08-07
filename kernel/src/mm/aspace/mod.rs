@@ -650,7 +650,7 @@ impl AddrSpace {
         let access_flags = VmaMetadata::access_flags();
         let requested = flags & access_flags;
         let requested_user = user_flags & access_flags;
-        let stats = self.areas.protect(
+        Ok(self.areas.protect(
             start,
             size,
             |area| {
@@ -670,14 +670,7 @@ impl AddrSpace {
                     && left.backend().merge_compatible(right.backend())
             },
             &mut self.pt,
-        )?;
-
-        // `mprotect` changes permissions in an address space which sibling
-        // threads may currently execute on other CPUs.
-        #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
-        crate::mm::flush_tlb_on_all_cpus(self.page_table_root(), None);
-
-        Ok(stats)
+        )?)
     }
 
     pub(crate) fn locked_bytes_in_range(&self, start: VirtAddr, size: usize) -> usize {

@@ -668,33 +668,33 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
         size: usize,
         flags: MappingFlags,
     ) -> PagingResult {
-        let mut vaddr_usize: usize = vaddr.into();
-        let mut size = size;
+        let start: usize = vaddr.into();
+        let Some(end) = start.checked_add(size) else {
+            return Err(PagingError::NotAligned);
+        };
         trace!(
             "protect_region({:#x}) [{:#x}, {:#x}) {:?}",
             self.root_paddr(),
-            vaddr_usize,
-            vaddr_usize + size,
+            start,
+            end,
             flags,
         );
-        while size > 0 {
-            let vaddr = vaddr_usize.into();
-            let page_size = match self.protect(vaddr, flags) {
-                Ok(page_size) => {
-                    assert!(page_size.is_aligned(vaddr_usize));
-                    assert!(page_size as usize <= size);
 
-                    page_size
-                }
-                Err(PagingError::NotMapped) => PageSize::Size4K,
-                Err(e) => {
-                    error!("failed to protect page: {vaddr_usize:#x?}, {e:?}");
-                    return Err(e);
-                }
-            };
-
-            vaddr_usize += page_size as usize;
-            size -= page_size as usize;
+        let mut cursor = start;
+        while let Some((mapping, _paddr, _old_flags, page_size)) =
+            self.next_present_mapping(cursor.into(), end.into())
+        {
+            let mapping: usize = mapping.into();
+            self.protect(mapping.into(), flags).inspect_err(|e| {
+                error!("failed to protect page: {mapping:#x?}, {e:?}");
+            })?;
+            let next = mapping
+                .checked_add(page_size as usize)
+                .ok_or(PagingError::NotAligned)?;
+            if next <= cursor {
+                return Err(PagingError::NotAligned);
+            }
+            cursor = next;
         }
         Ok(())
     }
