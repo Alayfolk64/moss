@@ -74,6 +74,24 @@ impl Inode {
         Ok(nlink)
     }
 
+    pub(crate) fn read_cached_at(
+        &self,
+        buf: &mut [u8],
+        offset: u64,
+        file_size: u64,
+    ) -> VfsResult<usize> {
+        self.fs.read_mapped(self.ino, buf, offset, file_size)
+    }
+
+    pub(crate) fn write_cached_at(
+        &self,
+        buf: &[u8],
+        offset: u64,
+        file_len: u64,
+    ) -> VfsResult<usize> {
+        self.fs.write_mapped(self.ino, buf, offset, file_len)
+    }
+
     pub fn set_xattr(&self, name: &[u8], value: &[u8]) -> VfsResult<()> {
         self.fs
             .lock()
@@ -186,7 +204,7 @@ impl NodeOps for Inode {
     fn sync(&self, _data_only: bool) -> VfsResult<()> {
         // ext4 uses a filesystem-level block cache; flushing one inode must
         // drain pending metadata/data updates to keep directory integrity.
-        self.fs.lock().flush().map_err(into_vfs_err)
+        self.fs.flush_all()
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
@@ -223,6 +241,7 @@ impl FileNodeOps for Inode {
     }
 
     fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
+        self.fs.invalidate_extent_cache(self.ino);
         self.fs
             .lock()
             .write_at(self.ino, buf, offset)
@@ -230,6 +249,7 @@ impl FileNodeOps for Inode {
     }
 
     fn append(&self, buf: &[u8]) -> VfsResult<(usize, u64)> {
+        self.fs.invalidate_extent_cache(self.ino);
         let mut fs = self.fs.lock();
         let length = fs
             .with_inode_ref(self.ino, |inode| Ok(inode.size()))
@@ -239,6 +259,7 @@ impl FileNodeOps for Inode {
     }
 
     fn set_len(&self, len: u64) -> VfsResult<()> {
+        self.fs.invalidate_extent_cache(self.ino);
         self.fs.lock().set_len(self.ino, len).map_err(into_vfs_err)
     }
 
@@ -340,13 +361,25 @@ impl DirNodeOps for Inode {
     }
 
     fn unlink(&self, name: &str) -> VfsResult<()> {
-        self.fs.lock().unlink(self.ino, name).map_err(into_vfs_err)
+        let removed = self
+            .fs
+            .lock()
+            .unlink(self.ino, name)
+            .map_err(into_vfs_err)?;
+        self.fs.invalidate_extent_cache(removed);
+        Ok(())
     }
 
     fn rename(&self, src_name: &str, dst_dir: &DirNode, dst_name: &str) -> VfsResult<()> {
         let dst_dir: Arc<Self> = dst_dir.downcast().map_err(|_| VfsError::InvalidInput)?;
         let mut fs = self.fs.lock();
-        fs.rename(self.ino, src_name, dst_dir.ino, dst_name)
-            .map_err(into_vfs_err)
+        let replaced = fs
+            .rename(self.ino, src_name, dst_dir.ino, dst_name)
+            .map_err(into_vfs_err)?;
+        drop(fs);
+        if let Some(ino) = replaced {
+            self.fs.invalidate_extent_cache(ino);
+        }
+        Ok(())
     }
 }

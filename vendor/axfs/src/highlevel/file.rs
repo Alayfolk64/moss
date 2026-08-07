@@ -1099,9 +1099,21 @@ impl CachedFile {
         file: &FileNode,
         mut buf: &mut [u8],
         mut offset: u64,
+        file_len: u64,
     ) -> VfsResult<usize> {
         let mut read = 0;
         while !buf.is_empty() {
+            #[cfg(feature = "ext4")]
+            let count = if let Ok(inode) = self
+                .inner()
+                .entry()
+                .downcast::<crate::fs::ext4::Inode>()
+            {
+                inode.read_cached_at(buf, offset, file_len)?
+            } else {
+                file.read_at(buf, offset)?
+            };
+            #[cfg(not(feature = "ext4"))]
             let count = file.read_at(buf, offset)?;
             if count == 0 {
                 break;
@@ -1113,8 +1125,25 @@ impl CachedFile {
         Ok(read)
     }
 
-    fn write_fully_at(&self, file: &FileNode, mut buf: &[u8], mut offset: u64) -> VfsResult<()> {
+    fn write_fully_at(
+        &self,
+        file: &FileNode,
+        mut buf: &[u8],
+        mut offset: u64,
+        file_len: u64,
+    ) -> VfsResult<()> {
         while !buf.is_empty() {
+            #[cfg(feature = "ext4")]
+            let written = if let Ok(inode) = self
+                .inner()
+                .entry()
+                .downcast::<crate::fs::ext4::Inode>()
+            {
+                inode.write_cached_at(buf, offset, file_len)?
+            } else {
+                file.write_at(buf, offset)?
+            };
+            #[cfg(not(feature = "ext4"))]
             let written = file.write_at(buf, offset)?;
             if written == 0 {
                 return Err(VfsError::Io);
@@ -1164,13 +1193,24 @@ impl CachedFile {
         }
     }
 
-    fn load_folio(&self, file: &FileNode, folio: &Arc<Folio>, zeroed: bool) -> VfsResult<()> {
+    fn load_folio(
+        &self,
+        file: &FileNode,
+        folio: &Arc<Folio>,
+        zeroed: bool,
+        file_len: u64,
+    ) -> VfsResult<()> {
         let data = unsafe { folio.data_mut_unchecked() };
         let result = if zeroed || self.in_memory() {
             data.fill(0);
             Ok(())
         } else {
-            self.read_fully_at(file, data, folio.index as u64 * PAGE_SIZE as u64)
+            self.read_fully_at(
+                file,
+                data,
+                folio.index as u64 * PAGE_SIZE as u64,
+                file_len,
+            )
                 .map(|read| data[read..].fill(0))
         };
         folio.complete_load(result);
@@ -1338,6 +1378,7 @@ impl CachedFile {
             Self::reclaim_page_cache_if_needed(self.record.key);
             let _invalidate = self.shared().invalidate_lock.read();
             let file = self.inner().entry().as_file()?;
+            let file_len = self.len()?;
             let (folio, loader) = self.get_or_publish_folio(pn, preferred_order)?;
             if !loader {
                 // Another task published the folio after the lock-free lookup.
@@ -1345,7 +1386,7 @@ impl CachedFile {
                 // of the loop.
                 continue;
             }
-            let load_result = self.load_folio(file, &folio, zeroed);
+            let load_result = self.load_folio(file, &folio, zeroed, file_len);
             if let Err(err) = load_result {
                 self.remove_folio(&folio);
                 if may_retry_failed_folio {
@@ -1510,7 +1551,10 @@ impl CachedFile {
             self.remove_folio(&folio);
             return;
         }
-        if self.load_folio(file, &folio, false).is_err() {
+        if self
+            .load_folio(file, &folio, false, file_len)
+            .is_err()
+        {
             self.remove_folio(&folio);
         }
     }
@@ -1815,6 +1859,7 @@ impl CachedFile {
                     file,
                     &data[byte_start..byte_end],
                     folio_start + byte_start as u64,
+                    file_len,
                 );
                 if result.is_err() {
                     break;

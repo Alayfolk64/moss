@@ -1,12 +1,13 @@
+use alloc::vec::Vec;
 use core::{
     mem::{self, offset_of},
     slice,
 };
 
 use super::InodeRef;
-
 use crate::{
-    Ext4Result, InodeType, SystemHal, WritebackGuard, error::Context, ffi::*, util::get_block_size,
+    Ext4Error, Ext4Result, InodeType, SystemHal, WritebackGuard, error::Context, ffi::*,
+    util::get_block_size,
 };
 
 fn take<'a>(buf: &mut &'a [u8], cnt: usize) -> &'a [u8] {
@@ -20,6 +21,44 @@ fn take_mut<'a>(buf: &mut &'a mut [u8], cnt: usize) -> &'a mut [u8] {
     let (first, rem) = mem::take(buf).split_at_mut(pos);
     *buf = rem;
     first
+}
+
+/// A consecutive run in an inode's logical-to-physical block mapping.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BlockExtent {
+    /// First logical filesystem block in this run.
+    pub logical_block: u32,
+    /// First physical filesystem block, or `None` for a sparse hole.
+    pub physical_block: Option<u64>,
+    /// Number of filesystem blocks in this run.
+    pub block_count: u32,
+}
+
+fn push_extent(
+    extents: &mut Vec<BlockExtent>,
+    logical_block: u32,
+    physical_block: Option<u64>,
+    block_count: u32,
+) {
+    let extends_previous = extents.last().is_some_and(|extent| {
+        extent.logical_block + extent.block_count == logical_block
+            && match (extent.physical_block, physical_block) {
+                (None, None) => true,
+                (Some(previous), Some(current)) => {
+                    previous + u64::from(extent.block_count) == current
+                }
+                _ => false,
+            }
+    });
+    if extends_previous {
+        extents.last_mut().unwrap().block_count += block_count;
+    } else {
+        extents.push(BlockExtent {
+            logical_block,
+            physical_block,
+            block_count,
+        });
+    }
 }
 
 impl<Hal: SystemHal> InodeRef<Hal> {
@@ -47,6 +86,145 @@ impl<Hal: SystemHal> InodeRef<Hal> {
                 .context("ext4_fs_append_inode_dblk_idx")?;
             Ok((fblock, block))
         }
+    }
+
+    fn uses_extents(&mut self) -> bool {
+        unsafe { ext4_inode_has_flag(self.inner.inode, EXT4_INODE_FLAG_EXTENTS) }
+    }
+
+    fn get_extent(
+        &mut self,
+        logical_block: u32,
+        max_blocks: u32,
+        create: bool,
+    ) -> Ext4Result<(u64, u32)> {
+        unsafe {
+            let mut physical_block = 0;
+            let mut block_count = 0;
+            ext4_extent_get_blocks(
+                self.inner.as_mut(),
+                logical_block,
+                max_blocks,
+                &mut physical_block,
+                create,
+                &mut block_count,
+            )
+            .context("ext4_extent_get_blocks")?;
+            Ok((physical_block, block_count))
+        }
+    }
+
+    /// Maps an inode block range without transferring file data.
+    ///
+    /// Adjacent logical blocks are coalesced when their physical blocks are
+    /// also adjacent. Sparse holes are returned as their own runs. The caller
+    /// may release the filesystem metadata lock after this function and submit
+    /// data I/O using the returned immutable mapping.
+    pub fn map_blocks(&mut self, start: u32, count: u32) -> Ext4Result<Vec<BlockExtent>> {
+        let Some(end) = start.checked_add(count) else {
+            return Err(Ext4Error::new(
+                EFBIG as _,
+                "logical block range overflow",
+            ));
+        };
+        let mut extents = Vec::new();
+        if self.uses_extents() {
+            let mut logical_block = start;
+            while logical_block < end {
+                let (physical_block, mapped) =
+                    self.get_extent(logical_block, end - logical_block, false)?;
+                // lwext4 reports a sparse hole as zero mapped blocks. Advance
+                // one block, then merge adjacent holes in `push_extent`.
+                let block_count = mapped.max(1).min(end - logical_block);
+                push_extent(
+                    &mut extents,
+                    logical_block,
+                    (physical_block != 0).then_some(physical_block),
+                    block_count,
+                );
+                logical_block += block_count;
+            }
+            return Ok(extents);
+        }
+
+        for logical_block in start..end {
+            let physical_block = self.get_inode_fblock(logical_block)?;
+            let physical_block = (physical_block != 0).then_some(physical_block);
+            push_extent(&mut extents, logical_block, physical_block, 1);
+        }
+        Ok(extents)
+    }
+
+    /// Allocates and maps a block range without transferring file data.
+    ///
+    /// Extent-backed sparse blocks are instantiated in place. The inode size
+    /// is deliberately committed only after the caller has completed the data
+    /// I/O, so a failed request cannot expose uninitialized blocks.
+    pub fn map_blocks_for_write(&mut self, start: u32, count: u32) -> Ext4Result<Vec<BlockExtent>> {
+        let Some(end) = start.checked_add(count) else {
+            return Err(Ext4Error::new(
+                EFBIG as _,
+                "logical block range overflow",
+            ));
+        };
+        let block_size = get_block_size(self.superblock()) as u64;
+        let original_size = self.size();
+        let mapping_end = u64::from(end) * block_size;
+        let temporary_size = original_size.max(mapping_end);
+        if temporary_size != original_size {
+            unsafe {
+                ext4_inode_set_size(self.inner.inode, temporary_size);
+            }
+        }
+
+        let result = (|| {
+            let mut extents = Vec::new();
+            if self.uses_extents() {
+                let mut logical_block = start;
+                while logical_block < end {
+                    let (physical_block, block_count) =
+                        self.get_extent(logical_block, end - logical_block, true)?;
+                    if physical_block == 0 || block_count == 0 {
+                        return Err(Ext4Error::new(
+                            ENOTSUP as _,
+                            "mapped write requires extent allocation",
+                        ));
+                    }
+                    let block_count = block_count.min(end - logical_block);
+                    push_extent(
+                        &mut extents,
+                        logical_block,
+                        Some(physical_block),
+                        block_count,
+                    );
+                    logical_block += block_count;
+                }
+                return Ok(extents);
+            }
+
+            for logical_block in start..end {
+                let physical_block = self.init_inode_fblock(logical_block)?;
+                if physical_block == 0 {
+                    return Err(Ext4Error::new(
+                        ENOTSUP as _,
+                        "mapped write requires extent allocation",
+                    ));
+                }
+
+                push_extent(&mut extents, logical_block, Some(physical_block), 1);
+            }
+            Ok(extents)
+        })();
+
+        // The temporary i_size lets extent allocation address sparse logical
+        // blocks, but it must not become visible before data I/O completes.
+        if self.size() != original_size {
+            unsafe {
+                ext4_inode_set_size(self.inner.inode, original_size);
+            }
+            self.mark_dirty();
+        }
+        result
     }
 
     fn read_bytes(&mut self, offset: u64, buf: &mut [u8]) -> Ext4Result<()> {
@@ -267,32 +445,20 @@ impl<Hal: SystemHal> InodeRef<Hal> {
     }
 
     pub fn set_len(&mut self, len: u64) -> Ext4Result<()> {
-        static EMPTY: [u8; 4096] = [0; 4096];
-
         let cur_len = self.size();
         if len < cur_len {
             self.truncate(len)?;
         } else if len > cur_len {
-            // TODO: correct implementation
-            let block_size = get_block_size(self.superblock());
-            let old_blocks = cur_len.div_ceil(block_size as u64) as u32;
-            let new_blocks = len.div_ceil(block_size as u64) as u32;
-            for block in old_blocks..new_blocks {
-                let (fblock, new_block) = self.append_inode_fblock()?;
-                assert_eq!(block, new_block);
-                self.write_bytes(fblock * block_size as u64, &EMPTY[..block_size as usize])?;
+            let block_size = get_block_size(self.superblock()) as u64;
+            let tail = (cur_len % block_size) as usize;
+            if tail != 0 {
+                let logical_block = (cur_len / block_size) as u32;
+                let physical_block = self.get_inode_fblock(logical_block)?;
+                if physical_block != 0 {
+                    let zeros = alloc::vec![0; block_size as usize - tail];
+                    self.write_bytes(physical_block * block_size + tail as u64, &zeros)?;
+                }
             }
-
-            // Clear the last block extended part
-            let old_last_block = (cur_len / block_size as u64) as u32;
-            let old_block_start = (cur_len - (old_last_block as u64 * block_size as u64)) as usize;
-            let fblock = self.init_inode_fblock(old_last_block)?;
-            assert!(fblock != 0, "fblock should not be zero");
-            let length = block_size as usize - old_block_start;
-            self.write_bytes(
-                fblock * block_size as u64 + old_block_start as u64,
-                &EMPTY[..length],
-            )?;
 
             unsafe {
                 ext4_inode_set_size(self.inner.inode, len);

@@ -4,10 +4,11 @@ mod file;
 mod xattr;
 
 use alloc::boxed::Box;
+use core::marker::PhantomData;
+
 pub use attr::FileAttr;
 pub use dir::{DirEntry, DirLookupResult, DirReader};
-
-use core::marker::PhantomData;
+pub use file::BlockExtent;
 
 use crate::{SystemHal, ffi::*};
 
@@ -16,14 +17,14 @@ use crate::{SystemHal, ffi::*};
 #[derive(PartialEq, Default, Eq, Clone, Copy, Debug)]
 pub enum InodeType {
     #[default]
-    Unknown = 0,
-    Fifo = 1,
+    Unknown         = 0,
+    Fifo            = 1,
     CharacterDevice = 2,
-    Directory = 4,
-    BlockDevice = 6,
-    RegularFile = 8,
-    Symlink = 10,
-    Socket = 12,
+    Directory       = 4,
+    BlockDevice     = 6,
+    RegularFile     = 8,
+    Symlink         = 10,
+    Socket          = 12,
 }
 impl From<u8> for InodeType {
     fn from(value: u8) -> Self {
