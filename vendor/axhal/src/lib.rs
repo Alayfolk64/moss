@@ -116,7 +116,7 @@ pub use axplat::init::{init_early_secondary, init_later_secondary};
 /// Initializes the platform and boot argument.
 /// This function should be called as early as possible.
 pub fn init_early(cpu_id: usize, arg: usize) {
-    dtb::init(arg);
+    dtb::init(arg, cpu_id);
     axplat::init::init_early(cpu_id, arg);
 }
 

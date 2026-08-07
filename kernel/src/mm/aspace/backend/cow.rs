@@ -928,14 +928,31 @@ impl BackendOps for CowBackend {
             }
             cursor = vaddr + page_size as usize;
 
-            // A clean page mapped directly from the file folio can be rebuilt
-            // by the child's first fault. Do not copy its PTE or pin here.
+            // Keep a resident file-folio mapping resident across fork. The
+            // ownership reference is already available, and inheriting it
+            // avoids sending the child back through page-cache/I/O on first
+            // access.
             if let Some(page) = self.file_pages.as_ref().and_then(|pages| pages.get(vaddr)) {
                 if page.paddr() != paddr || page_flags.contains(MappingFlags::WRITE) {
                     new_backend
                         .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
                     return Err(AxError::BadAddress);
                 }
+                if let Err(err) = (|| -> AxResult {
+                    old_pt.protect(vaddr, cow_flags)?;
+                    new_pt.map(vaddr, paddr, self.size, cow_flags)?;
+                    new_backend
+                        .file_pages
+                        .as_ref()
+                        .expect("file-backed clone lost its ownership table")
+                        .insert(vaddr, page);
+                    Ok(())
+                })() {
+                    new_backend
+                        .rollback_shared_range(VirtAddrRange::new(range.start, vaddr), new_pt);
+                    return Err(err);
+                }
+                new_backend.mapped_pages.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
 

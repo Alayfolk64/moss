@@ -41,3 +41,4 @@ __pycache__/
 /tmp/
 .agents/
 final_image/
+loongarch64-linux-musl-cross.tgz

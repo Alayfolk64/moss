@@ -6,13 +6,23 @@ use heapless::Vec;
 use lazyinit::LazyInit;
 
 static BOOTARG: LazyInit<usize> = LazyInit::new();
+static BOOT_CPU_ID: LazyInit<usize> = LazyInit::new();
 
-/// Initializes the boot argument.
-pub fn init(arg: usize) {
+/// Initializes the boot argument and records the CPU that actually entered the
+/// kernel.
+pub fn init(arg: usize, boot_cpu_id: usize) {
     if let Some(existing) = BOOTARG.get() {
         assert_eq!(*existing, arg, "boot DTB address changed after initialization");
     } else {
         BOOTARG.init_once(arg);
+    }
+    if let Some(existing) = BOOT_CPU_ID.get() {
+        assert_eq!(
+            *existing, boot_cpu_id,
+            "boot CPU ID changed after initialization"
+        );
+    } else {
+        BOOT_CPU_ID.init_once(boot_cpu_id);
     }
 }
 
@@ -93,7 +103,10 @@ pub fn cpu_hardware_ids() -> Option<&'static [usize]> {
         // currently emits them in descending order). Keep logical IDs stable
         // and dense before giving the boot CPU the distinguished first slot.
         ids.sort_unstable();
-        let boot_id = fdt.boot_cpuid_phys() as usize;
+        // Use the CPU that actually entered the kernel. On RISC-V, OpenSBI's
+        // cold-boot lottery may select a hart other than the DTB header's
+        // boot_cpuid_phys value.
+        let boot_id = *BOOT_CPU_ID;
         let boot_index = ids
             .iter()
             .position(|id| *id == boot_id)
