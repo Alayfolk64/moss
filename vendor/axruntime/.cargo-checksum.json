@@ -3,7 +3,7 @@
     "Cargo.lock": "ae899b8bede1ed8f61bffd891ff65499d8cc58004d1ff088375f096d5b65bf0c",
     "Cargo.toml": "cb08e3790a0e6bcd059db268a956a1a39fb03befd202fec1a86ab106bddd2c36",
     "src/lang_items.rs": "1fd845f1c8db997f96349d563bbb212c20c1d66acc1ea325c8180dcfc0c199f7",
-    "src/lib.rs": "5fd1f90de651d25667d69b47a482989051367009e99a137c29f3bfd25dccfe3b",
+    "src/lib.rs": "4cd4ec37522c5bac1b7a4caf811bca9000c9d0768ebabb702fba1fde62ce59dd",
     "src/mp.rs": "c13e8e4248bdb6866b766a28398d4ddf08ea1282fdd35bf9009252d5247f1fe8"
   },
   "package": "b1d457ccb4246b5c447d2b89bac387978c22e85805191e171d660fad70128422"
