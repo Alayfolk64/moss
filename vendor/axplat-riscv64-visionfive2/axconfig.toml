@@ -1,0 +1,49 @@
+# StarFive VisionFive 2 configuration used by `make kernel-vf2`.
+arch = "riscv64"
+platform = "visionfive2"
+package = "axplat-riscv64-visionfive2"
+
+[plat]
+# Start with one S-mode hart while using the full 4-GiB RAM topology reported
+# by the board DTB. SMP remains a follow-up enablement item.
+cpu-num = 1
+phys-memory-base = 0x4000_0000
+phys-memory-size = 0x1_0000_0000
+kernel-base-paddr = 0x4020_0000
+kernel-base-vaddr = "0xffff_ffc0_4020_0000"
+phys-virt-offset = "0xffff_ffc0_0000_0000"
+phys-bus-offset = 0
+kernel-aspace-base = "0xffff_ffc0_0000_0000"
+kernel-aspace-size = "0x0000_003f_ffff_f000"
+boot-stack-size = 0x40000
+
+[devices]
+mmio-ranges = [
+    [0x0200_0000, 0x1_0000],
+    [0x0201_0000, 0x4000],
+    [0x0c00_0000, 0x400_0000],
+    [0x1000_0000, 0x1_0000],
+    [0x1001_0000, 0x1_0000],
+    [0x1302_0000, 0x1_0000],
+    [0x1303_0000, 0x1_0000],
+    [0x1304_0000, 0x1_0000],
+    [0x1601_0000, 0x1_0000],
+    [0x1602_0000, 0x1_0000],
+    [0x1603_0000, 0x1_0000],
+    [0x1604_0000, 0x1_0000],
+    [0x1700_0000, 0x1_0000],
+    [0x1703_0000, 0x1_0000],
+    [0x1704_0000, 0x1_0000],
+] # [(uint, uint)]
+virtio-mmio-ranges = [] # [(uint, uint)]
+pci-ecam-base = 0x2b00_0000
+pci-bus-end = 0xff
+pci-ranges = [] # [(uint, uint)]
+
+timer-frequency = 4_000_000
+timer-irq = "0x8000_0000_0000_0005"
+ipi-irq = "0x8000_0000_0000_0001"
+
+uart-paddr = 0x1000_0000
+uart-irq = 0x20
+sdmmc-paddr = 0x1602_0000

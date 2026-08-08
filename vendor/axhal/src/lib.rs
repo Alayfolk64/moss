@@ -159,10 +159,20 @@ pub fn cpu_hardware_id(logical_id: usize) -> usize {
 
 /// Translates a firmware-visible CPU identifier to a dense logical index.
 pub fn cpu_logical_id(hardware_id: usize) -> Option<usize> {
-    dtb::cpu_hardware_ids()?
-        .iter()
-        .take(cpu_num())
-        .position(|id| *id == hardware_id)
+    #[cfg(not(feature = "smp"))]
+    {
+        // A uniprocessor build has exactly one participating CPU regardless
+        // of how firmware describes (or omits) its hardware ID in the DTB.
+        let _ = hardware_id;
+        Some(0)
+    }
+    #[cfg(feature = "smp")]
+    {
+        dtb::cpu_hardware_ids()?
+            .iter()
+            .take(cpu_num())
+            .position(|id| *id == hardware_id)
+    }
 }
 
 macro_rules! addr_of_sym {

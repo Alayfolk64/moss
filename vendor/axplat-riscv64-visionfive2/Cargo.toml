@@ -1,0 +1,23 @@
+[package]
+name = "axplat-riscv64-visionfive2"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+license = "Apache-2.0"
+description = "Minimal ArceOS platform support for the StarFive VisionFive 2 board"
+
+[features]
+default = []
+fp-simd = ["axcpu/fp-simd"]
+irq = ["axplat/irq"]
+
+[dependencies]
+axconfig-macros = "0.2"
+axcpu = "0.3.0-preview.2"
+axplat = ">=0.3.0-preview.2, <0.3.0"
+kspin = "0.1"
+lazyinit = "0.2"
+log = "0.4"
+riscv = "0.14"
+sbi-rt = { version = "0.0.3", features = ["legacy"] }
+uart_16550 = "0.4.0"

@@ -684,6 +684,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "axplat-riscv64-visionfive2"
+version = "0.1.0"
+dependencies = [
+ "axconfig-macros",
+ "axcpu",
+ "axplat",
+ "kspin",
+ "lazyinit",
+ "log",
+ "riscv 0.14.0",
+ "sbi-rt",
+ "uart_16550",
+]
+
+[[package]]
 name = "axplat-x86-pc"
 version = "0.3.0-preview.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2365,6 +2380,7 @@ version = "0.2.0-preview.2"
 dependencies = [
  "axfeat",
  "axplat-loongarch64-ls2k1000",
+ "axplat-riscv64-visionfive2",
  "starry-kernel",
 ]
 

@@ -72,7 +72,13 @@ shell-init = []
 pre-init = []
 smp = ["axfeat/smp"]
 
-vf2 = ["axfeat/driver-sdmmc"]
+vf2 = [
+    "axfeat/myplat",
+    "axfeat/driver-sdmmc",
+    "dep:axplat-riscv64-visionfive2",
+    "axplat-riscv64-visionfive2/fp-simd",
+    "axplat-riscv64-visionfive2/irq",
+]
 
 [[bin]]
 name = "starryos"
@@ -82,6 +88,7 @@ path = "src/main.rs"
 axfeat.workspace = true
 starry-kernel.workspace = true
 axplat-loongarch64-ls2k1000 = { path = "vendor/axplat-loongarch64-ls2k1000", optional = true }
+axplat-riscv64-visionfive2 = { path = "vendor/axplat-riscv64-visionfive2", optional = true }
 
 [patch.crates-io]
 axcpu = { path = "vendor/axcpu" }

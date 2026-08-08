@@ -79,6 +79,7 @@ makeclean:
 	@rm -f $(A)/kernel-rv $(A)/kernel-la $(A)/kernel-rv.bin $(A)/kernel-la.bin \
 		$(A)/kernel-rv.dbg.elf $(A)/kernel-la.dbg.elf \
 		$(A)/moss-2k1000la.bin $(A)/.axconfig.ls2k1000.toml \
+		$(A)/moss-vf2.bin $(A)/.axconfig.vf2.toml \
 		$(A)/kernel-rv.bin.o $(A)/kernel-la.bin.o $(A)/kernel-la.bin.S \
 		$(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.bin \
 		$(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.bin
@@ -138,6 +139,18 @@ kernel-la-2k1000: toolchain
 		CPU_CAPACITY=2 SMP=2 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la.bin
 	@printf "    \033[36mLS2K1000LA image\033[0m: moss-2k1000la.bin\n"
+
+kernel-vf2: toolchain
+	$(MAKE) -C make \
+		ARCH=riscv64 \
+		MYPLAT=axplat-riscv64-visionfive2 \
+		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
+		OUT_CONFIG=$(A)/.axconfig.vf2.toml \
+		APP_FEATURES="vf2 shell-init" \
+		LOG=info BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
+		CPU_CAPACITY=1 SMP=1 defconfig build
+	cp -f $(A)/$(KERNEL_NAME)_visionfive2.bin $(A)/moss-vf2.bin
+	@printf "    \033[36mVisionFive 2 image\033[0m: moss-vf2.bin\n"
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
@@ -282,8 +295,7 @@ shell_la:
 la-shell: shell_la
 
 
-vf2:
-	$(MAKE) ARCH=riscv64 APP_FEATURES=vf2 MYPLAT=axplat-riscv64-visionfive2 BUS=mmio build
+vf2: kernel-vf2
 
 docker:
 	docker run -it --rm --privileged \
@@ -293,4 +305,4 @@ docker:
 	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 kernel-vf2 vf2 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
