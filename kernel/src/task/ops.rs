@@ -286,6 +286,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         crate::syscall::release_process_fanotify_resources(process.pid());
         crate::syscall::close_all_files_for_current_process();
         reclaim_process_address_space(&thr.proc_data);
+        thr.proc_data.complete_vfork();
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());

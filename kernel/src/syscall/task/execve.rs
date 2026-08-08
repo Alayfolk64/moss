@@ -345,5 +345,6 @@ fn execve_common(
 
     uctx.set_ip(entry_point.as_usize());
     uctx.set_sp(user_stack_base.as_usize());
+    proc_data.complete_vfork();
     Ok(0)
 }

@@ -2,7 +2,7 @@
 
 # Final-round test switches.
 cagent=1
-buildstorm=0
+buildstorm=1
 
 # Architecture switches.
 RUN_RV=1

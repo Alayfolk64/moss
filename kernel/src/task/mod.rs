@@ -18,7 +18,7 @@ use core::{
 
 use axpoll::PollSet;
 use axsync::{Mutex, spin::SpinNoIrq};
-use axtask::{TaskExt, TaskInner};
+use axtask::{TaskExt, TaskInner, WaitQueue};
 use extern_trait::extern_trait;
 use scope_local::{ActiveScope, Scope};
 use spin::RwLock;
@@ -35,6 +35,31 @@ use crate::mm::AddrSpaceLock;
 pub enum ProcessWaitStatus {
     Stopped(Signo),
     Continued(Signo),
+}
+
+pub struct VforkCompletion {
+    done: AtomicBool,
+    wait_queue: WaitQueue,
+}
+
+impl VforkCompletion {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            done: AtomicBool::new(false),
+            wait_queue: WaitQueue::new(),
+        })
+    }
+
+    pub fn wait(&self) {
+        self.wait_queue
+            .wait_until(|| self.done.load(Ordering::Acquire));
+    }
+
+    fn complete(&self) {
+        if !self.done.swap(true, Ordering::AcqRel) {
+            self.wait_queue.notify_all(false);
+        }
+    }
 }
 
 const INIT_PID_NS_INODE: u64 = 0x0f00_0001;
@@ -268,6 +293,10 @@ pub struct ProcessData {
     // TODO: scopify
     aspace: RwLock<Arc<AddrSpaceLock>>,
 
+    /// Present only while this process is a vfork child. The parent sleeps on
+    /// it until execve installs a private address space or the child exits.
+    vfork_completion: SpinNoIrq<Option<Arc<VforkCompletion>>>,
+
     /// Serializes `clone` and `execve` changes to the thread group.
     pub exec_lock: Mutex<()>,
     /// True while this process is replacing its executable image.
@@ -336,6 +365,7 @@ impl ProcessData {
             exe_path: RwLock::new(exe_path),
             cmdline: RwLock::new(cmdline),
             aspace: RwLock::new(aspace),
+            vfork_completion: SpinNoIrq::new(None),
             exec_lock: Mutex::new(()),
             exec_in_progress: AtomicBool::new(false),
             scope: RwLock::new(Scope::new()),
@@ -389,6 +419,16 @@ impl ProcessData {
     /// Atomically install a fully constructed replacement address space.
     pub fn replace_aspace(&self, new_aspace: Arc<AddrSpaceLock>) -> Arc<AddrSpaceLock> {
         core::mem::replace(&mut *self.aspace.write(), new_aspace)
+    }
+
+    pub fn set_vfork_completion(&self, completion: Arc<VforkCompletion>) {
+        *self.vfork_completion.lock() = Some(completion);
+    }
+
+    pub fn complete_vfork(&self) {
+        if let Some(completion) = self.vfork_completion.lock().take() {
+            completion.complete();
+        }
     }
 
     /// Set the top address of the user heap.
