@@ -12,6 +12,8 @@ use axhal::{
 };
 use axsync::Mutex;
 use kernel_elf_parser::{AuxEntry, ELFHeaders, ELFHeadersBuilder, ELFParser, app_stack_region};
+#[cfg(target_arch = "loongarch64")]
+use kernel_elf_parser::AuxType;
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use ouroboros::self_referencing;
 use uluru::LRUCache;
@@ -20,6 +22,9 @@ use crate::{
     config::{USER_HEAP_BASE, USER_INTERP_BASE, USER_SPACE_BASE, USER_SPACE_SIZE},
     mm::aspace::{AddrSpace, Backend},
 };
+
+#[cfg(target_arch = "loongarch64")]
+const HWCAP_LOONGARCH_UAL: usize = 1 << 2;
 
 fn resolve_dynamic_linker(path: &str) -> AxResult<Location> {
     if let Ok(loc) = FS_CONTEXT.lock().resolve(path) {
@@ -333,6 +338,14 @@ impl ElfLoader {
         let auxv = elf
             .aux_vector(PAGE_SIZE_4K, ldso.map(|elf| elf.base()))
             .collect::<Vec<_>>();
+        // Linux user programs use AT_HWCAP to decide whether unaligned loads and
+        // stores are usable. Moss provides that behavior through trap emulation.
+        #[cfg(target_arch = "loongarch64")]
+        let auxv = {
+            let mut auxv = auxv;
+            auxv.push(AuxEntry::new(AuxType::HWCAP, HWCAP_LOONGARCH_UAL));
+            auxv
+        };
 
         Ok(Ok((entry, auxv)))
     }

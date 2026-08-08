@@ -9,7 +9,7 @@ use axsync::{Mutex as SleepMutex, MutexGuard as SleepMutexGuard};
 use hashbrown::{HashMap, HashSet};
 use spin::{RwLock, RwLockWriteGuard};
 
-use super::{DirEntry, invalidate_inode_metadata_cache};
+use super::{DirEntry, discard_inode_metadata_cache, invalidate_inode_metadata_cache};
 use crate::{
     MetadataUpdate, Mountpoint, Mutex, NodeOps, NodePermission, NodeType, VfsError, VfsResult,
     path::{DOT, DOTDOT, MAX_NAME_LEN, verify_entry_name},
@@ -377,10 +377,22 @@ impl DirNode {
             _ => {}
         }
 
+        // Dirty size and timestamp state must reach the inode while it still
+        // exists. Flushing it after the namespace operation can fail with
+        // EINVAL once ext4 has released the last link (notably for rmdir).
+        let removes_inode = entry.is_dir() || entry.metadata()?.nlink <= 1;
+        entry.flush_metadata_cache(false)?;
+
         match self.ops.unlink(name) {
             Ok(()) => {
                 invalidate_inode_metadata_cache(self.filesystem(), self.inode());
-                invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
+                if removes_inode {
+                    discard_inode_metadata_cache(entry.filesystem(), entry.inode());
+                } else {
+                    // A remaining hard link keeps the inode alive, so retain
+                    // writeback semantics for updates racing with unlink.
+                    invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
+                }
                 let mut cache = self.cache.write();
                 Self::forget_entry(&mut cache, name);
                 if self.ops.is_cacheable() {
@@ -516,6 +528,18 @@ impl DirNode {
             }
         }
 
+        // A replaced destination may cease to exist as soon as rename
+        // succeeds. Flush its lazy metadata before that point; after success
+        // the cache can be discarded unless another hard link keeps it alive.
+        let dst_removes_inode = dst
+            .as_ref()
+            .map(|dst| {
+                let removes_inode = dst.is_dir() || dst.metadata()?.nlink <= 1;
+                dst.flush_metadata_cache(false)?;
+                Ok::<_, VfsError>(removes_inode)
+            })
+            .transpose()?;
+
         self.ops.rename(src_name, dst_dir, dst_name).inspect(|_| {
             invalidate_inode_metadata_cache(self.filesystem(), self.inode());
             if !core::ptr::eq(self, dst_dir) {
@@ -523,7 +547,11 @@ impl DirNode {
             }
             invalidate_inode_metadata_cache(src.filesystem(), src.inode());
             if let Some(dst) = dst.as_ref() {
-                invalidate_inode_metadata_cache(dst.filesystem(), dst.inode());
+                if dst_removes_inode == Some(true) {
+                    discard_inode_metadata_cache(dst.filesystem(), dst.inode());
+                } else {
+                    invalidate_inode_metadata_cache(dst.filesystem(), dst.inode());
+                }
             }
             let (mut src_children, mut dst_children) = self.lock_both_cache(dst_dir);
             Self::forget_entry(&mut src_children, src_name);
