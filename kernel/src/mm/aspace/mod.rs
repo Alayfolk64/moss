@@ -19,6 +19,8 @@ use memory_addr::{
 };
 use memory_set::{MappingError, MemoryArea, MemorySet, ProtectStats};
 
+pub(crate) use backend::init_frame_ref_table;
+
 const WRITER_LOCKED: usize = 1;
 const ONE_READER: usize = 2;
 // Keep the active owner/readers and the number of queued writers in one

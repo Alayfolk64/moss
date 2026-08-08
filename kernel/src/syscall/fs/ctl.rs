@@ -186,7 +186,9 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
     let euid = proc_data.euid();
     let egid = proc_data.egid();
 
-    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
+    // The parent directory serializes lookup/create against mutations of the
+    // same directory. Independent directory creation must not share one
+    // system-wide namespace critical section.
     with_fs(dirfd, |fs| {
         let path = Path::new(path.as_str());
         let (dir, name) = fs.resolve_nonexistent(path)?;
@@ -248,7 +250,6 @@ pub fn sys_mkdirat(dirfd: i32, path: *const c_char, mode: u32) -> AxResult<isize
         )?;
         Ok(0)
     })?;
-    drop(namespace_transaction);
     notify_inotify_dirent(dirfd, &path, IN_CREATE, true, 0);
     notify_fanotify_create(dirfd, &path, true);
     Ok(0)
@@ -292,7 +293,6 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         return Err(AxError::OperationNotPermitted);
     }
 
-    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
     let loc = with_fs(dirfd, |fs| {
         let (dir, name) = fs.resolve_nonexistent(Path::new(path.as_str()))?;
         let dir_stat = dir.metadata()?;
@@ -340,7 +340,6 @@ pub fn sys_mknodat(dirfd: i32, path: *const c_char, mode: u32, dev: u64) -> AxRe
         register_special_node(path.to_string(), mode, dev_id_from_raw(dev));
     }
 
-    drop(namespace_transaction);
     notify_inotify_dirent(dirfd, &path, IN_CREATE, false, 0);
     notify_fanotify_create(dirfd, &path, false);
     Ok(0)
@@ -841,7 +840,6 @@ pub fn sys_symlinkat(
     let egid = proc_data.egid();
     check_parent_search_access(new_dirfd, Some(linkpath.as_str()), 0, euid, egid)?;
 
-    let namespace_transaction = NAMESPACE_TRANSACTION.lock();
     with_fs(new_dirfd, |fs| {
         let (dir, name) = fs.resolve_nonexistent(Path::new(linkpath.as_str()))?;
         check_link_dir_access(&dir)?;
@@ -865,7 +863,6 @@ pub fn sys_symlinkat(
         )?;
         Ok(0)
     })?;
-    drop(namespace_transaction);
     notify_inotify_dirent(new_dirfd, &linkpath, IN_CREATE, false, 0);
     Ok(0)
 }

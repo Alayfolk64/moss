@@ -22,7 +22,11 @@ mod linear;
 mod shared;
 
 pub use self::shared::SharedPages;
-pub(crate) use self::{cow::CowFaultPlan, file::FileFaultPlan, shared::SharedFaultPlan};
+pub(crate) use self::{
+    cow::{CowFaultPlan, init_frame_ref_table},
+    file::FileFaultPlan,
+    shared::SharedFaultPlan,
+};
 use super::{AddrSpace, AddrSpaceLock};
 
 /// Number of resident PTEs removed before one TLB flush and deferred release.

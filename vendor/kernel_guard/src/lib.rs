@@ -151,11 +151,13 @@ mod imp {
 
     impl BaseGuard for NoPreempt {
         type State = ();
+        #[inline]
         fn acquire() -> Self::State {
             // disable preempt
             #[cfg(feature = "preempt")]
             crate_interface::call_interface!(KernelGuardIf::disable_preempt);
         }
+        #[inline]
         fn release(_state: Self::State) {
             // enable preempt
             #[cfg(feature = "preempt")]
@@ -165,6 +167,7 @@ mod imp {
 
     impl BaseGuard for NoPreemptIrqSave {
         type State = usize;
+        #[inline]
         fn acquire() -> Self::State {
             // Disable IRQs before consulting per-CPU task state. This avoids
             // recursively acquiring another IRQ-save guard on SMP systems.
@@ -173,6 +176,7 @@ mod imp {
             crate_interface::call_interface!(KernelGuardIf::disable_preempt_irq_disabled);
             state
         }
+        #[inline]
         fn release(state: Self::State) {
             // restore IRQ states
             super::arch::local_irq_restore(state);

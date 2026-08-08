@@ -5,7 +5,7 @@ use alloc::{
     vec::Vec,
 };
 
-use axfs::{FS_CONTEXT, enable_async_block_io};
+use axfs::{FS_CONTEXT, enable_async_block_io, sync_global_file_caches};
 use axhal::uspace::UserContext;
 use axtask::{AxTaskExt, spawn_task};
 use starry_process::{Pid, Process};
@@ -74,6 +74,10 @@ fn resolve_init_command(args: &[String]) -> (Vec<String>, String, String) {
 
 /// Initialize and run initproc.
 pub fn init(args: &[String], envs: &[String]) {
+    // The allocator and physical RAM map are ready. Build the compact COW
+    // reference index before the first user address space allocates a frame.
+    crate::mm::init_frame_ref_table();
+
     // Rootfs is mounted before all run queues are online. From this point on,
     // block completions may safely execute in their own task.
     enable_async_block_io();
@@ -131,6 +135,10 @@ pub fn init(args: &[String], envs: &[String]) {
     let exit_code = task.join();
     info!("Init process exited with code: {exit_code:?}");
 
+    // File close no longer forces synchronous writeback. Flush dirty folios
+    // while every mount is still reachable, then let unmount and the final
+    // filesystem flush drain metadata and device queues.
+    sync_global_file_caches().expect("Failed to sync file caches");
     let cx = FS_CONTEXT.lock();
     cx.root_dir()
         .unmount_all()

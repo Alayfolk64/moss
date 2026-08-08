@@ -2,7 +2,7 @@
 
 use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
-use axtask::{current, future::block_on, yield_now};
+use axtask::{current, future::block_on};
 use event_listener::{Event, listener};
 
 /// A [`lock_api::RawMutex`] implementation.
@@ -39,16 +39,12 @@ struct Spin(u32);
 impl Spin {
     #[inline]
     fn spin(&mut self) -> bool {
-        if self.0 >= 10 {
+        if self.0 >= 3 {
             return false;
         }
         self.0 += 1;
-        if self.0 <= 3 {
-            for _ in 0..(1 << self.0) {
-                core::hint::spin_loop();
-            }
-        } else {
-            yield_now();
+        for _ in 0..(1 << self.0) {
+            core::hint::spin_loop();
         }
         true
     }

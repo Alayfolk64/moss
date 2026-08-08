@@ -20,7 +20,7 @@ use core::{
 
 #[allow(unused_imports)]
 use axallocator::{AllocResult, BaseAllocator, BitmapPageAllocator, ByteAllocator, PageAllocator};
-use kspin::SpinNoIrq;
+use kspin::{NoPreemptIrqSave, SpinIrq, SpinNoIrq};
 use strum::{IntoStaticStr, VariantArray};
 
 const PAGE_SIZE: usize = 0x1000;
@@ -131,7 +131,7 @@ pub struct GlobalAllocator {
     balloc: SpinNoIrq<DefaultByteAllocator>,
     #[cfg(not(feature = "level-1"))]
     palloc: SpinNoIrq<BitmapPageAllocator<PAGE_SIZE>>,
-    page_caches: [SpinNoIrq<PerCpuPageCache>; PCP_CPU_SLOTS],
+    page_caches: [SpinIrq<PerCpuPageCache>; PCP_CPU_SLOTS],
     page_cache_counts: [CacheAlignedCount; PCP_CPU_SLOTS],
     managed_pages: AtomicUsize,
     usages: AtomicUsages,
@@ -159,7 +159,7 @@ impl GlobalAllocator {
             balloc: SpinNoIrq::new(DefaultByteAllocator::new()),
             #[cfg(not(feature = "level-1"))]
             palloc: SpinNoIrq::new(BitmapPageAllocator::new()),
-            page_caches: [const { SpinNoIrq::new(PerCpuPageCache::new()) }; PCP_CPU_SLOTS],
+            page_caches: [const { SpinIrq::new(PerCpuPageCache::new()) }; PCP_CPU_SLOTS],
             page_cache_counts: [const { CacheAlignedCount::new() }; PCP_CPU_SLOTS],
             managed_pages: AtomicUsize::new(0),
             usages: AtomicUsages::new(),
@@ -397,6 +397,10 @@ impl GlobalAllocator {
         cpu_count: usize,
         kind: UsageKind,
     ) -> Option<usize> {
+        // Refill may acquire the global page allocator while the PCP slot is
+        // locked. Keep the task on this CPU across that nested lock; the
+        // common cache-hit path only needs the slot's IRQ guard.
+        let _preempt_guard = NoPreemptIrqSave::new();
         let mut cache = self.page_caches[slot].lock();
         let page = cache.allocate(self, total_pages, cpu_count, kind);
         self.page_cache_counts[slot]
@@ -418,6 +422,7 @@ impl GlobalAllocator {
 
         let total_pages = self.total_pages();
         let slot = cpu_id % PCP_CPU_SLOTS;
+        let _preempt_guard = NoPreemptIrqSave::new();
         let mut cache = self.page_caches[slot].lock();
         cache.release(self, total_pages, cpu_count, page, kind);
         self.page_cache_counts[slot]
@@ -427,6 +432,7 @@ impl GlobalAllocator {
 
     /// Drains all per-CPU order-0 page caches into the global page allocator.
     pub fn drain_page_caches(&self) -> usize {
+        let _preempt_guard = NoPreemptIrqSave::new();
         let mut drained = 0;
         for (slot, cache) in self.page_caches.iter().enumerate() {
             let mut cache = cache.lock();
