@@ -337,6 +337,7 @@ impl ElfLoader {
         );
         let auxv = elf
             .aux_vector(PAGE_SIZE_4K, ldso.map(|elf| elf.base()))
+            .map_err(map_elf_error)?
             .collect::<Vec<_>>();
         // Linux user programs use AT_HWCAP to decide whether unaligned loads and
         // stores are usable. Moss provides that behavior through trap emulation.

@@ -16,8 +16,9 @@ use starry_vm::{VmMutPtr, VmPtr};
 
 use crate::{
     task::{
-        AsThread, ProcessData, block_next_signal, check_signals, get_process_data,
-        get_process_group, processes, send_signal_to_process, send_signal_to_thread,
+        AsThread, ProcessData, SignalCheckResult, block_next_signal, check_signals_result,
+        get_process_data, get_process_group, processes, send_signal_to_process,
+        send_signal_to_thread,
     },
     time::TimeValueLike,
 };
@@ -311,6 +312,12 @@ pub fn sys_rt_sigtimedwait(
     timeout: *const timespec,
     sigsetsize: usize,
 ) -> AxResult<isize> {
+    enum WaitResult {
+        Signal(SignalInfo),
+        Handler,
+        Other,
+    }
+
     check_sigset_size(sigsetsize)?;
 
     let set = unsafe { set.vm_read_uninit()?.assume_init() };
@@ -334,15 +341,15 @@ pub fn sys_rt_sigtimedwait(
     uctx.set_retval(-LinuxError::EINTR.code() as usize);
     let fut = poll_fn(|cx| {
         if thr.pending_exit() || thr.exec_exit_requested() {
-            signal.set_blocked(old_blocked);
-            Poll::Ready(None)
+            Poll::Ready(WaitResult::Other)
         } else if let Some(sig) = signal.dequeue_signal(&set) {
-            signal.set_blocked(old_blocked);
-            Poll::Ready(Some(sig))
-        } else if check_signals(thr, uctx, Some(old_blocked)) {
-            signal.set_blocked(old_blocked);
-            Poll::Ready(None)
+            Poll::Ready(WaitResult::Signal(sig))
         } else {
+            match check_signals_result(thr, uctx, Some(old_blocked)) {
+                SignalCheckResult::None => {}
+                SignalCheckResult::Handler => return Poll::Ready(WaitResult::Handler),
+                SignalCheckResult::Other => return Poll::Ready(WaitResult::Other),
+            }
             if curr.poll_interrupt(cx).is_ready() {
                 cx.waker().wake_by_ref();
             }
@@ -355,9 +362,21 @@ pub fn sys_rt_sigtimedwait(
         signal.set_blocked(old_blocked);
         return Err(AxError::WouldBlock);
     };
-    let Some(sig) = sig else {
-        // Interrupted by a signal handler.
-        return Err(AxError::Interrupted);
+    let sig = match sig {
+        WaitResult::Signal(sig) => {
+            signal.set_blocked(old_blocked);
+            sig
+        }
+        WaitResult::Handler => {
+            // A signal frame is live in `uctx`; do not overwrite its handler
+            // arguments in the syscall dispatcher.  The frame restores the
+            // old mask when rt_sigreturn runs.
+            return Ok(crate::syscall::SYSCALL_RESTART);
+        }
+        WaitResult::Other => {
+            signal.set_blocked(old_blocked);
+            return Err(AxError::Interrupted);
+        }
     };
 
     if let Some(info) = info.nullable() {
@@ -384,12 +403,13 @@ pub fn sys_rt_sigsuspend(
     // We set this in uctx before check_signals so it's saved in SignalFrame
     uctx.set_retval(-LinuxError::EINTR.code() as usize);
 
-    block_on(poll_fn(|cx| {
+    let result = block_on(poll_fn(|cx| {
         if thr.pending_exit() || thr.exec_exit_requested() {
-            return Poll::Ready(());
+            return Poll::Ready(SignalCheckResult::Other);
         }
-        if check_signals(thr, uctx, Some(old_blocked)) {
-            return Poll::Ready(());
+        match check_signals_result(thr, uctx, Some(old_blocked)) {
+            SignalCheckResult::None => {}
+            result => return Poll::Ready(result),
         }
         if curr.poll_interrupt(cx).is_ready() {
             cx.waker().wake_by_ref();
@@ -397,8 +417,19 @@ pub fn sys_rt_sigsuspend(
         Poll::Pending
     }));
 
-    // sigsuspend always returns -EINTR
-    Err(AxError::Interrupted)
+    match result {
+        SignalCheckResult::Handler => {
+            // check_signals_result installed a userspace signal frame.  Keep
+            // its argument registers intact; rt_sigreturn will expose EINTR
+            // and restore old_blocked from that frame.
+            Ok(crate::syscall::SYSCALL_RESTART)
+        }
+        SignalCheckResult::Other => {
+            thr.signal.set_blocked(old_blocked);
+            Err(AxError::Interrupted)
+        }
+        SignalCheckResult::None => unreachable!(),
+    }
 }
 
 pub fn sys_pause(uctx: &mut UserContext) -> AxResult<isize> {
@@ -408,12 +439,13 @@ pub fn sys_pause(uctx: &mut UserContext) -> AxResult<isize> {
     // pause always returns -EINTR when a signal is caught.
     uctx.set_retval(-LinuxError::EINTR.code() as usize);
 
-    block_on(poll_fn(|cx| {
+    let result = block_on(poll_fn(|cx| {
         if thr.pending_exit() || thr.exec_exit_requested() {
-            return Poll::Ready(());
+            return Poll::Ready(SignalCheckResult::Other);
         }
-        if check_signals(thr, uctx, None) {
-            return Poll::Ready(());
+        match check_signals_result(thr, uctx, None) {
+            SignalCheckResult::None => {}
+            result => return Poll::Ready(result),
         }
         if curr.poll_interrupt(cx).is_ready() {
             cx.waker().wake_by_ref();
@@ -421,7 +453,11 @@ pub fn sys_pause(uctx: &mut UserContext) -> AxResult<isize> {
         Poll::Pending
     }));
 
-    Err(AxError::Interrupted)
+    match result {
+        SignalCheckResult::Handler => Ok(crate::syscall::SYSCALL_RESTART),
+        SignalCheckResult::Other => Err(AxError::Interrupted),
+        SignalCheckResult::None => unreachable!(),
+    }
 }
 
 pub fn sys_sigaltstack(ss: *const SignalStack, old_ss: *mut SignalStack) -> AxResult<isize> {

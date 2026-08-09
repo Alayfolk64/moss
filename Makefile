@@ -147,7 +147,7 @@ kernel-vf2: toolchain
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.vf2.toml \
 		APP_FEATURES="vf2 shell-init" \
-		LOG=info BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
+		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
 		CPU_CAPACITY=1 SMP=1 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_visionfive2.bin $(A)/moss-vf2.bin
 	@printf "    \033[36mVisionFive 2 image\033[0m: moss-vf2.bin\n"

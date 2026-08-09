@@ -160,6 +160,12 @@ pub struct Thread {
     /// Indicates whether the thread is currently accessing user memory.
     accessing_user_memory: AtomicBool,
 
+    /// Skip the normal pending-signal pass immediately after rt_sigreturn.
+    ///
+    /// This is thread-local state: a global flag can make one CPU suppress
+    /// signal delivery for an unrelated thread returning to userspace.
+    suppress_next_signal_check: AtomicBool,
+
     /// Restartable-sequence registration for this thread.
     rseq: SpinNoIrq<Option<RseqRegistration>>,
 
@@ -180,6 +186,7 @@ impl Thread {
             exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),
             accessing_user_memory: AtomicBool::new(false),
+            suppress_next_signal_check: AtomicBool::new(false),
             rseq: SpinNoIrq::new(None),
             exit_event: Arc::default(),
         })
@@ -246,6 +253,16 @@ impl Thread {
     pub fn set_accessing_user_memory(&self, accessing: bool) {
         self.accessing_user_memory
             .store(accessing, Ordering::Release);
+    }
+
+    pub fn suppress_next_signal_check(&self) {
+        self.suppress_next_signal_check
+            .store(true, Ordering::Release);
+    }
+
+    pub fn take_suppress_next_signal_check(&self) -> bool {
+        self.suppress_next_signal_check
+            .swap(false, Ordering::AcqRel)
     }
 }
 

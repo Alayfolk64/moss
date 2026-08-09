@@ -75,6 +75,7 @@ smp = ["axfeat/smp"]
 vf2 = [
     "axfeat/myplat",
     "axfeat/driver-sdmmc",
+    "starry-kernel/net",
     "dep:axplat-riscv64-visionfive2",
     "axplat-riscv64-visionfive2/fp-simd",
     "axplat-riscv64-visionfive2/irq",
@@ -103,6 +104,7 @@ axfs = { path = "vendor/axfs" }
 axmm = { path = "vendor/axmm" }
 axruntime = { path = "vendor/axruntime" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
+kernel-elf-parser = { path = "vendor/kernel-elf-parser" }
 memory_set = { path = "vendor/memory_set" }
 page_table_entry = { path = "vendor/page_table_entry" }
 page_table_multiarch = { path = "vendor/page_table_multiarch" }

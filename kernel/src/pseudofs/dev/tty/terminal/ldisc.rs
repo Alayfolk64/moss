@@ -10,7 +10,7 @@ use axerrno::{AxError, AxResult};
 use axpoll::{IoEvents, PollSet, Pollable};
 use axtask::future::{block_on, poll_io};
 use linux_raw_sys::general::{
-    ECHOCTL, ECHOK, ICRNL, IGNCR, ISIG, VEOF, VERASE, VKILL, VMIN, VTIME,
+    ECHOCTL, ECHOK, ICRNL, IGNCR, ISIG, NOFLSH, VEOF, VERASE, VKILL, VMIN, VTIME,
 };
 use ringbuf::{
     CachingCons, CachingProd,
@@ -114,10 +114,18 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 }
             }
 
-            self.check_send_signal(&term, ch);
+            let signal_char = self.check_send_signal(&term, ch);
 
             if term.echo() {
                 self.output_char(&term, ch);
+            }
+            if signal_char {
+                if !term.has_lflag(NOFLSH) {
+                    self.line_buf.clear();
+                    self.line_read = None;
+                    self.read_range.start = self.read_range.end;
+                }
+                continue;
             }
             if !term.canonical() {
                 self.buf_tx.try_push(ch).unwrap();
@@ -145,7 +153,7 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 continue;
             }
 
-            if ch.is_ascii_graphic() {
+            if ch == b' ' || ch.is_ascii_graphic() {
                 self.line_buf.push(ch);
                 continue;
             }
@@ -154,13 +162,14 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
         sent > 0
     }
 
-    fn check_send_signal(&self, term: &Termios2, ch: u8) {
+    fn check_send_signal(&self, term: &Termios2, ch: u8) -> bool {
         if !term.canonical() || !term.has_lflag(ISIG) {
-            return;
+            return false;
         }
-        if let Some(signo) = term.signo_for(ch)
-            && let Some(pg) = self.terminal.job_control.foreground()
-        {
+        let Some(signo) = term.signo_for(ch) else {
+            return false;
+        };
+        if let Some(pg) = self.terminal.job_control.foreground() {
             let sig = SignalInfo::new_kernel(signo);
             if let Err(err) = send_signal_to_process_group(pg.pgid(), Some(sig)) {
                 if err != AxError::NoSuchProcess {
@@ -168,6 +177,7 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 }
             }
         }
+        true
     }
 
     fn output_char(&self, term: &Termios2, ch: u8) {
@@ -358,11 +368,14 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
         let mut total_read = 0;
         let set = match &self.processor {
             Processor::Manual(_) => None,
-            Processor::External(set) => Some(set),
+            Processor::External(set) => Some(set.clone()),
             _ => unreachable!(),
         };
-        let pollable = WaitPollable(set);
+        let pollable = WaitPollable(set.as_ref());
         block_on(poll_io(&pollable, IoEvents::IN, false, || {
+            if let Processor::Manual(reader) = &mut self.processor {
+                reader.poll();
+            }
             total_read += self.buf_rx.pop_slice(&mut buf[total_read..]);
             self.poll_tx.wake();
             (total_read >= vmin)
