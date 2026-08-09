@@ -12,7 +12,10 @@ impl InitIf for InitIfImpl {
 
     fn init_later(_cpu_id: usize, _arg: usize) {
         #[cfg(feature = "irq")]
-        crate::irq::init_percpu();
+        {
+            crate::irq::init_percpu();
+            crate::console::init_irq();
+        }
         crate::time::init_percpu();
     }
 }
