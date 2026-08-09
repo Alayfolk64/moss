@@ -71,6 +71,7 @@ driver-ramdisk = [
     "axfs?/use-ramdisk",
 ]
 driver-sdmmc = ["axdriver?/sdmmc"]
+driver-sdmmc-irq = ["driver-sdmmc", "axdriver?/sdmmc-irq"]
 dwarf = [
     "alloc",
     "axbacktrace/dwarf",

@@ -108,6 +108,7 @@ sdmmc = [
     "dep:axconfig",
     "axdriver_block/sdmmc",
 ]
+sdmmc-irq = ["sdmmc", "dep:axtask"]
 virtio = [
     "dep:axdriver_virtio",
     "dep:axalloc",

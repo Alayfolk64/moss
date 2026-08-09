@@ -842,8 +842,10 @@ impl RIntSts {
     pub fn error(&self) -> bool {
         self.response_timeout()
             || self.data_read_timeout()
+            || self.host_timeout()
             || self.start_bit_error()
             || self.end_bit_error()
+            || self.fifo_under_over_run()
             || self.data_crc_error()
             || self.response_crc_error()
             || self.response_error()

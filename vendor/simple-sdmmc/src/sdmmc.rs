@@ -1,11 +1,11 @@
-use core::ptr::NonNull;
+use core::{ptr::NonNull, time::Duration};
 
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use volatile::VolatilePtr;
 
 use crate::{
     cmd::{Command, DataXfer},
-    regs::{ClkDiv, ClkEna, RegisterBlock, RegisterBlockVolatileFieldAccess},
+    regs::{ClkDiv, ClkEna, IntMask, RegisterBlock, RegisterBlockVolatileFieldAccess},
     utils::{Cid, CsdV2},
 };
 
@@ -19,10 +19,38 @@ where
     }
 }
 
+/// Platform hooks used by the interrupt-driven SD/MMC path.
+pub trait InterruptWait: Sync {
+    /// Discards the previous notification before starting a command.
+    fn prepare(&self);
+    /// Waits for the controller interrupt. Returns `false` on timeout.
+    fn wait(&self, timeout: Duration) -> bool;
+    /// Unmasks the controller interrupt after its status has been acknowledged.
+    fn rearm(&self);
+    /// Returns a monotonic timestamp in milliseconds.
+    fn current_ms(&self) -> u64;
+}
+
+/// Enables or disables the controller's global interrupt output.
+///
+/// This is used by the platform's top-half handler to deassert a level-triggered
+/// interrupt before the PLIC claim is completed.
+///
+/// # Safety
+///
+/// `base` must point to the SD/MMC controller register block owned by this driver.
+pub unsafe fn set_interrupt_enabled(base: usize, enabled: bool) {
+    let regs = unsafe {
+        VolatilePtr::new(NonNull::new_unchecked(base as *mut RegisterBlock))
+    };
+    regs.ctrl().update(|r| r.with_int_enable(enabled));
+}
+
 /// SD/MMC driver.
 pub struct SdMmc {
     regs: VolatilePtr<'static, RegisterBlock>,
     num_blocks: u64,
+    interrupt: Option<&'static dyn InterruptWait>,
 }
 
 impl SdMmc {
@@ -40,6 +68,27 @@ impl SdMmc {
         let mut this = Self {
             regs,
             num_blocks: 0,
+            interrupt: None,
+        };
+        this.init();
+        this
+    }
+
+    /// Creates an SD/MMC instance using controller completion interrupts.
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the same MMIO ownership requirements as [`Self::new`]
+    /// and ensure that `interrupt` is connected to this controller's IRQ.
+    pub unsafe fn new_with_interrupt(
+        base: usize,
+        interrupt: &'static dyn InterruptWait,
+    ) -> Self {
+        let regs = unsafe { VolatilePtr::new(NonNull::new_unchecked(base as *mut _)) };
+        let mut this = Self {
+            regs,
+            num_blocks: 0,
+            interrupt: Some(interrupt),
         };
         this.init();
         this
@@ -67,6 +116,14 @@ impl SdMmc {
     }
 
     fn send_cmd(&self, command: Command<'_>) -> Option<[u32; 4]> {
+        if self.interrupt.is_some() {
+            self.send_cmd_interrupt(command)
+        } else {
+            self.send_cmd_polling(command)
+        }
+    }
+
+    fn send_cmd_polling(&self, command: Command<'_>) -> Option<[u32; 4]> {
         trace!("send_cmd {command:#x?}");
 
         let (cmd, arg, xfer) = command.build();
@@ -146,6 +203,140 @@ impl SdMmc {
         Some(resp)
     }
 
+    fn wait_until_interrupt<F>(&self, timeout_ms: u64, mut condition: F) -> bool
+    where
+        F: FnMut() -> bool,
+    {
+        let interrupt = self.interrupt.unwrap();
+        let deadline = interrupt.current_ms().saturating_add(timeout_ms);
+        while !condition() {
+            if interrupt.current_ms() >= deadline {
+                return false;
+            }
+            core::hint::spin_loop();
+        }
+        true
+    }
+
+    fn send_cmd_interrupt(&self, command: Command<'_>) -> Option<[u32; 4]> {
+        const COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
+
+        trace!("send_cmd {command:#x?}");
+        let (cmd, arg, mut xfer) = command.build();
+        assert_eq!(cmd.data_expected(), xfer.is_some());
+
+        if !self.wait_until_interrupt(1_000, || self.can_send_cmd())
+            || (cmd.data_expected()
+                && !self.wait_until_interrupt(1_000, || self.can_send_data()))
+        {
+            warn!("SD/MMC controller stayed busy before CMD{}", cmd.cmd_index());
+            return None;
+        }
+
+        // Clock-update pseudo commands never produce Command Done interrupts.
+        if cmd.update_clock_registers_only() {
+            self.regs.cmdarg().write(arg);
+            self.regs.cmd().write(cmd);
+            if !self.wait_until_interrupt(1_000, || self.can_send_cmd()) {
+                warn!("SD/MMC clock update timed out");
+                return None;
+            }
+            return Some(self.regs.resp().read());
+        }
+
+        let stale = self.regs.rintsts().read();
+        self.regs.rintsts().write(stale);
+        let interrupt = self.interrupt.unwrap();
+        interrupt.prepare();
+        interrupt.rearm();
+
+        self.regs.cmdarg().write(arg);
+        self.regs.cmd().write(cmd);
+
+        let fifo_base = unsafe { self.regs.as_raw_ptr().byte_add(Self::FIFO) }.cast::<u64>();
+        let transfer_len = if xfer.is_some() {
+            self.regs.bytcnt().read() as usize
+        } else {
+            0
+        };
+        let mut offset = 0usize;
+        let mut command_done = false;
+        let mut data_done = xfer.is_none();
+
+        loop {
+            if !interrupt.wait(COMMAND_TIMEOUT) {
+                warn!(
+                    "SD/MMC CMD{} interrupt timed out: rintsts={:?}, mintsts={:?}, status={:?}",
+                    cmd.cmd_index(),
+                    self.regs.rintsts().read(),
+                    self.regs.mintsts().read(),
+                    self.regs.status().read(),
+                );
+                interrupt.rearm();
+                return None;
+            }
+
+            let status = self.regs.rintsts().read();
+            command_done |= status.command_done();
+            data_done |= status.data_transfer_over();
+
+            if let Some(ref mut xfer) = xfer {
+                match xfer {
+                    DataXfer::Read(buf)
+                        if status.receive_fifo_data_request()
+                            || status.data_transfer_over() =>
+                    {
+                        while self.fifo_cnt() >= 2 && offset + 8 <= transfer_len {
+                            let data = unsafe { fifo_base.byte_add(offset).read_volatile() };
+                            buf[offset..offset + 8].copy_from_slice(&data.to_le_bytes());
+                            offset += 8;
+                        }
+                    }
+                    DataXfer::Write(buf) if status.transmit_fifo_data_request() => {
+                        while self.fifo_cnt() < 120 && offset + 8 <= transfer_len {
+                            let data = u64::from_le_bytes(
+                                buf[offset..offset + 8].try_into().unwrap(),
+                            );
+                            unsafe { fifo_base.byte_add(offset).write_volatile(data) };
+                            offset += 8;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            self.regs.rintsts().write(status);
+            let failed = status.error();
+            interrupt.rearm();
+
+            if failed {
+                warn!(
+                    "SD/MMC CMD{} failed: {status:?}, resp={:?}",
+                    cmd.cmd_index(),
+                    self.regs.resp().read()
+                );
+                return None;
+            }
+            if command_done && data_done {
+                if let Some(ref xfer) = xfer {
+                    let buffer_len = match xfer {
+                        DataXfer::Read(buf) => buf.len(),
+                        DataXfer::Write(buf) => buf.len(),
+                    };
+                    let expected = transfer_len.min(buffer_len);
+                    if offset != expected {
+                        warn!(
+                            "SD/MMC CMD{} transferred {offset}/{expected} bytes",
+                            cmd.cmd_index()
+                        );
+                        return None;
+                    }
+                }
+                return Some(self.regs.resp().read());
+            }
+        }
+    }
+
     fn init(&mut self) {
         info!("Initializing SD/MMC driver at {:?}", self.regs);
 
@@ -186,6 +377,32 @@ impl SdMmc {
         self.regs
             .ctrl()
             .update(|r| r.with_dma_reset(true).with_use_internal_dmac(false));
+
+        if self.interrupt.is_some() {
+            let stale = self.regs.rintsts().read();
+            self.regs.rintsts().write(stale);
+            self.regs.intmask().write(
+                IntMask::new()
+                    .with_ebe(true)
+                    .with_sbe(true)
+                    .with_hle(true)
+                    .with_frun(true)
+                    .with_hto(true)
+                    .with_drto(true)
+                    .with_rto(true)
+                    .with_dcrc(true)
+                    .with_rcrc(true)
+                    .with_rxdr(true)
+                    .with_txdr(true)
+                    .with_dto(true)
+                    .with_cmd(true)
+                    .with_re(true),
+            );
+            self.regs.ctrl().update(|r| r.with_int_enable(true));
+            let interrupt = self.interrupt.unwrap();
+            interrupt.prepare();
+            interrupt.rearm();
+        }
 
         trace!("dma reset");
 
@@ -239,12 +456,16 @@ impl SdMmc {
         self.send_cmd(Command::SendScr(&mut buf)).unwrap();
 
         trace!("fifo count: {}", self.fifo_cnt());
-        let resp = unsafe {
-            self.regs
-                .as_raw_ptr()
-                .byte_add(Self::FIFO)
-                .cast::<u64>()
-                .read_volatile()
+        let resp = if self.interrupt.is_some() {
+            u64::from_le_bytes(buf[..8].try_into().unwrap())
+        } else {
+            unsafe {
+                self.regs
+                    .as_raw_ptr()
+                    .byte_add(Self::FIFO)
+                    .cast::<u64>()
+                    .read_volatile()
+            }
         };
         debug!("Bus width supported: {:#x?}", (resp >> 8) & 0xf);
         trace!("fifo count: {}", self.fifo_cnt());

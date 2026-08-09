@@ -2,6 +2,8 @@
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
 use simple_sdmmc::SdMmc;
+pub use simple_sdmmc::InterruptWait;
+pub use simple_sdmmc::set_interrupt_enabled;
 use spin::Mutex;
 
 use crate::BlockDriverOps;
@@ -18,6 +20,16 @@ impl SdMmcDriver {
     /// register block and that no other code is concurrently accessing the same hardware.
     pub unsafe fn new(base: usize) -> Self {
         Self(Mutex::new(SdMmc::new(base)))
+    }
+
+    /// Creates a driver that waits for SD/MMC controller interrupts.
+    pub unsafe fn new_with_interrupt(
+        base: usize,
+        interrupt: &'static dyn InterruptWait,
+    ) -> Self {
+        Self(Mutex::new(unsafe {
+            SdMmc::new_with_interrupt(base, interrupt)
+        }))
     }
 }
 

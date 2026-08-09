@@ -49,3 +49,4 @@ plic-num-sources = 136
 uart-paddr = 0x1000_0000
 uart-irq = 0x20
 sdmmc-paddr = 0x1602_0000
+sdmmc-irq = 75
