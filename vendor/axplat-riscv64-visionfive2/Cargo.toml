@@ -9,7 +9,7 @@ description = "Minimal ArceOS platform support for the StarFive VisionFive 2 boa
 [features]
 default = []
 fp-simd = ["axcpu/fp-simd"]
-irq = ["axplat/irq"]
+irq = ["axplat/irq", "dep:riscv_plic"]
 
 [dependencies]
 axconfig-macros = "0.2"
@@ -19,5 +19,6 @@ kspin = "0.1"
 lazyinit = "0.2"
 log = "0.4"
 riscv = "0.14"
+riscv_plic = { version = "0.2", optional = true }
 sbi-rt = { version = "0.0.3", features = ["legacy"] }
 uart_16550 = "0.4.0"

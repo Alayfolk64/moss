@@ -44,6 +44,8 @@ timer-frequency = 4_000_000
 timer-irq = "0x8000_0000_0000_0005"
 ipi-irq = "0x8000_0000_0000_0001"
 
+plic-paddr = 0x0c00_0000
+plic-num-sources = 136
 uart-paddr = 0x1000_0000
 uart-irq = 0x20
 sdmmc-paddr = 0x1602_0000

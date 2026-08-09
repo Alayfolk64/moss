@@ -694,6 +694,7 @@ dependencies = [
  "lazyinit",
  "log",
  "riscv 0.14.0",
+ "riscv_plic",
  "sbi-rt",
  "uart_16550",
 ]
