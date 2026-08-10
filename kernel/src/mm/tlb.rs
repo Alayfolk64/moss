@@ -63,26 +63,22 @@ mod riscv64 {
         }
 
         let cpu_num = axhal::cpu_num();
-        let mask_width = usize::BITS as usize;
         let (start, size) = vaddr.map_or((0, usize::MAX), |addr| (addr.as_usize(), PAGE_SIZE_4K));
 
-        for base in (0..cpu_num).step_by(mask_width) {
-            let count = (cpu_num - base).min(mask_width);
-            let mut mask = 0usize;
-            for cpu in base..base + count {
-                if cpu != current
-                    && (flush_all_roots
-                        || ACTIVE_PAGE_TABLE_ROOTS[cpu].load(Ordering::Acquire) == root)
-                {
-                    mask |= 1usize << (cpu - base);
-                }
-            }
-            if mask == 0 {
+        for cpu in 0..cpu_num {
+            if cpu == current
+                || (!flush_all_roots
+                    && ACTIVE_PAGE_TABLE_ROOTS[cpu].load(Ordering::Acquire) != root)
+            {
                 continue;
             }
 
+            // SBI masks address physical hart IDs, whereas Moss schedules with
+            // dense logical CPU IDs. They differ on JH7110 because hart 0 is a
+            // non-S-mode management core.
+            let hart_id = axhal::cpu_hardware_id(cpu);
             let result =
-                sbi_rt::remote_sfence_vma(HartMask::from_mask_base(mask, base), start, size);
+                sbi_rt::remote_sfence_vma(HartMask::from_mask_base(1, hart_id), start, size);
             assert!(!result.is_err(), "SBI remote SFENCE.VMA failed: {result:?}");
         }
     }

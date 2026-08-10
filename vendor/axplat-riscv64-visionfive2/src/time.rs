@@ -9,7 +9,12 @@ pub(super) fn init_early() {
     sbi_rt::set_timer(u64::MAX);
 }
 
-pub(super) fn init_percpu() {}
+pub(super) fn init_percpu() {
+    // Each hart owns an independent supervisor timer comparator. Trigger one
+    // initial interrupt so axruntime can establish its per-CPU tick deadline.
+    #[cfg(feature = "irq")]
+    sbi_rt::set_timer(0);
+}
 
 struct TimeIfImpl;
 

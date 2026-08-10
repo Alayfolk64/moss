@@ -15,8 +15,10 @@ pub const INIT_SCRIPT: &str = include_str!("init_final.sh");
 #[cfg(feature = "pre-init")]
 pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases.sh");
 
-#[cfg(any(feature = "pre-init", feature = "shell-init"))]
+#[cfg(feature = "pre-init")]
 pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
+#[cfg(all(not(feature = "pre-init"), feature = "shell-init"))]
+pub const CMDLINE: &[&str] = &["/bin/sh", "-c", INIT_SCRIPT];
 #[cfg(not(any(feature = "pre-init", feature = "shell-init")))]
 pub const CMDLINE: &[&str] = &["/bin/bash", "-c", INIT_SCRIPT];
 

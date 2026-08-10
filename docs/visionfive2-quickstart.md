@@ -161,21 +161,25 @@ ls /
 ls /glibc
 cat /proc/cpuinfo
 cat /proc/meminfo
+cat /sys/devices/system/cpu/online
+nproc
 mount
 ```
+
+当前 VF2 使用 4 个 U74 核，后两条命令应分别输出 `0-3` 和 `4`。
 
 在 Moss Shell 中运行 cagent：
 
 ```sh
 cd /glibc
-bash ./cagent_testcode.sh
+./cagent_testcode.sh
 ```
 
 运行 buildstorm：
 
 ```sh
 cd /glibc
-bash ./buildstorm_testcode.sh
+./buildstorm_testcode.sh
 ```
 
 验证 Moss 向 PC 发送 TCP 数据，先在 PC 执行：

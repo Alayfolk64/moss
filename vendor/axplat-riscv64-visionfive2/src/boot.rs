@@ -76,3 +76,33 @@ unsafe extern "C" fn _start() -> ! {
         entry = sym axplat::call_main,
     )
 }
+
+/// Earliest entry point for a U74 core started through SBI HSM.
+#[cfg(feature = "smp")]
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn _start_secondary() -> ! {
+    // a0 = physical hart ID
+    // a1 = physical address of this hart's boot-stack top
+    core::arch::naked_asm!(
+        "
+        csrci   sstatus, 2
+        csrwi   sie, 0
+        mv      s0, a0
+        mv      sp, a1
+
+        call    {init_mmu}
+
+        li      s1, {phys_virt_offset}
+        add     a1, a1, s1
+        add     sp, sp, s1
+
+        mv      a0, s0
+        la      a1, {entry}
+        add     a1, a1, s1
+        jalr    a1
+        j       .",
+        phys_virt_offset = const PHYS_VIRT_OFFSET,
+        init_mmu = sym init_mmu,
+        entry = sym axplat::call_secondary_main,
+    )
+}

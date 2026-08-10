@@ -1,8 +1,19 @@
-if ! /musl/busybox test -d /bin; then
+if [ ! -x /bin/sh ]; then
     echo @@@@@@@@@@ setup-shell @@@@@@@@@@
 
-    /musl/busybox mkdir -v /bin
-    /musl/busybox --install -s /bin
+    if [ -x /musl/busybox ]; then
+        BOOTSTRAP_BUSYBOX=/musl/busybox
+    elif [ -x /glibc/busybox ]; then
+        BOOTSTRAP_BUSYBOX=/glibc/busybox
+    elif [ -x /bin/busybox ]; then
+        BOOTSTRAP_BUSYBOX=/bin/busybox
+    else
+        echo "No /bin/sh or compatible busybox found"
+        exit 127
+    fi
+
+    "$BOOTSTRAP_BUSYBOX" mkdir -vp /bin
+    "$BOOTSTRAP_BUSYBOX" --install -s /bin
     export PATH=/bin
 
     mkdir -vp /lib /usr /var/tmp /var/log /etc
@@ -26,7 +37,7 @@ if ! /musl/busybox test -d /bin; then
     echo "nameserver 8.8.8.8" >/etc/resolv.conf
 fi
 
-export PATH=/bin:$PATH
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
 export HOME=/root
 export PS1='starry:~# '
 

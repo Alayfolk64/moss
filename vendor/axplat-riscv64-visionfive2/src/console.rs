@@ -105,8 +105,10 @@ struct ConsoleIfImpl;
 #[impl_plat_interface]
 impl ConsoleIf for ConsoleIfImpl {
     fn write_bytes(bytes: &[u8]) {
+        // Keep one userspace/kernel write contiguous on SMP. Locking once per
+        // byte lets writers on different U74 cores splice their text together.
+        let mut uart = UART.lock();
         for &byte in bytes {
-            let mut uart = UART.lock();
             if byte == b'\n' {
                 uart.port.send_raw(b'\r');
             }
