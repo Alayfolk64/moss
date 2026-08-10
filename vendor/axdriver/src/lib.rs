@@ -61,7 +61,7 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(any(feature = "dyn", feature = "ls2k1000"))]
+#[cfg(any(feature = "dyn", feature = "jh7110", feature = "ls2k1000"))]
 extern crate alloc;
 
 #[macro_use]
@@ -83,6 +83,9 @@ mod ixgbe;
 mod ls2k1000;
 #[cfg(feature = "ls2k1000")]
 mod ls2k1000_irq;
+
+#[cfg(feature = "jh7110")]
+mod jh7110;
 
 #[cfg(feature = "dyn")]
 mod dyn_drivers;

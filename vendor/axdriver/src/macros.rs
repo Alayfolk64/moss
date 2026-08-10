@@ -60,6 +60,11 @@ macro_rules! for_each_drivers {
             type $drv_type = crate::ls2k1000::Ls2kGmacDriver;
             $code
         }
+        #[cfg(net_dev = "jh7110")]
+        {
+            type $drv_type = crate::jh7110::Jh7110GmacDriver;
+            $code
+        }
         #[cfg(block_dev = "virtio-blk")]
         {
             type $drv_type = <virtio::VirtIoBlk as VirtIoDevMeta>::Driver;

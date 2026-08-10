@@ -88,6 +88,13 @@ ixgbe = [
     "dep:axdma",
     "axdriver_net/ixgbe",
 ]
+jh7110 = [
+    "net",
+    "dep:axhal",
+    "dep:axconfig",
+    "dep:fdt-parser",
+    "axdriver_net/dwmac-jh7110",
+]
 ls2k1000 = [
     "block",
     "net",

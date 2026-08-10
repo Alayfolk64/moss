@@ -74,6 +74,7 @@ smp = ["axfeat/smp"]
 
 vf2 = [
     "axfeat/myplat",
+    "axfeat/driver-jh7110",
     "axfeat/driver-sdmmc-irq",
     "starry-kernel/net",
     "dep:axplat-riscv64-visionfive2",

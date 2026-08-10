@@ -17,10 +17,8 @@
 ## 1. 接线
 
 - USB 串口连接 PC，用于查看日志和输入命令。
-- 网线直连 PC 与开发板，用于 U-Boot TFTP 传输内核。
+- 网线直连 PC 与开发板，用于 U-Boot TFTP 传输内核和 Moss 网络通信。
 - 插入写有 Moss rootfs 的 SD 卡。
-
-当前 Moss 尚不能通过 VF2 物理网卡传输文件；网线主要供 U-Boot 下载内核使用。rootfs 文件需在 PC 上直接写入 SD 卡。
 
 ## 2. 构建内核
 
@@ -180,10 +178,34 @@ cd /glibc
 bash ./buildstorm_testcode.sh
 ```
 
+验证 Moss 向 PC 发送 TCP 数据，先在 PC 执行：
+
+```bash
+nc -l 192.168.1.2 19000
+```
+
+再在 Moss 中执行：
+
+```sh
+echo MOSS_VF2_TX_OK | busybox nc -w 3 192.168.1.2 19000
+```
+
+验证 PC 向 Moss 发送数据，先在 Moss 中执行：
+
+```sh
+busybox nc -l -p 19001
+```
+
+再在 PC 执行：
+
+```bash
+printf 'MOSS_VF2_RX_OK\n' | nc -w 3 192.168.1.10 19001
+```
+
 ## 10. 常见问题
 
 - `Card did not respond to voltage select! : -110` 通常来自未就绪的 `mmc 0`；SD 卡应使用 `mmc 1`。
 - `serverip not set`：重新执行 `setenv serverip 192.168.1.2`。
 - 一个网口 PHY 超时不代表 TFTP 一定失败；成功时通常会切换到 `ethernet@16040000`。
 - `tftpboot` 失败时检查网线、PC 网口 IP、TFTP 服务和 `/srv/tftp/kernel`。
-- Moss 启动后目前不能使用物理网口执行 `scp`，更新内核用 U-Boot TFTP，更新 rootfs 文件用 PC 挂载 SD 卡。
+- Moss 已支持 VF2 物理网口的 TCP/IP 通信；`scp` 仍取决于 rootfs 是否提供 SSH 客户端或服务端。更新内核建议继续使用 U-Boot TFTP。

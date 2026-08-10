@@ -45,6 +45,9 @@ register_net_driver!(
     crate::ls2k1000::Ls2kGmacDevice
 );
 
+#[cfg(net_dev = "jh7110")]
+register_net_driver!(crate::jh7110::Jh7110GmacDriver, crate::jh7110::Jh7110GmacDevice);
+
 #[cfg(block_dev = "ls2k1000")]
 register_block_driver!(
     crate::ls2k1000::Ls2kAhciDriver,
