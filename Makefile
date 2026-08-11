@@ -135,7 +135,7 @@ kernel-la-2k1000: toolchain
 		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000.toml \
 		APP_FEATURES="ls2k1000" \
-		LOG=info BUS=mmio BLK=n NET=n VSOCK=n MEM=2G \
+		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
 		CPU_CAPACITY=2 SMP=2 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la.bin
 	@printf "    \033[36mLS2K1000LA image\033[0m: moss-2k1000la.bin\n"
@@ -151,6 +151,30 @@ kernel-vf2: toolchain
 		CPU_CAPACITY=1 SMP=1 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_visionfive2.bin $(A)/moss-vf2.bin
 	@printf "    \033[36mVisionFive 2 image\033[0m: moss-vf2.bin\n"
+
+kernel-la-2k1000-watchdog-smoke: toolchain
+	$(MAKE) -C make \
+		ARCH=loongarch64 \
+		MYPLAT=axplat-loongarch64-ls2k1000 \
+		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
+		OUT_CONFIG=$(A)/.axconfig.ls2k1000-watchdog-smoke.toml \
+		APP_FEATURES="ls2k1000 watchdog-smoke" \
+		LOG=info BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
+		CPU_CAPACITY=2 SMP=2 defconfig build
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-watchdog-smoke.bin
+	@printf "    \033[36mLS2K1000LA watchdog smoke image\033[0m: moss-watchdog-smoke.bin\n"
+
+kernel-la-2k1000-smp1: toolchain
+	$(MAKE) -C make \
+		ARCH=loongarch64 \
+		MYPLAT=axplat-loongarch64-ls2k1000 \
+		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
+		OUT_CONFIG=$(A)/.axconfig.ls2k1000-smp1.toml \
+		APP_FEATURES="ls2k1000" \
+		LOG=info BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
+		CPU_CAPACITY=1 SMP=1 defconfig build
+	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-watchdog-production-smp1.bin
+	@printf "    \033[36mLS2K1000LA single-core image\033[0m: moss-watchdog-production-smp1.bin\n"
 
 kernel-rv: toolchain
 	$(MAKE) ARCH=riscv64 MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
@@ -273,7 +297,7 @@ shell_rv:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default -drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default -drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -snapshot -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
 
 rv-shell: shell_rv
 
@@ -290,7 +314,7 @@ shell_la:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 -drive file=tmp-la-shell.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee $(OUTPUT_LA)
+	qemu-system-loongarch64 -kernel kernel-la -m $(MEM) -nographic -smp 1 -drive file=tmp-la-shell.img,if=none,format=raw,id=x0 -device virtio-blk-pci,drive=x0 -snapshot -no-reboot -device virtio-net-pci,netdev=net0 -netdev user,id=net0 -rtc base=utc 2>&1 | tee $(OUTPUT_LA)
 
 la-shell: shell_la
 
@@ -305,4 +329,4 @@ docker:
 	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 kernel-vf2 vf2 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
+.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 kernel-la-2k1000-watchdog-smoke kernel-la-2k1000-smp1 kernel-vf2 vf2 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker

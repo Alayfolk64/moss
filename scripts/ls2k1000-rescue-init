@@ -1,0 +1,43 @@
+#!/bin/busybox sh
+export PATH=/bin:/sbin
+export HOME=/root
+
+/bin/busybox mount -t devtmpfs devtmpfs /dev
+/bin/busybox mount -t proc proc /proc
+/bin/busybox mount -t sysfs sysfs /sys
+/bin/busybox mdev -s
+
+/bin/busybox echo 0 >/proc/sys/kernel/printk 2>/dev/null || true
+/bin/busybox echo
+/bin/busybox echo "MOSS LS2K1000 rescue initramfs"
+/bin/busybox echo "sda is intentionally not mounted"
+/bin/busybox echo
+
+# The boot command arms the LS2K1000 watchdog before entering Linux so an
+# early kernel panic returns to U-Boot without a physical reset.  Take over
+# feeding it as soon as the rescue userspace is alive; the 30-second timeout
+# remains short enough to recover a real hang while the 5-second heartbeat
+# safely covers long image transfers and filesystem checks.
+if [[ -c /dev/watchdog ]]; then
+    /bin/busybox watchdog -t 5 -T 30 /dev/watchdog
+    /bin/busybox echo "rescue watchdog: timeout=30s heartbeat=5s"
+else
+    /bin/busybox echo "warning: /dev/watchdog not found; automatic hang recovery is disabled"
+fi
+
+wait_count=0
+while [[ ! -e /sys/class/net/eth0 && $wait_count -lt 100 ]]; do
+    /bin/busybox sleep 0.1
+    wait_count=$((wait_count + 1))
+done
+
+if [[ -e /sys/class/net/eth0 ]]; then
+    /sbin/ip link set eth0 up || true
+    /sbin/ip addr add 192.168.88.2/24 dev eth0 || true
+    /bin/busybox echo "rescue network: eth0=192.168.88.2/24"
+else
+    /bin/busybox echo "warning: eth0 not found; configure networking manually"
+fi
+
+export PS1='MOSS-RESCUE# '
+exec /bin/bash --noprofile --norc

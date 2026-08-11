@@ -1,0 +1,58 @@
+#!/bin/bash
+set -euo pipefail
+
+expected_argument=--apply-clean-dual-root
+expected_disk_sectors=62533296
+disk=/dev/sda
+layout=/etc/moss-dual-root.sfdisk
+
+if [[ ${1-} != "$expected_argument" ]]; then
+    echo "usage: $0 $expected_argument" >&2
+    exit 2
+fi
+
+if [[ ! -b $disk ]]; then
+    echo "error: $disk is not a block device" >&2
+    exit 1
+fi
+
+actual_disk_sectors=$(/bin/busybox cat /sys/block/sda/size)
+if [[ $actual_disk_sectors != "$expected_disk_sectors" ]]; then
+    echo "error: expected $expected_disk_sectors sectors, got $actual_disk_sectors" >&2
+    exit 1
+fi
+
+if /bin/busybox grep -q '^/dev/sda' /proc/mounts; then
+    echo "error: an sda filesystem is mounted; refusing to repartition" >&2
+    exit 1
+fi
+
+current_layout=$(/sbin/sfdisk --dump "$disk")
+if [[ $current_layout == *"/dev/sda1 : start=        2048, size=    37363712, type=83"* &&
+      $current_layout == *"/dev/sda2 : start=    37365760, size=    25165824, type=83"* ]]; then
+    echo "target partition table is already installed"
+    /sbin/partprobe "$disk"
+    exit 0
+fi
+
+if [[ $current_layout != *"/dev/sda1 : start=     4194367, size=    58338929, type=83"* ||
+      $current_layout != *"/dev/sda3 : start=          63, size=     4194304, type=82"* ]]; then
+    echo "error: current partition table does not match the backed-up source layout" >&2
+    /sbin/sfdisk --dump "$disk" >&2
+    exit 1
+fi
+
+echo "installing aligned Linux sda1 + 12 GiB MOSS sda2 partition table"
+/sbin/sfdisk "$disk" <"$layout"
+/bin/busybox sync
+/sbin/partprobe "$disk"
+
+final_layout=$(/sbin/sfdisk --dump "$disk")
+if [[ $final_layout != *"/dev/sda1 : start=        2048, size=    37363712, type=83"* ||
+      $final_layout != *"/dev/sda2 : start=    37365760, size=    25165824, type=83"* ]]; then
+    echo "error: post-write partition verification failed" >&2
+    /sbin/sfdisk --dump "$disk" >&2
+    exit 1
+fi
+
+echo "partition table verified"

@@ -42,3 +42,8 @@ __pycache__/
 .agents/
 final_image/
 loongarch64-linux-musl-cross.tgz
+/target-newtc/
+/.playwright-cli/
+/docs/hardware-*.log
+/docs/qemu-*.log
+/docs/static-*.log
