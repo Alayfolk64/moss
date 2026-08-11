@@ -804,21 +804,8 @@ impl<H: Hal> AhciPort<H> {
             // One five-second COMRESET is enough to classify this I/O attempt;
             // a failed/offline port remains eligible for the deferred retry
             // below instead of monopolising the current task.
-            let reset_started_ms = H::current_ms();
-            let deadline_ms = reset_started_ms.saturating_add(RESET_TIMEOUT_MS);
-            debug!(
-                "AHCI port {} recovery starts: now_ms={}, timeout_ms={}",
-                self.index, reset_started_ms, RESET_TIMEOUT_MS
-            );
+            let deadline_ms = H::current_ms().saturating_add(RESET_TIMEOUT_MS);
             let result = self.hard_reset(wait_mode, deadline_ms);
-            debug!(
-                "AHCI port {} recovery finished {:?}: now_ms={}, SSTS={:?}, TFD={:?}",
-                self.index,
-                result,
-                H::current_ms(),
-                self.port.SSTS().read(),
-                self.port.TFD().read()
-            );
 
             if result == HardResetResult::Ready {
                 self.port.SERR().write(self.port.SERR().read());

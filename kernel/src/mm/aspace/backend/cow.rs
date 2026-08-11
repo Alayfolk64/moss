@@ -951,7 +951,6 @@ impl CowBackend {
                     // until CowFaultPlan is dropped after this commit.
                     crate::swap::release_slot(slot);
                     plan.frame = None;
-                    crate::swap::note_working_set_refault();
                     self.recent_pages.mark_refaulted(plan.vaddr);
                     self.mark_mapped();
                     return Ok(FaultCommit::Handled);
@@ -1089,7 +1088,6 @@ impl CowBackend {
             return Err(AxError::BadAddress);
         }
         crate::swap::release_slot(slot);
-        crate::swap::note_working_set_refault();
         self.recent_pages.mark_refaulted(vaddr);
         self.mark_mapped();
         Ok(())
@@ -1313,7 +1311,6 @@ impl CowBackend {
             Ordering::Relaxed,
         );
 
-        crate::swap::note_working_set_probes(sampled);
         if candidates.is_empty() {
             if sampled != 0 {
                 // Clearing D is permission tightening. Flush both CPUs before

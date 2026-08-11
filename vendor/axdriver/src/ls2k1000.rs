@@ -461,11 +461,6 @@ impl DriverProbe for Ls2kAhciDriver {
             mask >= u32::MAX as u64,
             "AHCI DMA mask is narrower than 32 bits"
         );
-        info!(
-            "LS2K1000 AHCI platform probe uses polling waits: current_task_blockable={}, \
-             platform_ports={platform_port_map:?}",
-            axtask::current_can_block()
-        );
         let prepared =
             unsafe { RawAhci::prepare_with_port_map(uncached_addr(paddr), platform_port_map) }
                 .expect("failed to prepare DT-discovered LS2K1000 AHCI");

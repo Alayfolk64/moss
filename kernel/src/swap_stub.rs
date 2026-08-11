@@ -28,7 +28,3 @@ pub(crate) fn write_page(_slot: usize, _paddr: PhysAddr) -> AxResult {
 pub(crate) fn read_page(_slot: usize, _paddr: PhysAddr) -> AxResult {
     Err(AxError::OperationNotSupported)
 }
-
-pub(crate) const fn note_working_set_probes(_pages: usize) {}
-
-pub(crate) const fn note_working_set_refault() {}

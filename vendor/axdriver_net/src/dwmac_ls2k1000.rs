@@ -220,7 +220,6 @@ static DMA_STORAGE_TAKEN: AtomicBool = AtomicBool::new(false);
 static DMA_MMIO_BASE: AtomicUsize = AtomicUsize::new(0);
 static DMA_IRQ_EVENTS: AtomicU32 = AtomicU32::new(0);
 static DMA_IRQ_ACTIVE: AtomicBool = AtomicBool::new(false);
-static GMAC_IRQ_DIAGNOSTIC_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[unsafe(link_section = ".dma_uncached")]
 static mut DMA_RINGS: DescriptorRings = DescriptorRings {
@@ -1068,11 +1067,9 @@ pub fn handle_interrupt() {
     let core_status = read(GMAC_INT_STATUS);
     let core_mask = read(GMAC_INT_MASK);
     write(GMAC_INT_MASK, core_mask | gmac_interrupt_mask(false));
-    let rgsmii_status = if core_status & GMAC_INT_STATUS_RGMII != 0 {
-        read(GMAC_RGSMII_STATUS)
-    } else {
-        0
-    };
+    if core_status & GMAC_INT_STATUS_RGMII != 0 {
+        read(GMAC_RGSMII_STATUS);
+    }
     if core_status & GMAC_INT_STATUS_PMT != 0 {
         read(GMAC_PMT);
     }
@@ -1080,22 +1077,7 @@ pub fn handle_interrupt() {
         read(GMAC_LPI_CONTROL_STATUS);
     }
 
-    let raw_status = read(DMA_STATUS);
-    let status = raw_status & DMA_STATUS_HANDLED;
-    let diagnostic_count = GMAC_IRQ_DIAGNOSTIC_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-    if diagnostic_count <= 8 {
-        info!(
-            "GMAC IRQ diagnostic: count={} active={} DMA_STATUS={:#010x} DMA_IE={:#010x} \
-             GMAC_INT_STATUS={:#010x} GMAC_INT_MASK={:#010x} RGSMII={:#010x}",
-            diagnostic_count,
-            irq_active,
-            raw_status,
-            read(DMA_INTERRUPT_ENABLE),
-            core_status,
-            core_mask,
-            rgsmii_status,
-        );
-    }
+    let status = read(DMA_STATUS) & DMA_STATUS_HANDLED;
     core::sync::atomic::fence(Ordering::SeqCst);
     if !irq_active {
         return;

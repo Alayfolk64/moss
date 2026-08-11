@@ -8,7 +8,7 @@
 
 use alloc::{collections::VecDeque, sync::Arc, vec, vec::Vec};
 use core::{
-    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     time::Duration,
 };
 
@@ -86,19 +86,11 @@ impl SwapState {
 }
 
 static SWAP: SpinNoIrq<Option<SwapState>> = SpinNoIrq::new(None);
-static SWAP_INS: AtomicU64 = AtomicU64::new(0);
-static SWAP_OUTS: AtomicU64 = AtomicU64::new(0);
-static SWAP_IO_ERRORS: AtomicU64 = AtomicU64::new(0);
-static WORKING_SET_PROBES: AtomicU64 = AtomicU64::new(0);
-static WORKING_SET_REFAULTS: AtomicU64 = AtomicU64::new(0);
 static RECLAIM_ACTIVE: AtomicUsize = AtomicUsize::new(0);
 static RECLAIM_WAIT: axtask::WaitQueue = axtask::WaitQueue::new();
 static RECLAIM_WORK: axtask::WaitQueue = axtask::WaitQueue::new();
 static RECLAIM_QUEUE: SpinNoIrq<VecDeque<Arc<AddrSpaceLock>>> = SpinNoIrq::new(VecDeque::new());
 static RECLAIM_WORKER_STARTED: AtomicBool = AtomicBool::new(false);
-static BACKGROUND_RECLAIM_PASSES: AtomicU64 = AtomicU64::new(0);
-static BACKGROUND_RECLAIMED: AtomicU64 = AtomicU64::new(0);
-static SYNCHRONOUS_RECLAIMED: AtomicU64 = AtomicU64::new(0);
 
 fn be_u32(bytes: &[u8]) -> u32 {
     u32::from_be_bytes(bytes.try_into().expect("validated DT cell"))
@@ -248,11 +240,9 @@ pub(crate) fn write_page(slot: usize, paddr: PhysAddr) -> AxResult {
     let lba = slot_lba(slot)?;
     let page = unsafe { core::slice::from_raw_parts(phys_to_virt(paddr).as_ptr(), PAGE_SIZE_4K) };
     axdriver::ls2k1000_raw_write(lba, page).map_err(|err| {
-        SWAP_IO_ERRORS.fetch_add(1, Ordering::Relaxed);
         warn!("MOSS_SWAP write failed: slot={slot} lba={lba} error={err:?}");
         AxError::Io
     })?;
-    SWAP_OUTS.fetch_add(1, Ordering::Relaxed);
     Ok(())
 }
 
@@ -261,20 +251,10 @@ pub(crate) fn read_page(slot: usize, paddr: PhysAddr) -> AxResult {
     let page =
         unsafe { core::slice::from_raw_parts_mut(phys_to_virt(paddr).as_mut_ptr(), PAGE_SIZE_4K) };
     axdriver::ls2k1000_raw_read(lba, page).map_err(|err| {
-        SWAP_IO_ERRORS.fetch_add(1, Ordering::Relaxed);
         warn!("MOSS_SWAP read failed: slot={slot} lba={lba} error={err:?}");
         AxError::Io
     })?;
-    SWAP_INS.fetch_add(1, Ordering::Relaxed);
     Ok(())
-}
-
-pub(crate) fn note_working_set_probes(pages: usize) {
-    WORKING_SET_PROBES.fetch_add(pages as u64, Ordering::Relaxed);
-}
-
-pub(crate) fn note_working_set_refault() {
-    WORKING_SET_REFAULTS.fetch_add(1, Ordering::Relaxed);
 }
 
 fn current_aspace() -> Option<Arc<AddrSpaceLock>> {
@@ -330,14 +310,6 @@ fn background_reclaim_worker() -> ! {
         }
 
         let attempt = reclaim_aspace(&aspace, BACKGROUND_RECLAIM_PAGES, false);
-        if let Some(reclaimed) = attempt {
-            BACKGROUND_RECLAIM_PASSES.fetch_add(1, Ordering::Relaxed);
-            BACKGROUND_RECLAIMED.fetch_add(reclaimed as u64, Ordering::Relaxed);
-            // Swap traffic is maintenance, not proof that the foreground job
-            // advances.  Let the watchdog's user-CPU/task-stage policy decide
-            // whether the 20-minute progress lease should move forward.
-        }
-
         if allocator.available_pages() * PAGE_SIZE_4K < TARGET_FREE_BYTES {
             queue_background_reclaim(aspace);
             match attempt {
@@ -385,11 +357,9 @@ pub(crate) fn reclaim_current(limit: usize) -> usize {
 }
 
 fn reclaim_current_inner(limit: usize, allow_recent: bool) -> usize {
-    let reclaimed = current_aspace()
+    current_aspace()
         .and_then(|aspace| reclaim_aspace(&aspace, limit, allow_recent))
-        .unwrap_or(0);
-    SYNCHRONOUS_RECLAIMED.fetch_add(reclaimed as u64, Ordering::Relaxed);
-    reclaimed
+        .unwrap_or(0)
 }
 
 /// Avoid reporting a false OOM when the other core is already returning pages
@@ -397,39 +367,5 @@ fn reclaim_current_inner(limit: usize, allow_recent: bool) -> usize {
 pub(crate) fn wait_for_reclaim() {
     if RECLAIM_ACTIVE.load(Ordering::Acquire) != 0 && axtask::current_can_block() {
         RECLAIM_WAIT.wait_until(|| RECLAIM_ACTIVE.load(Ordering::Acquire) == 0);
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-pub(crate) struct SwapStats {
-    pub(crate) total_pages: usize,
-    pub(crate) used_pages: usize,
-    pub(crate) swap_in: u64,
-    pub(crate) swap_out: u64,
-    pub(crate) probes: u64,
-    pub(crate) refaults: u64,
-    pub(crate) io_errors: u64,
-    pub(crate) background_passes: u64,
-    pub(crate) background_reclaimed: u64,
-    pub(crate) synchronous_reclaimed: u64,
-}
-
-pub(crate) fn stats() -> SwapStats {
-    let guard = SWAP.lock();
-    let (total_pages, used_pages) = guard
-        .as_ref()
-        .map(|state| (state.refs.len().saturating_sub(1), state.used))
-        .unwrap_or_default();
-    SwapStats {
-        total_pages,
-        used_pages,
-        swap_in: SWAP_INS.load(Ordering::Relaxed),
-        swap_out: SWAP_OUTS.load(Ordering::Relaxed),
-        probes: WORKING_SET_PROBES.load(Ordering::Relaxed),
-        refaults: WORKING_SET_REFAULTS.load(Ordering::Relaxed),
-        io_errors: SWAP_IO_ERRORS.load(Ordering::Relaxed),
-        background_passes: BACKGROUND_RECLAIM_PASSES.load(Ordering::Relaxed),
-        background_reclaimed: BACKGROUND_RECLAIMED.load(Ordering::Relaxed),
-        synchronous_reclaimed: SYNCHRONOUS_RECLAIMED.load(Ordering::Relaxed),
     }
 }
