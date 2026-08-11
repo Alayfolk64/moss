@@ -1,8 +1,7 @@
 //! Pure LS2K1000 node-PLL field encoding and frequency calculation.
 
 pub(crate) const TARGET_MHZ: u64 = 900;
-pub(crate) const TARGET_LOW_CONFIG: u64 =
-    (72 << 32) | (1 << 42) | (4 << 26) | (3 << 10) | (1 << 7);
+pub(crate) const TARGET_LOW_CONFIG: u64 = (72 << 32) | (1 << 42) | (4 << 26) | (3 << 10) | (1 << 7);
 pub(crate) const TARGET_HIGH_CONFIG: u64 = 2;
 pub(crate) const FULL_FREQSCALE: u64 = 7;
 
@@ -29,12 +28,18 @@ mod tests {
     #[test]
     fn official_900_mhz_configuration_is_exact() {
         assert_eq!(TARGET_LOW_CONFIG, 0x0000_0448_1000_0c80);
-        assert_eq!(effective_mhz(TARGET_LOW_CONFIG, TARGET_HIGH_CONFIG, 7), Some(900));
+        assert_eq!(
+            effective_mhz(TARGET_LOW_CONFIG, TARGET_HIGH_CONFIG, 7),
+            Some(900)
+        );
     }
 
     #[test]
     fn freqscale_is_part_of_the_effective_clock() {
-        assert_eq!(effective_mhz(TARGET_LOW_CONFIG, TARGET_HIGH_CONFIG, 3), Some(450));
+        assert_eq!(
+            effective_mhz(TARGET_LOW_CONFIG, TARGET_HIGH_CONFIG, 3),
+            Some(450)
+        );
     }
 
     #[test]

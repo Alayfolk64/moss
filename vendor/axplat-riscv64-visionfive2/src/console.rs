@@ -14,9 +14,8 @@ pub(crate) fn init_early() {
     UART.init_once({
         // JH7110 exposes the 8250 registers at a four-byte stride. U-Boot has
         // already configured the clock and baud rate, so do not reinitialize it.
-        let uart = unsafe {
-            MmioSerialPort::new_with_stride(phys_to_virt(pa!(UART_PADDR)).as_usize(), 4)
-        };
+        let uart =
+            unsafe { MmioSerialPort::new_with_stride(phys_to_virt(pa!(UART_PADDR)).as_usize(), 4) };
         SpinNoIrq::new(uart)
     });
 }

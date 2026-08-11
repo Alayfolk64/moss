@@ -271,12 +271,7 @@ impl Thread {
     }
 
     #[cfg(feature = "ls2k1000")]
-    pub(crate) fn watchdog_enter_syscall(
-        &self,
-        sysno: usize,
-        args: [usize; 3],
-        started_ns: u64,
-    ) {
+    pub(crate) fn watchdog_enter_syscall(&self, sysno: usize, args: [usize; 3], started_ns: u64) {
         for (destination, value) in self.watchdog_syscall_args.iter().zip(args) {
             destination.store(value, Ordering::Relaxed);
         }
@@ -299,9 +294,8 @@ impl Thread {
             return None;
         }
         let sysno = self.watchdog_syscall_number.load(Ordering::Relaxed);
-        let args = core::array::from_fn(|index| {
-            self.watchdog_syscall_args[index].load(Ordering::Relaxed)
-        });
+        let args =
+            core::array::from_fn(|index| self.watchdog_syscall_args[index].load(Ordering::Relaxed));
         // Reject a snapshot that raced with syscall exit or the next entry.
         (self.watchdog_syscall_started_ns.load(Ordering::Acquire) == started_ns)
             .then_some((started_ns, sysno, args))

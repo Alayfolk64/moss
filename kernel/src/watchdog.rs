@@ -53,10 +53,7 @@ fn user_progress_signature() -> UserProgressSignature {
     signature
 }
 
-fn user_identity_changed(
-    previous: UserProgressSignature,
-    current: UserProgressSignature,
-) -> bool {
+fn user_identity_changed(previous: UserProgressSignature, current: UserProgressSignature) -> bool {
     previous.task_count != current.task_count || previous.task_ids != current.task_ids
 }
 
@@ -75,8 +72,11 @@ fn sample_user_cpu_work(
         let Some(user_ns) = axtask::cpu_user_task_time_nanos(cpu_id) else {
             continue;
         };
-        user_delta_ns = user_delta_ns
-            .saturating_add(user_ns.saturating_sub(last_user_ns[cpu_id]).min(interval_ns));
+        user_delta_ns = user_delta_ns.saturating_add(
+            user_ns
+                .saturating_sub(last_user_ns[cpu_id])
+                .min(interval_ns),
+        );
         last_user_ns[cpu_id] = user_ns;
     }
     *last_sample_ns = now_ns;
@@ -107,8 +107,8 @@ fn report_build_tasks(elapsed_s: u64) {
         matched += 1;
         warn!(
             "LS2K1000 build task: elapsed_s={} pid={} tid={} ppid={} pgrp={} name={:?} state={:?} \
-             cpu={} schedule_count={} utime_ticks={} stime_ticks={} syscall={:?} \
-             args=[{:#x}, {:#x}, {:#x}]",
+             cpu={} schedule_count={} utime_ticks={} stime_ticks={} syscall={:?} args=[{:#x}, \
+             {:#x}, {:#x}]",
             elapsed_s,
             stat.pid,
             task.id().as_u64(),
@@ -184,11 +184,10 @@ fn report_cpu_utilization(
         // WFI accounting can straddle a sample boundary by a few timer ticks.
         // Clamp it so the displayed percentage always remains meaningful.
         let busy_ns = interval_ns.saturating_sub(idle_delta_ns.min(interval_ns));
-        let busy_permille =
-            ((busy_ns as u128) * 1_000 / interval_ns as u128).min(1_000) as u64;
+        let busy_permille = ((busy_ns as u128) * 1_000 / interval_ns as u128).min(1_000) as u64;
         warn!(
-            "LS2K1000 cpu utilization: elapsed_s={} interval_s={} cpu={} \
-             busy_percent={}.{} idle_ms={}",
+            "LS2K1000 cpu utilization: elapsed_s={} interval_s={} cpu={} busy_percent={}.{} \
+             idle_ms={}",
             elapsed_s,
             interval_ns / 1_000_000_000,
             cpu_id,
@@ -216,9 +215,11 @@ impl Drop for SyscallGuard {
 
 #[inline]
 pub(crate) fn enter_syscall(sysno: usize, args: [usize; 3]) -> SyscallGuard {
-    axtask::current()
-        .as_thread()
-        .watchdog_enter_syscall(sysno, args, axhal::time::monotonic_time_nanos());
+    axtask::current().as_thread().watchdog_enter_syscall(
+        sysno,
+        args,
+        axhal::time::monotonic_time_nanos(),
+    );
     SyscallGuard
 }
 
@@ -259,13 +260,11 @@ fn monitor() {
     let mut lease_expired = false;
     let mut clock_reported = false;
     let mut last_cpu_sample_ns = started_ns;
-    let mut last_cpu_idle_ns = core::array::from_fn(|cpu_id| {
-        axtask::cpu_idle_time_nanos(cpu_id).unwrap_or(0)
-    });
+    let mut last_cpu_idle_ns =
+        core::array::from_fn(|cpu_id| axtask::cpu_idle_time_nanos(cpu_id).unwrap_or(0));
     let mut lease_cpu_sample_ns = started_ns;
-    let mut lease_cpu_user_ns = core::array::from_fn(|cpu_id| {
-        axtask::cpu_user_task_time_nanos(cpu_id).unwrap_or(0)
-    });
+    let mut lease_cpu_user_ns =
+        core::array::from_fn(|cpu_id| axtask::cpu_user_task_time_nanos(cpu_id).unwrap_or(0));
     let mut next_build_snapshot_ns = started_ns + BUILD_TASK_SNAPSHOT_INTERVAL_SECS * 1_000_000_000;
 
     loop {
@@ -282,11 +281,8 @@ fn monitor() {
             last_progress_ns = now_ns;
         }
         user_progress = current_user_progress;
-        let user_cpu_work_permille_one_core = sample_user_cpu_work(
-            now_ns,
-            &mut lease_cpu_sample_ns,
-            &mut lease_cpu_user_ns,
-        );
+        let user_cpu_work_permille_one_core =
+            sample_user_cpu_work(now_ns, &mut lease_cpu_sample_ns, &mut lease_cpu_user_ns);
         if user_cpu_work_permille_one_core >= CPU_WORK_PROGRESS_PERMILLE_ONE_CORE {
             last_progress_ns = now_ns;
         }

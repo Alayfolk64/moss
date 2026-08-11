@@ -6,9 +6,11 @@
 //! down. It changes only the node PLL (CPU/cache/node fabric), never SPI flash,
 //! and a board reset restores the firmware configuration.
 
-use crate::fdt::uncached_addr;
-use crate::node_clock_state::{
-    FULL_FREQSCALE, TARGET_HIGH_CONFIG, TARGET_LOW_CONFIG, TARGET_MHZ, effective_mhz,
+use crate::{
+    fdt::uncached_addr,
+    node_clock_state::{
+        FULL_FREQSCALE, TARGET_HIGH_CONFIG, TARGET_LOW_CONFIG, TARGET_MHZ, effective_mhz,
+    },
 };
 
 const NODE_PLL_LOW_PADDR: usize = 0x1fe0_0480;
@@ -93,10 +95,7 @@ pub(crate) fn boost_to_900mhz() {
     unsafe {
         write64(NODE_PLL_LOW_PADDR, locked_low | PLL_SELECT);
         let scale = read64(NODE_FREQSCALE_PADDR);
-        write64(
-            NODE_FREQSCALE_PADDR,
-            (scale & !0x7) | FULL_FREQSCALE,
-        );
+        write64(NODE_FREQSCALE_PADDR, (scale & !0x7) | FULL_FREQSCALE);
     }
 
     let final_low = unsafe { read64(NODE_PLL_LOW_PADDR) };
@@ -105,7 +104,8 @@ pub(crate) fn boost_to_900mhz() {
     let final_mhz = effective_mhz(final_low, final_high, final_scale);
     if final_low & PLL_SELECT == 0 || final_mhz != Some(TARGET_MHZ) {
         panic!(
-            "LS2K1000 node clock verification failed: {:?} MHz low={:#018x} high={:#018x} scale={:#018x}",
+            "LS2K1000 node clock verification failed: {:?} MHz low={:#018x} high={:#018x} \
+             scale={:#018x}",
             final_mhz, final_low, final_high, final_scale
         );
     }

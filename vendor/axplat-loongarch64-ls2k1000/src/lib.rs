@@ -26,10 +26,10 @@ mod irq;
 mod irq_state;
 mod mem;
 mod mem_layout;
-mod node_clock;
-mod node_clock_state;
 #[cfg(feature = "smp")]
 mod mp;
+mod node_clock;
+mod node_clock_state;
 mod power;
 mod time;
 mod watchdog;

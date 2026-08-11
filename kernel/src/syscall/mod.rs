@@ -38,10 +38,8 @@ pub fn handle_syscall(uctx: &mut UserContext) {
     };
 
     #[cfg(feature = "ls2k1000")]
-    let _watchdog_syscall = crate::watchdog::enter_syscall(
-        uctx.sysno(),
-        [uctx.arg0(), uctx.arg1(), uctx.arg2()],
-    );
+    let _watchdog_syscall =
+        crate::watchdog::enter_syscall(uctx.sysno(), [uctx.arg0(), uctx.arg1(), uctx.arg2()]);
 
     trace!("Syscall {sysno:?}");
 

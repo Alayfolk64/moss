@@ -11,9 +11,9 @@ use axhal::{
     paging::{MappingFlags, PageSize},
 };
 use axsync::Mutex;
-use kernel_elf_parser::{AuxEntry, ELFHeaders, ELFHeadersBuilder, ELFParser, app_stack_region};
 #[cfg(target_arch = "loongarch64")]
 use kernel_elf_parser::AuxType;
+use kernel_elf_parser::{AuxEntry, ELFHeaders, ELFHeadersBuilder, ELFParser, app_stack_region};
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use ouroboros::self_referencing;
 use uluru::LRUCache;

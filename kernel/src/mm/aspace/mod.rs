@@ -12,14 +12,13 @@ use axhal::{
     trap::PageFaultFlags,
 };
 use axtask::yield_now;
+pub(crate) use backend::init_frame_ref_table;
 use event_listener::{Event, listener};
 use kspin::SpinNoIrq;
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
 use memory_set::{MappingError, MemoryArea, MemorySet, ProtectStats};
-
-pub(crate) use backend::init_frame_ref_table;
 
 const WRITER_LOCKED: usize = 1;
 const ONE_READER: usize = 2;
