@@ -18,6 +18,14 @@ impl<H: AhciHal> AhciDriver<H> {
         unsafe { SimpleAhciDriver::<H>::prepare(base) }.map(PreparedAhciDriver)
     }
 
+    pub unsafe fn prepare_with_port_map(
+        base: usize,
+        platform_port_map: Option<u32>,
+    ) -> Option<PreparedAhciDriver<H>> {
+        unsafe { SimpleAhciDriver::<H>::prepare_with_port_map(base, platform_port_map) }
+            .map(PreparedAhciDriver)
+    }
+
     /// Try to construct a new AHCI driver from the given MMIO base address.
     ///
     /// # Safety
@@ -29,6 +37,10 @@ impl<H: AhciHal> AhciDriver<H> {
     /// - The AHCI controller hardware is present and functional at the given address.
     pub unsafe fn try_new(base: usize) -> Option<Self> {
         unsafe { SimpleAhciDriver::<H>::try_new(base) }.map(AhciDriver)
+    }
+
+    pub fn enable_runtime_waits(&self) {
+        self.0.enable_runtime_waits();
     }
 }
 

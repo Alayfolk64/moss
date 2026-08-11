@@ -213,4 +213,3 @@ pub fn ata_id_n_sectors(id: &[u16]) -> u64 {
         0
     }
 }
-

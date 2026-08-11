@@ -1,6 +1,6 @@
 //! LS2K1000 integrated devices discovered from the firmware device tree.
 
-use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, format, string::String, sync::Arc, vec, vec::Vec};
 use core::{
     ptr,
     sync::atomic::{AtomicPtr, Ordering},
@@ -12,7 +12,10 @@ use axdriver_block::{
     BlockDriverOps,
     ahci::{AhciDriver, AhciIrqHandle},
 };
-use axdriver_net::dwmac_ls2k1000::{DwmacConfig, DwmacHal, DwmacLs2k1000};
+use axdriver_net::dwmac_ls2k1000::{
+    DwmacAxiConfig, DwmacConfig, DwmacDmaConfig, DwmacHal, DwmacLs2k1000, dwmac_axi_blen_mask,
+    dwmac_valid_pbl,
+};
 use fdt_parser::{Fdt, Node, Status};
 
 use crate::{
@@ -79,6 +82,7 @@ struct AhciHalImpl;
 
 static AHCI_WAIT_QUEUE: axtask::WaitQueue = axtask::WaitQueue::new();
 static AHCI_IRQ_HANDLE: AtomicPtr<AhciIrqHandle<AhciHalImpl>> = AtomicPtr::new(ptr::null_mut());
+static RAW_AHCI_DEVICE: AtomicPtr<RawAhci> = AtomicPtr::new(ptr::null_mut());
 
 impl axdriver_block::ahci::AhciHal for AhciHalImpl {
     fn virt_to_phys(virtual_address: usize) -> usize {
@@ -91,6 +95,22 @@ impl axdriver_block::ahci::AhciHal for AhciHalImpl {
 
     fn flush_dcache() {
         unsafe { core::arch::asm!("dbar 0", options(nostack, preserves_flags)) };
+    }
+
+    fn save_and_mask_local_irqs() -> bool {
+        let was_enabled = axhal::asm::irqs_enabled();
+        axhal::asm::disable_irqs();
+        was_enabled
+    }
+
+    fn restore_local_irqs(was_enabled: bool) {
+        if was_enabled {
+            axhal::asm::enable_irqs();
+        }
+    }
+
+    fn can_sleep() -> bool {
+        axtask::current_can_block()
     }
 
     fn wait_for_event<F>(timeout_ms: u64, condition: F) -> bool
@@ -112,6 +132,31 @@ fn handle_ahci_interrupt() {
     if !handle.is_null() {
         unsafe { &*handle }.handle_interrupt();
     }
+}
+
+fn raw_ahci_device() -> DevResult<&'static RawAhci> {
+    let device = RAW_AHCI_DEVICE.load(Ordering::Acquire);
+    if device.is_null() {
+        Err(DevError::BadState)
+    } else {
+        Ok(unsafe { &*device })
+    }
+}
+
+/// Reads sectors from the whole LS2K1000 SATA disk, bypassing the root
+/// partition slice. The swap layer supplies bounds-checked LBAs obtained from
+/// the boot DTB.
+pub fn ls2k1000_raw_read(block_id: u64, buffer: &mut [u8]) -> DevResult {
+    raw_ahci_device()?.read_block(block_id, buffer)
+}
+
+/// Writes sectors to the whole LS2K1000 SATA disk.
+pub fn ls2k1000_raw_write(block_id: u64, buffer: &[u8]) -> DevResult {
+    raw_ahci_device()?.write_block(block_id, buffer)
+}
+
+pub fn ls2k1000_raw_flush() -> DevResult {
+    raw_ahci_device()?.flush()
 }
 
 #[derive(Clone, Debug)]
@@ -345,7 +390,7 @@ fn select_partition(dev: &RawAhci) -> DevResult<(u64, u64, Option<usize>)> {
 }
 
 pub struct Ls2kAhciDevice {
-    inner: RawAhci,
+    inner: Arc<RawAhci>,
     start_lba: u64,
     blocks: u64,
 }
@@ -400,6 +445,7 @@ impl DriverProbe for Ls2kAhciDriver {
                 "loongson,ls-ahci",
                 "loongson,ls2k1000-ahci",
                 "loongson,2k1000-ahci",
+                "snps,spear-ahci",
             ])
             .find(enabled)?;
         let (paddr, size) = first_reg(&node).expect("enabled AHCI node has no reg property");
@@ -407,12 +453,22 @@ impl DriverProbe for Ls2kAhciDriver {
         let irq = translated_irq(fdt, &node)
             .expect("enabled LS2K1000 AHCI node requires a translated DT IRQ");
         let mask = dma_mask(&node).unwrap_or(u32::MAX as u64);
+        let platform_port_map = node
+            .find_property("ports-implemented")
+            .map(|property| property.u32())
+            .filter(|port_map| *port_map != 0);
         assert!(
             mask >= u32::MAX as u64,
             "AHCI DMA mask is narrower than 32 bits"
         );
-        let prepared = unsafe { RawAhci::prepare(uncached_addr(paddr)) }
-            .expect("failed to prepare DT-discovered LS2K1000 AHCI");
+        info!(
+            "LS2K1000 AHCI platform probe uses polling waits: current_task_blockable={}, \
+             platform_ports={platform_port_map:?}",
+            axtask::current_can_block()
+        );
+        let prepared =
+            unsafe { RawAhci::prepare_with_port_map(uncached_addr(paddr), platform_port_map) }
+                .expect("failed to prepare DT-discovered LS2K1000 AHCI");
         let handle = Box::into_raw(Box::new(prepared.irq_handle()));
         if AHCI_IRQ_HANDLE
             .compare_exchange(ptr::null_mut(), handle, Ordering::AcqRel, Ordering::Acquire)
@@ -432,6 +488,16 @@ impl DriverProbe for Ls2kAhciDriver {
             .expect("failed to identify DT-discovered LS2K1000 AHCI disk");
         let (start_lba, blocks, partition) =
             select_partition(&inner).expect("root= does not select one usable AHCI ext4 partition");
+        inner.enable_runtime_waits();
+        let inner = Arc::new(inner);
+        let raw = Arc::into_raw(inner.clone()) as *mut RawAhci;
+        if RAW_AHCI_DEVICE
+            .compare_exchange(ptr::null_mut(), raw, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            drop(unsafe { Arc::from_raw(raw) });
+            panic!("only one LS2K1000 raw AHCI disk is supported");
+        }
         info!(
             "LS2K1000 AHCI from DTB: paddr={paddr:#x}, size={size:#x}, irq={irq}, \
              dma_mask={mask:#x}, root_partition={partition:?}, start_lba={start_lba}, \
@@ -473,6 +539,55 @@ fn gmac0_node<'a>(fdt: &'a Fdt<'a>) -> Option<Node<'a>> {
         .find(enabled)
 }
 
+fn dwmac_field(node: &Node<'_>, name: &str, max: u32) -> Option<u8> {
+    node.find_property(name).map(|property| {
+        let value = property.u32();
+        assert!(value <= max, "DWMAC property {name}={value} exceeds {max}");
+        value as u8
+    })
+}
+
+fn dwmac_pbl(node: &Node<'_>, name: &str) -> Option<u8> {
+    node.find_property(name).map(|property| {
+        let value = property.u32();
+        assert!(
+            dwmac_valid_pbl(value),
+            "DWMAC property {name}={value} is not one of 1,2,4,8,16,32"
+        );
+        value as u8
+    })
+}
+
+fn dwmac_dma_config(fdt: &Fdt<'_>, node: &Node<'_>) -> DwmacDmaConfig {
+    let mut config = DwmacDmaConfig::linux_default();
+    config.pbl = dwmac_pbl(node, "snps,pbl").unwrap_or(config.pbl);
+    config.tx_pbl = dwmac_pbl(node, "snps,txpbl").unwrap_or(0);
+    config.rx_pbl = dwmac_pbl(node, "snps,rxpbl").unwrap_or(0);
+    config.pbl_x8 = node.find_property("snps,no-pbl-x8").is_none();
+    config.address_aligned = node.find_property("snps,aal").is_some();
+    config.fixed_burst = node.find_property("snps,fixed-burst").is_some();
+    config.mixed_burst = node.find_property("snps,mixed-burst").is_some();
+
+    config.axi = node
+        .find_property("snps,axi-config")
+        .and_then(|property| fdt.get_node_by_phandle(property.u32().into()))
+        .map(|axi| {
+            let burst_register_bits = axi.find_property("snps,blen").map_or(0, |bursts| {
+                let values = bursts.u32_list().collect::<Vec<_>>();
+                dwmac_axi_blen_mask(&values).expect(
+                    "DWMAC snps,blen must contain seven cells, each 0 or a power of two from 4 to \
+                     256",
+                )
+            });
+            DwmacAxiConfig {
+                write_outstanding_limit: dwmac_field(&axi, "snps,wr_osr_lmt", 0xf).unwrap_or(1),
+                read_outstanding_limit: dwmac_field(&axi, "snps,rd_osr_lmt", 0xf).unwrap_or(1),
+                burst_register_bits,
+            }
+        });
+    config
+}
+
 pub struct Ls2kGmacDriver;
 
 impl DriverProbe for Ls2kGmacDriver {
@@ -489,8 +604,13 @@ impl DriverProbe for Ls2kGmacDriver {
         let phy_address = node
             .find_property("phy-handle")
             .and_then(|property| fdt.get_node_by_phandle(property.u32().into()))
-            .and_then(|phy| phy.reg()?.next().map(|reg| reg.address as u8))
-            .unwrap_or(0);
+            .and_then(|phy| {
+                phy.reg()?
+                    .next()
+                    .and_then(|reg| u8::try_from(reg.address).ok())
+                    .filter(|address| *address < 32)
+            })
+            .expect("GMAC0 requires a DT phy-handle with a Clause 22 PHY address");
         let mac_address = node
             .find_property("local-mac-address")
             .or_else(|| node.find_property("mac-address"))
@@ -501,6 +621,7 @@ impl DriverProbe for Ls2kGmacDriver {
                     .and_then(|mac| mac.try_into().ok())
             });
         let irq = translated_irq(fdt, &node);
+        let dma = dwmac_dma_config(fdt, &node);
         let mask = dma_mask(&node).unwrap_or(u32::MAX as u64);
         assert!(
             mask >= u32::MAX as u64,
@@ -513,6 +634,7 @@ impl DriverProbe for Ls2kGmacDriver {
                     mac_address,
                     phy_address,
                     irq,
+                    dma,
                 },
             )
         }
@@ -520,7 +642,7 @@ impl DriverProbe for Ls2kGmacDriver {
         let mut device = device;
         if let Some(irq) = irq {
             if axhal::irq::register(irq, axdriver_net::dwmac_ls2k1000::handle_interrupt) {
-                device.enable_interrupt_mode();
+                device.register_interrupt_handler();
             } else {
                 warn!("LS2K1000 GMAC0 IRQ {irq} registration failed; using polling mode");
             }
@@ -529,7 +651,7 @@ impl DriverProbe for Ls2kGmacDriver {
         }
         info!(
             "LS2K1000 GMAC0 from DTB: paddr={paddr:#x}, size={size:#x}, irq={irq:?}, \
-             phy_mode={phy_mode}, phy_address={phy_address}, dma_mask={mask:#x}"
+             phy_mode={phy_mode}, phy_address={phy_address}, dma_mask={mask:#x}, dma={dma:?}"
         );
         Some(AxDeviceEnum::from_net(device))
     }

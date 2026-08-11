@@ -84,6 +84,9 @@ mod ls2k1000;
 #[cfg(feature = "ls2k1000")]
 mod ls2k1000_irq;
 
+#[cfg(feature = "ls2k1000")]
+pub use ls2k1000::{ls2k1000_raw_flush, ls2k1000_raw_read, ls2k1000_raw_write};
+
 #[cfg(feature = "dyn")]
 mod dyn_drivers;
 

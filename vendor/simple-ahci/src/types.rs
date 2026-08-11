@@ -61,4 +61,3 @@ pub struct ahci_cmd_tbl {
     res: [u8; 0x6c],
     pub sgs: [ahci_sg; AHCI_MAX_SG],
 }
-
