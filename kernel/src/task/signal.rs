@@ -211,10 +211,18 @@ pub fn send_signal_to_process(pid: Pid, sig: Option<SignalInfo>) -> AxResult<()>
         {
             return Ok(());
         }
-        if let Some(tid) = proc_data.signal.send_signal(sig)
-            && let Ok(task) = get_task(tid)
-        {
-            task.interrupt();
+        let mut interrupted = 0usize;
+        for tid in proc_data.signal.send_signal(sig) {
+            if let Ok(task) = get_task(tid) {
+                task.interrupt();
+                interrupted += 1;
+            }
+        }
+        if matches!(signo, Signo::SIGINT | Signo::SIGQUIT | Signo::SIGTSTP) {
+            warn!(
+                "MOSS_TTY_SIGNAL_DELIVERY pid={} signo={:?} interrupted_threads={}",
+                pid, signo, interrupted
+            );
         }
     }
 
@@ -227,8 +235,19 @@ pub fn send_signal_to_process_group(pgid: Pid, sig: Option<SignalInfo>) -> AxRes
 
     if let Some(sig) = sig {
         info!("Send signal {:?} to process group {}", sig.signo(), pgid);
+        let mut delivered = false;
         for proc in pg.processes() {
-            send_signal_to_process(proc.pid(), Some(sig.clone()))?;
+            match send_signal_to_process(proc.pid(), Some(sig.clone())) {
+                Ok(()) => delivered = true,
+                // Process-group membership can race with exit.  One stale
+                // member must not prevent delivery to the remaining live
+                // foreground jobs.
+                Err(AxError::NoSuchProcess) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        if !delivered {
+            return Err(AxError::NoSuchProcess);
         }
     }
 
@@ -242,11 +261,14 @@ pub fn raise_signal_fatal(sig: SignalInfo) -> AxResult<()> {
 
     let signo = sig.signo();
     info!("Send fatal signal {signo:?} to the current process");
-    if let Some(tid) = proc_data.signal.send_signal(sig)
-        && let Ok(task) = get_task(tid)
-    {
-        task.interrupt();
-    } else {
+    let mut interrupted = false;
+    for tid in proc_data.signal.send_signal(sig) {
+        if let Ok(task) = get_task(tid) {
+            task.interrupt();
+            interrupted = true;
+        }
+    }
+    if !interrupted {
         // No task wants to handle the signal, abort the task
         do_exit(signo as i32, true);
     }

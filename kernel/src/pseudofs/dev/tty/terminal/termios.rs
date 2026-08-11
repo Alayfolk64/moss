@@ -6,7 +6,7 @@ use bytemuck::AnyBitPattern;
 use linux_raw_sys::general::{
     B38400, CREAD, CS8, ECHO, ECHOCTL, ECHOE, ECHOK, ECHOKE, ICANON, ICRNL, IEXTEN, ISIG, IXON,
     ONLCR, OPOST, VDISCARD, VEOF, VEOL, VEOL2, VERASE, VINTR, VKILL, VLNEXT, VQUIT, VREPRINT,
-    VWERASE, speed_t, tcflag_t,
+    VSUSP, VWERASE, speed_t, tcflag_t,
 };
 use starry_signal::Signo;
 
@@ -49,6 +49,7 @@ impl Default for Termios {
         for (i, ch) in [
             (VINTR, ctl(b'C')),
             (VQUIT, ctl(b'\\')),
+            (VSUSP, ctl(b'Z')),
             (VERASE, b'\x7f'),
             (VKILL, ctl(b'U')),
             (VEOF, ctl(b'D')),
@@ -138,11 +139,19 @@ impl Termios {
     }
 
     pub fn signo_for(&self, ch: u8) -> Option<Signo> {
-        Some(match ch {
-            ch if ch == self.special_char(VINTR) => Signo::SIGINT,
-            ch if ch == self.special_char(VQUIT) => Signo::SIGQUIT,
-            _ => return None,
-        })
+        // Linux uses zero as _POSIX_VDISABLE on this architecture.  Never
+        // turn a disabled control slot into a signal-generating NUL byte.
+        for (index, signo) in [
+            (VINTR, Signo::SIGINT),
+            (VQUIT, Signo::SIGQUIT),
+            (VSUSP, Signo::SIGTSTP),
+        ] {
+            let special = self.special_char(index);
+            if special != 0 && ch == special {
+                return Some(signo);
+            }
+        }
+        None
     }
 }
 

@@ -35,7 +35,14 @@ fn new_n_tty() -> Arc<NTtyDriver> {
             reader: Console,
             writer: Console,
             process_mode: if let Some(irq) = axhal::console::irq_num() {
-                ProcessMode::External(Box::new(move |waker| register_irq_waker(irq, &waker)) as _)
+                ProcessMode::External(Box::new(move |waker| {
+                    // Drain once before this callback, then publish the waker
+                    // and unmask the interrupt controller before enabling the
+                    // NS16550 receive interrupt.  This ordering avoids a lost
+                    // first byte and an unhandled level interrupt window.
+                    register_irq_waker(irq, &waker);
+                    axhal::console::enable_rx_interrupt();
+                }) as _)
             } else {
                 ProcessMode::Manual
             },

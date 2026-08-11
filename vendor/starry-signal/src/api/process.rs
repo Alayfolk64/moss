@@ -107,24 +107,27 @@ impl ProcessSignalManager {
 
     /// Sends a signal to the process.
     ///
-    /// Returns `Some(tid)` if the signal wakes up a thread.
+    /// Returns every unblocked thread ID that should be woken. The signal is
+    /// queued only once at process scope; waking all eligible threads avoids a
+    /// lost notification when the first thread races with task teardown, and
+    /// only one thread can dequeue the process-level pending instance.
     ///
     /// See [`ThreadSignalManager::send_signal`] for the thread-level version.
     #[must_use]
-    pub fn send_signal(&self, sig: SignalInfo) -> Option<u32> {
+    pub fn send_signal(&self, sig: SignalInfo) -> Vec<u32> {
         let signo = sig.signo();
         if self.signal_ignored(signo) {
-            return None;
+            return Vec::new();
         }
 
         if self.pending.lock().put_signal(sig) {
             self.possibly_has_signal.store(true, Ordering::Release);
         }
-        let mut result = None;
+        let mut result = Vec::new();
         self.children.lock().retain(|(tid, thread)| {
             if let Some(thread) = thread.upgrade() {
-                if result.is_none() && !thread.signal_blocked(signo) {
-                    result = Some(*tid);
+                if !thread.signal_blocked(signo) {
+                    result.push(*tid);
                 }
                 true
             } else {

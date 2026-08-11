@@ -31,7 +31,7 @@ pub use self::{
 };
 use crate::{
     pseudofs::{DeviceOps, SimpleFs},
-    task::AsThread,
+    task::{AsThread, get_process_group},
 };
 
 pub fn create_pty_master(fs: Arc<SimpleFs>) -> AxResult<Arc<PtyDriver>> {
@@ -151,10 +151,15 @@ impl<R: TtyRead, W: TtyWrite> DeviceOps for Tty<R, W> {
                 (arg as *mut u32).vm_write(foreground.pgid())?;
             }
             TIOCSPGRP => {
+                let pgid = (arg as *const u32).vm_read()?;
+                let requested = get_process_group(pgid)?;
                 let curr = current();
-                self.terminal
-                    .job_control
-                    .set_foreground(&curr.as_thread().proc_data.proc.group())?;
+                let current_group = curr.as_thread().proc_data.proc.group();
+                if !Arc::ptr_eq(&current_group.session(), &requested.session()) {
+                    return Err(AxError::OperationNotPermitted);
+                }
+                self.terminal.job_control.set_foreground(&requested)?;
+                warn!("MOSS_TTY_FOREGROUND pgid={pgid}");
             }
             TIOCGWINSZ => {
                 (arg as *mut WindowSize).vm_write(*self.terminal.window_size.lock())?;

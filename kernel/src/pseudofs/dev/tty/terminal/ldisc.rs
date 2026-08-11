@@ -10,7 +10,7 @@ use axerrno::{AxError, AxResult};
 use axpoll::{IoEvents, PollSet, Pollable};
 use axtask::future::{block_on, poll_io};
 use linux_raw_sys::general::{
-    ECHOCTL, ECHOK, ICRNL, IGNCR, ISIG, VEOF, VERASE, VKILL, VMIN, VTIME,
+    ECHOCTL, ECHOK, ICRNL, IGNCR, ISIG, NOFLSH, VEOF, VERASE, VKILL, VMIN, VTIME,
 };
 use ringbuf::{
     CachingCons, CachingProd,
@@ -73,6 +73,7 @@ struct InputReader<R, W> {
     line_buf: Vec<u8>,
     line_read: Option<usize>,
     clear_line_buf: Arc<AtomicBool>,
+    flush_input: Arc<AtomicBool>,
 }
 impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
     pub fn poll(&mut self) -> bool {
@@ -114,8 +115,13 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 }
             }
 
-            self.check_send_signal(&term, ch);
-
+            if self.check_send_signal(&term, ch) {
+                if term.echo() {
+                    self.output_char(&term, ch);
+                }
+                // ISIG characters are terminal controls, not input bytes.
+                continue;
+            }
             if term.echo() {
                 self.output_char(&term, ch);
             }
@@ -154,20 +160,36 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
         sent > 0
     }
 
-    fn check_send_signal(&self, term: &Termios2, ch: u8) {
-        if !term.canonical() || !term.has_lflag(ISIG) {
-            return;
+    fn check_send_signal(&mut self, term: &Termios2, ch: u8) -> bool {
+        // POSIX ISIG is independent of ICANON: Ctrl+C must interrupt a
+        // foreground raw-mode program as well as a canonical-mode shell.
+        if !term.has_lflag(ISIG) {
+            return false;
         }
-        if let Some(signo) = term.signo_for(ch)
-            && let Some(pg) = self.terminal.job_control.foreground()
-        {
+        let Some(signo) = term.signo_for(ch) else {
+            return false;
+        };
+
+        if !term.has_lflag(NOFLSH) {
+            // Flush canonical state immediately and ask the consumer side to
+            // discard bytes that were committed before the signal character.
+            self.line_buf.clear();
+            self.line_read = None;
+            self.read_range = 0..0;
+            self.flush_input.store(true, Ordering::Release);
+        }
+
+        if let Some(pg) = self.terminal.job_control.foreground() {
+            let pgid = pg.pgid();
+            warn!("MOSS_TTY_SIGNAL signo={signo:?} foreground_pgid={pgid}");
             let sig = SignalInfo::new_kernel(signo);
-            if let Err(err) = send_signal_to_process_group(pg.pgid(), Some(sig)) {
-                if err != AxError::NoSuchProcess {
-                    warn!("Failed to send signal: {err:?}");
-                }
+            if let Err(err) = send_signal_to_process_group(pgid, Some(sig))
+                && err != AxError::NoSuchProcess
+            {
+                warn!("Failed to send terminal signal: {err:?}");
             }
         }
+        true
     }
 
     fn output_char(&self, term: &Termios2, ch: u8) {
@@ -214,6 +236,7 @@ pub struct LineDiscipline<R, W> {
     buf_rx: CachingCons<ReadBuf>,
     poll_tx: Arc<PollSet>,
     clear_line_buf: Arc<AtomicBool>,
+    flush_input: Arc<AtomicBool>,
     processor: Processor<R, W>,
 }
 
@@ -237,6 +260,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
         let (buf_tx, buf_rx) = ReadBuf::default().split();
 
         let clear_line_buf = Arc::new(AtomicBool::new(false));
+        let flush_input = Arc::new(AtomicBool::new(false));
         let mut reader = InputReader {
             terminal: terminal.clone(),
 
@@ -250,6 +274,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
             line_buf: Vec::new(),
             line_read: None,
             clear_line_buf: clear_line_buf.clone(),
+            flush_input: flush_input.clone(),
         };
 
         let poll_tx = Arc::new(PollSet::new());
@@ -296,7 +321,15 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
             buf_rx,
             poll_tx,
             clear_line_buf,
+            flush_input,
             processor,
+        }
+    }
+
+    fn apply_signal_flush(&mut self) {
+        if self.flush_input.swap(false, Ordering::Acquire) {
+            self.buf_rx.clear();
+            self.poll_tx.wake();
         }
     }
 
@@ -306,6 +339,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
     }
 
     pub fn poll_read(&mut self) -> bool {
+        self.apply_signal_flush();
         match &mut self.processor {
             Processor::Manual(reader) => {
                 reader.poll();
@@ -328,6 +362,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
     }
 
     pub fn read(&mut self, buf: &mut [u8]) -> AxResult<usize> {
+        self.apply_signal_flush();
         if buf.is_empty() {
             return Ok(0);
         }
