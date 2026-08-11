@@ -159,7 +159,6 @@ impl<R: TtyRead, W: TtyWrite> DeviceOps for Tty<R, W> {
                     return Err(AxError::OperationNotPermitted);
                 }
                 self.terminal.job_control.set_foreground(&requested)?;
-                warn!("MOSS_TTY_FOREGROUND pgid={pgid}");
             }
             TIOCGWINSZ => {
                 (arg as *mut WindowSize).vm_write(*self.terminal.window_size.lock())?;

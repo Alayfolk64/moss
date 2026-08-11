@@ -18,8 +18,7 @@ use crate::{
 };
 
 #[inline]
-fn boot_progress(stage: &str) {
-    warn!("MOSS_BOOT stage={stage}");
+fn boot_progress(_stage: &str) {
     #[cfg(feature = "ls2k1000")]
     crate::watchdog::note_progress();
 }

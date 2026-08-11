@@ -211,18 +211,10 @@ pub fn send_signal_to_process(pid: Pid, sig: Option<SignalInfo>) -> AxResult<()>
         {
             return Ok(());
         }
-        let mut interrupted = 0usize;
         for tid in proc_data.signal.send_signal(sig) {
             if let Ok(task) = get_task(tid) {
                 task.interrupt();
-                interrupted += 1;
             }
-        }
-        if matches!(signo, Signo::SIGINT | Signo::SIGQUIT | Signo::SIGTSTP) {
-            warn!(
-                "MOSS_TTY_SIGNAL_DELIVERY pid={} signo={:?} interrupted_threads={}",
-                pid, signo, interrupted
-            );
         }
     }
 

@@ -3,7 +3,7 @@
     "Cargo.lock": "700436383aecd1c7174f184278e1f6962dc52779516c86541b240045996f9636",
     "Cargo.toml": "8bbd8090983a9e28ef9132ded3f42617daee65a3a020df7d06cfc9719c2f5799",
     "README.md": "e44c863ba5c4ae0599c72fa1a5272a8a37a780d14a64383dd16ad01f50a57fb3",
-    "src/api.rs": "22cff71e5eaee3b0de42a624aa3a68dff837bc13a2d5eb13bc7e74b30b456b54",
+    "src/api.rs": "487b10ec444e6a1c27ee7ca0fa9aad5c4c789cbb4de713f7cfe95fe78394b227",
     "src/api_s.rs": "64a4dde0b0a68c5db0053b08b50caf67660740d9e90bd068158b9834cc0cbc29",
     "src/block_context.rs": "dd7baaae79a343729287d32de9c0a7ab3772cd16363f2a92a61dab984ce21125",
     "src/future/mod.rs": "9369ef3cf62f3cb878d48acef2610bbbeccd97a4d080df27ceac440e67e9f125",
@@ -11,7 +11,7 @@
     "src/future/time.rs": "94cefb0dff9e09b705a7a3ce1bef36561daf4d2bbe08f31e8811856a3178cb22",
     "src/lib.rs": "d65ed010fb846e7993007793c8229fd924510422d1aadc441d9e627c1c54d5ea",
     "src/run_queue.rs": "ac561759ec50375e85e795cfef7b969b6cca77e0128431c6a4de134cb332d19f",
-    "src/task.rs": "bf638913554ca15926be3d2a0d199549728d2e538a6130e5bee515445bdd8f08",
+    "src/task.rs": "2ee4ef02c812adce9e39757336f10407e023d437161f1a64bd2aa21ac0f775a9",
     "src/tests.rs": "ca380c7c0be79182c421e765fddf8e15e81d5d11e244998ad5fef1cce222e3a1",
     "src/timers.rs": "05b0cf8ef103e0e4c207d2f5bec757f981a4e70b697228c0d9893b304bbad747",
     "src/wait_queue.rs": "53a8ac5ff02e9d90cc41f22b7d20cf64ac185319a503c1f4bfe59273386363c1"

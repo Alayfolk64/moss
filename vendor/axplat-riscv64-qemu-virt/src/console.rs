@@ -51,9 +51,4 @@ impl ConsoleIf for ConsoleIfImpl {
     fn irq_num() -> Option<usize> {
         Some(crate::config::devices::UART_IRQ)
     }
-
-    #[cfg(feature = "irq")]
-    fn enable_rx_interrupt() {
-        // `MmioSerialPort::init` already enables the 16550 receive interrupt.
-    }
 }

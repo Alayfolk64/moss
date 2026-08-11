@@ -12,7 +12,8 @@ fp-simd = ["axcpu/fp-simd"]
 irq = ["axplat/irq"]
 rtc = ["dep:chrono"]
 smp = ["axplat/smp", "kspin/smp"]
-watchdog-smoke = []
+watchdog = []
+shell-mode = []
 
 [dependencies]
 axconfig-macros = "0.2"

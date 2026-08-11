@@ -5,15 +5,17 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use crate::fdt::{WatchdogResource, uncached_addr};
 
 const RST_CTR: usize = 0x00;
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 const WD_CR: usize = 0x04;
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 const WD_TIMER: usize = 0x08;
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 const RST_CTR_ENABLE: u32 = 1 << 1;
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 const WDT_CLOCK_HZ: u64 = 125_000_000;
 
-#[cfg(not(feature = "watchdog-smoke"))]
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 pub(crate) const BOOT_TIMEOUT_SECS: u32 = 30;
-#[cfg(feature = "watchdog-smoke")]
-pub(crate) const BOOT_TIMEOUT_SECS: u32 = 10;
 
 static ARMED: AtomicBool = AtomicBool::new(false);
 
@@ -33,6 +35,7 @@ unsafe fn write(resource: WatchdogResource, offset: usize, value: u32) {
     unsafe { core::arch::asm!("dbar 0", options(nostack, preserves_flags)) };
 }
 
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 fn timeout_count(timeout_secs: u32) -> Option<u32> {
     WDT_CLOCK_HZ
         .checked_mul(u64::from(timeout_secs))
@@ -40,6 +43,7 @@ fn timeout_count(timeout_secs: u32) -> Option<u32> {
         .filter(|count| *count != 0)
 }
 
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 pub(crate) fn start(timeout_secs: u32) -> bool {
     let Some(resource) = resource() else {
         return false;
@@ -68,7 +72,7 @@ pub(crate) fn start(timeout_secs: u32) -> bool {
     true
 }
 
-#[cfg(not(feature = "watchdog-smoke"))]
+#[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
 pub(crate) fn ping() {
     if !ARMED.load(Ordering::Acquire) {
         return;
@@ -76,12 +80,6 @@ pub(crate) fn ping() {
     if let Some(resource) = resource() {
         unsafe { write(resource, WD_CR, 1) };
     }
-}
-
-#[cfg(feature = "watchdog-smoke")]
-pub(crate) fn ping() {
-    // Deliberately do not reload. The smoke image proves that the hardware can
-    // reset the board without depending on the kernel progress monitor.
 }
 
 pub(crate) fn stop() {

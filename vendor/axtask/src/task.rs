@@ -4,7 +4,7 @@ use alloc::{
     string::String,
     sync::{Arc, Weak},
 };
-#[cfg(any(feature = "preempt", target_arch = "loongarch64"))]
+#[cfg(feature = "preempt")]
 use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
@@ -91,19 +91,6 @@ pub struct TaskInner {
     has_run: AtomicBool,
     /// Number of times this task has resumed after a real context switch.
     schedule_count: AtomicU64,
-
-    /// Address of the cooperative mutex this task is waiting for.  This is
-    /// intentionally task state rather than a global lock table, so the
-    /// LS2K1000 watchdog can distinguish a real long lock wait from a valid
-    /// blocking syscall such as `accept`.
-    #[cfg(target_arch = "loongarch64")]
-    mutex_wait_address: AtomicUsize,
-    #[cfg(target_arch = "loongarch64")]
-    mutex_wait_owner_id: AtomicU64,
-    #[cfg(target_arch = "loongarch64")]
-    mutex_wait_caller: AtomicUsize,
-    #[cfg(target_arch = "loongarch64")]
-    mutex_wait_started_ns: AtomicU64,
 
     #[cfg(feature = "preempt")]
     need_resched: AtomicBool,
@@ -276,50 +263,6 @@ impl TaskInner {
         self.schedule_count.fetch_add(1, Ordering::Release);
     }
 
-    /// Marks the start of a cooperative mutex slow-path wait.
-    #[cfg(target_arch = "loongarch64")]
-    #[inline]
-    pub fn begin_mutex_wait(&self, address: usize, owner_id: u64, caller: usize) {
-        self.mutex_wait_address.store(address, Ordering::Relaxed);
-        self.mutex_wait_owner_id
-            .store(owner_id, Ordering::Relaxed);
-        self.mutex_wait_caller.store(caller, Ordering::Relaxed);
-        self.mutex_wait_started_ns.store(
-            axhal::time::monotonic_time_nanos().max(1),
-            Ordering::Release,
-        );
-    }
-
-    /// Refreshes the observed owner while a task remains on the same mutex.
-    #[cfg(target_arch = "loongarch64")]
-    #[inline]
-    pub fn update_mutex_wait_owner(&self, owner_id: u64) {
-        self.mutex_wait_owner_id
-            .store(owner_id, Ordering::Relaxed);
-    }
-
-    /// Clears the cooperative mutex slow-path marker after acquisition.
-    #[cfg(target_arch = "loongarch64")]
-    #[inline]
-    pub fn end_mutex_wait(&self) {
-        self.mutex_wait_started_ns.store(0, Ordering::Release);
-    }
-
-    /// Returns a stable `(start_time_ns, mutex_address, owner_id, caller)` wait snapshot.
-    #[cfg(target_arch = "loongarch64")]
-    #[inline]
-    pub fn mutex_wait_snapshot(&self) -> Option<(u64, usize, u64, usize)> {
-        let started_ns = self.mutex_wait_started_ns.load(Ordering::Acquire);
-        if started_ns == 0 {
-            return None;
-        }
-        let address = self.mutex_wait_address.load(Ordering::Relaxed);
-        let owner_id = self.mutex_wait_owner_id.load(Ordering::Relaxed);
-        let caller = self.mutex_wait_caller.load(Ordering::Relaxed);
-        (self.mutex_wait_started_ns.load(Ordering::Acquire) == started_ns)
-            .then_some((started_ns, address, owner_id, caller))
-    }
-
     /// Gets the cpu affinity mask of the task.
     ///
     /// Returns the cpu affinity mask of the task in type [`AxCpuMask`].
@@ -390,14 +333,6 @@ impl TaskInner {
             on_cpu: AtomicBool::new(false),
             has_run: AtomicBool::new(false),
             schedule_count: AtomicU64::new(0),
-            #[cfg(target_arch = "loongarch64")]
-            mutex_wait_address: AtomicUsize::new(0),
-            #[cfg(target_arch = "loongarch64")]
-            mutex_wait_owner_id: AtomicU64::new(0),
-            #[cfg(target_arch = "loongarch64")]
-            mutex_wait_caller: AtomicUsize::new(0),
-            #[cfg(target_arch = "loongarch64")]
-            mutex_wait_started_ns: AtomicU64::new(0),
             #[cfg(feature = "preempt")]
             need_resched: AtomicBool::new(false),
             #[cfg(feature = "preempt")]
@@ -452,13 +387,6 @@ impl TaskInner {
         task.on_cpu.store(false, Ordering::Release);
         task.has_run.store(false, Ordering::Release);
         task.schedule_count.store(0, Ordering::Release);
-        #[cfg(target_arch = "loongarch64")]
-        {
-            task.mutex_wait_address.store(0, Ordering::Release);
-            task.mutex_wait_owner_id.store(0, Ordering::Release);
-            task.mutex_wait_caller.store(0, Ordering::Release);
-            task.mutex_wait_started_ns.store(0, Ordering::Release);
-        }
         #[cfg(feature = "preempt")]
         {
             task.need_resched.store(false, Ordering::Release);
@@ -524,18 +452,6 @@ impl TaskInner {
     #[cfg(feature = "preempt")]
     pub(crate) fn set_preempt_pending(&self, pending: bool) {
         self.need_resched.store(pending, Ordering::Release)
-    }
-
-    #[inline]
-    #[cfg(feature = "preempt")]
-    pub(crate) fn preempt_pending(&self) -> bool {
-        self.need_resched.load(Ordering::Acquire)
-    }
-
-    #[inline]
-    #[cfg(feature = "preempt")]
-    pub(crate) fn preempt_disable_count(&self) -> usize {
-        self.preempt_disable_count.load(Ordering::Acquire)
     }
 
     #[inline]

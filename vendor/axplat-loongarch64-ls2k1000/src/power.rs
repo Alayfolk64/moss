@@ -42,10 +42,19 @@ impl PowerIf for PowerIfImpl {
     }
 
     fn watchdog_start(timeout_secs: u32) -> bool {
-        crate::watchdog::start(timeout_secs)
+        #[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
+        {
+            crate::watchdog::start(timeout_secs)
+        }
+        #[cfg(any(not(feature = "watchdog"), feature = "shell-mode"))]
+        {
+            let _ = timeout_secs;
+            false
+        }
     }
 
     fn watchdog_ping() {
+        #[cfg(all(feature = "watchdog", not(feature = "shell-mode")))]
         crate::watchdog::ping();
     }
 

@@ -76,8 +76,6 @@ unsafe impl lock_api::RawMutex for RawMutex {
         let current_id = current().id().as_u64();
         let mut spin = Spin(0);
         let mut owner_id = self.owner_id.load(Ordering::Relaxed);
-        #[cfg(target_arch = "loongarch64")]
-        let mut waiting = false;
 
         loop {
             #[cfg(target_arch = "loongarch64")]
@@ -142,18 +140,8 @@ unsafe impl lock_api::RawMutex for RawMutex {
             // other architectures on the normal blocking implementation.
             #[cfg(target_arch = "loongarch64")]
             {
-                if !waiting {
-                    let caller = core::panic::Location::caller() as *const _ as usize;
-                    current().begin_mutex_wait(
-                        self as *const Self as usize,
-                        owner_id,
-                        caller,
-                    );
-                    waiting = true;
-                }
                 yield_now();
                 owner_id = self.owner_id.load(Ordering::Acquire);
-                current().update_mutex_wait_owner(owner_id);
                 continue;
             }
 
@@ -174,10 +162,6 @@ unsafe impl lock_api::RawMutex for RawMutex {
             }
         }
 
-        #[cfg(target_arch = "loongarch64")]
-        if waiting {
-            current().end_mutex_wait();
-        }
     }
 
     #[inline(always)]

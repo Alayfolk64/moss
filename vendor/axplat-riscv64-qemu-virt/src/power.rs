@@ -28,14 +28,6 @@ impl PowerIf for PowerImpl {
         Self::system_off()
     }
 
-    fn watchdog_start(_timeout_secs: u32) -> bool {
-        false
-    }
-
-    fn watchdog_ping() {}
-
-    fn watchdog_stop() {}
-
     /// Shutdown the whole system.
     fn system_off() -> ! {
         info!("Shutting down...");

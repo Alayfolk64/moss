@@ -161,9 +161,8 @@ fn is_init_ok() -> bool {
 /// initialization.  Keeping explicit milestones here preserves the short
 /// hardware timeout without making a valid cold boot race a single 30-second
 /// deadline covering allocator, MMU, drivers, filesystems and SMP bring-up.
-fn boot_watchdog_milestone(stage: &str) {
+fn boot_watchdog_milestone(_stage: &str) {
     axhal::watchdog::ping();
-    ax_println!("MOSS_BOOT_STAGE {stage}");
 }
 
 /// The main entry point of the ArceOS runtime.

@@ -180,10 +180,8 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
         }
 
         if let Some(pg) = self.terminal.job_control.foreground() {
-            let pgid = pg.pgid();
-            warn!("MOSS_TTY_SIGNAL signo={signo:?} foreground_pgid={pgid}");
             let sig = SignalInfo::new_kernel(signo);
-            if let Err(err) = send_signal_to_process_group(pgid, Some(sig))
+            if let Err(err) = send_signal_to_process_group(pg.pgid(), Some(sig))
                 && err != AxError::NoSuchProcess
             {
                 warn!("Failed to send terminal signal: {err:?}");

@@ -67,11 +67,9 @@ ls2k1000 = [
     "axplat-loongarch64-ls2k1000/irq",
     "axplat-loongarch64-ls2k1000/rtc",
     "axplat-loongarch64-ls2k1000/smp",
+    "axplat-loongarch64-ls2k1000/watchdog",
 ]
-watchdog-smoke = [
-    "ls2k1000",
-    "axplat-loongarch64-ls2k1000/watchdog-smoke",
-]
+ls2k1000-shell-mode = ["axplat-loongarch64-ls2k1000/shell-mode"]
 shell-init = []
 pre-init = []
 smp = ["axfeat/smp"]

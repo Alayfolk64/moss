@@ -35,8 +35,6 @@ pub type WeakAxTaskRef = Weak<AxTask>;
 pub type AxCpuMask = cpumask::CpuMask<{ axconfig::plat::CPU_NUM }>;
 
 static CPU_NUM: AtomicUsize = AtomicUsize::new(1);
-static CPU_IDLE_NANOS: [AtomicU64; axconfig::plat::CPU_NUM] =
-    [const { AtomicU64::new(0) }; axconfig::plat::CPU_NUM];
 static CPU_USER_TASK_NANOS: [AtomicU64; axconfig::plat::CPU_NUM] =
     [const { AtomicU64::new(0) }; axconfig::plat::CPU_NUM];
 static CPU_LAST_ACCOUNT_NS: [AtomicU64; axconfig::plat::CPU_NUM] =
@@ -142,18 +140,6 @@ pub fn report_recovered_mutex(
     );
 }
 
-/// Returns the current task's preemption-disable nesting depth.
-pub fn current_preempt_disable_count() -> usize {
-    #[cfg(feature = "preempt")]
-    {
-        current().preempt_disable_count()
-    }
-    #[cfg(not(feature = "preempt"))]
-    {
-        0
-    }
-}
-
 /// Initializes the task scheduler (for the primary CPU).
 pub fn init_scheduler() {
     init_scheduler_with_cpu_num(axhal::cpu_num());
@@ -176,17 +162,6 @@ pub(crate) fn active_cpu_num() -> usize {
 /// Returns the number of CPUs currently managed by the scheduler.
 pub fn active_cpu_count() -> usize {
     CPU_NUM.load(core::sync::atomic::Ordering::Relaxed)
-}
-
-/// Returns the time this CPU has spent in the architecture idle instruction.
-///
-/// The counter deliberately measures the interval around `wait_for_irqs()`
-/// instead of task accounting.  A blocked syscall is therefore not mistaken
-/// for CPU work, which makes interval deltas suitable for utilization
-/// telemetry under swap pressure.
-pub fn cpu_idle_time_nanos(cpu_id: usize) -> Option<u64> {
-    (cpu_id < active_cpu_count())
-        .then(|| CPU_IDLE_NANOS[cpu_id].load(Ordering::Relaxed))
 }
 
 /// Returns timer-accounted CPU time spent executing a userspace-owned task.
@@ -394,12 +369,6 @@ pub fn run_idle() -> ! {
         yield_now();
         trace!("idle task: waiting for IRQs...");
         #[cfg(feature = "irq")]
-        {
-            let started_ns = axhal::time::monotonic_time_nanos();
-            axhal::asm::wait_for_irqs();
-            let idle_ns = axhal::time::monotonic_time_nanos().saturating_sub(started_ns);
-            CPU_IDLE_NANOS[axhal::percpu::this_cpu_id()]
-                .fetch_add(idle_ns, Ordering::Relaxed);
-        }
+        axhal::asm::wait_for_irqs();
     }
 }

@@ -331,14 +331,10 @@ const MAX_FOLIO_PAGES: usize = 1 << MAX_FOLIO_ORDER;
 const LOCAL_LARGE_FOLIO_CACHE_CAPACITY: usize = 8;
 const LOCAL_PAGE_FRAME_CACHE_SHARDS: usize = 64;
 const LARGE_FOLIO_RETRY_NANOS: u64 = 30 * 1_000_000_000;
-const LARGE_FOLIO_REPORT_NANOS: u64 = 60 * 1_000_000_000;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 static FILE_CACHE_CLOCK: AtomicU64 = AtomicU64::new(1);
 static LARGE_FOLIO_RETRY_AFTER_NS: [AtomicU64; MAX_FOLIO_ORDER as usize] =
     [const { AtomicU64::new(0) }; MAX_FOLIO_ORDER as usize];
-static LARGE_FOLIO_ALLOCATION_FAILURES: [AtomicU64; MAX_FOLIO_ORDER as usize] =
-    [const { AtomicU64::new(0) }; MAX_FOLIO_ORDER as usize];
-static LARGE_FOLIO_LAST_REPORT_NS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default)]
 struct SleepRwState {
@@ -499,34 +495,12 @@ fn large_folio_backed_off(order: u8, now_ns: u64) -> bool {
     now_ns < LARGE_FOLIO_RETRY_AFTER_NS[slot].load(Ordering::Acquire)
 }
 
-fn note_large_folio_allocation_failure(order: u8, now_ns: u64) {
+fn back_off_large_folio(order: u8, now_ns: u64) {
     let slot = usize::from(order - 1);
     LARGE_FOLIO_RETRY_AFTER_NS[slot].store(
         now_ns.saturating_add(LARGE_FOLIO_RETRY_NANOS),
         Ordering::Release,
     );
-    let total = LARGE_FOLIO_ALLOCATION_FAILURES[slot].fetch_add(1, Ordering::Relaxed) + 1;
-    let last = LARGE_FOLIO_LAST_REPORT_NS.load(Ordering::Acquire);
-    if now_ns.saturating_sub(last) >= LARGE_FOLIO_REPORT_NANOS
-        && LARGE_FOLIO_LAST_REPORT_NS
-            .compare_exchange(last, now_ns, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    {
-        warn!(
-            "large folio allocation is fragmented: order={order} failures={total}; \
-             using smaller folios and retrying after {} s",
-            LARGE_FOLIO_RETRY_NANOS / 1_000_000_000
-        );
-    }
-}
-
-/// Number of failed contiguous large-folio allocation attempts. Backoff makes
-/// this a fragmentation diagnostic rather than a count of fallback reads.
-pub fn large_folio_allocation_failures() -> u64 {
-    LARGE_FOLIO_ALLOCATION_FAILURES
-        .iter()
-        .map(|count| count.load(Ordering::Relaxed))
-        .sum()
 }
 
 fn alloc_page_frame() -> VfsResult<VirtAddr> {
@@ -594,7 +568,7 @@ fn alloc_folio_frame(order: u8) -> VfsResult<FolioFrame> {
             ) {
                 Ok(start) => (start, 1),
                 Err(_) => {
-                    note_large_folio_allocation_failure(order, now_ns);
+                    back_off_large_folio(order, now_ns);
                     return Err(VfsError::NoMemory);
                 }
             },

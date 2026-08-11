@@ -160,22 +160,6 @@ pub struct Thread {
     /// Indicates whether the thread is currently accessing user memory.
     accessing_user_memory: AtomicBool,
 
-    /// Monotonic timestamp at which the current system call entered the
-    /// kernel.  Zero means that the thread is executing in userspace or has
-    /// no active system call.
-    #[cfg(feature = "ls2k1000")]
-    watchdog_syscall_started_ns: AtomicU64,
-
-    /// Raw system-call number paired with `watchdog_syscall_started_ns`.
-    #[cfg(feature = "ls2k1000")]
-    watchdog_syscall_number: AtomicUsize,
-
-    /// First three raw arguments of the active system call. These cover the
-    /// fd/buffer/length tuple needed to distinguish a blocked pipe write from
-    /// filesystem writeback during the competition build.
-    #[cfg(feature = "ls2k1000")]
-    watchdog_syscall_args: [AtomicUsize; 3],
-
     /// Restartable-sequence registration for this thread.
     rseq: SpinNoIrq<Option<RseqRegistration>>,
 
@@ -196,12 +180,6 @@ impl Thread {
             exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),
             accessing_user_memory: AtomicBool::new(false),
-            #[cfg(feature = "ls2k1000")]
-            watchdog_syscall_started_ns: AtomicU64::new(0),
-            #[cfg(feature = "ls2k1000")]
-            watchdog_syscall_number: AtomicUsize::new(0),
-            #[cfg(feature = "ls2k1000")]
-            watchdog_syscall_args: [const { AtomicUsize::new(0) }; 3],
             rseq: SpinNoIrq::new(None),
             exit_event: Arc::default(),
         })
@@ -268,37 +246,6 @@ impl Thread {
     pub fn set_accessing_user_memory(&self, accessing: bool) {
         self.accessing_user_memory
             .store(accessing, Ordering::Release);
-    }
-
-    #[cfg(feature = "ls2k1000")]
-    pub(crate) fn watchdog_enter_syscall(&self, sysno: usize, args: [usize; 3], started_ns: u64) {
-        for (destination, value) in self.watchdog_syscall_args.iter().zip(args) {
-            destination.store(value, Ordering::Relaxed);
-        }
-        self.watchdog_syscall_number.store(sysno, Ordering::Relaxed);
-        // Publish the number before the non-zero timestamp.  The monitor uses
-        // an acquire load of the timestamp as the validity flag.
-        self.watchdog_syscall_started_ns
-            .store(started_ns.max(1), Ordering::Release);
-    }
-
-    #[cfg(feature = "ls2k1000")]
-    pub(crate) fn watchdog_exit_syscall(&self) {
-        self.watchdog_syscall_started_ns.store(0, Ordering::Release);
-    }
-
-    #[cfg(feature = "ls2k1000")]
-    pub(crate) fn watchdog_syscall_snapshot(&self) -> Option<(u64, usize, [usize; 3])> {
-        let started_ns = self.watchdog_syscall_started_ns.load(Ordering::Acquire);
-        if started_ns == 0 {
-            return None;
-        }
-        let sysno = self.watchdog_syscall_number.load(Ordering::Relaxed);
-        let args =
-            core::array::from_fn(|index| self.watchdog_syscall_args[index].load(Ordering::Relaxed));
-        // Reject a snapshot that raced with syscall exit or the next entry.
-        (self.watchdog_syscall_started_ns.load(Ordering::Acquire) == started_ns)
-            .then_some((started_ns, sysno, args))
     }
 }
 
