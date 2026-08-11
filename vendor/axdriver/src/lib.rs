@@ -90,6 +90,9 @@ pub use ls2k1000::{ls2k1000_raw_flush, ls2k1000_raw_read, ls2k1000_raw_write};
 #[cfg(feature = "jh7110")]
 mod jh7110;
 
+#[cfg(block_dev = "sdmmc")]
+mod sdmmc;
+
 #[cfg(feature = "dyn")]
 mod dyn_drivers;
 

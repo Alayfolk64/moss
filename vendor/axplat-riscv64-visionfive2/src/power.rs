@@ -20,6 +20,21 @@ impl PowerIf for PowerImpl {
         );
     }
 
+    fn system_reset() -> ! {
+        info!("Rebooting...");
+        let result = sbi_rt::system_reset(sbi_rt::ColdReboot, sbi_rt::NoReason);
+        warn!("SBI cold reboot returned unexpectedly: {result:?}");
+        Self::system_off()
+    }
+
+    fn watchdog_start(_timeout_secs: u32) -> bool {
+        false
+    }
+
+    fn watchdog_ping() {}
+
+    fn watchdog_stop() {}
+
     fn system_off() -> ! {
         info!("Shutting down...");
         sbi_rt::system_reset(sbi_rt::Shutdown, sbi_rt::NoReason);

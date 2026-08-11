@@ -97,7 +97,6 @@ pub(crate) fn init_irq() {
         axplat::irq::register(UART_IRQ, handle_uart_interrupt),
         "failed to register VF2 UART IRQ {UART_IRQ}"
     );
-    set_rx_interrupt(true);
 }
 
 struct ConsoleIfImpl;
@@ -134,5 +133,10 @@ impl ConsoleIf for ConsoleIfImpl {
     #[cfg(feature = "irq")]
     fn irq_num() -> Option<usize> {
         Some(UART_IRQ)
+    }
+
+    #[cfg(feature = "irq")]
+    fn enable_rx_interrupt() {
+        set_rx_interrupt(true);
     }
 }
