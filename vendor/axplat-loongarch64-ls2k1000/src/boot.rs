@@ -16,7 +16,6 @@ const UNCACHED_DMW_INIT: usize = crate::fdt::UNCACHED_DMW_BASE | 0x1;
 const CACHED_DMW_INIT: usize = PHYS_BOOT_OFFSET | 0x11;
 const UHI_FDT_ARG0: usize = usize::MAX - 1;
 const MAX_UBOOT_GO_ARGS: usize = 16;
-const MAX_UBOOT_GO_ARG_LEN: usize = 32;
 
 #[unsafe(link_section = ".bss.stack")]
 static mut BOOT_STACK: [u8; BOOT_STACK_SIZE] = [0; BOOT_STACK_SIZE];
@@ -78,39 +77,12 @@ fn init_mmu() {
     );
 }
 
-fn parse_hex_bytes(bytes: &[u8]) -> Option<usize> {
-    let bytes = bytes
-        .strip_prefix(b"0x")
-        .or_else(|| bytes.strip_prefix(b"0X"))
-        .unwrap_or(bytes);
-    if bytes.is_empty() {
-        return None;
-    }
-    bytes.iter().try_fold(0usize, |value, byte| {
-        let digit = match byte {
-            b'0'..=b'9' => byte - b'0',
-            b'a'..=b'f' => byte - b'a' + 10,
-            b'A'..=b'F' => byte - b'A' + 10,
-            _ => return None,
-        } as usize;
-        value.checked_mul(16)?.checked_add(digit)
-    })
-}
-
 unsafe fn parse_uboot_addr_arg(arg: usize) -> Option<usize> {
     if arg == 0 {
         return None;
     }
     let ptr = crate::fdt::uncached_addr(crate::fdt::to_phys(arg)) as *const u8;
-    let mut len = 0;
-    while len < MAX_UBOOT_GO_ARG_LEN {
-        if unsafe { ptr.add(len).read() } == 0 {
-            let bytes = unsafe { core::slice::from_raw_parts(ptr, len) };
-            return parse_hex_bytes(bytes);
-        }
-        len += 1;
-    }
-    None
+    unsafe { crate::boot_arg::parse_hex_c_str(ptr) }
 }
 
 unsafe fn uboot_fdt_arg(argc: usize, argv: usize) -> Option<usize> {
@@ -170,6 +142,13 @@ unsafe extern "C" fn _start() -> ! {
         .word   0x818223cd
         .word   0
 
+        // Linux enters LoongArch with CRMD.IE cleared before touching any
+        // firmware-owned state.  Do the same here: U-Boot is not required to
+        // leave the interrupt-enable bit in a particular state, and our trap
+        // vector/handler tables are not installed yet.
+        ori         $t0, $zero, 4
+        csrxchg     $zero, $t0, 0x0
+
         move        $s0, $a0
         move        $s1, $a1
 
@@ -206,6 +185,7 @@ unsafe extern "C" fn _start() -> ! {
         move        $a0, $s0
         move        $a1, $s1
         bl          {resolve_fdt_arg}
+
         move        $a1, $a0
         csrrd       $a0, 0x20
         la.abs      $t0, {entry}
@@ -233,6 +213,9 @@ unsafe extern "C" fn _start() -> ! {
 pub(crate) unsafe extern "C" fn _start_secondary() -> ! {
     core::arch::naked_asm!(
         "
+        ori         $t0, $zero, 4
+        csrxchg     $zero, $t0, 0x0
+
         li.w        $t0, 0x1028
         iocsrrd.d   $sp, $t0
 
@@ -258,17 +241,4 @@ pub(crate) unsafe extern "C" fn _start_secondary() -> ! {
         init_mmu = sym init_mmu,
         entry = sym axplat::call_secondary_main,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_hex_bytes;
-
-    #[test]
-    fn parses_uboot_hex_addresses() {
-        assert_eq!(parse_hex_bytes(b"0x98000040"), Some(0x9800_0040));
-        assert_eq!(parse_hex_bytes(b"a00000"), Some(0xa0_0000));
-        assert_eq!(parse_hex_bytes(b"0x"), None);
-        assert_eq!(parse_hex_bytes(b"123g"), None);
-    }
 }

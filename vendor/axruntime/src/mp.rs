@@ -62,7 +62,13 @@ pub fn rust_main_secondary(hardware_cpu_id: usize) -> ! {
     }
 
     #[cfg(feature = "irq")]
-    axhal::asm::enable_irqs();
+    {
+        assert!(
+            !axhal::asm::irqs_enabled(),
+            "secondary CPU enabled interrupts before reaching the online state"
+        );
+        axhal::asm::enable_irqs();
+    }
 
     #[cfg(all(feature = "tls", not(feature = "multitask")))]
     super::init_tls();

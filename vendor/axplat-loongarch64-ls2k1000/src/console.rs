@@ -1,12 +1,12 @@
 use axplat::console::ConsoleIf;
 use kspin::SpinNoIrq;
-use lazyinit::LazyInit;
 
 use crate::fdt::{UartResource, resources, uncached_addr};
 
 const UART_RBR_THR: usize = 0;
 const UART_IER: usize = 1;
 const UART_LSR: usize = 5;
+const UART_IER_RECEIVED_DATA_AVAILABLE: u8 = 1;
 const UART_LSR_DATA_READY: u32 = 1;
 const UART_LSR_THR_EMPTY: u32 = 1 << 5;
 
@@ -20,6 +20,14 @@ unsafe impl Send for Ns16550 {}
 unsafe impl Sync for Ns16550 {}
 
 impl Ns16550 {
+    const fn uninit() -> Self {
+        Self {
+            base: 0,
+            reg_shift: 0,
+            reg_io_width: 1,
+        }
+    }
+
     fn new(resource: UartResource) -> Self {
         let uart = Self {
             base: uncached_addr(resource.paddr),
@@ -64,11 +72,15 @@ impl Ns16550 {
     }
 }
 
-static UART: LazyInit<SpinNoIrq<Ns16550>> = LazyInit::new();
+// Keep the lock at its final address and initialize only the aligned UART
+// payload in place.  Moving `SpinNoIrq<Ns16550>` through `LazyInit::init_once`
+// also copies the lock's seven padding bytes; the pinned LoongArch backend
+// widened that padding copy into unaligned word loads/stores on LA264.
+static UART: SpinNoIrq<Ns16550> = SpinNoIrq::new(Ns16550::uninit());
 
 pub(crate) fn init_early() {
     let resource = resources().uart;
-    UART.init_once(SpinNoIrq::new(Ns16550::new(resource)));
+    *UART.lock() = Ns16550::new(resource);
     info!(
         "LS2K1000 console from DTB: paddr={:#x}, reg_shift={}, reg_io_width={}, clock_hz={:?}, \
          irq={:?}",
@@ -104,5 +116,24 @@ impl ConsoleIf for ConsoleIfImpl {
     #[cfg(feature = "irq")]
     fn irq_num() -> Option<usize> {
         resources().uart.irq
+    }
+
+    #[cfg(feature = "irq")]
+    fn enable_rx_interrupt() {
+        let changed = {
+            let uart = UART.lock();
+            let ier = uart.read(UART_IER) as u8;
+            if ier & UART_IER_RECEIVED_DATA_AVAILABLE == 0 {
+                uart.write(UART_IER, ier | UART_IER_RECEIVED_DATA_AVAILABLE);
+                true
+            } else {
+                false
+            }
+        };
+        // Never print through ConsoleIf while holding UART: the print path
+        // takes the same lock and would deadlock before the first RX IRQ.
+        if changed {
+            warn!("LS2K1000 console RX interrupt enabled");
+        }
     }
 }

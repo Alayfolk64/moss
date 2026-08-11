@@ -4,5 +4,5 @@ use core::panic::PanicInfo;
 fn panic(info: &PanicInfo) -> ! {
     ax_println!("{}", info);
     ax_println!("{}", axbacktrace::Backtrace::capture());
-    axhal::power::system_off()
+    axhal::power::system_reset()
 }

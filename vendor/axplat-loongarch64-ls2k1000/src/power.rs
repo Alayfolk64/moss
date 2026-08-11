@@ -41,6 +41,18 @@ impl PowerIf for PowerIfImpl {
         }
     }
 
+    fn watchdog_start(timeout_secs: u32) -> bool {
+        crate::watchdog::start(timeout_secs)
+    }
+
+    fn watchdog_ping() {
+        crate::watchdog::ping();
+    }
+
+    fn watchdog_stop() {
+        crate::watchdog::stop();
+    }
+
     fn system_off() -> ! {
         match crate::fdt::resources().poweroff {
             Some(action) => apply(action, "poweroff"),

@@ -7,8 +7,16 @@ impl InitIf for InitIfImpl {
     fn init_early(_cpu_id: usize, arg: usize) {
         axcpu::init::init_trap();
         crate::fdt::init(arg);
+        // The serial/TFTP runner arms the hardware watchdog before entering
+        // MOSS.  Reload it as soon as the DT resource is known so failures
+        // before the scheduler-backed monitor starts still reset the board.
+        // This is also safe when firmware entered with the watchdog stopped.
+        if !crate::watchdog::start(crate::watchdog::BOOT_TIMEOUT_SECS) {
+            warn!("LS2K1000 early watchdog is unavailable; early hang recovery is disabled");
+        }
         crate::console::init_early();
         crate::time::init_early();
+        crate::node_clock::boost_to_900mhz();
 
         // This marker is intentionally emitted before the allocator, drivers,
         // filesystem and userspace are initialized.  It is the first hardware
@@ -27,6 +35,9 @@ impl InitIf for InitIfImpl {
         crate::time::init_percpu();
         #[cfg(all(feature = "smp", feature = "irq"))]
         axplat::irq::set_enable(crate::config::devices::IPI_IRQ, true);
+        if !crate::watchdog::start(crate::watchdog::BOOT_TIMEOUT_SECS) {
+            warn!("LS2K1000 watchdog is unavailable; automatic hang recovery is disabled");
+        }
     }
 
     #[cfg(feature = "smp")]

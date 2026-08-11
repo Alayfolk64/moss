@@ -18,6 +18,12 @@ pub trait ConsoleIf {
     /// Returns `None` if input interrupt is not supported.
     #[cfg(feature = "irq")]
     fn irq_num() -> Option<usize>;
+
+    /// Enables the device-side receive interrupt after the generic IRQ waker
+    /// has been registered.  Polling-only consoles and consoles initialized
+    /// with receive interrupts already enabled may keep the default no-op.
+    #[cfg(feature = "irq")]
+    fn enable_rx_interrupt() {}
 }
 
 struct EarlyConsole;

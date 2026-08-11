@@ -42,6 +42,12 @@ pub(crate) struct SysconAction {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct WatchdogResource {
+    pub paddr: usize,
+    pub size: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Resources {
     pub cpu_hardware_ids: [Option<usize>; MAX_CPUS],
     pub uart: UartResource,
@@ -49,6 +55,7 @@ pub(crate) struct Resources {
     pub liointc: [Option<LioIntcResource>; MAX_LIOINTC],
     pub poweroff: Option<SysconAction>,
     pub reboot: Option<SysconAction>,
+    pub watchdog: Option<WatchdogResource>,
 }
 
 static RESOURCES: LazyInit<Resources> = LazyInit::new();
@@ -75,7 +82,8 @@ pub(crate) fn init(dtb_paddr: usize) {
     assert_ne!(dtb_paddr, 0, "LS2K1000 requires a firmware-provided DTB");
     let ptr = NonNull::new(uncached_addr(dtb_paddr) as *mut u8).expect("null DTB address");
     let fdt = Fdt::from_ptr(ptr).expect("invalid LS2K1000 firmware DTB");
-    RESOURCES.init_once(parse_resources(&fdt));
+    let resources = parse_resources(&fdt);
+    RESOURCES.init_once(resources);
 }
 
 fn enabled(node: &Node<'_>) -> bool {
@@ -261,14 +269,49 @@ fn parse_syscon_action(fdt: &Fdt<'_>, wanted: &str) -> Option<SysconAction> {
     })
 }
 
+fn parse_watchdog(fdt: &Fdt<'_>) -> Option<WatchdogResource> {
+    let node = fdt.find_compatible(&["loongson,ls2x-wdt"]).find(enabled)?;
+    let (paddr, size) = first_reg(&node).expect("enabled LS2X watchdog has no reg property");
+    assert!(
+        size >= 3 * core::mem::size_of::<u32>(),
+        "LS2X watchdog register window is too small"
+    );
+    assert_eq!(
+        node.find_property("clock-names")
+            .map(|property| property.str()),
+        Some("wdt-clk"),
+        "LS2X watchdog must name its input clock wdt-clk"
+    );
+    let mut clocks = node
+        .find_property("clocks")
+        .expect("LS2X watchdog has no clocks property")
+        .u32_list();
+    let _provider = clocks
+        .next()
+        .expect("LS2X watchdog clock phandle is missing");
+    assert_eq!(
+        clocks.next(),
+        Some(12),
+        "LS2X watchdog must use the LS2K1000 APB watchdog clock"
+    );
+    Some(WatchdogResource { paddr, size })
+}
+
 fn parse_resources(fdt: &Fdt<'_>) -> Resources {
     let liointc = parse_liointc(fdt);
+    let cpu_hardware_ids = parse_cpu_hardware_ids(fdt);
+    let uart = parse_uart(fdt, &liointc);
+    let rtc_paddr = parse_rtc(fdt);
+    let poweroff = parse_syscon_action(fdt, "syscon-poweroff");
+    let reboot = parse_syscon_action(fdt, "syscon-reboot");
+    let watchdog = parse_watchdog(fdt);
     Resources {
-        cpu_hardware_ids: parse_cpu_hardware_ids(fdt),
-        uart: parse_uart(fdt, &liointc),
-        rtc_paddr: parse_rtc(fdt),
+        cpu_hardware_ids,
+        uart,
+        rtc_paddr,
         liointc,
-        poweroff: parse_syscon_action(fdt, "syscon-poweroff"),
-        reboot: parse_syscon_action(fdt, "syscon-reboot"),
+        poweroff,
+        reboot,
+        watchdog,
     }
 }

@@ -5,15 +5,16 @@
     "README.md": "a80a71debca4f4564fb2b039418c963777b0272716c013b9779cf27cc335d243",
     "build.rs": "de8a5f3ed8efb957c1348a2ba7aa4dcb7756d5585aadbdf49a3feabd1eb954b4",
     "linker.lds.S": "aa12f343f1ff648ac4daa68c76925a10599bf51efd7a0e0b8914953e4cb7aafa",
-    "src/dtb.rs": "9a13ceb04c67974dabff3630cab8af2c0f04381f46f43e24071944c189da1056",
+    "src/dtb.rs": "77a6a707e90f7cae7115504d0438685ed5389f51e263cfb0dbfd8b224611de10",
     "src/dummy.rs": "050ac328f6f80324cf576ec2836e4b4774c261fc7e51f56158c582c0dd1f29e0",
-    "src/irq.rs": "76ebabd2b973990eb4d14178e2bca05201f33a82a90955f626a76256778d7512",
-    "src/lib.rs": "32eb5d0062bf54f108ba9b5c93df0c829fd89e6c9f7ce1d5dd6964c4ff1be607",
-    "src/mem.rs": "21477430d792c5954d67fa680a4dcaf0d400e1fade9f8c091ed45ceb32236d58",
+    "src/irq.rs": "0755e4be770eae1c910248ba7fb3df565f52b5adb54f81b1839712d21b573227",
+    "src/lib.rs": "b1e85d3188f461b32cfd2ba951003765ac2c5e61f2c2f33df0feff7cde8f5fb4",
+    "src/mem.rs": "0c10a1c682758e982947bcb574352244136bc1ffecdee7e35bcddb5dffc02f28",
     "src/paging.rs": "671c054e9df979e6f15125351c613340443797fbc9093ea63d36c2b20aa43bbf",
     "src/percpu.rs": "7b7632032e7db375923088eca8488002dc7f22decebc8acab349b0f8714db18f",
-    "src/time.rs": "151941fea5a3c388ecfbfbcc0cc15ec2f9f05ba96ffcbf91a63e8f3ae60d083b",
-    "src/tls.rs": "59d37fe4b43a8b9165a1da0ecf50bf6d5ca4c8413ed011188ee94b89915a8451"
+    "src/time.rs": "71df0fc6b3cf327de1bcf64e6a30d0123d57ddfc371e7d1089d9bdf05160f940",
+    "src/tls.rs": "30ef41c69daf31c8eb7be8967dcdec2d756e467f1a1e94ee255a7a6b6ff9e507",
+    "src/ram_source.rs": "5aade44620d4beb0a01e8d437a14cb341834372a92d8da1d708f3efd503ccc0d"
   },
   "package": "fb544b7a866bf391721e039976d18ac77028c59e2dfd65c951414ab98cd0394e"
 }

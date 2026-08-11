@@ -31,6 +31,12 @@
         value = <0x3c00>;
     };
 
+    gmac_axi: stmmac-axi-config {
+        snps,wr_osr_lmt = <1>;
+        snps,rd_osr_lmt = <2>;
+        snps,blen = <4 8 16 32 0 0 0>;
+    };
+
     memory@200000 {
         device_type = "memory";
         reg = <0 0x00200000 0 0x0ee00000>,
@@ -67,6 +73,11 @@
         #interrupt-cells = <1>;
     };
 
+    clk: clock-controller {
+        compatible = "loongson,ls2k1000-clk";
+        #clock-cells = <1>;
+    };
+
     liointc: interrupt-controller@1fe01400 {
         compatible = "loongson,2k1000-icu";
         interrupt-controller;
@@ -100,12 +111,21 @@
             reg = <0 0x1fe27000 0 0x58>;
         };
 
+        watchdog@1fe27030 {
+            compatible = "loongson,ls2x-wdt";
+            reg = <0 0x1fe27030 0 0xc>;
+            clocks = <&clk 12>;
+            clock-names = "wdt-clk";
+            status = "okay";
+        };
+
         ahci@400e0000 {
-            compatible = "loongson,ls-ahci", "snps,spear-ahci";
+            compatible = "snps,spear-ahci";
             reg = <0 0x400e0000 0 0x10000>;
             interrupt-parent = <&liointc>;
             interrupts = <19>;
             dma-mask = <0 0xffffffff>;
+            ports-implemented = <1>;
             status = "okay";
         };
 
@@ -126,6 +146,11 @@
             phy-handle = <&phy0>;
             local-mac-address = [02 4d 4f 53 53 00];
             dma-mask = <0 0xffffffff>;
+            snps,pbl = <8>;
+            snps,txpbl = <16>;
+            snps,rxpbl = <8>;
+            snps,mixed-burst;
+            snps,axi-config = <&gmac_axi>;
             status = "okay";
 
             mdio {

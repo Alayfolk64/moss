@@ -17,6 +17,13 @@ impl PowerIf for PowerImpl {
         crate::mp::start_secondary_cpu(cpu_id, pa!(stack_top_paddr));
     }
 
+    /// QEMU's LoongArch GED exposes the existing power-off action but no
+    /// separate reset action through this platform module.  Keep panic/reset
+    /// callers linkable and terminate this disposable VM cleanly.
+    fn system_reset() -> ! {
+        Self::system_off()
+    }
+
     /// Shutdown the whole system.
     fn system_off() -> ! {
         let halt_addr = phys_to_virt(pa!(GED_PADDR)).as_mut_ptr();

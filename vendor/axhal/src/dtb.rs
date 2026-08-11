@@ -12,7 +12,10 @@ static BOOT_CPU_ID: LazyInit<usize> = LazyInit::new();
 /// kernel.
 pub fn init(arg: usize, boot_cpu_id: usize) {
     if let Some(existing) = BOOTARG.get() {
-        assert_eq!(*existing, arg, "boot DTB address changed after initialization");
+        assert_eq!(
+            *existing, arg,
+            "boot DTB address changed after initialization"
+        );
     } else {
         BOOTARG.init_once(arg);
     }
@@ -91,7 +94,10 @@ pub fn cpu_hardware_ids() -> Option<&'static [usize]> {
                 .and_then(|mut regs| regs.next())
                 .map(|reg| reg.address as usize)
                 .unwrap_or_else(|| panic!("enabled CPU node {} has no reg property", node.name()));
-            assert!(!ids.contains(&id), "duplicate CPU hardware ID {id:#x} in DTB");
+            assert!(
+                !ids.contains(&id),
+                "duplicate CPU hardware ID {id:#x} in DTB"
+            );
             ids.push(id).expect("too many CPU nodes in DTB");
         }
 
@@ -137,4 +143,17 @@ pub fn get_chosen_bootargs() -> Option<&'static str> {
     }
 
     *CACHED_BOOTARGS.init_once(init_bootargs())
+}
+
+/// Returns the raw bytes of a property in `/chosen`.
+///
+/// Boot-time consumers use this for machine-specific handoff data that does
+/// not belong in the command line. The returned slice lives in the immutable
+/// boot DTB and is therefore valid for the lifetime of the kernel.
+pub fn get_chosen_property(name: &str) -> Option<&'static [u8]> {
+    get_fdt()?
+        .find_nodes("/chosen")
+        .next()?
+        .find_property(name)
+        .map(|property| property.raw_value())
 }

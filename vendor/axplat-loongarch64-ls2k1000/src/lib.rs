@@ -15,15 +15,21 @@ pub mod config {
 }
 
 mod boot;
+mod boot_arg;
 mod console;
 mod fdt;
 mod init;
+mod ipi_state;
 #[cfg(feature = "irq")]
 mod irq;
 #[cfg(feature = "irq")]
 mod irq_state;
 mod mem;
+mod mem_layout;
+mod node_clock;
+mod node_clock_state;
 #[cfg(feature = "smp")]
 mod mp;
 mod power;
 mod time;
+mod watchdog;

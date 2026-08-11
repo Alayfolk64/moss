@@ -1,20 +1,20 @@
 //! Physical memory management.
 
-use heapless::Vec;
-use lazyinit::LazyInit;
-
-use axplat::mem::{RawRange, check_sorted_ranges_overlap, ranges_difference};
-use memory_addr::{align_down_4k, align_up_4k};
-
-pub use axplat::mem::{MemRegionFlags, PhysMemRegion};
-pub use axplat::mem::{mmio_ranges, phys_to_virt, virt_to_phys};
 // `kernel_aspace` is only available in newer (unpublished) versions of axplat;
 // the crates.io 0.3.0 release does not have it.
 #[cfg(any(feature = "defplat", feature = "myplat"))]
 pub use axplat::mem::kernel_aspace;
+pub use axplat::mem::{MemRegionFlags, PhysMemRegion, mmio_ranges, phys_to_virt, virt_to_phys};
+use axplat::mem::{RawRange, check_sorted_ranges_overlap, ranges_difference};
+use heapless::Vec;
+use lazyinit::LazyInit;
 pub use memory_addr::{PAGE_SIZE_4K, PhysAddr, PhysAddrRange, VirtAddr, VirtAddrRange, pa, va};
+use memory_addr::{align_down_4k, align_up_4k};
 
-use crate::addr_of_sym;
+use crate::{
+    addr_of_sym,
+    ram_source::{RamSource, visit_selected_ram_ranges},
+};
 
 const MAX_REGIONS: usize = 128;
 
@@ -71,12 +71,19 @@ fn discover_ram_ranges() -> Vec<RawRange, MAX_REGIONS> {
     #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
     {
         let fdt = crate::dtb::get_fdt().expect("QEMU requires a valid device tree");
-        for memory in fdt.memory() {
-            for region in memory.regions() {
-                push_ram_range(&mut ranges, region.address as usize, region.size);
-            }
+        let device_tree = fdt
+            .memory()
+            .flat_map(|memory| memory.regions())
+            .map(|region| (region.address as usize, region.size));
+        let source = visit_selected_ram_ranges(
+            device_tree,
+            axplat::mem::phys_ram_ranges().iter().copied(),
+            |(start, size)| push_ram_range(&mut ranges, start, size),
+        );
+        if source == RamSource::Platform {
+            warn!("device tree contains no usable RAM; using platform firmware memory ranges");
         }
-        assert!(!ranges.is_empty(), "device tree contains no usable RAM");
+        assert!(!ranges.is_empty(), "firmware contains no usable RAM");
     }
 
     #[cfg(not(any(target_arch = "riscv64", target_arch = "loongarch64")))]

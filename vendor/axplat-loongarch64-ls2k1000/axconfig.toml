@@ -7,11 +7,13 @@ package = "axplat-loongarch64-ls2k1000"
 # Capacity only. Enabled CPUs and their hardware IDs come from the DTB.
 cpu-num = 2
 
-# The vendor U-Boot reports 256 MiB at PA 0 and 1792 MiB at PA 0x9000_0000.
+# The 1 GiB board exposes 256 MiB at PA 0 and 768 MiB at PA 0x9000_0000.
+# The factory DTB overstates this capacity, so keep the platform fallback tied
+# to the physical DIMM size rather than trusting that broken memory node.
 low-memory-base = 0x0
 low-memory-size = 0x1000_0000
 high-memory-base = 0x9000_0000
-phys-memory-size = 0x8000_0000
+phys-memory-size = 0x4000_0000
 
 # DMW0/1 are used during early boot.  The LA264 implements fewer virtual
 # address bits than QEMU, so 0xffff_8000_0000_0000 is not canonical on the

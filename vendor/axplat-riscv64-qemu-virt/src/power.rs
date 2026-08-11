@@ -20,6 +20,22 @@ impl PowerIf for PowerImpl {
         sbi_rt::hart_start(cpu_id, entry.as_usize(), stack_top_paddr);
     }
 
+    /// Reboot the whole system through the SBI system reset extension.
+    fn system_reset() -> ! {
+        info!("Rebooting...");
+        let ret = sbi_rt::system_reset(sbi_rt::ColdReboot, sbi_rt::NoReason);
+        warn!("Failed to reboot: {:?}", ret);
+        Self::system_off()
+    }
+
+    fn watchdog_start(_timeout_secs: u32) -> bool {
+        false
+    }
+
+    fn watchdog_ping() {}
+
+    fn watchdog_stop() {}
+
     /// Shutdown the whole system.
     fn system_off() -> ! {
         info!("Shutting down...");

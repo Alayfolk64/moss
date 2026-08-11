@@ -17,6 +17,19 @@ pub trait PowerIf {
         Self::system_off()
     }
 
+    /// Starts the hardware watchdog with the requested timeout.
+    ///
+    /// Returns `false` when the platform has no usable watchdog.
+    fn watchdog_start(_timeout_secs: u32) -> bool {
+        false
+    }
+
+    /// Reloads the hardware watchdog countdown.
+    fn watchdog_ping() {}
+
+    /// Stops the hardware watchdog.
+    fn watchdog_stop() {}
+
     /// Shutdown the whole system.
     fn system_off() -> !;
 }

@@ -1,12 +1,24 @@
 use axplat::mem::{MemIf, PhysAddr, RawRange, VirtAddr, pa, va};
 
-use crate::config::{
-    devices::MMIO_RANGES,
-    plat::{
-        HIGH_MEMORY_BASE, LOW_MEMORY_BASE, LOW_MEMORY_SIZE, PHYS_BOOT_OFFSET, PHYS_MEMORY_SIZE,
-        PHYS_VIRT_OFFSET,
+use crate::{
+    config::{
+        devices::MMIO_RANGES,
+        plat::{
+            HIGH_MEMORY_BASE, LOW_MEMORY_BASE, LOW_MEMORY_SIZE, PHYS_BOOT_OFFSET, PHYS_MEMORY_SIZE,
+            PHYS_VIRT_OFFSET,
+        },
     },
+    mem_layout::top_reservation,
 };
+
+// U-Boot's bdinfo/LMB map reserves the last 16 MiB of the 256 MiB low bank.
+// The preceding framebuffer reservation is described by the DTB, but this
+// firmware workspace is not.
+const FIRMWARE_LOW_RESERVED: RawRange =
+    match top_reservation(LOW_MEMORY_BASE, LOW_MEMORY_SIZE, 0x0100_0000) {
+        Some(range) => range,
+        None => panic!("LS2K1000 firmware reservation exceeds the low RAM bank"),
+    };
 
 struct MemIfImpl;
 
@@ -21,9 +33,8 @@ impl MemIf for MemIfImpl {
     }
 
     fn reserved_phys_ram_ranges() -> &'static [RawRange] {
-        // Firmware reservations and the actual DTB range are added by axhal.
-        // Keep only the conventional low firmware area reserved here.
-        &[(0, 0x20_0000)]
+        // DTB reservations and the actual DTB range are added by axhal.
+        &[(LOW_MEMORY_BASE, 0x20_0000), FIRMWARE_LOW_RESERVED]
     }
 
     fn mmio_ranges() -> &'static [RawRange] {

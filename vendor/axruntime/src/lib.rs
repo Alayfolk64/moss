@@ -97,9 +97,7 @@ impl axdma::DmaProtectIf for DmaProtectIfImpl {
         size: usize,
         flags: axhal::paging::MappingFlags,
     ) -> Result<(), axerrno::AxError> {
-        axmm::kernel_aspace()
-            .lock()
-            .protect(vaddr, size, flags)
+        axmm::kernel_aspace().lock().protect(vaddr, size, flags)
     }
 }
 
@@ -122,9 +120,10 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 static INITED_CPUS: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(feature = "fs")]
-use axdriver::prelude::{BaseDriverOps, BlockDriverOps};
-#[cfg(feature = "fs")]
 use alloc::vec::Vec;
+
+#[cfg(feature = "fs")]
+use axdriver::prelude::{BaseDriverOps, BlockDriverOps};
 
 #[cfg(feature = "fs")]
 static RUNTIME_BLOCK_DEVS: spin::Mutex<Option<Vec<Option<axdriver::AxBlockDevice>>>> =
@@ -154,6 +153,17 @@ pub fn take_runtime_block_device(slot_idx: usize) -> Option<axdriver::AxBlockDev
 
 fn is_init_ok() -> bool {
     INITED_CPUS.load(Ordering::Acquire) == axhal::cpu_num()
+}
+
+/// Publish one bounded boot milestone and reload a firmware/platform watchdog.
+///
+/// The scheduler-backed progress monitor cannot run during early single-core
+/// initialization.  Keeping explicit milestones here preserves the short
+/// hardware timeout without making a valid cold boot race a single 30-second
+/// deadline covering allocator, MMU, drivers, filesystems and SMP bring-up.
+fn boot_watchdog_milestone(stage: &str) {
+    axhal::watchdog::ping();
+    ax_println!("MOSS_BOOT_STAGE {stage}");
 }
 
 /// The main entry point of the ArceOS runtime.
@@ -228,6 +238,7 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
 
     #[cfg(feature = "alloc")]
     init_allocator();
+    boot_watchdog_milestone("allocator-ready");
 
     {
         use core::ops::Range;
@@ -250,18 +261,23 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
 
         axbacktrace::init(ip_range, fp_range);
     }
+    boot_watchdog_milestone("backtrace-ready");
 
     #[cfg(feature = "paging")]
     axmm::init_memory_management();
+    boot_watchdog_milestone("paging-ready");
 
     #[cfg(feature = "driver-dyn")]
     axdriver::setup(arg);
+    boot_watchdog_milestone("driver-config-ready");
 
     info!("Initialize platform devices...");
     axhal::init_later(cpu_id, arg);
+    boot_watchdog_milestone("platform-ready");
 
     #[cfg(feature = "multitask")]
     axtask::init_scheduler();
+    boot_watchdog_milestone("scheduler-ready");
 
     #[cfg(feature = "ipi")]
     axipi::init();
@@ -271,6 +287,7 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
         info!("Initialize interrupt handlers...");
         init_interrupt();
     }
+    boot_watchdog_milestone("interrupts-ready");
 
     #[cfg(any(feature = "fs", feature = "net", feature = "display"))]
     {
@@ -294,13 +311,12 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
                         .expect("all block device slots should be occupied");
                     let bytes = dev.num_blocks() as u128 * dev.block_size() as u128;
                     let better_size = bytes > root_bytes;
-                    let tie_but_better_name =
-                        bytes == root_bytes && {
-                            let current = block_slots[root_idx]
-                                .as_ref()
-                                .expect("root index should point to a valid block device");
-                            dev.device_name() < current.device_name()
-                        };
+                    let tie_but_better_name = bytes == root_bytes && {
+                        let current = block_slots[root_idx]
+                            .as_ref()
+                            .expect("root index should point to a valid block device");
+                        dev.device_name() < current.device_name()
+                    };
                     if better_size || tie_but_better_name {
                         root_bytes = bytes;
                         root_idx = idx;
@@ -334,9 +350,11 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
         #[cfg(feature = "input")]
         axinput::init_input(all_devices.input);
     }
+    boot_watchdog_milestone("devices-ready");
 
     #[cfg(feature = "smp")]
     self::mp::start_secondary_cpus(hardware_cpu_id);
+    boot_watchdog_milestone("smp-ready");
 
     #[cfg(all(feature = "tls", not(feature = "multitask")))]
     {
@@ -345,6 +363,7 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
     }
 
     ctor_bare::call_ctors();
+    boot_watchdog_milestone("constructors-ready");
 
     info!("Primary CPU {cpu_id} init OK.");
     INITED_CPUS.fetch_add(1, Ordering::Release);
@@ -352,8 +371,7 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
     while !is_init_ok() {
         core::hint::spin_loop();
     }
-
-    ax_println!("MOSS_SMP online={}", INITED_CPUS.load(Ordering::Acquire));
+    boot_watchdog_milestone("main-entry");
 
     unsafe { main() };
 
@@ -368,23 +386,18 @@ pub fn rust_main(hardware_cpu_id: usize, arg: usize) -> ! {
 
 #[cfg(feature = "alloc")]
 fn init_allocator() {
-    use axhal::mem::{MemRegionFlags, memory_regions, phys_to_virt, virt_to_phys};
+    use axhal::mem::{MemRegionFlags, memory_regions, phys_to_virt};
 
     info!("Initialize global memory allocator...");
     info!("  use {} allocator.", axalloc::global_allocator().name());
 
     let free_regions = || memory_regions().filter(|r| r.flags.contains(MemRegionFlags::FREE));
 
-    unsafe extern "C" {
-        safe static _ekernel: [u8; 0];
-    }
-    let kernel_end_paddr = virt_to_phys(_ekernel.as_ptr().addr().into());
-
     let init_region = free_regions()
-        // The bitmap page allocator manages only its initial contiguous range.
-        // Prefer the largest one so split-memory machines can use high RAM for
-        // page-backed user memory.
-        .max_by_key(|r| (r.size, r.paddr >= kernel_end_paddr))
+        // Bitmap indices are offsets from the initial range. Start at the
+        // lowest free address so later, discontiguous RAM banks can be added
+        // without moving the bitmap base.
+        .min_by_key(|r| r.paddr)
         .expect("no free memory region found!!");
 
     axalloc::global_init(phys_to_virt(init_region.paddr).as_usize(), init_region.size);
@@ -392,9 +405,16 @@ fn init_allocator() {
     for r in free_regions() {
         if r.paddr != init_region.paddr {
             axalloc::global_add_memory(phys_to_virt(r.paddr).as_usize(), r.size)
-                .expect("add heap memory region failed");
+                .expect("add page memory region failed");
         }
     }
+
+    let allocator = axalloc::global_allocator();
+    ax_println!(
+        "MOSS_MEMORY managed_mib={} free_mib={}",
+        (allocator.used_pages() + allocator.available_pages()) * 0x1000 / (1024 * 1024),
+        allocator.available_pages() * 0x1000 / (1024 * 1024),
+    );
 }
 
 #[cfg(feature = "irq")]

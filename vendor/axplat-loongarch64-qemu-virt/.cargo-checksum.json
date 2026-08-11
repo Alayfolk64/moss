@@ -14,7 +14,7 @@
     "src/lib.rs": "b3e5f871ec61a023549b900cc86ddbd9b062910b9b325fa73c8abe2087467478",
     "src/mem.rs": "6d2428586cbd6f20c1717f78d1f9c81b3b3a3109cfaedf5d3b32ed1f49ffd3a0",
     "src/mp.rs": "619d36eb25dee8eaff77c371bacb02536a1fd6964c49859fa05c7d62d0427fc4",
-    "src/power.rs": "aa06ca7c5495a51ec431a85205f32e11d929269d728d67496ce5b09916d83c82",
+    "src/power.rs": "25e216fb34f844baa67a9dc66116dbf823f1b257f144cee02f1afffd317046e5",
     "src/time.rs": "0c6983315d4a0cbed5eeadf65afb1ab275de07557f487fe7b334ad38c50ef386"
   },
   "package": "e6950cea16d394b76a2d0c6970be4a631ef4bb30db6fbe4994e488fbc9f5ab2f"

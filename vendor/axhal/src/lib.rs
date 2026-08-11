@@ -59,6 +59,7 @@ cfg_if::cfg_if! {
 pub mod dtb;
 pub mod mem;
 pub mod percpu;
+mod ram_source;
 pub mod time;
 
 #[cfg(feature = "tls")]
@@ -73,7 +74,7 @@ pub mod paging;
 /// Console input and output.
 pub mod console {
     #[cfg(all(feature = "irq", any(feature = "defplat", feature = "myplat")))]
-    pub use axplat::console::irq_num;
+    pub use axplat::console::{enable_rx_interrupt, irq_num};
     #[cfg(all(feature = "irq", not(any(feature = "defplat", feature = "myplat"))))]
     pub fn irq_num() -> Option<usize> {
         None
@@ -86,6 +87,13 @@ pub mod power {
     #[cfg(feature = "smp")]
     pub use axplat::power::cpu_boot;
     pub use axplat::power::{system_off, system_reset};
+}
+
+/// Hardware watchdog management.
+pub mod watchdog {
+    pub use axplat::power::{
+        watchdog_ping as ping, watchdog_start as start, watchdog_stop as stop,
+    };
 }
 
 /// Trap handling.
@@ -104,12 +112,9 @@ pub mod context {
 }
 
 pub use axcpu::asm;
-
 #[cfg(feature = "uspace")]
 pub use axcpu::uspace;
-
 pub use axplat::init::init_later;
-
 #[cfg(feature = "smp")]
 pub use axplat::init::{init_early_secondary, init_later_secondary};
 

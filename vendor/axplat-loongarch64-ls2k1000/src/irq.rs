@@ -1,6 +1,7 @@
 use axplat::irq::{HandlerTable, IpiTarget, IrqHandler, IrqIf};
 use loongArch64::{
     iocsr::{iocsr_read_w, iocsr_write_w},
+    ipi::send_ipi_single,
     register::{
         ecfg::{self, LineBasedInterrupt},
         ticlr,
@@ -13,6 +14,7 @@ use crate::{
         LIOINTC_IRQ_BASE, LIOINTC_IRQS_PER_CONTROLLER, LioIntcResource, MAX_LIOINTC, resources,
         uncached_addr,
     },
+    ipi_state::{ENABLED_ACTIONS, RUNTIME_ACTION, decode_pending},
     irq_state::first_pending_source,
 };
 
@@ -20,9 +22,6 @@ const MAX_IRQ_COUNT: usize = LIOINTC_IRQ_BASE + MAX_LIOINTC * LIOINTC_IRQS_PER_C
 const IOCSR_IPI_STATUS: usize = 0x1000;
 const IOCSR_IPI_ENABLE: usize = 0x1004;
 const IOCSR_IPI_CLEAR: usize = 0x100c;
-const IOCSR_IPI_SEND: usize = 0x1040;
-const IOCSR_IPI_SEND_CPU_SHIFT: u32 = 16;
-const IOCSR_IPI_SEND_BLOCKING: u32 = 1 << 31;
 
 static IRQ_HANDLERS: HandlerTable<MAX_IRQ_COUNT> = HandlerTable::new();
 
@@ -128,8 +127,18 @@ fn handle_liointc(controller: LioIntc) -> Option<usize> {
         return None;
     };
     let irq = controller.resource.irq_base + source;
-    if !IRQ_HANDLERS.handle(irq) {
-        controller.set_enable(source, false);
+
+    // LIOINTC device inputs are level-triggered. Match Linux's
+    // handle_level_irq flow: mask the source while the device handler clears
+    // its status, then unmask it only after the MMIO acknowledgement has
+    // completed. Without this sequence LS2K1000 can immediately re-enter the
+    // parent interrupt with a stale CPU ISR bit even though the AHCI PxIS and
+    // HBA IS registers already read back as zero.
+    controller.set_enable(source, false);
+    let handled = IRQ_HANDLERS.handle(irq);
+    if handled {
+        controller.set_enable(source, true);
+    } else {
         warn!("Unhandled LS2K1000 device IRQ {irq}; masked source {source}");
     }
     // Return the exact IRQ whose handler ran. Other pending level sources
@@ -138,21 +147,30 @@ fn handle_liointc(controller: LioIntc) -> Option<usize> {
     Some(irq)
 }
 
-fn send_ipi(cpu_id: usize) {
+fn send_runtime_ipi(cpu_id: usize) {
     let hardware_id = crate::fdt::logical_cpu_hardware_id(cpu_id);
-    iocsr_write_w(
-        IOCSR_IPI_SEND,
-        IOCSR_IPI_SEND_BLOCKING | ((hardware_id as u32) << IOCSR_IPI_SEND_CPU_SHIFT),
-    );
+    send_ipi_single(hardware_id, RUNTIME_ACTION);
 }
 
 fn handle_ipi() {
     let status = iocsr_read_w(IOCSR_IPI_STATUS);
-    if status != 0 {
-        iocsr_write_w(IOCSR_IPI_CLEAR, status);
+    if status == 0 {
+        return;
+    }
+
+    // Linux acknowledges every latched action before dispatch. In particular,
+    // the boot action has no runtime callback behind it and must be ignored.
+    iocsr_write_w(IOCSR_IPI_CLEAR, status);
+    unsafe { core::arch::asm!("dbar 0", options(nostack, preserves_flags)) };
+
+    let pending = decode_pending(status);
+    if pending.runtime {
         if !IRQ_HANDLERS.handle(IPI_IRQ) {
             debug!("Unhandled IPI");
         }
+    }
+    if pending.unknown != 0 {
+        warn!("Unsupported LS2K1000 IPI actions: {:#x}", pending.unknown);
     }
 }
 
@@ -166,7 +184,7 @@ impl IrqIf for IrqIfImpl {
             return;
         }
         if irq == IPI_IRQ {
-            iocsr_write_w(IOCSR_IPI_ENABLE, if enabled { u32::MAX } else { 0 });
+            iocsr_write_w(IOCSR_IPI_ENABLE, if enabled { ENABLED_ACTIONS } else { 0 });
             set_arch_line(IPI_IRQ, enabled);
             return;
         }
@@ -214,11 +232,11 @@ impl IrqIf for IrqIfImpl {
 
     fn send_ipi(_irq_num: usize, target: IpiTarget) {
         match target {
-            IpiTarget::Current { cpu_id } | IpiTarget::Other { cpu_id } => send_ipi(cpu_id),
+            IpiTarget::Current { cpu_id } | IpiTarget::Other { cpu_id } => send_runtime_ipi(cpu_id),
             IpiTarget::AllExceptCurrent { cpu_id, cpu_num } => {
                 for target in 0..cpu_num {
                     if target != cpu_id {
-                        send_ipi(target);
+                        send_runtime_ipi(target);
                     }
                 }
             }

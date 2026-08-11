@@ -29,7 +29,7 @@ pub fn init() {
 
 /// Executes a callback on the specified destination CPU via IPI.
 pub fn run_on_cpu<T: Into<Callback>>(dest_cpu: usize, callback: T) {
-    info!("Send IPI event to CPU {dest_cpu}");
+    debug!("Send IPI event to CPU {dest_cpu}");
     if dest_cpu == this_cpu_id() {
         // Execute callback on current CPU immediately
         callback.into().call();
@@ -43,7 +43,7 @@ pub fn run_on_cpu<T: Into<Callback>>(dest_cpu: usize, callback: T) {
 
 /// Executes a callback on all other CPUs via IPI.
 pub fn run_on_each_cpu<T: Into<MulticastCallback>>(callback: T) {
-    info!("Send IPI event to all other CPUs");
+    debug!("Send IPI event to all other CPUs");
     let current_cpu_id = this_cpu_id();
     let cpu_num = axhal::cpu_num();
     let callback = callback.into();
