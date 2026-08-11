@@ -9,6 +9,8 @@ extern crate alloc;
 pub mod dwmac_ls2k1000;
 #[cfg(feature = "dwmac-ls2k1000")]
 mod dwmac_ls2k1000_state;
+#[cfg(feature = "dwmac-jh7110")]
+pub mod dwmac_jh7110;
 
 #[cfg(feature = "fxmac")]
 /// fxmac driver for PhytiumPi

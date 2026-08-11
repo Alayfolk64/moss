@@ -1,8 +1,4 @@
-use core::{
-    future::poll_fn,
-    sync::atomic::{AtomicBool, Ordering},
-    task::Poll,
-};
+use core::{future::poll_fn, task::Poll};
 
 use axerrno::{AxError, AxResult};
 use axhal::uspace::UserContext;
@@ -131,14 +127,12 @@ pub fn check_signals(
     check_signals_result(thr, uctx, restore_blocked) != SignalCheckResult::None
 }
 
-static BLOCK_NEXT_SIGNAL_CHECK: AtomicBool = AtomicBool::new(false);
-
 pub fn block_next_signal() {
-    BLOCK_NEXT_SIGNAL_CHECK.store(true, Ordering::SeqCst);
+    current().as_thread().suppress_next_signal_check();
 }
 
 pub fn unblock_next_signal() -> bool {
-    BLOCK_NEXT_SIGNAL_CHECK.swap(false, Ordering::SeqCst)
+    current().as_thread().take_suppress_next_signal_check()
 }
 
 pub fn with_blocked_signals<R>(

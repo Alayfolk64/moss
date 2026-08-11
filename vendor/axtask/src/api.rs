@@ -339,6 +339,15 @@ pub fn yield_now() {
     current_run_queue::<NoPreemptIrqSave>().yield_current()
 }
 
+/// Requests a reschedule when the current no-preemption section ends.
+///
+/// Interrupt handlers can use this after waking a latency-sensitive task. The
+/// actual context switch is deferred until the interrupt guard is dropped.
+pub fn request_reschedule() {
+    #[cfg(feature = "preempt")]
+    current().set_preempt_pending(true);
+}
+
 /// Current task is going to sleep for the given duration.
 ///
 /// If the feature `irq` is not enabled, it uses busy-wait instead.

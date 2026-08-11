@@ -65,12 +65,14 @@ driver-dyn = [
 ]
 driver-fxmac = ["axdriver?/fxmac"]
 driver-ixgbe = ["axdriver?/ixgbe"]
+driver-jh7110 = ["axdriver?/jh7110"]
 driver-ls2k1000 = ["axdriver?/ls2k1000"]
 driver-ramdisk = [
     "axdriver?/ramdisk",
     "axfs?/use-ramdisk",
 ]
 driver-sdmmc = ["axdriver?/sdmmc"]
+driver-sdmmc-irq = ["driver-sdmmc", "axdriver?/sdmmc-irq"]
 dwarf = [
     "alloc",
     "axbacktrace/dwarf",

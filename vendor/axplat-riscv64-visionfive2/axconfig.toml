@@ -4,9 +4,9 @@ platform = "visionfive2"
 package = "axplat-riscv64-visionfive2"
 
 [plat]
-# Start with one S-mode hart while using the full 4-GiB RAM topology reported
-# by the board DTB. SMP remains a follow-up enablement item.
-cpu-num = 1
+# JH7110 hart 0 is a monitor core without an S-mode PLIC context. Moss runs on
+# the four U74 S-mode harts (physical harts 1 through 4).
+cpu-num = 4
 phys-memory-base = 0x4000_0000
 phys-memory-size = 0x1_0000_0000
 kernel-base-paddr = 0x4020_0000
@@ -44,6 +44,14 @@ timer-frequency = 4_000_000
 timer-irq = "0x8000_0000_0000_0005"
 ipi-irq = "0x8000_0000_0000_0001"
 
+plic-paddr = 0x0c00_0000
+plic-num-sources = 136
 uart-paddr = 0x1000_0000
 uart-irq = 0x20
 sdmmc-paddr = 0x1602_0000
+sdmmc-irq = 75
+gmac1-paddr = 0x1604_0000
+gmac1-irq = 78
+ccache-paddr = 0x0201_0000
+syscrg-paddr = 0x1302_0000
+syscon-paddr = 0x1303_0000

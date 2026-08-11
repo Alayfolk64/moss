@@ -1,0 +1,124 @@
+#let report-header-title = [MossOS 设计文档]
+
+#let report-header() = [
+  #align(center, text(font: ("Times New Roman", "SimSun", "Songti SC", "STSong"), size: 10pt, report-header-title))
+  #v(4pt)
+  #line(length: 100%, stroke: 0.75pt + black)
+]
+
+#let report-footer(numbering: "1") = context [
+  #align(center, text(font: ("Times New Roman", "SimSun", "Songti SC", "STSong"), size: 10pt, counter(page).display(numbering)))
+]
+
+#let report-style(body) = {
+  set text(
+    font: ("Times New Roman", "SimSun", "Songti SC", "STSong"),
+    size: 11pt,
+    lang: "zh",
+  )
+
+  set page(
+    paper: "a4",
+    margin: (top: 2.5cm, bottom: 2.2cm, x: 2.5cm),
+    header-ascent: 1.2em,
+    header: report-header(),
+    footer: report-footer(),
+  )
+
+  set par(
+    first-line-indent: (amount: 2em, all: true),
+    justify: true,
+    leading: 0.85em,
+    spacing: 0.85em,
+  )
+
+  show raw.where(block: true): it => {
+    block(
+      fill: rgb("#f6f6f6"),
+      inset: 1em,
+      radius: 6pt,
+      width: 100%,
+      breakable: true,
+      above: 0.35em,
+      below: 0.35em,
+      align(
+        left,
+        text(
+          font: ("Consolas", "KaiTi", "Kaiti SC"),
+          size: 10pt,
+          it,
+        ),
+      ),
+    )
+  }
+
+  // 代码图的外层 figure 也允许分页，否则内部代码块仍会被整体移到下一页。
+  show figure.where(kind: raw): set block(breakable: true)
+
+  set heading(numbering: "1.1")
+
+  set figure(numbering: (..nums) => {
+    let chapter = counter(heading).get().first()
+    numbering("1-1", chapter, ..nums)
+  })
+
+  show heading.where(level: 1): it => {
+    pagebreak(weak: true)
+    set align(center)
+    set text(
+      font: "Microsoft YaHei",
+      size: 16pt,
+      weight: "regular",
+    )
+    block[
+      #if it.numbering != none [
+        第#counter(heading).display()章 #it.body
+      ] else [
+        #it.body
+      ]
+    ]
+    v(0.5em)
+  }
+
+  show heading.where(level: 2): it => {
+    block(
+      above: 1.1em,
+      below: 1em,
+      sticky: true,
+      width: 100%,
+    )[
+      #set text(
+        font: "Microsoft YaHei",
+        size: 14pt,
+        weight: "regular",
+      )
+      #counter(heading).display(it.numbering) #h(0.45em) #it.body
+    ]
+  }
+
+  show heading.where(level: 3): it => {
+    block(
+      above: 1em,
+      below: 1em,
+      sticky: true,
+      width: 100%,
+    )[
+      #set text(
+        font: "Microsoft YaHei",
+        size: 12pt,
+        weight: "regular",
+      )
+      #counter(heading).display(it.numbering) #h(0.45em) #it.body
+    ]
+  }
+
+  body
+}
+
+// 每章开头调用，例如第二章使用 #chapter-start(2)。
+#let chapter-start(number) = {
+  counter(heading).update(number - 1)
+  counter(figure.where(kind: image)).update(0)
+  counter(figure.where(kind: table)).update(0)
+  counter(figure.where(kind: raw)).update(0)
+}

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" width="560" height="120">
+
+  <!-- VPN[2]: bits[38:30], 9 bits -->
+  <rect x="40" y="50" width="111" height="50"
+        fill="#BFDBFE" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- VPN[1]: bits[29:21], 9 bits -->
+  <rect x="151" y="50" width="111" height="50"
+        fill="#BFDBFE" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- VPN[0]: bits[20:12], 9 bits -->
+  <rect x="262" y="50" width="111" height="50"
+        fill="#BFDBFE" stroke="#3B82F6" stroke-width="1.5"/>
+  <!-- page offset: bits[11:0], 12 bits -->
+  <rect x="373" y="50" width="147" height="50"
+        fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.5"/>
+
+  <!-- Field names -->
+  <text x="95.5"  y="72" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="13" font-weight="bold" fill="#1E40AF">VPN[2]</text>
+  <text x="206.5" y="72" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="13" font-weight="bold" fill="#1E40AF">VPN[1]</text>
+  <text x="317.5" y="72" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="13" font-weight="bold" fill="#1E40AF">VPN[0]</text>
+  <text x="446.5" y="72" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC','Noto Sans CJK SC',sans-serif"
+        font-size="13" font-weight="bold" fill="#92400E">页内偏移</text>
+
+  <!-- Bit widths -->
+  <text x="95.5"  y="91" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1D4ED8">9 bit</text>
+  <text x="206.5" y="91" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1D4ED8">9 bit</text>
+  <text x="317.5" y="91" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1D4ED8">9 bit</text>
+  <text x="446.5" y="91" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#B45309">12 bit</text>
+
+  <!-- Tick marks at bit boundaries -->
+  <line x1="40"  y1="44" x2="40"  y2="50" stroke="#64748B" stroke-width="1"/>
+  <line x1="151" y1="44" x2="151" y2="50" stroke="#64748B" stroke-width="1"/>
+  <line x1="262" y1="44" x2="262" y2="50" stroke="#64748B" stroke-width="1"/>
+  <line x1="373" y1="44" x2="373" y2="50" stroke="#64748B" stroke-width="1"/>
+  <line x1="520" y1="44" x2="520" y2="50" stroke="#64748B" stroke-width="1"/>
+
+  <!-- Bit index labels -->
+  <text x="40"  y="40" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#64748B">38</text>
+  <text x="151" y="40" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#64748B">30 29</text>
+  <text x="262" y="40" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#64748B">21 20</text>
+  <text x="373" y="40" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#64748B">12 11</text>
+  <text x="520" y="40" text-anchor="middle"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#64748B">0</text>
+
+</svg>

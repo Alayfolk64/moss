@@ -70,6 +70,7 @@ impl Inode {
             .create(self.ino, name, inode_type, permission.bits() as _)
             .map_err(into_vfs_err)?;
         self.update_ctime_locked(fs, ino)?;
+        self.fs.bump_namespace_version(self.ino, name);
 
         let reference = Reference::new(
             self.this.as_ref().and_then(WeakDirEntry::upgrade),
@@ -273,6 +274,13 @@ impl FileNodeOps for Inode {
         self.fs.lock().set_len(self.ino, len).map_err(into_vfs_err)
     }
 
+    fn commit_len(&self, len: u64) -> VfsResult<()> {
+        self.fs
+            .lock()
+            .commit_len(self.ino, len)
+            .map_err(into_vfs_err)
+    }
+
     fn set_symlink(&self, target: &str) -> VfsResult<()> {
         self.fs
             .lock()
@@ -290,6 +298,10 @@ impl Pollable for Inode {
 }
 
 impl DirNodeOps for Inode {
+    fn cache_version(&self, name: &str) -> Option<u64> {
+        Some(self.fs.namespace_version(self.ino, name))
+    }
+
     fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
         let mut fs = self.fs.lock();
         let mut reader = fs.read_dir(self.ino, offset).map_err(into_vfs_err)?;
@@ -353,6 +365,7 @@ impl DirNodeOps for Inode {
         fs.link(self.ino, name, node.inode() as _)
             .map_err(into_vfs_err)?;
         self.update_ctime_locked(&mut fs, node.inode() as _)?;
+        self.fs.bump_namespace_version(self.ino, name);
         self.lookup_locked(&mut fs, name)
     }
 
@@ -363,6 +376,7 @@ impl DirNodeOps for Inode {
             .unlink(self.ino, name)
             .map_err(into_vfs_err)?;
         self.fs.invalidate_extent_cache(removed);
+        self.fs.bump_namespace_version(self.ino, name);
         Ok(())
     }
 
@@ -376,6 +390,8 @@ impl DirNodeOps for Inode {
         if let Some(ino) = replaced {
             self.fs.invalidate_extent_cache(ino);
         }
+        self.fs.bump_namespace_version(self.ino, src_name);
+        self.fs.bump_namespace_version(dst_dir.ino, dst_name);
         Ok(())
     }
 }

@@ -128,7 +128,48 @@ struct FileContent {
 
 #[derive(Default)]
 struct DirContent {
-    entries: Mutex<HashMap<FileName, InodeRef>>,
+    state: Mutex<DirState>,
+}
+
+#[derive(Default)]
+struct DirState {
+    entries: HashMap<FileName, InodeRef>,
+    /// Monotonically increasing namespace version for this directory.
+    generation: u64,
+    /// Version at which each currently-present name acquired its inode.
+    entry_versions: HashMap<FileName, u64>,
+}
+
+impl DirState {
+    fn next_generation(&mut self) -> u64 {
+        self.generation = self.generation.wrapping_add(1);
+        self.generation
+    }
+
+    fn cache_version(&self, name: &str) -> u64 {
+        self.entry_versions
+            .get(name)
+            .copied()
+            .unwrap_or(self.generation)
+    }
+
+    fn mark_inserted(&mut self, name: &str) {
+        let generation = self.next_generation();
+        self.entry_versions
+            .insert(name.to_owned().into(), generation);
+    }
+
+    fn mark_removed(&mut self, name: &str) {
+        self.next_generation();
+        self.entry_versions.remove(name);
+    }
+
+    fn mark_renamed(&mut self, src_name: &str, dst_name: &str) {
+        let generation = self.next_generation();
+        self.entry_versions.remove(src_name);
+        self.entry_versions
+            .insert(dst_name.to_owned().into(), generation);
+    }
 }
 
 enum NodeContent {
@@ -182,9 +223,11 @@ impl Inode {
         entry.insert(result.clone());
         drop(inodes);
         if let NodeContent::Dir(dir) = &result.content {
-            let mut entries = dir.entries.lock();
-            entries.insert(".".into(), InodeRef::new(fs.clone(), ino));
-            entries.insert(
+            let mut state = dir.state.lock();
+            state
+                .entries
+                .insert(".".into(), InodeRef::new(fs.clone(), ino));
+            state.entries.insert(
                 "..".into(),
                 InodeRef::new(fs.clone(), parent.unwrap_or(ino)),
             );
@@ -282,9 +325,10 @@ impl NodeOps for MemoryNode {
                 metadata.size = *content.length.lock();
             }
             NodeContent::Dir(dir) => {
-                let entries = dir.entries.lock();
-                metadata.size = entries.len() as u64;
-                metadata.nlink = 2 + entries
+                let state = dir.state.lock();
+                metadata.size = state.entries.len() as u64;
+                metadata.nlink = 2 + state
+                    .entries
                     .iter()
                     .filter(|(name, entry)| {
                         name.0 != "."
@@ -422,8 +466,9 @@ impl DirNodeOps for MemoryNode {
     fn read_dir(&self, offset: u64, sink: &mut dyn DirEntrySink) -> VfsResult<usize> {
         let mut entries = {
             let dir = self.inode.as_dir()?;
-            let entries = dir.entries.lock();
-            entries
+            let state = dir.state.lock();
+            state
+                .entries
                 .iter()
                 .map(|(name, entry)| {
                     let inode = entry.get();
@@ -454,12 +499,19 @@ impl DirNodeOps for MemoryNode {
 
     fn lookup(&self, name: &str) -> VfsResult<DirEntry> {
         let dir = self.inode.as_dir()?;
-        let entries = dir.entries.lock();
+        let state = dir.state.lock();
 
-        let entry = entries.get(name).ok_or(VfsError::NotFound)?;
+        let entry = state.entries.get(name).ok_or(VfsError::NotFound)?;
         let inode = entry.get();
         let node_type = inode.metadata.lock().node_type;
         self.new_entry(name, node_type, inode)
+    }
+
+    fn cache_version(&self, name: &str) -> Option<u64> {
+        self.inode
+            .as_dir()
+            .ok()
+            .map(|dir| dir.state.lock().cache_version(name))
     }
 
     fn create(
@@ -469,71 +521,105 @@ impl DirNodeOps for MemoryNode {
         permission: NodePermission,
     ) -> VfsResult<DirEntry> {
         let dir = self.inode.as_dir()?;
-        let mut entries = dir.entries.lock();
+        let mut state = dir.state.lock();
 
-        if entries.contains_key(name) {
+        if state.entries.contains_key(name) {
             return Err(VfsError::AlreadyExists);
         }
         let inode = Inode::new(&self.fs, Some(self.inode.ino), node_type, permission);
-        entries.insert(name.into(), InodeRef::new(self.fs.clone(), inode.ino));
+        state
+            .entries
+            .insert(name.into(), InodeRef::new(self.fs.clone(), inode.ino));
+        state.mark_inserted(name);
         self.new_entry(name, node_type, inode)
     }
 
     fn link(&self, name: &str, target: &DirEntry) -> VfsResult<DirEntry> {
         let dir = self.inode.as_dir()?;
-        let mut entries = dir.entries.lock();
+        let mut state = dir.state.lock();
 
         let target = target.downcast::<Self>()?;
 
-        if entries.contains_key(name) {
+        if state.entries.contains_key(name) {
             return Err(VfsError::AlreadyExists);
         }
         let inode = target.inode.clone();
         let node_type = target.metadata()?.node_type;
-        entries.insert(name.into(), InodeRef::new(self.fs.clone(), inode.ino));
+        state
+            .entries
+            .insert(name.into(), InodeRef::new(self.fs.clone(), inode.ino));
+        state.mark_inserted(name);
         self.new_entry(name, node_type, inode)
     }
 
     fn unlink(&self, name: &str) -> VfsResult<()> {
         let dir = self.inode.as_dir()?;
-        let mut entries = dir.entries.lock();
+        let mut state = dir.state.lock();
 
-        let Some(entry) = entries.get(name) else {
+        let Some(entry) = state.entries.get(name) else {
             return Err(VfsError::NotFound);
         };
-        if let NodeContent::Dir(DirContent { entries }) = &entry.get().content
-            && entries.lock().len() > 2
+        if let NodeContent::Dir(DirContent { state }) = &entry.get().content
+            && state.lock().entries.len() > 2
         {
             return Err(VfsError::DirectoryNotEmpty);
         }
-        entries.remove(name);
+        state.entries.remove(name);
+        state.mark_removed(name);
 
         Ok(())
     }
 
-    // TODO: atomicity
     fn rename(&self, src_name: &str, dst_dir: &DirNode, dst_name: &str) -> VfsResult<()> {
         let dst_node = dst_dir.downcast::<Self>()?;
-        if let Ok(entry) = dst_dir.lookup(dst_name) {
-            let src_entry = self.lookup(src_name)?;
-            if entry.inode() == src_entry.inode() {
+        let src_dir = self.inode.as_dir()?;
+        let dst_content = dst_node.inode.as_dir()?;
+
+        if self.inode.ino == dst_node.inode.ino {
+            let mut state = src_dir.state.lock();
+            let src_ino = state.entries.get(src_name).ok_or(VfsError::NotFound)?.ino;
+            if state
+                .entries
+                .get(dst_name)
+                .is_some_and(|entry| entry.ino == src_ino)
+            {
                 return Ok(());
             }
+            let src_entry = state.entries.remove(src_name).ok_or(VfsError::NotFound)?;
+            state.entries.insert(dst_name.into(), src_entry);
+            state.mark_renamed(src_name, dst_name);
+            return Ok(());
         }
 
-        let src_entry = self
-            .inode
-            .as_dir()?
+        // Lock two different directories in inode order so a cross-directory
+        // rename is atomic with respect to tmpfs lookups and cannot deadlock
+        // against a rename in the opposite direction.
+        let (mut src_state, mut dst_state) = if self.inode.ino < dst_node.inode.ino {
+            (src_dir.state.lock(), dst_content.state.lock())
+        } else {
+            let dst_state = dst_content.state.lock();
+            let src_state = src_dir.state.lock();
+            (src_state, dst_state)
+        };
+        let src_ino = src_state
             .entries
-            .lock()
+            .get(src_name)
+            .ok_or(VfsError::NotFound)?
+            .ino;
+        if dst_state
+            .entries
+            .get(dst_name)
+            .is_some_and(|entry| entry.ino == src_ino)
+        {
+            return Ok(());
+        }
+        let src_entry = src_state
+            .entries
             .remove(src_name)
             .ok_or(VfsError::NotFound)?;
-        dst_node
-            .inode
-            .as_dir()?
-            .entries
-            .lock()
-            .insert(dst_name.into(), src_entry);
+        dst_state.entries.insert(dst_name.into(), src_entry);
+        src_state.mark_removed(src_name);
+        dst_state.mark_inserted(dst_name);
         Ok(())
     }
 }
@@ -550,7 +636,9 @@ impl Drop for MemoryNode {
         let reclaim_dir =
             self.inode.metadata.lock().nlink == 1 && Arc::strong_count(&self.inode) == 2;
         if reclaim_dir && let NodeContent::Dir(dir) = &self.inode.content {
-            dir.entries.lock().clear();
+            let mut state = dir.state.lock();
+            state.entries.clear();
+            state.entry_versions.clear();
         }
         release_inode(&self.fs, &self.inode, 0);
     }

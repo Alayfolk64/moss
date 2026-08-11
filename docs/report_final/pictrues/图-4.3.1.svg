@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 630" width="560" height="630">
+  <defs>
+    <pattern id="mmap-stripe" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45 0 0)">
+      <rect width="8" height="8" fill="#F1F5F9"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#CBD5E0" stroke-width="2"/>
+    </pattern>
+  </defs>
+
+  <!-- Arch title -->
+  <text x="267" y="24" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC','Noto Sans CJK SC',sans-serif"
+        font-size="13" font-weight="bold" fill="#1E293B">RISC-V64 / LoongArch64</text>
+
+  <!-- ① Stack  y=38..110 -->
+  <rect x="182" y="38" width="170" height="72"
+        fill="#BFDBFE" stroke="#3B82F6" stroke-width="1.3"/>
+  <text x="267" y="67" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="13" font-weight="bold" fill="#1E40AF">用户栈</text>
+  <text x="267" y="84" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#1E40AF">&#x2193; 增长　512 KiB</text>
+
+  <!-- ② mmap  y=110..228 -->
+  <rect x="182" y="110" width="170" height="118"
+        fill="url(#mmap-stripe)" stroke="#94A3B8" stroke-width="1"
+        stroke-dasharray="6,3"/>
+  <text x="267" y="174" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="12" fill="#475569">mmap 映射区域</text>
+
+  <!-- ③ Signal trampoline  y=228..252 -->
+  <rect x="182" y="228" width="170" height="24"
+        fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.3"/>
+  <text x="267" y="244" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#78350F">信号跳板（只读可执行，4 KiB）</text>
+
+  <!-- ④ Heap  y=252..335 -->
+  <rect x="182" y="252" width="170" height="83"
+        fill="#BBF7D0" stroke="#16A34A" stroke-width="1.3"/>
+  <text x="267" y="280" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="13" font-weight="bold" fill="#14532D">用户堆</text>
+  <text x="267" y="297" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#14532D">&#x2191; 增长　初始 64 KiB</text>
+  <text x="267" y="313" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#14532D">最大 512 MiB（brk）</text>
+
+  <!-- ⑤ Unused gap  y=335..415 -->
+  <rect x="182" y="335" width="170" height="80"
+        fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+  <text x="267" y="379" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="12" fill="#94A3B8">（未使用）</text>
+
+  <!-- ⑥ Dynamic linker  y=415..477 -->
+  <rect x="182" y="415" width="170" height="62"
+        fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.3"/>
+  <text x="267" y="441" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="13" font-weight="bold" fill="#4C1D95">动态链接器</text>
+  <text x="267" y="458" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#4C1D95">ld-musl / ld.so</text>
+
+  <!-- ⑦ ELF segments  y=477..575 -->
+  <rect x="182" y="477" width="170" height="98"
+        fill="#FED7AA" stroke="#EA580C" stroke-width="1.3"/>
+  <text x="267" y="505" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="13" font-weight="bold" fill="#7C2D12">ELF 程序段</text>
+  <text x="267" y="522" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#7C2D12">.text / .data / .bss</text>
+  <text x="267" y="539" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#7C2D12">（范围由程序头决定）</text>
+
+  <!-- ⑧ Guard  y=575..600 -->
+  <rect x="182" y="575" width="170" height="25"
+        fill="#E2E8F0" stroke="#94A3B8" stroke-width="1"/>
+  <text x="267" y="591" text-anchor="middle"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="11" fill="#64748B">保留（不可映射）</text>
+
+  <!-- bar bottom border -->
+  <line x1="182" y1="600" x2="352" y2="600" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- ══ LEFT: ADDRESS LABELS ══ -->
+
+  <line x1="176" y1="38" x2="182" y2="38" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="42" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x4_0000_0000</text>
+
+  <line x1="176" y1="228" x2="182" y2="228" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="232" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x6000_1000</text>
+
+  <line x1="176" y1="252" x2="182" y2="252" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="256" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x6000_0000</text>
+
+  <line x1="176" y1="335" x2="182" y2="335" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="339" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x4000_0000</text>
+
+  <line x1="176" y1="415" x2="182" y2="415" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="419" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x0400_0000</text>
+
+  <line x1="176" y1="575" x2="182" y2="575" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="579" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x0000_1000</text>
+
+  <line x1="176" y1="600" x2="182" y2="600" stroke="#334155" stroke-width="1.2"/>
+  <text x="174" y="604" text-anchor="end"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="11" fill="#1E293B">0x0</text>
+
+  <!-- ══ RIGHT: CONSTANT NAMES ══ -->
+
+  <line x1="352" y1="38" x2="358" y2="38" stroke="#3B82F6" stroke-width="1.2"/>
+  <text x="361" y="42"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#1D4ED8">USER_STACK_TOP</text>
+
+  <line x1="352" y1="228" x2="358" y2="228" stroke="#F59E0B" stroke-width="1.2"/>
+  <text x="361" y="232"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#92400E">SIGNAL_TRAMPOLINE</text>
+
+  <line x1="352" y1="252" x2="358" y2="252" stroke="#16A34A" stroke-width="1.2"/>
+  <text x="361" y="256"
+        font-family="'Source Han Sans CN','PingFang SC',sans-serif"
+        font-size="10" fill="#166534">堆上限（brk 上界）</text>
+
+  <line x1="352" y1="335" x2="358" y2="335" stroke="#16A34A" stroke-width="1.2"/>
+  <text x="361" y="339"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#166534">USER_HEAP_BASE</text>
+
+  <line x1="352" y1="415" x2="358" y2="415" stroke="#7C3AED" stroke-width="1.2"/>
+  <text x="361" y="419"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#4C1D95">USER_INTERP_BASE</text>
+
+  <line x1="352" y1="575" x2="358" y2="575" stroke="#334155" stroke-width="1.2"/>
+  <text x="361" y="579"
+        font-family="Consolas,'Courier New',monospace"
+        font-size="10" fill="#334155">USER_SPACE_BASE</text>
+
+</svg>

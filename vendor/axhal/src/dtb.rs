@@ -65,6 +65,21 @@ pub fn cpu_count() -> Option<usize> {
 
 const MAX_CPU_TOPOLOGY: usize = 256;
 
+#[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
+fn riscv_isa_has_supervisor_mode(isa: &str) -> bool {
+    let Some(extensions) = isa
+        .strip_prefix("rv32")
+        .or_else(|| isa.strip_prefix("rv64"))
+    else {
+        return false;
+    };
+
+    extensions
+        .split('_')
+        .next()
+        .is_some_and(|base| base.bytes().any(|extension| extension == b's'))
+}
+
 /// Returns enabled CPU IDs in dense logical order, with the boot CPU first.
 ///
 /// The IDs come from each CPU node's `reg` property. This deliberately does
@@ -86,7 +101,29 @@ pub fn cpu_hardware_ids() -> Option<&'static [usize]> {
             .filter(|node| node.status() != Some(Status::Disabled))
             .filter(|node| {
                 node.find_property("device_type")
-                    .is_none_or(|property| property.str() == "cpu")
+                    .is_some_and(|property| property.str() == "cpu")
+            })
+            .filter(|_node| {
+                #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
+                {
+                    // A heterogeneous RISC-V SoC may expose management harts
+                    // that cannot enter S-mode. They are firmware CPUs, but
+                    // cannot run an S-mode kernel and must not enter the Moss
+                    // logical topology. JH7110 hart 0 is such a core. Modern
+                    // QEMU does not put `s` in the base part of `riscv,isa`;
+                    // its S-mode CPUs are identified by an Sv* MMU instead.
+                    let has_supervisor_mmu = _node
+                        .find_property("mmu-type")
+                        .is_some_and(|property| property.str().starts_with("riscv,sv"));
+                    has_supervisor_mmu
+                        || _node.find_property("riscv,isa").is_some_and(|property| {
+                            riscv_isa_has_supervisor_mode(property.str())
+                        })
+                }
+                #[cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))]
+                {
+                    true
+                }
             })
         {
             let id = node

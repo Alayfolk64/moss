@@ -89,18 +89,42 @@ impl<'a> ELFParser<'a> {
         self.headers.header.pt2.ph_entry_size() as usize
     }
 
-    /// The offset of the program header table in the ELF file.
-    pub fn phdr(&self) -> usize {
-        let ph_offset = self.headers.header.pt2.ph_offset() as usize;
-        let header = self
+    /// The in-memory address of the program header table.
+    ///
+    /// Linux exposes this address through `AT_PHDR`, so the complete table must
+    /// be covered by a loadable segment.  Malformed or unsupported layouts are
+    /// rejected instead of panicking the kernel while handling `execve`.
+    pub fn phdr(&self) -> Result<usize, &'static str> {
+        let ph_start = self.headers.header.pt2.ph_offset();
+        let ph_size = u64::from(self.headers.header.pt2.ph_entry_size())
+            .checked_mul(u64::from(self.headers.header.pt2.ph_count()))
+            .ok_or("program header table size overflows")?;
+        let ph_end = ph_start
+            .checked_add(ph_size)
+            .ok_or("program header table range overflows")?;
+
+        let segment = self
             .headers
             .ph
             .iter()
+            .filter(|header| header.get_type() == Ok(xmas_elf::program::Type::Load))
             .find(|header| {
-                (header.offset..header.offset + header.file_size).contains(&(ph_offset as u64))
+                header
+                    .offset
+                    .checked_add(header.file_size)
+                    .is_some_and(|segment_end| header.offset <= ph_start && ph_end <= segment_end)
             })
-            .expect("can not find program header table address in elf");
-        ph_offset - header.offset as usize + header.virtual_addr as usize + self.base
+            .ok_or("program header table is not covered by a loadable segment")?;
+
+        let offset_in_segment = ph_start
+            .checked_sub(segment.offset)
+            .ok_or("invalid program header table offset")?;
+        let address = segment
+            .virtual_addr
+            .checked_add(offset_in_segment)
+            .and_then(|address| address.checked_add(self.base as u64))
+            .ok_or("program header table address overflows")?;
+        usize::try_from(address).map_err(|_| "program header table address does not fit usize")
     }
 
     /// The base address of the ELF file loaded into the memory.
@@ -124,9 +148,10 @@ impl<'a> ELFParser<'a> {
         &self,
         pagesz: usize,
         ldso_base: Option<usize>,
-    ) -> impl Iterator<Item = AuxEntry> {
-        [
-            (AuxType::PHDR, self.phdr()),
+    ) -> Result<impl Iterator<Item = AuxEntry>, &'static str> {
+        let phdr = self.phdr()?;
+        Ok([
+            (AuxType::PHDR, phdr),
             (AuxType::PHENT, self.phent()),
             (AuxType::PHNUM, self.phnum()),
             (AuxType::PAGESZ, pagesz),
@@ -134,6 +159,6 @@ impl<'a> ELFParser<'a> {
         ]
         .into_iter()
         .chain(ldso_base.into_iter().map(|base| (AuxType::BASE, base)))
-        .map(|(at, val)| AuxEntry::new(at, val))
+        .map(|(at, val)| AuxEntry::new(at, val)))
     }
 }

@@ -306,6 +306,10 @@ impl Location {
         Arc::ptr_eq(&self.mountpoint, &other.mountpoint) && self.entry.ptr_eq(&other.entry)
     }
 
+    pub fn take_freshly_created(&self) -> bool {
+        self.entry.take_freshly_created()
+    }
+
     pub fn is_mountpoint(&self) -> bool {
         self.entry.as_dir().is_ok_and(|it| it.is_mountpoint())
     }

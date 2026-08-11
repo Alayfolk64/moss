@@ -31,15 +31,31 @@ fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
     };
 
     let busybox_variants = ["/musl/busybox", "/glibc/busybox", "/bin/busybox"];
-    if busybox_variants.contains(&exec) {
-        for alt in busybox_variants {
-            if alt == exec {
-                continue;
+    match exec {
+        "/bin/sh" => {
+            for busybox in busybox_variants {
+                let mut candidate = vec![busybox.to_string(), "sh".to_string()];
+                candidate.extend(args[1..].iter().cloned());
+                candidates.push(candidate);
             }
-            let mut candidate = args.to_vec();
-            candidate[0] = alt.to_string();
-            candidates.push(candidate);
         }
+        exec if busybox_variants.contains(&exec) => {
+            for alt in busybox_variants {
+                if alt == exec {
+                    continue;
+                }
+                let mut candidate = args.to_vec();
+                candidate[0] = alt.to_string();
+                candidates.push(candidate);
+            }
+
+            if args.get(1).map(String::as_str) == Some("sh") {
+                let mut candidate = vec!["/bin/sh".to_string()];
+                candidate.extend(args[2..].iter().cloned());
+                candidates.push(candidate);
+            }
+        }
+        _ => {}
     }
 
     // The final test script only needs a POSIX shell.  Some minimal rootfs

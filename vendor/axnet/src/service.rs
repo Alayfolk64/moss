@@ -2,10 +2,11 @@ use alloc::boxed::Box;
 use core::{
     pin::Pin,
     task::{Context, Waker},
+    time::Duration,
 };
 
 use axerrno::{AxError, AxResult, LinuxError};
-use axhal::time::{NANOS_PER_MICROS, TimeValue, wall_time_nanos};
+use axhal::time::{NANOS_PER_MICROS, TimeValue, wall_time, wall_time_nanos};
 use axtask::future::sleep_until;
 use smoltcp::{
     iface::{Interface, SocketSet},
@@ -14,6 +15,10 @@ use smoltcp::{
 };
 
 use crate::{SOCKET_SET, router::Router};
+
+/// Keep blocking socket operations making progress even on platforms where a
+/// network device interrupt is unavailable or routed incorrectly.
+const MAX_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 fn now() -> Instant {
     Instant::from_micros_const((wall_time_nanos() / NANOS_PER_MICROS) as i64)
@@ -76,23 +81,26 @@ impl Service {
     }
 
     pub fn register_waker(&mut self, mask: u32, waker: &Waker) {
-        let next = self.iface.poll_at(now(), &SOCKET_SET.inner.lock());
+        let protocol_deadline = self
+            .iface
+            .poll_at(now(), &SOCKET_SET.inner.lock())
+            .map(|t| TimeValue::from_micros(t.total_micros() as _));
+        let fallback_deadline = wall_time() + MAX_POLL_INTERVAL;
+        let next = protocol_deadline.map_or(fallback_deadline, |t| t.min(fallback_deadline));
 
-        if let Some(t) = next {
-            let next = TimeValue::from_micros(t.total_micros() as _);
+        // Drop the previous timeout future and arm this socket's waker. The
+        // bounded fallback is needed for devices that cannot wake the stack
+        // through an RX interrupt (notably virtio-net on LA QEMU).
+        self.timeout = None;
 
-            // drop old timeout future
-            self.timeout = None;
+        let mut fut = Box::pin(sleep_until(next));
+        let mut cx = Context::from_waker(waker);
 
-            let mut fut = Box::pin(sleep_until(next));
-            let mut cx = Context::from_waker(waker);
-
-            if fut.as_mut().poll(&mut cx).is_ready() {
-                waker.wake_by_ref();
-                return;
-            } else {
-                self.timeout = Some(fut);
-            }
+        if fut.as_mut().poll(&mut cx).is_ready() {
+            waker.wake_by_ref();
+            return;
+        } else {
+            self.timeout = Some(fut);
         }
 
         for (i, device) in self.router.devices.iter().enumerate() {

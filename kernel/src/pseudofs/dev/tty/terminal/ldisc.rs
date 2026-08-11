@@ -4,6 +4,7 @@ use core::{
     ops::Range,
     sync::atomic::{AtomicBool, Ordering},
     task::{Context, Poll, Waker},
+    time::Duration,
 };
 
 use axerrno::{AxError, AxResult};
@@ -34,6 +35,13 @@ pub enum ProcessMode {
     /// `read` call to the terminal, since the signal is emitted only when
     /// inputs are being processed.
     Manual,
+    /// Spawns a task that periodically polls the input device.
+    ///
+    /// This is used when a platform can read its console but cannot provide a
+    /// reliable receive interrupt. Unlike [`Self::Manual`], it can still
+    /// process terminal signals such as Ctrl+C while another program is in the
+    /// foreground.
+    Polling(Duration),
     /// Spawns task for processing inputs, relying on external events to wake
     /// up.
     ///
@@ -151,7 +159,7 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 continue;
             }
 
-            if ch.is_ascii_graphic() {
+            if ch == b' ' || ch.is_ascii_graphic() {
                 self.line_buf.push(ch);
                 continue;
             }
@@ -278,6 +286,22 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
         let poll_tx = Arc::new(PollSet::new());
         let processor = match config.process_mode {
             ProcessMode::Manual => Processor::Manual(reader),
+            ProcessMode::Polling(interval) => {
+                let poll_rx = Arc::new(PollSet::new());
+                axtask::spawn_with_name(
+                    {
+                        let poll_rx = poll_rx.clone();
+                        move || loop {
+                            while reader.poll() {
+                                poll_rx.wake();
+                            }
+                            axtask::sleep(interval);
+                        }
+                    },
+                    "tty-poller".into(),
+                );
+                Processor::External(poll_rx)
+            }
             ProcessMode::External(register) => {
                 let poll_rx = Arc::new(PollSet::new());
                 axtask::spawn_with_name(
@@ -391,11 +415,14 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
         let mut total_read = 0;
         let set = match &self.processor {
             Processor::Manual(_) => None,
-            Processor::External(set) => Some(set),
+            Processor::External(set) => Some(set.clone()),
             _ => unreachable!(),
         };
-        let pollable = WaitPollable(set);
+        let pollable = WaitPollable(set.as_ref());
         block_on(poll_io(&pollable, IoEvents::IN, false, || {
+            if let Processor::Manual(reader) = &mut self.processor {
+                reader.poll();
+            }
             total_read += self.buf_rx.pop_slice(&mut buf[total_read..]);
             self.poll_tx.wake();
             (total_read >= vmin)

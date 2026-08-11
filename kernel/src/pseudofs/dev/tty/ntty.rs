@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, sync::Arc};
+use core::time::Duration;
 
 use axtask::future::register_irq_waker;
 use lazy_static::lazy_static;
@@ -44,7 +45,7 @@ fn new_n_tty() -> Arc<NTtyDriver> {
                     axhal::console::enable_rx_interrupt();
                 }) as _)
             } else {
-                ProcessMode::Manual
+                ProcessMode::Polling(Duration::from_millis(10))
             },
         },
     )

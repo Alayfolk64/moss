@@ -14,6 +14,7 @@ use core::{
     any::{Any, TypeId},
     fmt, iter,
     ops::Deref,
+    sync::atomic::{AtomicBool, Ordering},
     task::Context,
     time::Duration,
 };
@@ -375,7 +376,7 @@ fn flush_metadata_cache_shared(
             restore_metadata_dirty(shared, Some(size), &update);
             return Err(VfsError::InvalidInput);
         };
-        if let Err(err) = file.set_len(size) {
+        if let Err(err) = file.commit_len(size) {
             restore_metadata_dirty(shared, Some(size), &update);
             return Err(err);
         }
@@ -404,6 +405,11 @@ struct Inner {
     node: Node,
     node_type: NodeType,
     reference: Reference,
+    /// Set only for a newly allocated filesystem inode and consumed by the
+    /// high-level file cache on its first open.  An inode number may be reused
+    /// after unlink, so the new inode must not inherit an older generation's
+    /// page-cache record keyed by the same `(filesystem, inode)` pair.
+    freshly_created: AtomicBool,
     metadata_cache: RwLock<Weak<RwLock<InodeMetadataCache>>>,
     user_data: Mutex<TypeMap>,
 }
@@ -462,6 +468,7 @@ impl DirEntry {
             node: Node::File(node),
             node_type,
             reference,
+            freshly_created: AtomicBool::new(false),
             metadata_cache: RwLock::new(Weak::new()),
             user_data: Mutex::default(),
         }))
@@ -472,9 +479,18 @@ impl DirEntry {
             node: Node::Dir(node_fn(WeakDirEntry(this.clone()))),
             node_type: NodeType::Directory,
             reference,
+            freshly_created: AtomicBool::new(false),
             metadata_cache: RwLock::new(Weak::new()),
             user_data: Mutex::default(),
         }))
+    }
+
+    pub(super) fn mark_freshly_created(&self) {
+        self.0.freshly_created.store(true, Ordering::Release);
+    }
+
+    pub fn take_freshly_created(&self) -> bool {
+        self.0.freshly_created.swap(false, Ordering::AcqRel)
     }
 
     fn cacheable_metadata(&self) -> bool {

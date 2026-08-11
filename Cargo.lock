@@ -539,8 +539,6 @@ dependencies = [
 [[package]]
 name = "axnet"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86073a98c41a18205a482c7b223fc9ce043935f6922bd1f89a1e02976e0de02e"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -634,8 +632,6 @@ dependencies = [
 [[package]]
 name = "axplat-loongarch64-qemu-virt"
 version = "0.3.0-preview.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6950cea16d394b76a2d0c6970be4a631ef4bb30db6fbe4994e488fbc9f5ab2f"
 dependencies = [
  "axconfig-macros",
  "axcpu",
@@ -663,8 +659,6 @@ dependencies = [
 [[package]]
 name = "axplat-riscv64-qemu-virt"
 version = "0.3.0-preview.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f0ee11922a369bd9c3c4b555cc27d5a969aad1ef1f1ea63af82c80bdbd17c5"
 dependencies = [
  "axconfig-macros",
  "axcpu",
@@ -690,6 +684,7 @@ dependencies = [
  "lazyinit",
  "log",
  "riscv 0.14.0",
+ "riscv_plic",
  "sbi-rt",
  "uart_16550",
 ]
@@ -1491,8 +1486,6 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "kernel-elf-parser"
 version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f1495ab3ea0a7cee31d14901a858a732e282c139b3d17d3f935aebeeefcc34a"
 dependencies = [
  "xmas-elf",
  "zero",
@@ -2195,8 +2188,6 @@ dependencies = [
 [[package]]
 name = "simple-sdmmc"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833bc981c24e613cf9b95bbd2c5ade1a222d23274343c29486a6f65c41fc3390"
 dependencies = [
  "bitfield-struct",
  "log",

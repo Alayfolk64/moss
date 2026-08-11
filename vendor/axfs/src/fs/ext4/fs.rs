@@ -1,5 +1,8 @@
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
-use core::cell::OnceCell;
+use alloc::{collections::BTreeMap, string::String, sync::Arc, vec::Vec};
+use core::{
+    cell::OnceCell,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use axdriver::AxBlockDevice;
 use axfs_ng_vfs::{
@@ -23,6 +26,16 @@ pub struct Ext4Filesystem {
     inner: Mutex<LwExt4Filesystem>,
     disk: SharedBlockDevice,
     block_size: usize,
+    /// Versions shared by every wrapper of an ext4 directory inode.
+    ///
+    /// The VFS can legitimately construct more than one `DirNode` wrapper for
+    /// the same directory inode.  Their dentry caches are wrapper-local, so a
+    /// namespace mutation observed through one wrapper must invalidate cached
+    /// copies of the affected name held by the others.  Versions are per-name:
+    /// invalidating an unrelated sibling would unnecessarily replace mounted
+    /// dentries such as `/dev` with a fresh, unmounted wrapper.
+    next_namespace_version: AtomicU64,
+    namespace_versions: RwLock<BTreeMap<u32, BTreeMap<String, u64>>>,
     extent_cache: [RwLock<BTreeMap<u32, BTreeMap<u32, BlockExtent>>>; EXTENT_CACHE_SHARDS],
     root_dir: OnceCell<DirEntry>,
 }
@@ -46,6 +59,8 @@ impl Ext4Filesystem {
             inner: Mutex::new(ext4),
             disk: shared_disk,
             block_size,
+            next_namespace_version: AtomicU64::new(0),
+            namespace_versions: RwLock::new(BTreeMap::new()),
             extent_cache: [const { RwLock::new(BTreeMap::new()) }; EXTENT_CACHE_SHARDS],
             root_dir: OnceCell::new(),
         });
@@ -58,6 +73,27 @@ impl Ext4Filesystem {
 
     pub(crate) fn lock(&self) -> MutexGuard<'_, LwExt4Filesystem> {
         self.inner.lock()
+    }
+
+    pub(crate) fn namespace_version(&self, dir_ino: u32, name: &str) -> u64 {
+        self.namespace_versions
+            .read()
+            .get(&dir_ino)
+            .and_then(|names| names.get(name))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn bump_namespace_version(&self, dir_ino: u32, name: &str) {
+        let version = self
+            .next_namespace_version
+            .fetch_add(1, Ordering::AcqRel)
+            .wrapping_add(1);
+        self.namespace_versions
+            .write()
+            .entry(dir_ino)
+            .or_default()
+            .insert(name.into(), version);
     }
 
     fn extent_cache_for(

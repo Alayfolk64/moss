@@ -5,6 +5,12 @@
 use crate::AxDeviceEnum;
 use axdriver_base::DeviceType;
 
+#[cfg(feature = "sdmmc-irq")]
+use core::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+
 #[cfg(feature = "virtio")]
 use crate::virtio::{self, VirtIoDevMeta};
 
@@ -38,6 +44,9 @@ register_net_driver!(
     crate::ls2k1000::Ls2kGmacDriver,
     crate::ls2k1000::Ls2kGmacDevice
 );
+
+#[cfg(net_dev = "jh7110")]
+register_net_driver!(crate::jh7110::Jh7110GmacDriver, crate::jh7110::Jh7110GmacDevice);
 
 #[cfg(block_dev = "ls2k1000")]
 register_block_driver!(
@@ -96,9 +105,78 @@ cfg_if::cfg_if! {
         pub struct SdMmcDriver;
         register_block_driver!(SdMmcDriver, axdriver_block::sdmmc::SdMmcDriver);
 
+        #[cfg(feature = "sdmmc-irq")]
+        const SDMMC_IRQ: usize = axconfig::devices::SDMMC_IRQ as usize;
+
+        #[cfg(feature = "sdmmc-irq")]
+        struct SdMmcInterrupt;
+
+        #[cfg(feature = "sdmmc-irq")]
+        static SDMMC_INTERRUPT: SdMmcInterrupt = SdMmcInterrupt;
+        #[cfg(feature = "sdmmc-irq")]
+        static SDMMC_PENDING: AtomicBool = AtomicBool::new(false);
+        #[cfg(feature = "sdmmc-irq")]
+        static SDMMC_WAIT_QUEUE: axtask::WaitQueue = axtask::WaitQueue::new();
+
+        #[cfg(feature = "sdmmc-irq")]
+        fn sdmmc_base() -> usize {
+            axhal::mem::phys_to_virt(axconfig::devices::SDMMC_PADDR.into()).into()
+        }
+
+        #[cfg(feature = "sdmmc-irq")]
+        impl axdriver_block::sdmmc::InterruptWait for SdMmcInterrupt {
+            fn prepare(&self) {
+                SDMMC_PENDING.store(false, Ordering::Release);
+            }
+
+            fn wait(&self, timeout: Duration) -> bool {
+                !SDMMC_WAIT_QUEUE.wait_timeout_until(timeout, || {
+                    SDMMC_PENDING.load(Ordering::Acquire)
+                })
+            }
+
+            fn rearm(&self) {
+                SDMMC_PENDING.store(false, Ordering::Release);
+                unsafe {
+                    axdriver_block::sdmmc::set_interrupt_enabled(sdmmc_base(), true);
+                }
+            }
+
+            fn current_ms(&self) -> u64 {
+                axhal::time::monotonic_time_nanos() / 1_000_000
+            }
+        }
+
+        #[cfg(feature = "sdmmc-irq")]
+        fn handle_sdmmc_interrupt() {
+            // Deassert the controller's level-triggered output before the PLIC
+            // claim is completed. The request thread acknowledges RINTSTS and
+            // re-enables this output after consuming the FIFO.
+            unsafe {
+                axdriver_block::sdmmc::set_interrupt_enabled(sdmmc_base(), false);
+            }
+            SDMMC_PENDING.store(true, Ordering::Release);
+            SDMMC_WAIT_QUEUE.notify_all(false);
+            axtask::request_reschedule();
+        }
+
         impl DriverProbe for SdMmcDriver {
             fn probe_global() -> Option<AxDeviceEnum> {
+                #[cfg(feature = "sdmmc-irq")]
+                if !axhal::irq::register(SDMMC_IRQ, handle_sdmmc_interrupt) {
+                    warn!("failed to register SD/MMC IRQ {SDMMC_IRQ}");
+                    return None;
+                }
+
                 let sdmmc = unsafe {
+                    #[cfg(feature = "sdmmc-irq")]
+                    {
+                        axdriver_block::sdmmc::SdMmcDriver::new_with_interrupt(
+                            axhal::mem::phys_to_virt(axconfig::devices::SDMMC_PADDR.into()).into(),
+                            &SDMMC_INTERRUPT,
+                        )
+                    }
+                    #[cfg(not(feature = "sdmmc-irq"))]
                     axdriver_block::sdmmc::SdMmcDriver::new(
                         axhal::mem::phys_to_virt(axconfig::devices::SDMMC_PADDR.into()).into(),
                     )

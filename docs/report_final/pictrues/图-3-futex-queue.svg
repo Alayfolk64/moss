@@ -1,0 +1,70 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 215">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arr-o" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <!-- ===== FutexKey ===== -->
+  <rect x="10" y="60" width="175" height="115" rx="4" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="10" y="60" width="175" height="22" rx="4" fill="#3b82f6"/>
+  <text x="97" y="76" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="white">FutexKey</text>
+
+  <text x="97" y="100" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#1e40af">Private</text>
+  <text x="97" y="115" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#374151">用户虚拟地址</text>
+
+  <line x1="25" y1="124" x2="170" y2="124" stroke="#bfdbfe" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="97" y="136" text-anchor="middle" font-family="sans-serif" font-size="13.5" fill="#94a3b8">或</text>
+
+  <text x="97" y="152" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#0369a1">Shared</text>
+  <text x="97" y="166" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#374151">共享页后端 + 页偏移</text>
+
+  <!-- Arrow -->
+  <line x1="187" y1="118" x2="218" y2="118" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="202" y="112" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#64748b">查找</text>
+
+  <!-- ===== WaitQueue ===== -->
+  <text x="440" y="22" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#334155">WaitQueue</text>
+
+  <!-- Column header labels -->
+  <text x="312" y="42" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#64748b">notified</text>
+  <text x="422" y="42" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#64748b">bitset</text>
+  <text x="552" y="42" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#64748b">PollSet</text>
+
+  <!-- Outer border -->
+  <rect x="225" y="48" width="420" height="138" rx="3" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- Vertical dividers -->
+  <line x1="391" y1="48" x2="391" y2="186" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="457" y1="48" x2="457" y2="186" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Horizontal row dividers -->
+  <line x1="225" y1="94" x2="645" y2="94" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="225" y1="140" x2="645" y2="140" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- Row 1 highlight (being woken) -->
+  <rect x="226" y="49" width="418" height="44" rx="2" fill="#fff7ed"/>
+  <text x="308" y="75" text-anchor="middle" font-family="monospace" font-size="15" fill="#c2410c">true</text>
+  <text x="424" y="75" text-anchor="middle" font-family="monospace" font-size="15" fill="#374151">0xFF</text>
+  <text x="551" y="75" text-anchor="middle" font-family="sans-serif" font-size="12.5" fill="#15803d">wake() → 任务 A</text>
+
+  <!-- Row 2 -->
+  <text x="308" y="120" text-anchor="middle" font-family="monospace" font-size="15" fill="#94a3b8">false</text>
+  <text x="424" y="120" text-anchor="middle" font-family="monospace" font-size="15" fill="#374151">0x0F</text>
+  <text x="551" y="120" text-anchor="middle" font-family="sans-serif" font-size="12.5" fill="#64748b">任务 B</text>
+
+  <!-- Row 3 -->
+  <text x="308" y="166" text-anchor="middle" font-family="monospace" font-size="15" fill="#94a3b8">false</text>
+  <text x="424" y="166" text-anchor="middle" font-family="monospace" font-size="15" fill="#374151">0xFF</text>
+  <text x="551" y="166" text-anchor="middle" font-family="sans-serif" font-size="12.5" fill="#64748b">任务 C</text>
+
+  <!-- Legend note at bottom -->
+  <rect x="225" y="192" width="420" height="18" rx="2" fill="#fff7ed" stroke="#fed7aa" stroke-width="1"/>
+  <text x="435" y="204" text-anchor="middle" font-family="sans-serif" font-size="13.5" fill="#c2410c">橙色行：FUTEX_WAKE 设 notified=true 并调用 PollSet.wake() 的等待项</text>
+
+  <!-- VecDeque footer -->
+  <text x="435" y="212" text-anchor="middle" font-family="sans-serif" font-size="0" fill="none"/>
+</svg>

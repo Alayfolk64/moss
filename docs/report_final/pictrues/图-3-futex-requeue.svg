@@ -1,0 +1,95 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 300">
+  <defs>
+    <marker id="arr-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="arr-o" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/>
+    </marker>
+  </defs>
+
+  <!-- ===== 调用前 ===== -->
+  <text x="14" y="20" font-family="sans-serif" font-size="14" font-weight="bold" fill="#334155">调用前</text>
+
+  <!-- condvar_addr label + queue -->
+  <text x="178" y="44" text-anchor="end" font-family="monospace" font-size="12.5" fill="#475569">condvar_addr</text>
+  <rect x="182" y="30" width="238" height="38" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <!-- Item A (green: will be woken) -->
+  <rect x="186" y="34" width="48" height="30" rx="2" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+  <text x="210" y="53" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#15803d">A</text>
+  <!-- Item B (orange: will be requeued) -->
+  <rect x="238" y="34" width="48" height="30" rx="2" fill="#ffedd5" stroke="#f97316" stroke-width="1"/>
+  <text x="262" y="53" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#c2410c">B</text>
+  <!-- Item C (orange) -->
+  <rect x="290" y="34" width="48" height="30" rx="2" fill="#ffedd5" stroke="#f97316" stroke-width="1"/>
+  <text x="314" y="53" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#c2410c">C</text>
+  <!-- Item D (gray: stays) -->
+  <rect x="342" y="34" width="48" height="30" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="366" y="53" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#475569">D</text>
+
+  <!-- Wake annotation for A -->
+  <text x="208" y="24" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#15803d">唤醒</text>
+  <line x1="210" y1="26" x2="210" y2="33" stroke="#16a34a" stroke-width="1" marker-end="url(#arr-g)"/>
+
+  <!-- Requeue annotation for B, C -->
+  <text x="288" y="24" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#c2410c">转移</text>
+  <line x1="262" y1="26" x2="262" y2="33" stroke="#ea580c" stroke-width="1" marker-end="url(#arr-o)"/>
+  <line x1="314" y1="26" x2="314" y2="33" stroke="#ea580c" stroke-width="1" marker-end="url(#arr-o)"/>
+
+  <!-- mutex_addr label + queue (BEFORE) -->
+  <text x="178" y="100" text-anchor="end" font-family="monospace" font-size="12.5" fill="#475569">mutex_addr</text>
+  <rect x="182" y="86" width="134" height="38" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <rect x="186" y="90" width="48" height="30" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="210" y="109" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#475569">E</text>
+  <rect x="238" y="90" width="48" height="30" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="262" y="109" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#475569">F</text>
+
+  <!-- ===== Operation line ===== -->
+  <line x1="0" y1="142" x2="660" y2="142" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="140" y="130" width="375" height="24" rx="4" fill="#fafafa" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="328" y="146" text-anchor="middle" font-family="monospace" font-size="15" fill="#334155">FUTEX_REQUEUE( wake=1, requeue=2, to=mutex_addr )</text>
+
+  <!-- ===== 调用后 ===== -->
+  <text x="14" y="178" font-family="sans-serif" font-size="14" font-weight="bold" fill="#334155">调用后</text>
+
+  <!-- condvar_addr AFTER (only D remains) -->
+  <text x="178" y="202" text-anchor="end" font-family="monospace" font-size="12.5" fill="#475569">condvar_addr</text>
+  <rect x="182" y="188" width="62" height="38" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <rect x="186" y="192" width="48" height="30" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="210" y="211" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#475569">D</text>
+
+  <!-- Task A woken (shown to the right) -->
+  <rect x="290" y="188" width="130" height="38" rx="3" fill="#dcfce7" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="355" y="211" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#15803d">任务 A → 已唤醒</text>
+
+  <!-- mutex_addr AFTER (E, F, B, C) -->
+  <text x="178" y="258" text-anchor="end" font-family="monospace" font-size="12.5" fill="#475569">mutex_addr</text>
+  <rect x="182" y="244" width="238" height="38" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.2"/>
+  <rect x="186" y="248" width="48" height="30" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="210" y="267" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#475569">E</text>
+  <rect x="238" y="248" width="48" height="30" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="262" y="267" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#475569">F</text>
+  <!-- B, C transferred (orange) -->
+  <rect x="290" y="248" width="48" height="30" rx="2" fill="#ffedd5" stroke="#f97316" stroke-width="1.5"/>
+  <text x="314" y="267" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#c2410c">B</text>
+  <rect x="342" y="248" width="48" height="30" rx="2" fill="#ffedd5" stroke="#f97316" stroke-width="1.5"/>
+  <text x="366" y="267" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#c2410c">C</text>
+
+  <!-- Transfer arrows: B in BEFORE to B in AFTER -->
+  <!-- Curved path: from (262, 64) to (314, 248) -->
+  <path d="M262,65 C262,155 314,155 314,247" fill="none" stroke="#f97316" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-o)"/>
+  <path d="M314,65 C314,155 366,155 366,247" fill="none" stroke="#f97316" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-o)"/>
+
+  <!-- Legend -->
+  <rect x="430" y="32" width="222" height="84" rx="3" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="441" y="48" font-family="sans-serif" font-size="14" fill="#334155" font-weight="bold">图例</text>
+  <rect x="441" y="56" width="14" height="14" rx="2" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+  <text x="460" y="67" font-family="sans-serif" font-size="14" fill="#15803d">FUTEX_WAKE 唤醒</text>
+  <rect x="441" y="76" width="14" height="14" rx="2" fill="#ffedd5" stroke="#f97316" stroke-width="1"/>
+  <text x="460" y="87" font-family="sans-serif" font-size="14" fill="#c2410c">FUTEX_REQUEUE 转移</text>
+  <rect x="441" y="96" width="14" height="14" rx="2" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/>
+  <text x="460" y="107" font-family="sans-serif" font-size="14" fill="#475569">保持不变</text>
+
+  <!-- Note at bottom -->
+  <text x="330" y="293" text-anchor="middle" font-family="sans-serif" font-size="13.5" fill="#94a3b8">B、C 转移时保留 notified、bitset 和 PollSet，不重新登记 Waker</text>
+</svg>
