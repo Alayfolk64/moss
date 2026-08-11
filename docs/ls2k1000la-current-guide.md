@@ -51,7 +51,21 @@
 此前的 BSP2 chain、rescue initramfs、旧 Linux uImage runner、分区写盘脚本均属于一次性实验
 工具，不再作为当前生产流程入口；其结果和命令仍可从两份历史报告追溯。
 
-## 4. 构建、验收与上板
+## 4. AHCI 代码边界
+
+- vendor/axdriver/src/ls2k1000.rs：从 FDT 取得 AHCI MMIO、IRQ 和端口掩码，完成板级注册。
+- vendor/axdriver_block/src/ahci.rs：把块设备接口适配到 simple-ahci，保持通用 main 实现不动。
+- vendor/simple-ahci/src/ahci.rs：保留块设备 API、FIFO 非 NCQ 提交、完成队列和 IRQ/轮询兜底。
+- vendor/simple-ahci/src/controller.rs：负责 AHCI mode，并在 HOST_RESET 前保存、复位后恢复
+  CAP、PI 和 PxCMD 能力位。
+- vendor/simple-ahci/src/recovery.rs：只负责有界 COMRESET、PHY resume、链路 debounce 和设备
+  ready 时序；命令准入和调度不混入这里。
+- completion.rs、host_reset.rs、port_state.rs：保存可在宿主机直接运行的纯状态机与回归测试。
+
+本轮只拆分 8fd4e55f 之后加入的板级 AHCI 逻辑；该提交及更早来自 main 的命令提交、IRQ
+完成和读写代码不作语义修改。
+
+## 5. 构建、验收与上板
 
 先在宿主机完成静态验收：
 
@@ -82,7 +96,7 @@ python3 scripts/run_ls2k1000_serial_tftp.py moss-shell.bin \
 runner 的监视时间只决定主机脚本何时退出，不会给板上 workload 设置截止时间。脚本退出后可用
 任意 115200 8N1 串口终端重新打开 `/dev/ttyUSB0`，继续操作交互 shell。
 
-## 5. 当前验收边界
+## 6. 当前验收边界
 
 宿主机静态检查能证明两个镜像可构建、DT 合同和纯状态机测试通过，但不能代替实板数据路径。
 最终完成标准仍包括：MOSS 在双核/1 GiB 下完成 cagent 与完整 buildstorm；AHCI 无命令超时或

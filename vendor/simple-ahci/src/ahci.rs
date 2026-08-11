@@ -19,17 +19,18 @@ use crate::{
         ata_id_has_lba48, ata_id_n_sectors, ata_id_to_string,
     },
     completion::{
-        AdmissionTicket, CommandToken, CompletionQueue, DebounceResult, NonNcqAdmission,
-        RecoveryAction, SataDebounce, command_completion_failed, completed_commands,
-        port_interrupt_failed, recovery_action, transfer_in_range,
+        AdmissionTicket, CommandToken, CompletionQueue, NonNcqAdmission, RecoveryAction,
+        command_completion_failed, completed_commands, port_interrupt_failed, recovery_action,
+        transfer_in_range,
     },
-    hal::{WaitMode, WaitModeState, delay_ms, wait_for_event_or_spin, wait_until_timeout},
-    host_reset::{HostInitialConfig, select_effective_port_map},
+    controller::SavedControllerConfig,
+    hal::{WaitMode, WaitModeState, wait_for_event_or_spin, wait_until_timeout},
     mmio::{
-        AhciMmio, AhciMmioVolatileFieldAccess, CAP, GenericHostControlVolatileFieldAccess, ICC,
+        AhciMmio, AhciMmioVolatileFieldAccess, GenericHostControlVolatileFieldAccess, ICC,
         PortRegisters, PortRegistersVolatileFieldAccess, PxCMD, PxI,
     },
     port_state::{PortDeinitAction, next_port_deinit_action},
+    recovery::{HardResetResult, PortRecovery},
     types::{
         AHCI_MAX_BYTES_PER_CMD, AHCI_MAX_BYTES_PER_SG, AHCI_MAX_SG, ahci_cmd_hdr, ahci_cmd_list,
         ahci_cmd_tbl, ahci_cmd_tblVolatileFieldAccess, ahci_rx_fis, ahci_sg, sata_fis_h2d,
@@ -38,36 +39,17 @@ use crate::{
 
 const COMMAND_TIMEOUT_MS: u64 = 1_000;
 const COMMAND_COMPLETION_POLL_MS: u64 = 10;
-const AHCI_ENABLE_RETRIES: usize = 5;
-const AHCI_ENABLE_RETRY_MS: u64 = 10;
 const ENGINE_STOP_TIMEOUT_MS: u64 = 500;
 const FIS_STOP_TIMEOUT_MS: u64 = 1_000;
-const LINK_RESUME_RETRIES: usize = 5;
-const LINK_RESUME_DELAY_MS: u64 = 200;
-const LINK_DEBOUNCE_POLL_MS: u64 = 5;
-const LINK_DEBOUNCE_STABLE_MS: u64 = 100;
-const LINK_DEBOUNCE_TIMEOUT_MS: u64 = 2_000;
-const RESET_SETTLE_MS: u64 = 150;
-const READY_POLL_MS: u64 = 50;
 const OFFLINE_RETRY_MS: u64 = 60_000;
 const RESET_TIMEOUT_MS: u64 = 5_000;
-const SCTL_DET_COMRESET: u32 = 1;
-const SCTL_IPM_ACTIVE: u32 = 0x300;
-const SCTL_SPD_MASK: u32 = 0x0f0;
-const SCTL_RESUME_VERIFY_MASK: u32 = 0xf0f;
+const _: () = assert!(size_of::<PxCMD>() == size_of::<u32>());
 fn alloc<T: Sized>(align: usize) -> VolatilePtr<'static, T> {
     unsafe {
         VolatilePtr::new(NonNull::new_unchecked(
             alloc_zeroed(Layout::from_size_align(size_of::<T>(), align).unwrap()).cast(),
         ))
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum HardResetResult {
-    Ready,
-    Offline,
-    Failed,
 }
 
 /// DMA memory owned by one AHCI port. Allocation and descriptor construction
@@ -646,97 +628,6 @@ impl<H: Hal> AhciPort<H> {
         true
     }
 
-    fn debounce_link(&self, wait_mode: WaitMode, deadline_ms: u64) -> Option<u32> {
-        let started_ms = H::current_ms();
-        let timeout_ms = deadline_ms
-            .saturating_sub(started_ms)
-            .min(LINK_DEBOUNCE_TIMEOUT_MS);
-        if timeout_ms == 0 {
-            return None;
-        }
-
-        let initial_det = self.port.SSTS().read().DET();
-        let mut debounce = SataDebounce::new(
-            started_ms,
-            initial_det.into(),
-            LINK_DEBOUNCE_STABLE_MS,
-            timeout_ms,
-        );
-        loop {
-            let now_ms = H::current_ms();
-            let remaining_ms = deadline_ms.saturating_sub(now_ms);
-            if remaining_ms == 0 {
-                return match debounce.observe(now_ms, self.port.SSTS().read().DET().into()) {
-                    DebounceResult::Stable(det) => Some(det),
-                    DebounceResult::Pending | DebounceResult::TimedOut => None,
-                };
-            }
-            delay_ms::<H>(wait_mode, remaining_ms.min(LINK_DEBOUNCE_POLL_MS));
-            match debounce.observe(H::current_ms(), self.port.SSTS().read().DET().into()) {
-                DebounceResult::Pending => {}
-                DebounceResult::Stable(det) => return Some(det),
-                DebounceResult::TimedOut => return None,
-            }
-        }
-    }
-
-    fn resume_link(&self, wait_mode: WaitMode, deadline_ms: u64) -> Option<u32> {
-        for _ in 0..LINK_RESUME_RETRIES {
-            let sctl = (self.port.SCTL().read() & SCTL_SPD_MASK) | SCTL_IPM_ACTIVE;
-            self.port.SCTL().write(sctl);
-
-            let remaining_ms = deadline_ms.saturating_sub(H::current_ms());
-            if remaining_ms == 0 {
-                return None;
-            }
-            // Match sata_link_resume(): some PHYs fail negotiation when SStatus
-            // is read repeatedly immediately after COMRESET is released.
-            delay_ms::<H>(wait_mode, remaining_ms.min(LINK_RESUME_DELAY_MS));
-            if self.port.SCTL().read() & SCTL_RESUME_VERIFY_MASK == SCTL_IPM_ACTIVE {
-                let det = self.debounce_link(wait_mode, deadline_ms)?;
-                self.port.SERR().write(self.port.SERR().read());
-                return Some(det);
-            }
-        }
-        None
-    }
-
-    fn hard_reset(&self, wait_mode: WaitMode, deadline_ms: u64) -> HardResetResult {
-        // Mask before writing PxSCTL so the A/B experiment has no interrupt
-        // window between the COMRESET write/readback log and the delay.
-        let irqs_were_enabled = H::save_and_mask_local_irqs();
-        let sctl = (self.port.SCTL().read() & SCTL_SPD_MASK) | SCTL_IPM_ACTIVE | SCTL_DET_COMRESET;
-        self.port.SCTL().write(sctl);
-
-        // SATA requires COMRESET to remain asserted for at least 1 ms.
-        delay_ms::<H>(wait_mode, 1);
-        H::restore_local_irqs(irqs_were_enabled);
-
-        let Some(det) = self.resume_link(wait_mode, deadline_ms) else {
-            return HardResetResult::Failed;
-        };
-        if det != 3 {
-            return HardResetResult::Offline;
-        }
-
-        let remaining_ms = deadline_ms.saturating_sub(H::current_ms());
-        if remaining_ms == 0 {
-            return HardResetResult::Failed;
-        }
-        delay_ms::<H>(wait_mode, remaining_ms.min(RESET_SETTLE_MS));
-        loop {
-            let tfd = self.port.TFD().read();
-            if !(tfd.STS_BSY() || tfd.STS_DRQ()) {
-                return HardResetResult::Ready;
-            }
-            let remaining_ms = deadline_ms.saturating_sub(H::current_ms());
-            if remaining_ms == 0 {
-                return HardResetResult::Failed;
-            }
-            delay_ms::<H>(wait_mode, remaining_ms.min(READY_POLL_MS));
-        }
-    }
-
     fn recover_if_needed(&self, wait_mode: WaitMode) -> bool {
         loop {
             match self.current_recovery_action() {
@@ -805,7 +696,7 @@ impl<H: Hal> AhciPort<H> {
             // a failed/offline port remains eligible for the deferred retry
             // below instead of monopolising the current task.
             let deadline_ms = H::current_ms().saturating_add(RESET_TIMEOUT_MS);
-            let result = self.hard_reset(wait_mode, deadline_ms);
+            let result = PortRecovery::new(self.port).hard_reset::<H>(wait_mode, deadline_ms);
 
             if result == HardResetResult::Ready {
                 self.port.SERR().write(self.port.SERR().read());
@@ -947,91 +838,15 @@ impl<H: Hal> AhciDriver<H> {
     ) -> Option<PreparedAhci<H>> {
         let mmio = unsafe { VolatilePtr::new(NonNull::new(base as *mut _).unwrap()) };
         let host = mmio.host();
-
-        // Match Linux ahci_enable_ahci(): configuration registers are valid
-        // only in AHCI mode, and some controllers require repeated AE writes.
-        let enable_ahci = || {
-            for _ in 0..AHCI_ENABLE_RETRIES {
-                let ghc = host.ghc().read();
-                if ghc.AE() {
-                    return true;
-                }
-                host.ghc().write(ghc.with_AE(true).with_IE(false));
-                if host.ghc().read().AE() {
-                    return true;
-                }
-                delay_ms::<H>(WaitMode::Poll, AHCI_ENABLE_RETRY_MS);
-            }
-            false
-        };
-        if !enable_ahci() {
-            error!("AHCI mode enable failed before HBA reset");
-            return None;
-        }
-
-        // Linux ahci_save_initial_config() runs before HOST_RESET because
-        // platform/firmware configuration such as PI and PxCMD capability bits
-        // may be cleared by reset. LS2K1000 clears PI in practice.
-        let saved_cap = host.cap().read().into_bits();
-        let saved_version = host.vs().read().into_bits();
-        let hardware_port_map = host.pi().read();
-        let selected_port_map = select_effective_port_map(
-            saved_cap,
-            saved_version,
-            hardware_port_map,
-            platform_port_map,
-        );
-        let saved_port_map = selected_port_map.value;
-        if let Some(platform_port_map) = platform_port_map.filter(|map| *map != 0) {
-            if saved_port_map != platform_port_map {
-                warn!(
-                    "AHCI platform PI {platform_port_map:#x} exceeds CAP.NP; effective PI is \
-                     {saved_port_map:#x}"
-                );
-            }
-        }
-        let mut saved_port_commands = [0_u32; 32];
-        for (index, command) in saved_port_commands.iter_mut().enumerate() {
-            if saved_port_map & (1_u32 << index) != 0 {
-                let port = unsafe {
-                    mmio.ports()
-                        .map(|ports| ports.cast::<PortRegisters>().add(index))
-                };
-                *command = port.CMD().read().into_bits();
-            }
-        }
-        let initial_config = HostInitialConfig::new(
-            saved_cap,
-            saved_version,
-            saved_port_map,
-            saved_port_commands,
-        );
+        let controller = SavedControllerConfig::capture::<H>(mmio, platform_port_map)?;
 
         host.ghc().update(|ghc| ghc.with_IE(false).with_HR(true));
         if !wait_until_timeout::<H>(|| !host.ghc().read().HR(), 1_000) {
             error!("AHCI HBA reset timeout");
             return None;
         }
-        if !enable_ahci() {
-            error!("AHCI mode enable failed after HBA reset");
-            return None;
-        }
-
-        // Match Linux ahci_restore_initial_config(). Restore PI before touching
-        // port registers and read it back to flush the MMIO write.
-        host.cap().write(CAP::from_bits(initial_config.cap));
-        let port_map_restore = initial_config.port_map_restore(host.pi().read());
-        host.pi().write(port_map_restore.value);
-        let port_map = host.pi().read();
-        for (index, command) in initial_config.port_cmd_caps.iter().enumerate() {
-            if port_map & (1_u32 << index) != 0 {
-                let port = unsafe {
-                    mmio.ports()
-                        .map(|ports| ports.cast::<PortRegisters>().add(index))
-                };
-                port.CMD().write(PxCMD::from_bits(*command));
-            }
-        }
+        let restored = controller.restore_after_reset::<H>()?;
+        let port_map = restored.port_map;
 
         let cap = host.cap().read();
         let slot_count = usize::from(cap.NCS()) + 1;
@@ -1045,20 +860,7 @@ impl<H: Hal> AhciDriver<H> {
             }
         }
         let port = selected?;
-        // Linux prints the host summary only after reset and controller/port
-        // initialization. Keep this path numeric and compact: verbose CAP
-        // formatting is diagnostic work, not part of an MMIO state transition.
-        info!(
-            "AHCI host ready: version={:#x}, cap={:#x}, slots={slot_count}, \
-             hardware_ports={hardware_port_map:#x}, platform_ports={platform_port_map:?}, \
-             ports={port_map:#x}, platform_override={}, fabricated_ports={}, \
-             reset_cleared_ports={}",
-            initial_config.version,
-            initial_config.cap,
-            selected_port_map.platform_override,
-            selected_port_map.fabricated,
-            port_map_restore.write_needed
-        );
+        controller.log_ready(slot_count, &restored);
         Some(PreparedAhci {
             inner: Arc::new(AhciInner { _mmio: mmio, port }),
         })
