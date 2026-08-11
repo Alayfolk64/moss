@@ -360,20 +360,32 @@ pub fn sys_prctl(
         PR_SET_SECCOMP => {}
         PR_MCE_KILL => {}
         PR_CAPBSET_READ => {
-            if arg2 > CAP_LAST_CAP as usize {
+            let cap = arg2 as u32;
+
+            if cap >= 64 {
                 return Err(AxError::InvalidInput);
             }
+
             let pid = current_pid();
             let state = get_state(pid);
-            return Ok(((state.bounding & (1u64 << arg2)) != 0) as isize);
+            let is_set = (state.bounding & (1u64 << cap)) != 0;
+
+            return Ok(is_set as isize);
         }
         PR_CAPBSET_DROP => {
-            if arg2 > CAP_LAST_CAP as usize {
+            let cap = arg2 as u32;
+            if cap >= 64 {
                 return Err(AxError::InvalidInput);
             }
+
+            if !current_has_cap(CAP_SETPCAP) {
+                return Err(eperm());
+            }
+
             let pid = current_pid();
             let mut state = get_state(pid);
-            state.bounding &= !(1u64 << arg2);
+
+            state.bounding &= !(1u64 << cap);
             set_state(pid, state);
         }
         PR_SET_MM => {
