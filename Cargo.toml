@@ -103,6 +103,8 @@ axdriver_net = { path = "vendor/axdriver_net" }
 axdriver_virtio = { path = "vendor/axdriver_virtio" }
 axhal = { path = "vendor/axhal" }
 axplat = { path = "vendor/axplat" }
+axplat-riscv64-qemu-virt = { path = "vendor/axplat-riscv64-qemu-virt" }
+axplat-loongarch64-qemu-virt = { path = "vendor/axplat-loongarch64-qemu-virt" }
 axfs = { path = "vendor/axfs" }
 axmm = { path = "vendor/axmm" }
 axruntime = { path = "vendor/axruntime" }

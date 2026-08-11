@@ -106,10 +106,16 @@ pub fn cpu_hardware_ids() -> Option<&'static [usize]> {
                     // A heterogeneous RISC-V SoC may expose management harts
                     // that cannot enter S-mode. They are firmware CPUs, but
                     // cannot run an S-mode kernel and must not enter the Moss
-                    // logical topology. JH7110 hart 0 is such a core.
-                    _node.find_property("riscv,isa").is_none_or(|property| {
-                        riscv_isa_has_supervisor_mode(property.str())
-                    })
+                    // logical topology. JH7110 hart 0 is such a core. Modern
+                    // QEMU does not put `s` in the base part of `riscv,isa`;
+                    // its S-mode CPUs are identified by an Sv* MMU instead.
+                    let has_supervisor_mmu = _node
+                        .find_property("mmu-type")
+                        .is_some_and(|property| property.str().starts_with("riscv,sv"));
+                    has_supervisor_mmu
+                        || _node.find_property("riscv,isa").is_some_and(|property| {
+                            riscv_isa_has_supervisor_mode(property.str())
+                        })
                 }
                 #[cfg(not(any(target_arch = "riscv32", target_arch = "riscv64")))]
                 {

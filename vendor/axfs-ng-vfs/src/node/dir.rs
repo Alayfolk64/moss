@@ -513,6 +513,12 @@ impl DirNode {
             self.ops.create(name, node_type, permission)?
         };
         invalidate_inode_metadata_cache(self.filesystem(), self.inode());
+        // ext4 may immediately reuse an inode number released by unlink or a
+        // rename replacement.  Drop metadata belonging to that older inode
+        // generation and let the high-level cache make the same distinction
+        // for file pages on first open.
+        discard_inode_metadata_cache(entry.filesystem(), entry.inode());
+        entry.mark_freshly_created();
         let version = self.ops.cache_version(name);
         let mut cache = self.cache.write();
         Self::forget_entry(&mut cache, name);

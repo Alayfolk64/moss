@@ -43,5 +43,15 @@ export PS1='starry:~# '
 
 cd /root 2>/dev/null || cd /
 
+if [ ! -s /etc/resolv.conf ]; then
+    mkdir -p /etc
+    printf 'nameserver 223.5.5.5\nnameserver 1.1.1.1\n' >/etc/resolv.conf
+fi
+
+if command -v ntpd >/dev/null 2>&1; then
+    echo "Synchronizing system time with NTP..."
+    ntpd -nq -p ntp.aliyun.com || echo "Warning: NTP time synchronization failed"
+fi
+
 echo "Entering interactive shell..."
 exec /bin/sh

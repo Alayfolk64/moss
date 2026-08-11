@@ -924,8 +924,32 @@ impl CachedFile {
             .clone()
     }
 
+    /// Retires a page-cache record left under an inode number that the
+    /// filesystem has since reused.  Do not destroy the record itself: an open
+    /// descriptor for the unlinked inode may still own it and must retain its
+    /// private contents.  Removing the global index is enough to give the new
+    /// inode a distinct address space.
+    fn retire_reused_inode_record(location: &Location) {
+        let key = Self::file_cache_key(location);
+        let cache = Self::cache_for_key(key);
+        let stale = {
+            let mut records = cache.write();
+            match records.get(&key) {
+                Some(record) if !record.location.ptr_eq(location) => records.remove(&key),
+                _ => None,
+            }
+        };
+        if let Some(stale) = stale {
+            stale.location.user_data().remove::<FileUserData>();
+        }
+    }
+
     pub fn get_or_create(location: Location) -> Self {
         let in_memory = location.filesystem().name() == "tmpfs";
+
+        if location.take_freshly_created() {
+            Self::retire_reused_inode_record(&location);
+        }
 
         let mut guard = location.user_data();
         let record = if let Some(record) = guard.get::<FileUserData>().and_then(|it| it.get()) {
