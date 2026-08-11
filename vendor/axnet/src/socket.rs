@@ -172,6 +172,20 @@ pub enum Socket {
     Vsock(VsockSocket),
 }
 
+impl Socket {
+    /// Finalizes a newly accepted socket after its last aggregate move and
+    /// before it is published to another task through a descriptor table.
+    ///
+    /// # Safety
+    ///
+    /// The socket must be newly accepted and exclusively owned.
+    pub unsafe fn reinitialize_accepted_after_move(&mut self) {
+        if let Self::Tcp(socket) = self {
+            unsafe { socket.reinitialize_accepted_after_move() };
+        }
+    }
+}
+
 impl Pollable for Socket {
     fn poll(&self) -> IoEvents {
         match self {

@@ -38,6 +38,7 @@ pub mod vsock;
 mod wrapper;
 
 use alloc::{borrow::ToOwned, boxed::Box};
+use core::time::Duration;
 
 use axdriver::{AxDeviceContainer, prelude::*};
 use axsync::Mutex;
@@ -110,6 +111,7 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
         warn!("  No network device found!");
         None
     };
+    let has_physical_nic = eth0_ip.is_some();
 
     for dev in &router.devices {
         info!("Device: {}", dev.name());
@@ -128,6 +130,19 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
     SOCKET_SET.init_once(SocketSetWrapper::new());
     LISTEN_TABLE.init_once(ListenTable::new());
     local::init();
+    if has_physical_nic {
+        axtask::spawn_with_name(network_link_poll_loop, "net-link-poll".to_owned());
+    }
+}
+
+/// PHYs may not provide a usable link-change interrupt through the MAC. Keep
+/// Linux phylib's one-second state-machine cadence even while all sockets are
+/// idle, so cable and negotiated-mode changes reach the driver promptly.
+fn network_link_poll_loop() {
+    loop {
+        axtask::future::block_on(axtask::future::sleep(Duration::from_secs(1)));
+        poll_interfaces();
+    }
 }
 
 /// Init vsock subsystem by vsock devices.

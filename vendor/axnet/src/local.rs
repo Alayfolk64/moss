@@ -397,27 +397,52 @@ pub(crate) struct LocalTcpSocket {
 }
 
 impl LocalTcpSocket {
-    pub(crate) fn new(family: IpFamily) -> Self {
-        Self {
-            family,
-            bound: Mutex::new(None),
-            listener: Mutex::new(None),
-            stream: Mutex::new(None),
-            poll_state: Arc::new(PollSet::new()),
+    /// Initializes local TCP state directly inside its final socket allocation.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must be valid, aligned, uninitialized storage for one
+    /// `LocalTcpSocket`, and the outer socket must remain unpublished until
+    /// initialization completes.
+    pub(crate) unsafe fn write_unpublished_in_place(
+        dst: *mut Self,
+        family: IpFamily,
+        bound: Option<IpListenEndpoint>,
+        stream: Option<Arc<LocalTcpStream>>,
+    ) {
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).family).write(family);
+            axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).bound), bound);
+            axsync::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).listener),
+                None,
+            );
+            axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).stream), stream);
+            core::ptr::addr_of_mut!((*dst).poll_state).write(PollSet::new_shared());
         }
     }
 
-    pub(crate) fn new_connected(family: IpFamily, stream: Arc<LocalTcpStream>) -> Self {
-        Self {
-            family,
-            bound: Mutex::new(Some(IpListenEndpoint {
-                addr: Some(stream.local_endpoint().addr),
-                port: stream.local_endpoint().port,
-            })),
-            listener: Mutex::new(None),
-            stream: Mutex::new(Some(stream)),
-            poll_state: Arc::new(PollSet::new()),
-        }
+    /// Repairs freshly constructed state in an accepted socket after the
+    /// socket has reached its final allocation but before it is published.
+    pub(crate) unsafe fn reinitialize_accepted_after_move(&mut self) -> [u64; 3] {
+        let previous_owners = unsafe {
+            let previous_owners = [
+                axsync::reinitialize_unpublished(&mut self.bound),
+                axsync::reinitialize_unpublished(&mut self.listener),
+                axsync::reinitialize_unpublished(&mut self.stream),
+            ];
+
+            // An accepted socket can never itself be a listener. On the
+            // pinned LoongArch toolchain the same aggregate move that has
+            // polluted fresh RawMutex atomics has turned this `None` niche
+            // into small task IDs. Do not assign here: that would first drop
+            // the invalid Arc pointer. The socket is private, and the
+            // constructor invariant makes overwriting the intended `None`
+            // value without dropping it the only valid recovery.
+            core::ptr::write(self.listener.get_mut(), None);
+            previous_owners
+        };
+        previous_owners
     }
 
     pub(crate) fn bind(&self, endpoint: IpListenEndpoint) -> AxResult {

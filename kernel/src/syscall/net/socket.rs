@@ -1,3 +1,5 @@
+use alloc::sync::Arc;
+
 use axerrno::{AxError, AxResult, LinuxError};
 #[cfg(feature = "vsock")]
 use axnet::vsock::{VsockSocket, VsockStreamTransport};
@@ -19,7 +21,7 @@ use linux_raw_sys::{
 
 use super::addr::SocketAddrExt;
 use crate::{
-    file::{FileLike, Socket},
+    file::{FileLike, Socket, add_file_like},
     mm::{UserConstPtr, UserPtr},
     task::AsThread,
 };
@@ -138,8 +140,18 @@ pub fn sys_accept4(
 
     let cloexec = flags & O_CLOEXEC != 0;
 
-    let socket = Socket::from_fd(fd)?;
-    let socket = Socket(socket.accept()?);
+    let listener = Socket::from_fd(fd)?;
+    let mut socket = Arc::new(Socket(listener.accept()?));
+    // The pinned LoongArch nightly has corrupted atomic fields while moving
+    // large task and socket aggregates. The accepted socket is now in its
+    // final allocation and is still private, so restore only its freshly
+    // constructed cooperative-lock state before the first peer-address query.
+    unsafe {
+        Arc::get_mut(&mut socket)
+            .expect("newly allocated accepted socket must be unique")
+            .0
+            .reinitialize_accepted_after_move();
+    }
     if flags & O_NONBLOCK != 0 {
         socket.set_nonblocking(true)?;
     }
@@ -149,7 +161,7 @@ pub fn sys_accept4(
     } else {
         None
     };
-    let fd = socket.add_to_fd_table(cloexec).map(|fd| fd as isize)?;
+    let fd = add_file_like(socket, cloexec).map(|fd| fd as isize)?;
     debug!("sys_accept => fd: {fd}, addr: {remote_addr:?}");
 
     if let Some(remote_addr) = remote_addr {
@@ -200,18 +212,33 @@ pub fn sys_socketpair(
             return Err(AxError::from(LinuxError::ESOCKTNOSUPPORT));
         }
     };
-    let sock1 = Socket(SocketInner::Unix(sock1));
-    let sock2 = Socket(SocketInner::Unix(sock2));
-
-    if raw_ty & O_NONBLOCK != 0 {
-        sock1.set_nonblocking(true)?;
-        sock2.set_nonblocking(true)?;
+    // Put both socket aggregates in their final allocations before publishing
+    // them through the descriptor table.  The pinned LoongArch toolchain has
+    // previously corrupted fresh atomic fields while moving large socket
+    // aggregates (see the accepted-socket repair above).  In particular, a
+    // moved SOCK_SEQPACKET endpoint has intermittently acquired O_NONBLOCK and
+    // made Rust's blocking fork/exec status read fail with EAGAIN.  Always
+    // write the requested state at the final address, including the common
+    // blocking case, instead of trusting the moved default value.
+    let sock1 = Arc::new(Socket(SocketInner::Unix(sock1)));
+    let sock2 = Arc::new(Socket(SocketInner::Unix(sock2)));
+    let nonblocking = raw_ty & O_NONBLOCK != 0;
+    if !nonblocking && (sock1.nonblocking() || sock2.nonblocking()) {
+        warn!(
+            "MOSS_SOCKETPAIR_NONBLOCK_REPAIR pid={} type={} endpoint_nonblocking=[{}, {}]",
+            pid,
+            ty,
+            sock1.nonblocking(),
+            sock2.nonblocking(),
+        );
     }
+    sock1.set_nonblocking(nonblocking)?;
+    sock2.set_nonblocking(nonblocking)?;
     let cloexec = raw_ty & O_CLOEXEC != 0;
 
     *fds.get_as_mut()? = [
-        sock1.add_to_fd_table(cloexec)?,
-        sock2.add_to_fd_table(cloexec)?,
+        add_file_like(sock1, cloexec)?,
+        add_file_like(sock2, cloexec)?,
     ];
     Ok(0)
 }

@@ -35,6 +35,17 @@ impl StateLock {
         Self(AtomicU8::new(state as u8))
     }
 
+    /// Initializes a state lock at its final unpublished address.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must be valid, aligned, uninitialized storage for one `StateLock`.
+    pub unsafe fn write_unpublished_in_place(dst: *mut Self, state: State) {
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).0).write(AtomicU8::new(state as u8));
+        }
+    }
+
     pub fn get(&self) -> State {
         self.0
             .load(Ordering::Acquire)

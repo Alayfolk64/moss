@@ -66,6 +66,29 @@ impl GeneralOptions {
         }
     }
 
+    /// Initializes default socket options at their final unpublished address.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must be valid, aligned, uninitialized storage for one
+    /// `GeneralOptions` and must remain private until initialization finishes.
+    pub(crate) unsafe fn write_unpublished_in_place(dst: *mut Self) {
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).nonblock).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).reuse_address).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).ipv6_only).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).dont_route).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).recv_error).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).linger_enabled).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).linger_timeout_secs).write(AtomicU32::new(0));
+            core::ptr::addr_of_mut!((*dst).send_timeout_nanos).write(AtomicU64::new(0));
+            core::ptr::addr_of_mut!((*dst).recv_timeout_nanos).write(AtomicU64::new(0));
+            core::ptr::addr_of_mut!((*dst).send_buffer_len).write(AtomicU32::new(0));
+            core::ptr::addr_of_mut!((*dst).recv_buffer_len).write(AtomicU32::new(0));
+            core::ptr::addr_of_mut!((*dst).device_mask).write(AtomicU32::new(0));
+        }
+    }
+
     pub fn nonblocking(&self) -> bool {
         self.nonblock.load(Ordering::Relaxed)
     }

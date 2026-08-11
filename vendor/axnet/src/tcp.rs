@@ -1,5 +1,6 @@
-use alloc::vec;
+use alloc::{boxed::Box, vec};
 use core::{
+    ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::Context,
 };
@@ -38,7 +39,15 @@ pub(crate) fn new_tcp_socket() -> smol::Socket<'static> {
 }
 
 /// A TCP socket that provides POSIX-like APIs.
-pub struct TcpSocket {
+///
+/// Keep the state behind one stable allocation. In particular, accepted
+/// sockets cross an async poller, the [`Socket`] enum, and the syscall file
+/// wrapper before publication. Moving only this pointer avoids repeatedly
+/// copying atomics and niche-encoded `Option<Arc<_>>` fields on LoongArch.
+pub struct TcpSocket(Box<TcpSocketInner>);
+
+/// Heap-resident state of a [`TcpSocket`].
+pub struct TcpSocketInner {
     state: StateLock,
     handle: Mutex<Option<SocketHandle>>,
     local: LocalTcpSocket,
@@ -58,26 +67,62 @@ pub struct TcpSocket {
 
 unsafe impl Sync for TcpSocket {}
 
+impl Deref for TcpSocket {
+    type Target = TcpSocketInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for TcpSocket {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+const _: () = assert!(core::mem::size_of::<TcpSocket>() == core::mem::size_of::<usize>());
+
 impl TcpSocket {
+    fn allocate(
+        state: State,
+        handle: Option<SocketHandle>,
+        family: IpFamily,
+        local_bound: Option<IpListenEndpoint>,
+        local_stream: Option<alloc::sync::Arc<LocalTcpStream>>,
+    ) -> Self {
+        let mut storage = Box::<TcpSocketInner>::new_uninit();
+        let dst = storage.as_mut_ptr();
+
+        unsafe {
+            StateLock::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).state), state);
+            axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).handle), handle);
+            LocalTcpSocket::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).local),
+                family,
+                local_bound,
+                local_stream,
+            );
+            core::ptr::addr_of_mut!((*dst).family).write(family);
+            core::ptr::addr_of_mut!((*dst).ever_connected)
+                .write(AtomicBool::new(state == State::Connected));
+            core::ptr::addr_of_mut!((*dst).requested_mss).write(AtomicUsize::new(0));
+            core::ptr::addr_of_mut!((*dst).bytes_since_poll).write(AtomicUsize::new(0));
+            core::ptr::addr_of_mut!((*dst).nagle_enabled).write(AtomicBool::new(true));
+            core::ptr::addr_of_mut!((*dst).quick_ack).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).keep_alive).write(AtomicBool::new(false));
+            GeneralOptions::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).general));
+            core::ptr::addr_of_mut!((*dst).has_mcast_group).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).rx_closed).write(AtomicBool::new(false));
+            PollSet::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).poll_rx_closed));
+
+            Self(storage.assume_init())
+        }
+    }
+
     /// Creates a new TCP socket.
     pub fn new(family: IpFamily) -> Self {
-        Self {
-            state: StateLock::new(State::Idle),
-            handle: Mutex::new(None),
-            local: LocalTcpSocket::new(family),
-            family,
-            ever_connected: AtomicBool::new(false),
-            requested_mss: AtomicUsize::new(0),
-            bytes_since_poll: AtomicUsize::new(0),
-            nagle_enabled: AtomicBool::new(true),
-            quick_ack: AtomicBool::new(false),
-            keep_alive: AtomicBool::new(false),
-
-            general: GeneralOptions::new(),
-            has_mcast_group: AtomicBool::new(false),
-            rx_closed: AtomicBool::new(false),
-            poll_rx_closed: PollSet::new(),
-        }
+        Self::allocate(State::Idle, None, family, None, None)
     }
 
     /// Creates a new TCP socket that is already connected.
@@ -87,23 +132,7 @@ impl TcpSocket {
         rx_buf_len: usize,
         tx_buf_len: usize,
     ) -> Self {
-        let result = Self {
-            state: StateLock::new(State::Connected),
-            handle: Mutex::new(Some(handle)),
-            local: LocalTcpSocket::new(family),
-            family,
-            ever_connected: AtomicBool::new(true),
-            requested_mss: AtomicUsize::new(0),
-            bytes_since_poll: AtomicUsize::new(0),
-            nagle_enabled: AtomicBool::new(true),
-            quick_ack: AtomicBool::new(false),
-            keep_alive: AtomicBool::new(false),
-
-            general: GeneralOptions::new(),
-            has_mcast_group: AtomicBool::new(false),
-            rx_closed: AtomicBool::new(false),
-            poll_rx_closed: PollSet::new(),
-        };
+        let result = Self::allocate(State::Connected, Some(handle), family, None, None);
         result.general.set_recv_buffer(rx_buf_len);
         result.general.set_send_buffer(tx_buf_len);
         let endpoint = result.with_smol_socket(|socket| {
@@ -127,26 +156,40 @@ impl TcpSocket {
         rx_buf_len: usize,
         tx_buf_len: usize,
     ) -> Self {
-        let result = Self {
-            state: StateLock::new(State::Connected),
-            handle: Mutex::new(None),
-            local: LocalTcpSocket::new_connected(family, stream),
+        let local_endpoint = stream.local_endpoint();
+        let result = Self::allocate(
+            State::Connected,
+            None,
             family,
-            ever_connected: AtomicBool::new(true),
-            requested_mss: AtomicUsize::new(0),
-            bytes_since_poll: AtomicUsize::new(0),
-            nagle_enabled: AtomicBool::new(true),
-            quick_ack: AtomicBool::new(false),
-            keep_alive: AtomicBool::new(false),
-
-            general: GeneralOptions::new(),
-            has_mcast_group: AtomicBool::new(false),
-            rx_closed: AtomicBool::new(false),
-            poll_rx_closed: PollSet::new(),
-        };
+            Some(IpListenEndpoint {
+                addr: Some(local_endpoint.addr),
+                port: local_endpoint.port,
+            }),
+            Some(stream),
+        );
         result.general.set_recv_buffer(rx_buf_len);
         result.general.set_send_buffer(tx_buf_len);
         result
+    }
+
+    /// Reinitializes fresh cooperative locks after an accepted socket reaches
+    /// the allocation that will be published to the file-descriptor table.
+    ///
+    /// # Safety
+    ///
+    /// This must be called exactly once on a newly accepted socket before the
+    /// socket is shared with another task.
+    pub unsafe fn reinitialize_accepted_after_move(&mut self) {
+        let previous_handle_owner =
+            unsafe { axsync::reinitialize_unpublished(&mut self.handle) };
+        let previous_local_owners =
+            unsafe { self.local.reinitialize_accepted_after_move() };
+        if previous_handle_owner != 0 || previous_local_owners.iter().any(|owner| *owner != 0) {
+            warn!(
+                "reinitialized moved accepted TCP mutexes: handle_owner={}, local_owners={:?}",
+                previous_handle_owner, previous_local_owners
+            );
+        }
     }
 }
 
