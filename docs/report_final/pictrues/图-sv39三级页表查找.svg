@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="440" viewBox="0 0 920 440">
+  <defs>
+    <marker id="darkArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="orangeArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#d97706"/>
+    </marker>
+  </defs>
+  <style>
+    .zh { font-family: 'Source Han Sans CN','Microsoft YaHei','PingFang SC',sans-serif; }
+    .mono { font-family: Consolas,'Courier New',monospace; }
+    .title { font-size: 18px; font-weight: 700; fill: #1e293b; }
+    .label { font-size: 15px; font-weight: 600; fill: #334155; }
+    .small { font-size: 13px; fill: #475569; }
+    .tiny { font-size: 12px; fill: #64748b; }
+  </style>
+
+  <!-- Virtual address: each VPN selects one PTE in its own level. -->
+  <text x="34" y="45" class="zh title">虚拟地址</text>
+  <rect x="130" y="20" width="180" height="44" rx="6" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.4"/>
+  <rect x="310" y="20" width="180" height="44" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.4"/>
+  <rect x="490" y="20" width="180" height="44" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.4"/>
+  <rect x="670" y="20" width="170" height="44" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.4"/>
+  <text x="220" y="48" text-anchor="middle" class="mono label">VPN[2]</text>
+  <text x="400" y="48" text-anchor="middle" class="mono label">VPN[1]</text>
+  <text x="580" y="48" text-anchor="middle" class="mono label">VPN[0]</text>
+  <text x="755" y="48" text-anchor="middle" class="zh label">页内偏移</text>
+
+  <!-- satp points to the root page-table page, not to a selected PTE. -->
+  <rect x="28" y="204" width="96" height="62" rx="9" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.4"/>
+  <text x="76" y="231" text-anchor="middle" class="mono title">satp</text>
+  <text x="76" y="251" text-anchor="middle" class="zh tiny">根表 PPN</text>
+
+  <!-- L2 root page table -->
+  <g>
+    <rect x="152" y="145" width="136" height="148" rx="9" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+    <rect x="152" y="145" width="136" height="34" rx="9" fill="#e0f2fe"/>
+    <text x="220" y="168" text-anchor="middle" class="zh label">根页表 L2</text>
+    <line x1="164" y1="199" x2="276" y2="199" stroke="#cbd5e1"/>
+    <rect x="164" y="211" width="112" height="30" rx="4" fill="#bfdbfe" stroke="#60a5fa"/>
+    <line x1="164" y1="253" x2="276" y2="253" stroke="#cbd5e1"/>
+    <line x1="164" y1="274" x2="276" y2="274" stroke="#cbd5e1"/>
+    <text x="220" y="231" text-anchor="middle" class="zh small">下一表 PPN</text>
+  </g>
+
+  <!-- L1 middle page table -->
+  <g>
+    <rect x="332" y="145" width="136" height="148" rx="9" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+    <rect x="332" y="145" width="136" height="34" rx="9" fill="#e0f2fe"/>
+    <text x="400" y="168" text-anchor="middle" class="zh label">中间页表 L1</text>
+    <line x1="344" y1="199" x2="456" y2="199" stroke="#cbd5e1"/>
+    <rect x="344" y="211" width="112" height="30" rx="4" fill="#bfdbfe" stroke="#60a5fa"/>
+    <line x1="344" y1="253" x2="456" y2="253" stroke="#cbd5e1"/>
+    <line x1="344" y1="274" x2="456" y2="274" stroke="#cbd5e1"/>
+    <text x="400" y="231" text-anchor="middle" class="zh small">下一表 PPN</text>
+  </g>
+
+  <!-- L0 leaf page table -->
+  <g>
+    <rect x="512" y="145" width="136" height="148" rx="9" fill="#fff" stroke="#64748b" stroke-width="1.5"/>
+    <rect x="512" y="145" width="136" height="34" rx="9" fill="#e0f2fe"/>
+    <text x="580" y="168" text-anchor="middle" class="zh label">叶子页表 L0</text>
+    <line x1="524" y1="199" x2="636" y2="199" stroke="#cbd5e1"/>
+    <rect x="524" y="211" width="112" height="30" rx="4" fill="#bfdbfe" stroke="#60a5fa"/>
+    <line x1="524" y1="253" x2="636" y2="253" stroke="#cbd5e1"/>
+    <line x1="524" y1="274" x2="636" y2="274" stroke="#cbd5e1"/>
+    <text x="580" y="231" text-anchor="middle" class="zh small">PPN + 权限</text>
+  </g>
+
+  <!-- Blue: VPN only selects a PTE in that level. -->
+  <path d="M220 64 L220 209" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#blueArrow)"/>
+  <path d="M400 64 L400 209" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#blueArrow)"/>
+  <path d="M580 64 L580 209" fill="none" stroke="#2563eb" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#blueArrow)"/>
+
+  <!-- Dark: PTE supplies the next table PPN. -->
+  <path d="M124 235 L138 235 L138 180 L150 180" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#darkArrow)"/>
+  <path d="M288 226 L310 226 L310 180 L330 180" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#darkArrow)"/>
+  <path d="M468 226 L490 226 L490 180 L510 180" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#darkArrow)"/>
+
+  <!-- Leaf PTE supplies the data-page PPN; offset bypasses the walk unchanged. -->
+  <path d="M580 241 L580 333 L520 333 L520 368" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#darkArrow)"/>
+  <path d="M755 64 L755 368" fill="none" stroke="#d97706" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#orangeArrow)"/>
+
+  <!-- Physical address is PPN concatenated with the unchanged offset. -->
+  <text x="34" y="395" class="zh title">物理地址</text>
+  <rect x="130" y="370" width="480" height="46" rx="6" fill="#dcfce7" stroke="#4ade80" stroke-width="1.4"/>
+  <rect x="610" y="370" width="230" height="46" rx="6" fill="#fef3c7" stroke="#fbbf24" stroke-width="1.4"/>
+  <text x="370" y="399" text-anchor="middle" class="mono label">物理页号 PPN</text>
+  <text x="725" y="399" text-anchor="middle" class="zh label">页内偏移</text>
+</svg>

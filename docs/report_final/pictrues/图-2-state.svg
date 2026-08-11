@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="390"
+     viewBox="0 0 720 390"
+     font-family="'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="6"
+            refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="720" height="390" fill="#fafafa" rx="6"/>
+  <text x="360" y="36" text-anchor="middle" font-size="14"
+        font-weight="bold" fill="#333">进程生命周期状态机</text>
+
+  <!-- 起始点 -->
+  <circle cx="55" cy="132" r="11" fill="#444"/>
+
+  <!-- start → 运行中 -->
+  <line x1="66" y1="132" x2="121" y2="132"
+        stroke="#555" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="93" y="119" text-anchor="middle" font-size="11" fill="#666">clone/fork</text>
+
+  <!-- 运行中 -->
+  <rect x="123" y="108" width="144" height="48" rx="8"
+        fill="#d5e8d4" stroke="#82b366" stroke-width="2"/>
+  <text x="195" y="137" text-anchor="middle" font-size="15"
+        font-weight="bold" fill="#2d6a2d">运行中</text>
+
+  <!-- 运行中 → 僵尸 -->
+  <line x1="267" y1="132" x2="347" y2="132"
+        stroke="#555" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="307" y="119" text-anchor="middle" font-size="11" fill="#666">exit()</text>
+
+  <!-- 运行中 → 已停止（下行，偏左 x=162） -->
+  <line x1="162" y1="156" x2="162" y2="264"
+        stroke="#555" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="104" y="208" text-anchor="middle" font-size="11" fill="#666">SIGSTOP /</text>
+  <text x="104" y="223" text-anchor="middle" font-size="11" fill="#666">SIGTSTP</text>
+
+  <!-- 已停止 → 运行中（上行，偏右 x=228） -->
+  <line x1="228" y1="264" x2="228" y2="156"
+        stroke="#555" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="286" y="216" text-anchor="middle" font-size="11" fill="#666">SIGCONT</text>
+
+  <!-- 已停止 -->
+  <rect x="123" y="266" width="144" height="48" rx="8"
+        fill="#fff2cc" stroke="#d6b656" stroke-width="2"/>
+  <text x="195" y="295" text-anchor="middle" font-size="15"
+        font-weight="bold" fill="#7d6000">已停止</text>
+
+  <!-- 僵尸 -->
+  <rect x="349" y="108" width="130" height="48" rx="8"
+        fill="#ffe6cc" stroke="#d6a000" stroke-width="2"/>
+  <text x="414" y="137" text-anchor="middle" font-size="15"
+        font-weight="bold" fill="#7d4000">僵尸</text>
+
+  <!-- 僵尸 → 已回收 -->
+  <line x1="479" y1="132" x2="536" y2="132"
+        stroke="#555" stroke-width="1.8" marker-end="url(#ah)"/>
+  <text x="507" y="119" text-anchor="middle" font-size="11" fill="#666">wait()</text>
+
+  <!-- 已回收 -->
+  <rect x="538" y="108" width="134" height="48" rx="8"
+        fill="#f5f5f5" stroke="#999" stroke-width="2"/>
+  <text x="605" y="137" text-anchor="middle" font-size="15"
+        font-weight="bold" fill="#777">已回收</text>
+
+  <!-- 分隔线 -->
+  <line x1="40" y1="346" x2="680" y2="346"
+        stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- 注释：WUNTRACED -->
+  <rect x="40" y="355" width="192" height="27" rx="4"
+        fill="#fffde7" stroke="#d6b656" stroke-width="1"/>
+  <text x="136" y="373" text-anchor="middle" font-size="11" fill="#7d6000">WUNTRACED → Stopped 事件可观测</text>
+
+  <!-- 注释：WCONTINUED -->
+  <rect x="244" y="355" width="216" height="27" rx="4"
+        fill="#e8f5e9" stroke="#82b366" stroke-width="1"/>
+  <text x="352" y="373" text-anchor="middle" font-size="11" fill="#2d6a2d">WCONTINUED → Continued 事件可观测</text>
+
+  <!-- 注释：SIGCHLD -->
+  <rect x="472" y="355" width="208" height="27" rx="4"
+        fill="#fff3e0" stroke="#d6a000" stroke-width="1"/>
+  <text x="576" y="373" text-anchor="middle" font-size="11" fill="#7d4000">exit 时向父进程发送 SIGCHLD</text>
+</svg>
