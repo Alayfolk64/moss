@@ -375,7 +375,7 @@ fn flush_metadata_cache_shared(
             restore_metadata_dirty(shared, Some(size), &update);
             return Err(VfsError::InvalidInput);
         };
-        if let Err(err) = file.set_len(size) {
+        if let Err(err) = file.commit_len(size) {
             restore_metadata_dirty(shared, Some(size), &update);
             return Err(err);
         }

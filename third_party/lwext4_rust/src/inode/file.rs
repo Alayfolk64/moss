@@ -467,4 +467,20 @@ impl<Hal: SystemHal> InodeRef<Hal> {
         }
         Ok(())
     }
+
+    /// Commits an inode size after the caller has already initialized all
+    /// newly exposed bytes through direct data I/O.
+    pub fn commit_len(&mut self, len: u64) -> Ext4Result<()> {
+        let cur_len = self.size();
+        if len < cur_len {
+            return self.truncate(len);
+        }
+        if len > cur_len {
+            unsafe {
+                ext4_inode_set_size(self.inner.inode, len);
+            }
+            self.mark_dirty();
+        }
+        Ok(())
+    }
 }

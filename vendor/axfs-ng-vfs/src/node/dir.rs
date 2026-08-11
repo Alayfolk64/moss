@@ -42,6 +42,13 @@ struct DirCache {
     /// mutation removes or invalidates the corresponding entry before
     /// publishing its new generation.
     negative: HashSet<String>,
+    /// Filesystem-provided versions for cached positive and negative entries.
+    ///
+    /// Most filesystems use one canonical `DirNode` per directory and do not
+    /// need this. Filesystems which can construct multiple `DirNode` wrappers
+    /// for the same inode use it to invalidate aliases after a namespace
+    /// mutation performed through another wrapper.
+    versions: HashMap<String, u64>,
 }
 
 pub trait DirNodeOps: NodeOps {
@@ -68,6 +75,17 @@ pub trait DirNodeOps: NodeOps {
     /// called multiple times for the same name.
     fn is_cacheable(&self) -> bool {
         true
+    }
+
+    /// Returns a version describing the current lookup result for `name`.
+    ///
+    /// If implemented, the version must change whenever the name starts or
+    /// stops existing, or begins referring to another inode. This keeps the
+    /// per-`DirNode` dentry caches coherent when a filesystem can return
+    /// multiple wrappers for the same directory inode. Returning `None`
+    /// retains the regular wrapper-local cache behavior.
+    fn cache_version(&self, _name: &str) -> Option<u64> {
+        None
     }
 
     /// Creates a directory entry.
@@ -192,16 +210,43 @@ impl DirNode {
         {
             dir.forget();
         }
+        cache.versions.remove(name);
     }
 
-    fn cache_positive(cache: &mut DirCache, name: &str, entry: DirEntry) {
+    fn cache_positive(cache: &mut DirCache, name: &str, entry: DirEntry, version: Option<u64>) {
         cache.negative.remove(name);
         cache.children.insert(name.to_owned(), entry);
+        match version {
+            Some(version) => {
+                cache.versions.insert(name.to_owned(), version);
+            }
+            None => {
+                cache.versions.remove(name);
+            }
+        }
     }
 
-    fn cache_negative(cache: &mut DirCache, name: &str) {
+    fn cache_negative(cache: &mut DirCache, name: &str, version: Option<u64>) {
         Self::forget_entry(cache, name);
         cache.negative.insert(name.to_owned());
+        if let Some(version) = version {
+            cache.versions.insert(name.to_owned(), version);
+        }
+    }
+
+    /// Invalidates a cached name when another wrapper for the same backend
+    /// directory observed a namespace mutation.
+    fn synchronize_cache_version(&self, name: &str) {
+        let Some(version) = self.ops.cache_version(name) else {
+            return;
+        };
+        let mut cache = self.cache.write();
+        let is_cached = cache.children.contains_key(name) || cache.negative.contains(name);
+        if is_cached && cache.versions.get(name) != Some(&version) {
+            Self::forget_entry(&mut cache, name);
+            cache.negative.remove(name);
+            self.cache_generation.fetch_add(1, Ordering::AcqRel);
+        }
     }
 
     /// Publishes a filesystem lookup result without retaining the cache lock
@@ -210,6 +255,7 @@ impl DirNode {
         &self,
         name: &str,
         result: &VfsResult<DirEntry>,
+        version: Option<u64>,
     ) {
         if !self.ops.is_cacheable() {
             return;
@@ -217,11 +263,11 @@ impl DirNode {
         let mut cache = self.cache.write();
         match result {
             Ok(entry) => {
-                Self::cache_positive(&mut cache, name, entry.clone());
+                Self::cache_positive(&mut cache, name, entry.clone(), version);
             }
             Err(err) => {
                 if err.canonicalize() == VfsError::NotFound {
-                    Self::cache_negative(&mut cache, name);
+                    Self::cache_negative(&mut cache, name, version);
                 }
             }
         }
@@ -230,8 +276,13 @@ impl DirNode {
     /// Performs a real filesystem lookup while the caller holds this
     /// directory's mutation lock.
     fn lookup_fresh_for_mutation(&self, name: &str) -> VfsResult<DirEntry> {
+        self.synchronize_cache_version(name);
+        let version_before = self.ops.cache_version(name);
         let result = self.ops.lookup(name);
-        self.publish_lookup_result(name, &result);
+        let version_after = self.ops.cache_version(name);
+        if version_before == version_after {
+            self.publish_lookup_result(name, &result, version_after);
+        }
         result
     }
 
@@ -239,6 +290,7 @@ impl DirNode {
     /// The caller holds `mutation_lock`, so a cached result cannot be
     /// invalidated by another local mutation during this operation.
     fn lookup_for_mutation(&self, name: &str) -> VfsResult<DirEntry> {
+        self.synchronize_cache_version(name);
         if self.ops.is_cacheable() {
             let cache = self.cache.read();
             if let Some(entry) = cache.children.get(name) {
@@ -267,6 +319,8 @@ impl DirNode {
             return self.ops.lookup(name);
         }
 
+        self.synchronize_cache_version(name);
+
         {
             let cache = self.cache.read();
             if let Some(entry) = cache.children.get(name).cloned() {
@@ -282,6 +336,7 @@ impl DirNode {
         // can still progress, and followers recheck the dentry cache instead
         // of repeating the same filesystem lookup.
         let _lookup = self.lookup_lock(name).lock();
+        self.synchronize_cache_version(name);
         let generation = self.cache_generation.load(Ordering::Acquire);
         {
             let cache = self.cache.read();
@@ -296,16 +351,20 @@ impl DirNode {
         // Filesystem lookup may block on metadata I/O. Do not hold the
         // directory cache write lock across it: a cold lookup for one name
         // must not block cache hits for every other name in the directory.
+        let version_before = self.ops.cache_version(name);
         let result = self.ops.lookup(name);
-        if self.cache_generation.load(Ordering::Acquire) == generation {
+        let version_after = self.ops.cache_version(name);
+        if version_before == version_after
+            && self.cache_generation.load(Ordering::Acquire) == generation
+        {
             let mut cache = self.cache.write();
             if self.cache_generation.load(Ordering::Acquire) == generation {
                 match &result {
                     Ok(entry) => {
-                        Self::cache_positive(&mut cache, name, entry.clone());
+                        Self::cache_positive(&mut cache, name, entry.clone(), version_after);
                     }
                     Err(err) if err.canonicalize() == VfsError::NotFound => {
-                        Self::cache_negative(&mut cache, name);
+                        Self::cache_negative(&mut cache, name, version_after);
                     }
                     Err(_) => {}
                 }
@@ -325,6 +384,7 @@ impl DirNode {
 
     /// Looks up a directory entry by name in cache.
     pub fn lookup_cache(&self, name: &str) -> Option<DirEntry> {
+        self.synchronize_cache_version(name);
         if self.ops.is_cacheable() {
             self.cache.read().children.get(name).cloned()
         } else {
@@ -335,9 +395,19 @@ impl DirNode {
     /// Inserts a directory entry into the cache.
     pub fn insert_cache(&self, name: String, entry: DirEntry) -> Option<DirEntry> {
         if self.ops.is_cacheable() {
+            self.synchronize_cache_version(&name);
+            let version = self.ops.cache_version(&name);
             let mut cache = self.cache.write();
             cache.negative.remove(&name);
-            let previous = cache.children.insert(name, entry);
+            let previous = cache.children.insert(name.clone(), entry);
+            match version {
+                Some(version) => {
+                    cache.versions.insert(name, version);
+                }
+                None => {
+                    cache.versions.remove(&name);
+                }
+            }
             self.cache_generation.fetch_add(1, Ordering::AcqRel);
             previous
         } else {
@@ -357,9 +427,10 @@ impl DirNode {
         self.ops.link(name, node).inspect(|entry| {
             invalidate_inode_metadata_cache(self.filesystem(), self.inode());
             invalidate_inode_metadata_cache(node.filesystem(), node.inode());
+            let version = self.ops.cache_version(name);
             let mut cache = self.cache.write();
             if self.ops.is_cacheable() {
-                Self::cache_positive(&mut cache, name, entry.clone());
+                Self::cache_positive(&mut cache, name, entry.clone(), version);
             }
             self.cache_generation.fetch_add(1, Ordering::AcqRel);
         })
@@ -393,10 +464,14 @@ impl DirNode {
                     // writeback semantics for updates racing with unlink.
                     invalidate_inode_metadata_cache(entry.filesystem(), entry.inode());
                 }
+                let version = self.ops.cache_version(name);
                 let mut cache = self.cache.write();
                 Self::forget_entry(&mut cache, name);
                 if self.ops.is_cacheable() {
                     cache.negative.insert(name.to_owned());
+                    if let Some(version) = version {
+                        cache.versions.insert(name.to_owned(), version);
+                    }
                 }
                 self.cache_generation.fetch_add(1, Ordering::AcqRel);
                 Ok(())
@@ -433,16 +508,16 @@ impl DirNode {
         known_absent: bool,
     ) -> VfsResult<DirEntry> {
         let entry = if known_absent {
-            self.ops
-                .create_after_lookup(name, node_type, permission)?
+            self.ops.create_after_lookup(name, node_type, permission)?
         } else {
             self.ops.create(name, node_type, permission)?
         };
         invalidate_inode_metadata_cache(self.filesystem(), self.inode());
+        let version = self.ops.cache_version(name);
         let mut cache = self.cache.write();
         Self::forget_entry(&mut cache, name);
         if self.ops.is_cacheable() {
-            Self::cache_positive(&mut cache, name, entry.clone());
+            Self::cache_positive(&mut cache, name, entry.clone(), version);
         }
         self.cache_generation.fetch_add(1, Ordering::AcqRel);
         Ok(entry)
@@ -463,10 +538,7 @@ impl DirNode {
     fn lock_both_mutations<'a>(
         &'a self,
         other: &'a Self,
-    ) -> (
-        SleepMutexGuard<'a, ()>,
-        Option<SleepMutexGuard<'a, ()>>,
-    ) {
+    ) -> (SleepMutexGuard<'a, ()>, Option<SleepMutexGuard<'a, ()>>) {
         if core::ptr::eq(self, other) {
             (self.mutation_lock.lock(), None)
         } else if (self as *const Self as usize) < (other as *const Self as usize) {
@@ -553,10 +625,14 @@ impl DirNode {
                     invalidate_inode_metadata_cache(dst.filesystem(), dst.inode());
                 }
             }
+            let src_version = self.ops.cache_version(src_name);
             let (mut src_children, mut dst_children) = self.lock_both_cache(dst_dir);
             Self::forget_entry(&mut src_children, src_name);
             if self.ops.is_cacheable() {
                 src_children.negative.insert(src_name.to_owned());
+                if let Some(version) = src_version {
+                    src_children.versions.insert(src_name.to_owned(), version);
+                }
             }
             let dst_cache: &mut DirCache = match dst_children.as_mut() {
                 Some(cache) => &mut **cache,
@@ -585,29 +661,32 @@ impl DirNode {
             // checked create establish absence and create atomically instead
             // of scanning the directory once here and a second time inside
             // ext4. A positive dentry remains the cheapest existing-file path.
+            self.synchronize_cache_version(name);
             if self.ops.is_cacheable()
                 && let Some(entry) = self.cache.read().children.get(name).cloned()
             {
                 return Ok(entry);
             }
 
-            let entry =
-                match self.create_for_mutation(name, options.node_type, options.permission, false) {
-                    Ok(entry) => entry,
-                    Err(create_error) => {
-                        // O_CREAT without O_EXCL opens a concurrently-created
-                        // or previously uncached entry. If the name is still
-                        // absent, preserve the checked-create failure (for
-                        // example ENOSPC or EROFS).
-                        return match self.lookup_fresh_for_mutation(name) {
-                            Ok(entry) => Ok(entry),
-                            Err(err) if err.canonicalize() == VfsError::NotFound => {
-                                Err(create_error)
-                            }
-                            Err(err) => Err(err),
-                        };
-                    }
-                };
+            let entry = match self.create_for_mutation(
+                name,
+                options.node_type,
+                options.permission,
+                false,
+            ) {
+                Ok(entry) => entry,
+                Err(create_error) => {
+                    // O_CREAT without O_EXCL opens a concurrently-created
+                    // or previously uncached entry. If the name is still
+                    // absent, preserve the checked-create failure (for
+                    // example ENOSPC or EROFS).
+                    return match self.lookup_fresh_for_mutation(name) {
+                        Ok(entry) => Ok(entry),
+                        Err(err) if err.canonicalize() == VfsError::NotFound => Err(create_error),
+                        Err(err) => Err(err),
+                    };
+                }
+            };
             if options.user.is_some() {
                 entry.update_metadata(MetadataUpdate {
                     owner: options.user,
@@ -632,8 +711,7 @@ impl DirNode {
             Err(err) if err.canonicalize() == VfsError::NotFound && options.create => {}
             Err(err) => return Err(err),
         }
-        let entry =
-            self.create_for_mutation(name, options.node_type, options.permission, true)?;
+        let entry = self.create_for_mutation(name, options.node_type, options.permission, true)?;
         if options.user.is_some() {
             entry.update_metadata(MetadataUpdate {
                 owner: options.user,
@@ -661,6 +739,7 @@ impl DirNode {
             }
         }
         cache.negative.clear();
+        cache.versions.clear();
         self.cache_generation.fetch_add(1, Ordering::AcqRel);
     }
 }

@@ -2198,8 +2198,6 @@ dependencies = [
 [[package]]
 name = "simple-sdmmc"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833bc981c24e613cf9b95bbd2c5ade1a222d23274343c29486a6f65c41fc3390"
 dependencies = [
  "bitfield-struct",
  "log",

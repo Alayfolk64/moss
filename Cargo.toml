@@ -115,6 +115,7 @@ lwext4_rust = { path = "third_party/lwext4_rust" }
 starry-smoltcp = { path = "vendor/starry-smoltcp" }
 starry-process = { path = "vendor/starry-process" }
 starry-signal = { path = "vendor/starry-signal" }
+simple-sdmmc = { path = "vendor/simple-sdmmc" }
 virtio-drivers = { path = "vendor/virtio-drivers" }
 
 [package.metadata.vendor-filter]

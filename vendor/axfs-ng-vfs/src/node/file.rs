@@ -22,6 +22,15 @@ pub trait FileNodeOps: NodeOps + Pollable {
     /// Sets the size of the file.
     fn set_len(&self, len: u64) -> VfsResult<()>;
 
+    /// Commits a size whose newly exposed bytes have already been written.
+    ///
+    /// Page-cache writeback uses this after persisting dirty data. Filesystems
+    /// that zero-fill ordinary `set_len` growth should override this method so
+    /// they do not overwrite the data that was just written.
+    fn commit_len(&self, len: u64) -> VfsResult<()> {
+        self.set_len(len)
+    }
+
     /// Sets the file's symlink target.
     fn set_symlink(&self, target: &str) -> VfsResult<()>;
 

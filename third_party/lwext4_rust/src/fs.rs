@@ -159,6 +159,9 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
     pub fn set_len(&mut self, ino: u32, len: u64) -> Ext4Result<()> {
         self.inode_ref(ino)?.set_len(len)
     }
+    pub fn commit_len(&mut self, ino: u32, len: u64) -> Ext4Result<()> {
+        self.inode_ref(ino)?.commit_len(len)
+    }
     pub fn set_symlink(&mut self, ino: u32, buf: &[u8]) -> Ext4Result<()> {
         self.inode_ref(ino)?.set_symlink(buf)
     }

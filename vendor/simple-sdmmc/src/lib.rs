@@ -7,4 +7,4 @@ mod regs;
 mod sdmmc;
 mod utils;
 
-pub use self::sdmmc::{InterruptWait, SdMmc, set_interrupt_enabled};
+pub use self::sdmmc::{InterruptWait, SdMmc, SdMmcError, set_interrupt_enabled};

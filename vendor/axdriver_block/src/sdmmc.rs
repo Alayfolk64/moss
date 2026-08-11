@@ -2,8 +2,7 @@
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
 use simple_sdmmc::SdMmc;
-pub use simple_sdmmc::InterruptWait;
-pub use simple_sdmmc::set_interrupt_enabled;
+pub use simple_sdmmc::{InterruptWait, set_interrupt_enabled};
 use spin::Mutex;
 
 use crate::BlockDriverOps;
@@ -23,10 +22,7 @@ impl SdMmcDriver {
     }
 
     /// Creates a driver that waits for SD/MMC controller interrupts.
-    pub unsafe fn new_with_interrupt(
-        base: usize,
-        interrupt: &'static dyn InterruptWait,
-    ) -> Self {
+    pub unsafe fn new_with_interrupt(base: usize, interrupt: &'static dyn InterruptWait) -> Self {
         Self(Mutex::new(unsafe {
             SdMmc::new_with_interrupt(base, interrupt)
         }))
@@ -59,9 +55,17 @@ impl BlockDriverOps for SdMmcDriver {
             return Err(DevError::InvalidParam);
         }
 
+        let end_block = block_id
+            .checked_add(blocks.len() as u64)
+            .ok_or(DevError::InvalidParam)?;
         let mut inner = self.0.lock();
+        if end_block > inner.num_blocks() || end_block > u32::MAX as u64 + 1 {
+            return Err(DevError::InvalidParam);
+        }
         for (i, block) in blocks.iter_mut().enumerate() {
-            inner.read_block(block_id as u32 + i as u32, block);
+            inner
+                .read_block(block_id as u32 + i as u32, block)
+                .map_err(|_| DevError::Io)?;
         }
 
         Ok(())
@@ -74,15 +78,23 @@ impl BlockDriverOps for SdMmcDriver {
             return Err(DevError::InvalidParam);
         }
 
+        let end_block = block_id
+            .checked_add(blocks.len() as u64)
+            .ok_or(DevError::InvalidParam)?;
         let mut inner = self.0.lock();
+        if end_block > inner.num_blocks() || end_block > u32::MAX as u64 + 1 {
+            return Err(DevError::InvalidParam);
+        }
         for (i, block) in blocks.iter().enumerate() {
-            inner.write_block(block_id as u32 + i as u32, block);
+            inner
+                .write_block(block_id as u32 + i as u32, block)
+                .map_err(|_| DevError::Io)?;
         }
 
         Ok(())
     }
 
     fn flush(&self) -> DevResult {
-        Ok(())
+        self.0.lock().flush().map_err(|_| DevError::Io)
     }
 }
