@@ -46,10 +46,22 @@ impl UserContext {
         unsafe { enter_user(self) };
 
         let estat = estat::read();
+        let cause = estat.cause();
         let badv = badv::read().vaddr();
-        let badi = badi::read().inst();
+        let hardware_badi = badi::read().inst();
+        // LS2K1000LA/LA264 reports zero in BADI for address-not-aligned
+        // exceptions.  The faulting user instruction has just executed and
+        // remains mapped in the active address space, so ERA is the reliable
+        // fallback used by the original software emulator.
+        let badi = if hardware_badi == 0
+            && matches!(cause, Trap::Exception(Exception::AddressNotAligned))
+        {
+            unsafe { core::ptr::read_volatile(self.era as *const u32) }
+        } else {
+            hardware_badi
+        };
 
-        let ret = match estat.cause() {
+        let ret = match cause {
             Trap::Interrupt(interrupt) => {
                 // Keep dispatch consistent with the priority decision made by
                 // `Estat::cause`; in particular, do not hide an IPI behind a
@@ -57,6 +69,11 @@ impl UserContext {
                 handle_trap!(IRQ, interrupt as usize);
                 ReturnReason::Interrupt
             }
+            // Level-triggered IRQs may be deasserted between trap entry and
+            // this ESTAT sample. Treat ECODE=0 with no pending IS bit as an
+            // empty interrupt return; genuine unknown exceptions keep using
+            // ReturnReason::Unknown below.
+            Trap::Unknown if estat.ecode() == 0 && estat.is() == 0 => ReturnReason::Interrupt,
             Trap::Exception(Exception::Syscall) => {
                 self.era += 4;
                 ReturnReason::Syscall

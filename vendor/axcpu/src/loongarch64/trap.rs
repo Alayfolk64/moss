@@ -1,8 +1,7 @@
 use loongArch64::register::{
-    badv,
+    badi, badv,
     estat::{self, Exception, Trap},
 };
-
 use super::context::TrapFrame;
 use crate::trap::PageFaultFlags;
 
@@ -68,6 +67,28 @@ fn handle_page_fault(tf: &mut TrapFrame, access_flags: PageFaultFlags) {
     );
 }
 
+fn handle_unaligned_access(tf: &mut TrapFrame, ecode: usize, esubcode: usize) {
+    let fault_vaddr = badv::read().vaddr();
+    let hardware_badi = badi::read().inst();
+    // LA264 leaves BADI as zero for the address-not-aligned exception.  ERA
+    // still names the aligned instruction word (and was the source used by
+    // the original emulator), so use it when the CSR provides no instruction.
+    let instruction = if hardware_badi != 0 {
+        hardware_badi
+    } else {
+        unsafe { core::ptr::read_volatile(tf.era as *const u32) }
+    };
+
+    if let Err(error) = unsafe { tf.emulate_unaligned_at(fault_vaddr as u64, instruction) } {
+        panic!(
+            "Failed to emulate PLV0 unaligned access @ {:#x}: \
+             fault_vaddr={:#x}, instruction={:#010x}, ecode={:#x}, esubcode={:#x}, \
+             error={}\n{:#x?}",
+            tf.era, fault_vaddr, instruction, ecode, esubcode, error, tf,
+        );
+    }
+}
+
 #[unsafe(no_mangle)]
 fn loongarch64_trap_handler(tf: &mut TrapFrame) {
     let estat = estat::read();
@@ -86,20 +107,33 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame) {
             handle_page_fault(tf, PageFaultFlags::EXECUTE);
         }
         Trap::Exception(Exception::Breakpoint) => handle_breakpoint(&mut tf.era),
-        Trap::Exception(Exception::AddressNotAligned) => unsafe {
-            tf.emulate_unaligned().unwrap();
-        },
+        Trap::Exception(Exception::AddressNotAligned) => {
+            handle_unaligned_access(tf, estat.ecode(), estat.esubcode())
+        }
         Trap::Interrupt(interrupt) => {
             // `Estat::cause` selects the highest-priority pending interrupt.
             // Dispatch that same vector; using `trailing_zeros` here could
             // instead service a lower-priority timer and starve an IPI.
             handle_trap!(IRQ, interrupt as usize);
         }
+        Trap::Unknown if estat.ecode() == 0 && estat.is() == 0 => {
+            // A level-triggered shared interrupt can be acknowledged by the
+            // other CPU (or deasserted by the device) after trap entry but
+            // before ESTAT is sampled here.  With ECODE=0 and no pending IS
+            // bit this is a spurious interrupt, not an unknown exception.
+        }
         trap => {
+            let fault_vaddr = badv::read().vaddr();
+            let instruction = badi::read().inst();
             panic!(
-                "Unhandled trap {:?} @ {:#x}:\n{:#x?}\n{}",
+                "Unhandled trap {:?} @ {:#x}: fault_vaddr={:#x}, \
+                 instruction={:#010x}, ecode={:#x}, esubcode={:#x}\n{:#x?}\n{}",
                 trap,
                 tf.era,
+                fault_vaddr,
+                instruction,
+                estat.ecode(),
+                estat.esubcode(),
                 tf,
                 tf.backtrace()
             );

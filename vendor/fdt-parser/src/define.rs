@@ -31,7 +31,7 @@ impl From<u32> for Token {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
+#[repr(C, align(4))]
 pub struct Fdt32([u8; 4]);
 
 impl Fdt32 {
@@ -48,7 +48,15 @@ impl Fdt32 {
 
 impl From<&[u8]> for Fdt32 {
     fn from(value: &[u8]) -> Self {
-        Fdt32(value.get(..4).unwrap().try_into().unwrap())
+        let value = value.get(..4).unwrap();
+        let mut bytes = [0u8; 4];
+        for (index, byte) in bytes.iter_mut().enumerate() {
+            // An FDT is a byte buffer and its base pointer is not part of this
+            // API's alignment contract.  Volatile byte reads keep LLVM from
+            // widening this copy on targets without unaligned access support.
+            *byte = unsafe { value.as_ptr().add(index).read_volatile() };
+        }
+        Fdt32(bytes)
     }
 }
 
@@ -59,7 +67,7 @@ impl Default for Fdt32 {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
+#[repr(C, align(8))]
 pub struct Fdt64([u8; 8]);
 
 impl Fdt64 {
@@ -73,7 +81,12 @@ impl Fdt64 {
 }
 impl From<&[u8]> for Fdt64 {
     fn from(value: &[u8]) -> Self {
-        Self(value.get(..8).unwrap().try_into().unwrap())
+        let value = value.get(..8).unwrap();
+        let mut bytes = [0u8; 8];
+        for (index, byte) in bytes.iter_mut().enumerate() {
+            *byte = unsafe { value.as_ptr().add(index).read_volatile() };
+        }
+        Self(bytes)
     }
 }
 impl Default for Fdt64 {
@@ -93,7 +106,11 @@ pub struct RawReg<'a> {
     pub size: &'a [u8],
 }
 #[derive(Debug, Clone, Copy)]
-#[repr(C)]
+// Keep the parsed header naturally aligned even though each on-wire field is a
+// byte array.  In particular, this prevents the LoongArch backend from placing
+// the header at a four-byte offset inside `Result<Fdt, _>` and emitting an
+// unaligned `st.d` while returning `Fdt::from_bytes`.
+#[repr(C, align(8))]
 pub struct FdtHeader {
     /// FDT header magic
     pub magic: Fdt32,
@@ -149,24 +166,67 @@ impl FdtHeader {
             return Err(FdtError::Eof);
         }
 
-        unsafe {
-            let ptr: *const FdtHeader = bytes.as_ptr().cast();
-            Ok(ptr.read())
-        }
+        let field = |offset: usize| {
+            let mut value = [0u8; 4];
+            for (index, byte) in value.iter_mut().enumerate() {
+                // DTBs are byte buffers. Volatile byte reads prevent LLVM's
+                // LoongArch backend from widening the copy to unaligned
+                // halfword/dword loads when UAL is disabled on LS2K1000LA.
+                *byte = unsafe { bytes.as_ptr().add(offset + index).read_volatile() };
+            }
+            Fdt32(value)
+        };
+
+        Ok(Self {
+            magic: field(0),
+            totalsize: field(4),
+            off_dt_struct: field(8),
+            off_dt_strings: field(12),
+            off_mem_rsvmap: field(16),
+            version: field(20),
+            last_comp_version: field(24),
+            boot_cpuid_phys: field(28),
+            size_dt_strings: field(32),
+            size_dt_struct: field(36),
+        })
     }
 
     #[inline(always)]
     pub fn from_ptr(ptr: NonNull<u8>) -> FdtResult<'static, Self> {
-        let ptr: NonNull<FdtHeader> = ptr.cast();
-        unsafe {
-            ptr.as_ref().valid_magic()?;
-            Ok(*ptr.as_ref())
-        }
+        let bytes = unsafe { core::slice::from_raw_parts(ptr.as_ptr(), size_of::<FdtHeader>()) };
+        let header = Self::from_bytes(bytes)?;
+        header.valid_magic()?;
+        Ok(header)
     }
 
     #[inline(always)]
     pub fn total_size(&self) -> usize {
         self.totalsize.get() as _
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use core::ptr::NonNull;
+
+    use super::FdtHeader;
+
+    #[test]
+    fn reads_header_from_an_unaligned_byte_buffer() {
+        assert_eq!(align_of::<FdtHeader>(), 8);
+        assert_eq!(size_of::<FdtHeader>(), 40);
+
+        let mut storage = [0u8; 1 + size_of::<FdtHeader>()];
+        let header = &mut storage[1..];
+        header[0..4].copy_from_slice(&0xd00d_feedu32.to_be_bytes());
+        header[4..8].copy_from_slice(&(size_of::<FdtHeader>() as u32).to_be_bytes());
+
+        let parsed = FdtHeader::from_bytes(header).unwrap();
+        assert_eq!(parsed.total_size(), size_of::<FdtHeader>());
+
+        let ptr = NonNull::new(header.as_mut_ptr()).unwrap();
+        let parsed = FdtHeader::from_ptr(ptr).unwrap();
+        assert_eq!(parsed.total_size(), size_of::<FdtHeader>());
     }
 }
 

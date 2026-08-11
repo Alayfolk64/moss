@@ -98,8 +98,21 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                         let signo = match exc_info.kind() {
                             ExceptionKind::Misaligned => {
                                 #[cfg(target_arch = "loongarch64")]
-                                if unsafe { uctx.emulate_unaligned() }.is_ok() {
-                                    break 'exc;
+                                match crate::mm::access_user_memory(|| unsafe {
+                                    uctx.emulate_unaligned_at(exc_info.badv as u64, exc_info.badi)
+                                }) {
+                                    Ok(()) => break 'exc,
+                                    Err(error) => warn!(
+                                        "failed to emulate user unaligned access: task={} \
+                                         era={:#x} badv={:#x} badi={:#010x} exception={:?} \
+                                         error={}",
+                                        curr.id_name(),
+                                        uctx.ip(),
+                                        exc_info.badv,
+                                        exc_info.badi,
+                                        exc_info.e,
+                                        error,
+                                    ),
                                 }
                                 Signo::SIGBUS
                             }
@@ -124,14 +137,14 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 let check_signal = !unblock_next_signal();
                 let signal_pending =
                     check_signal && !(thr.signal.pending() & !thr.signal.blocked()).is_empty();
-                // Syscall and trap handling is complete here, so the saved
-                // user context can migrate without carrying CPU-local kernel
-                // state or locks across the switch. Publish the resulting CPU
-                // through rseq only after migration has completed.
-                let migrated = axtask::rebalance_current();
-                if let Err(err) =
-                    thr.prepare_rseq(&mut uctx, interrupted || signal_pending || migrated)
-                {
+                // New tasks are already placed on the least-loaded run queue,
+                // and an explicit affinity change performs its own migration.
+                // Migrating here on every syscall/trap return creates a fresh
+                // helper task each time and degenerates into a migration-task
+                // storm under syscall-heavy workloads such as buildstorm.
+                // rseq observes real scheduling and migration through the
+                // task's schedule_count, so no hot-path rebalance is needed.
+                if let Err(err) = thr.prepare_rseq(&mut uctx, interrupted || signal_pending) {
                     warn!("Invalid rseq state: {err:?}");
                     thr.reset_rseq();
                     raise_signal_fatal(SignalInfo::new_kernel(Signo::SIGSEGV))

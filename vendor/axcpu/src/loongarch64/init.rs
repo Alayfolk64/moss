@@ -1,6 +1,6 @@
 //! Helper functions to initialize the CPU states on systems bootstrapping.
 
-use loongArch64::register::{crmd, stlbps, tlbidx, tlbrehi, tlbrentry};
+use loongArch64::register::{stlbps, tlbidx, tlbrehi, tlbrentry};
 use memory_addr::PhysAddr;
 use page_table_multiarch::loongarch64::LA64MetaData;
 
@@ -32,8 +32,18 @@ pub fn init_mmu(root_paddr: PhysAddr, phys_virt_offset: usize) {
     }
     crate::asm::flush_tlb(None);
 
-    // Enable mapped address translation mode
-    crmd::set_pg(true);
+    // Match Linux SETUP_MODES in one CSR write. Besides PG=1 this clears
+    // firmware-owned IE/DA/PLV/watchpoint state and establishes the coherent
+    // DATF/DATM values required by software-managed TLB refill. A single write
+    // avoids an invalid transient with both DA and PG cleared or set.
+    unsafe {
+        core::arch::asm!(
+            "ori {temp}, $r0, 0xb0",
+            "csrwr {temp}, 0x0",
+            temp = lateout(reg) _,
+            options(nostack, preserves_flags),
+        );
+    }
 }
 
 /// Initializes trap handling on the current CPU.
@@ -46,7 +56,16 @@ pub fn init_trap() {
         extern "C" {
             fn exception_entry_base();
         }
-        core::arch::asm!(include_asm_macros!(), "csrwr $r0, KSAVE_KSP");
+        // Match Linux's early LoongArch mode setup: exceptions return to PLV0
+        // with interrupts enabled unless a saved trap frame says otherwise.
+        // KSAVE_KSP must be empty while executing in the kernel.
+        core::arch::asm!(
+            include_asm_macros!(),
+            "csrwr $r0, KSAVE_KSP",
+            "ori {temp}, $r0, 4",
+            "csrwr {temp}, LA_CSR_PRMD",
+            temp = lateout(reg) _,
+        );
         crate::asm::write_exception_entry_base(exception_entry_base as usize);
     }
 }

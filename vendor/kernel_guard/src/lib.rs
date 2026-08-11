@@ -43,11 +43,11 @@
 //! }
 //!
 //! let guard = NoPreempt::new();
-//! /* The critical section starts here
-//!
-//! Do something that requires preemption to be disabled
-//!
-//! The critical section ends here */
+//! // The critical section starts here
+//! //
+//! // Do something that requires preemption to be disabled
+//! //
+//! // The critical section ends here
 //! drop(guard);
 //! ```
 
@@ -99,7 +99,8 @@ cfg_if::cfg_if! {
         ///
         /// When entering the critical section, it disables local IRQs first,
         /// followed by kernel preemption. When leaving the critical section,
-        /// it re-enables local IRQs first, followed by kernel preemption.
+        /// it re-enables kernel preemption while local IRQs remain disabled,
+        /// then restores the saved IRQ state.
         pub struct NoPreemptIrqSave(usize);
     } else {
         /// Alias of [`NoOp`].
@@ -178,11 +179,14 @@ mod imp {
         }
         #[inline]
         fn release(state: Self::State) {
-            // restore IRQ states
-            super::arch::local_irq_restore(state);
-            // enable preempt
+            // The final enable_preempt may reschedule and requires local IRQs
+            // to remain disabled. Restoring IRQs first leaves a window where a
+            // level interrupt can repeatedly preempt this same instruction.
             #[cfg(feature = "preempt")]
             crate_interface::call_interface!(KernelGuardIf::enable_preempt);
+            // Restore the caller's saved IRQ state only after the per-CPU
+            // preemption state is consistent again.
+            super::arch::local_irq_restore(state);
         }
     }
 

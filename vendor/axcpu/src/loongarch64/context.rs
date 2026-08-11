@@ -229,6 +229,12 @@ pub struct TaskContext {
     pub s: [usize; 10],
     /// Thread Pointer
     pub tp: usize,
+    /// Pre-exception mode information restored with this task.
+    ///
+    /// Linux saves CSR.PRMD in `__switch_to`. This is required when the
+    /// scheduler switches away from a task on an interrupt-exit path: PRMD is
+    /// a CPU-global CSR, while the suspended return path belongs to one task.
+    pub prmd: usize,
     #[cfg(feature = "uspace")]
     /// user page table root
     pub pgdl: usize,
@@ -249,6 +255,13 @@ impl TaskContext {
         self.sp = kstack_top.as_usize();
         self.ra = entry;
         self.tp = tls_area.as_usize();
+        unsafe {
+            core::arch::asm!(
+                "csrrd {prmd}, 0x1",
+                prmd = out(reg) self.prmd,
+                options(nostack, preserves_flags),
+            );
+        }
     }
 
     /// Changes the page table root in this context.
@@ -339,8 +352,12 @@ unsafe extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task:
         STD     $s7, $a0, 9
         STD     $s8, $a0, 10
         STD     $fp, $a0, 11
+        csrrd   $t0, LA_CSR_PRMD
+        STD     $t0, $a0, {prmd_slot}
 
         // restore new context
+        LDD     $t0, $a1, {prmd_slot}
+        csrwr   $t0, LA_CSR_PRMD
         LDD     $fp, $a1, 11
         LDD     $s8, $a1, 10
         LDD     $s7, $a1, 9
@@ -355,5 +372,6 @@ unsafe extern "C" fn context_switch(_current_task: &mut TaskContext, _next_task:
         LDD     $ra, $a1, 0
 
         ret",
+        prmd_slot = const core::mem::offset_of!(TaskContext, prmd) / 8,
     )
 }

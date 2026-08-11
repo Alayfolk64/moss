@@ -2,8 +2,6 @@
 
 use core::{arch::asm, fmt};
 
-use loongArch64::register::badv;
-
 use crate::{GeneralRegisters, TrapFrame};
 
 core::arch::global_asm!(include_asm_macros!(), include_str!("unaligned.S"));
@@ -551,11 +549,12 @@ impl TrapFrame {
     /// # Safety
     /// This function uses raw pointers and inline assembly to handle unaligned memory accesses,
     /// so it must only be called in a valid trap context with a properly initialized TrapFrame.
-    pub unsafe fn emulate_unaligned(&mut self) -> Result<(), UnalignedError> {
+    pub unsafe fn emulate_unaligned_at(
+        &mut self,
+        badv: u64,
+        badi: u32,
+    ) -> Result<(), UnalignedError> {
         let mut value: u64 = 0;
-
-        let badv = badv::read().vaddr() as u64;
-        let badi = core::ptr::read(self.era as *const u32);
         let rd = (badi & 0x1f) as usize;
 
         let regs = unsafe {
