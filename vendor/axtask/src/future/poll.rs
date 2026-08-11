@@ -48,19 +48,45 @@ pub fn register_irq_waker(irq: usize, waker: &core::task::Waker) {
 
     static POLL_IRQ: SpinNoIrq<BTreeMap<usize, PollSet>> = SpinNoIrq::new(BTreeMap::new());
 
+    fn irq_event_marker() {}
+
     fn irq_hook(irq: usize) {
+        // Event-waker IRQs are one-shot.  Mask before waking the consumer so a
+        // level-triggered UART cannot retrigger forever while its FIFO still
+        // contains the byte that woke us.  The next poll registration rearms
+        // the controller after the device has been drained.
+        let registered = POLL_IRQ.lock().contains_key(&irq);
+        if !registered {
+            return;
+        }
+        axhal::irq::set_enable(irq, false);
         if let Some(s) = POLL_IRQ.lock().get(&irq) {
             s.wake();
         }
     }
 
-    match POLL_IRQ.lock().entry(irq) {
-        Entry::Vacant(e) => {
-            axhal::irq::register_irq_hook(irq_hook);
-            axhal::irq::set_enable(irq, true);
-            e.insert(PollSet::new())
+    let first_registration = {
+        let mut poll_irq = POLL_IRQ.lock();
+        let first = !poll_irq.contains_key(&irq);
+        match poll_irq.entry(irq) {
+            Entry::Vacant(entry) => entry.insert(PollSet::new()),
+            Entry::Occupied(entry) => entry.into_mut(),
         }
-        Entry::Occupied(e) => e.into_mut(),
+        .register(waker);
+        first
+    };
+
+    if first_registration {
+        axhal::irq::register_irq_hook(irq_hook);
+        // Give hook-only sources (such as the LS2K1000 UART) a marker handler
+        // so the platform does not classify every byte as an unhandled IRQ.
+        // A real driver may already own the source, in which case registration
+        // correctly fails and only the shared post-IRQ hook is used.
+        if axhal::irq::register(irq, irq_event_marker) {
+            return;
+        }
     }
-    .register(waker);
+    // This is also required for the occupied path: irq_hook masked the source
+    // after its previous event, so merely replacing the waker is insufficient.
+    axhal::irq::set_enable(irq, true);
 }

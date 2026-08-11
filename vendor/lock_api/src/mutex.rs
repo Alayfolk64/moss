@@ -45,6 +45,7 @@ pub unsafe trait RawMutex {
     type GuardMarker;
 
     /// Acquires this mutex, blocking the current thread until it is able to do so.
+    #[track_caller]
     fn lock(&self);
 
     /// Attempts to acquire this mutex without blocking. Returns `true`
@@ -150,6 +151,25 @@ impl<R: RawMutex, T> Mutex<R, T> {
         Mutex {
             raw: R::INIT,
             data: UnsafeCell::new(val),
+        }
+    }
+
+    /// Initializes a mutex directly at its final, unpublished address.
+    ///
+    /// This is useful for constructing a mutex as one field of a larger
+    /// allocation without first materializing and moving the complete outer
+    /// aggregate.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must be valid, properly aligned, uninitialized storage for one
+    /// `Mutex<R, T>`. It must not alias an initialized value, and the mutex
+    /// must not become visible until this function returns.
+    #[inline]
+    pub unsafe fn write_unpublished_in_place(dst: *mut Self, val: T) {
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).raw).write(R::INIT);
+            core::ptr::addr_of_mut!((*dst).data).write(UnsafeCell::new(val));
         }
     }
 
@@ -278,6 +298,17 @@ impl<R: RawMutex, T: ?Sized> Mutex<R, T> {
     #[inline]
     pub unsafe fn raw(&self) -> &R {
         &self.raw
+    }
+
+    /// Returns a mutable reference to the underlying raw mutex.
+    ///
+    /// # Safety
+    ///
+    /// The caller must not change the raw mutex into a state that is
+    /// inconsistent with the protected value or any outstanding guard.
+    #[inline]
+    pub unsafe fn raw_mut(&mut self) -> &mut R {
+        &mut self.raw
     }
 
     /// Returns a raw pointer to the underlying data.

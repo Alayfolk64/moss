@@ -1,6 +1,6 @@
 //! Task APIs for multi-task configuration.
 
-use core::sync::atomic::AtomicUsize;
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use alloc::{
     string::String,
@@ -35,6 +35,12 @@ pub type WeakAxTaskRef = Weak<AxTask>;
 pub type AxCpuMask = cpumask::CpuMask<{ axconfig::plat::CPU_NUM }>;
 
 static CPU_NUM: AtomicUsize = AtomicUsize::new(1);
+static CPU_IDLE_NANOS: [AtomicU64; axconfig::plat::CPU_NUM] =
+    [const { AtomicU64::new(0) }; axconfig::plat::CPU_NUM];
+static CPU_USER_TASK_NANOS: [AtomicU64; axconfig::plat::CPU_NUM] =
+    [const { AtomicU64::new(0) }; axconfig::plat::CPU_NUM];
+static CPU_LAST_ACCOUNT_NS: [AtomicU64; axconfig::plat::CPU_NUM] =
+    [const { AtomicU64::new(0) }; axconfig::plat::CPU_NUM];
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "sched-rr")] {
@@ -85,6 +91,17 @@ pub fn current_may_uninit() -> Option<CurrentTask> {
     CurrentTask::try_get()
 }
 
+/// Returns whether the current task may safely enter a blocking wait.
+///
+/// The scheduler bootstrap task and per-CPU idle tasks must keep polling even
+/// after the scheduler has been initialized. Only ordinary spawned tasks have
+/// a context that can be placed on a wait queue and resumed later.
+pub fn current_can_block() -> bool {
+    current_may_uninit().is_some_and(|task| {
+        crate::block_context::task_context_may_block(task.is_init(), task.is_idle())
+    })
+}
+
 /// Replace the page-table root saved for the current task and activate it.
 ///
 /// The caller must keep the old address space alive until this function
@@ -106,6 +123,35 @@ pub fn replace_current_page_table(root: memory_addr::PhysAddr) {
 /// Panics if the current task is not initialized.
 pub fn current() -> CurrentTask {
     CurrentTask::get()
+}
+
+/// Looks up a live scheduler task by its unique ID.
+pub fn task_by_id(id: u64) -> Option<AxTaskRef> {
+    crate::task::task_by_id(id)
+}
+
+/// Reports recovery of a mutex whose recorded owner no longer exists.
+pub fn report_recovered_mutex(
+    address: usize,
+    stale_owner_id: u64,
+    caller: &'static core::panic::Location<'static>,
+) {
+    warn!(
+        "recovered orphaned/corrupt mutex: address={:#x}, stale_owner_tid={}, caller={:?}",
+        address, stale_owner_id, caller
+    );
+}
+
+/// Returns the current task's preemption-disable nesting depth.
+pub fn current_preempt_disable_count() -> usize {
+    #[cfg(feature = "preempt")]
+    {
+        current().preempt_disable_count()
+    }
+    #[cfg(not(feature = "preempt"))]
+    {
+        0
+    }
 }
 
 /// Initializes the task scheduler (for the primary CPU).
@@ -132,6 +178,40 @@ pub fn active_cpu_count() -> usize {
     CPU_NUM.load(core::sync::atomic::Ordering::Relaxed)
 }
 
+/// Returns the time this CPU has spent in the architecture idle instruction.
+///
+/// The counter deliberately measures the interval around `wait_for_irqs()`
+/// instead of task accounting.  A blocked syscall is therefore not mistaken
+/// for CPU work, which makes interval deltas suitable for utilization
+/// telemetry under swap pressure.
+pub fn cpu_idle_time_nanos(cpu_id: usize) -> Option<u64> {
+    (cpu_id < active_cpu_count())
+        .then(|| CPU_IDLE_NANOS[cpu_id].load(Ordering::Relaxed))
+}
+
+/// Returns timer-accounted CPU time spent executing a userspace-owned task.
+/// This includes real syscall work on behalf of that task, but excludes idle
+/// and standalone kernel workers. The latter distinction prevents background
+/// reclaim from renewing a userspace forward-progress lease by merely scanning.
+pub fn cpu_user_task_time_nanos(cpu_id: usize) -> Option<u64> {
+    (cpu_id < active_cpu_count())
+        .then(|| CPU_USER_TASK_NANOS[cpu_id].load(Ordering::Relaxed))
+}
+
+#[cfg(feature = "task-ext")]
+fn account_user_task_time() {
+    let cpu_id = axhal::percpu::this_cpu_id();
+    let now_ns = axhal::time::monotonic_time_nanos();
+    let previous_ns = CPU_LAST_ACCOUNT_NS[cpu_id].swap(now_ns, Ordering::Relaxed);
+    if previous_ns == 0 {
+        return;
+    }
+    if current_may_uninit().is_some_and(|task| task.task_ext().is_some()) {
+        CPU_USER_TASK_NANOS[cpu_id]
+            .fetch_add(now_ns.saturating_sub(previous_ns), Ordering::Relaxed);
+    }
+}
+
 /// Initializes the task scheduler for secondary CPUs.
 pub fn init_scheduler_secondary() {
     crate::run_queue::init_secondary();
@@ -144,6 +224,8 @@ pub fn init_scheduler_secondary() {
 #[doc(cfg(feature = "irq"))]
 pub fn on_timer_tick() {
     use kernel_guard::NoOp;
+    #[cfg(feature = "task-ext")]
+    account_user_task_time();
     crate::timers::check_events();
     // Since irq and preemption are both disabled here,
     // we can get current run queue with the default `kernel_guard::NoOp`.
@@ -312,6 +394,12 @@ pub fn run_idle() -> ! {
         yield_now();
         trace!("idle task: waiting for IRQs...");
         #[cfg(feature = "irq")]
-        axhal::asm::wait_for_irqs();
+        {
+            let started_ns = axhal::time::monotonic_time_nanos();
+            axhal::asm::wait_for_irqs();
+            let idle_ns = axhal::time::monotonic_time_nanos().saturating_sub(started_ns);
+            CPU_IDLE_NANOS[axhal::percpu::this_cpu_id()]
+                .fetch_add(idle_ns, Ordering::Relaxed);
+        }
     }
 }

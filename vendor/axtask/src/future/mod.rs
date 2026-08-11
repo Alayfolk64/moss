@@ -58,6 +58,7 @@ pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
     // It's necessary to keep a strong reference to the current task
     // to prevent it from being dropped while blocking.
     let task = curr.clone();
+    let may_park = crate::block_context::block_on_may_park(task.is_idle());
 
     let axwaker = AxWaker::new(&task);
     let waker = Waker::from(axwaker.clone());
@@ -66,6 +67,17 @@ pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
     loop {
         match fut.as_mut().poll(&mut cx) {
             Poll::Pending => {
+                if !may_park {
+                    // The idle task owns scheduler state and cannot itself be
+                    // placed on a wait queue. Keep polling with IRQs enabled;
+                    // timer/device interrupts can still make the future ready.
+                    let mut woke = axwaker.woke.lock();
+                    *woke = false;
+                    drop(woke);
+                    core::hint::spin_loop();
+                    continue;
+                }
+
                 let mut rq = current_run_queue::<NoPreemptIrqSave>();
                 let mut woke = axwaker.woke.lock();
                 if !*woke {

@@ -3,17 +3,18 @@
     "Cargo.lock": "700436383aecd1c7174f184278e1f6962dc52779516c86541b240045996f9636",
     "Cargo.toml": "8bbd8090983a9e28ef9132ded3f42617daee65a3a020df7d06cfc9719c2f5799",
     "README.md": "e44c863ba5c4ae0599c72fa1a5272a8a37a780d14a64383dd16ad01f50a57fb3",
-    "src/api.rs": "410b337bfb3eb22d743abe5cba7a3a969147eff3734d25e32352d4372693372b",
+    "src/api.rs": "22cff71e5eaee3b0de42a624aa3a68dff837bc13a2d5eb13bc7e74b30b456b54",
     "src/api_s.rs": "64a4dde0b0a68c5db0053b08b50caf67660740d9e90bd068158b9834cc0cbc29",
-    "src/future/mod.rs": "36fca712db5f13e65aed33f23c0bbfff5e3a798fc9b80e81974739f947c61a42",
-    "src/future/poll.rs": "af5b325b189a663c70ec88e795907e062c20738719bc3e1395bd9c917bc125d9",
-    "src/future/time.rs": "2874295ff82921cc8d0f19b0ab788e07cf6ccbb603b11814fa8bc561312ec463",
-    "src/lib.rs": "a5163ebab338565bcec633c7c459703276d30871b9e866ddacf907bd21373214",
-    "src/run_queue.rs": "1eae76d097154c94eee418512686371125b768b914c3d91f3de0db5f33d5fe58",
-    "src/task.rs": "1c66c7eb1a21fb137277a216766ebac617993025f614bb6aab43af819af7e8c6",
+    "src/block_context.rs": "dd7baaae79a343729287d32de9c0a7ab3772cd16363f2a92a61dab984ce21125",
+    "src/future/mod.rs": "9369ef3cf62f3cb878d48acef2610bbbeccd97a4d080df27ceac440e67e9f125",
+    "src/future/poll.rs": "06ff8bc8ea9990d98190628e59ba6867666cf517c1ae8a8401d2993778a2e7d1",
+    "src/future/time.rs": "94cefb0dff9e09b705a7a3ce1bef36561daf4d2bbe08f31e8811856a3178cb22",
+    "src/lib.rs": "d65ed010fb846e7993007793c8229fd924510422d1aadc441d9e627c1c54d5ea",
+    "src/run_queue.rs": "ac561759ec50375e85e795cfef7b969b6cca77e0128431c6a4de134cb332d19f",
+    "src/task.rs": "bf638913554ca15926be3d2a0d199549728d2e538a6130e5bee515445bdd8f08",
     "src/tests.rs": "ca380c7c0be79182c421e765fddf8e15e81d5d11e244998ad5fef1cce222e3a1",
     "src/timers.rs": "05b0cf8ef103e0e4c207d2f5bec757f981a4e70b697228c0d9893b304bbad747",
-    "src/wait_queue.rs": "5314ffe462225599eebf9d33502787a07f80e6ec3f222146d5fe842b7343c6cb"
+    "src/wait_queue.rs": "53a8ac5ff02e9d90cc41f22b7d20cf64ac185319a503c1f4bfe59273386363c1"
   },
   "package": "7ea1ee808218981a12bbcfd0322d88f576d88201b6ab029c5bf1a2036383ff68"
 }

@@ -1,5 +1,10 @@
-use alloc::{boxed::Box, string::String, sync::Arc};
-#[cfg(feature = "preempt")]
+use alloc::{
+    boxed::Box,
+    collections::BTreeMap,
+    string::String,
+    sync::{Arc, Weak},
+};
+#[cfg(any(feature = "preempt", target_arch = "loongarch64"))]
 use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
@@ -21,6 +26,14 @@ use kspin::SpinNoIrq;
 use memory_addr::{VirtAddr, align_up_4k};
 
 use crate::{AxCpuMask, AxTask, AxTaskRef, future::block_on};
+
+static TASK_REGISTRY: SpinNoIrq<BTreeMap<u64, Weak<AxTask>>> =
+    SpinNoIrq::new(BTreeMap::new());
+
+/// Looks up any live scheduler task, including kernel-only tasks, by ID.
+pub(crate) fn task_by_id(id: u64) -> Option<AxTaskRef> {
+    TASK_REGISTRY.lock().get(&id).and_then(Weak::upgrade)
+}
 
 /// A unique identifier for a thread.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -60,8 +73,8 @@ pub unsafe trait TaskExt {
 pub struct TaskInner {
     id: TaskId,
     name: SpinNoIrq<String>,
-    is_idle: bool,
-    is_init: bool,
+    is_idle: AtomicBool,
+    is_init: AtomicBool,
 
     entry: Cell<Option<Box<dyn FnOnce()>>>,
     state: AtomicU8,
@@ -78,6 +91,19 @@ pub struct TaskInner {
     has_run: AtomicBool,
     /// Number of times this task has resumed after a real context switch.
     schedule_count: AtomicU64,
+
+    /// Address of the cooperative mutex this task is waiting for.  This is
+    /// intentionally task state rather than a global lock table, so the
+    /// LS2K1000 watchdog can distinguish a real long lock wait from a valid
+    /// blocking syscall such as `accept`.
+    #[cfg(target_arch = "loongarch64")]
+    mutex_wait_address: AtomicUsize,
+    #[cfg(target_arch = "loongarch64")]
+    mutex_wait_owner_id: AtomicU64,
+    #[cfg(target_arch = "loongarch64")]
+    mutex_wait_caller: AtomicUsize,
+    #[cfg(target_arch = "loongarch64")]
+    mutex_wait_started_ns: AtomicU64,
 
     #[cfg(feature = "preempt")]
     need_resched: AtomicBool,
@@ -148,7 +174,7 @@ impl TaskInner {
             .init(task_entry as *const () as usize, kstack.top(), tls);
         t.kstack = Some(kstack);
         if t.name() == "idle" {
-            t.is_idle = true;
+            t.is_idle.store(true, Ordering::Release);
         }
         t
     }
@@ -250,6 +276,50 @@ impl TaskInner {
         self.schedule_count.fetch_add(1, Ordering::Release);
     }
 
+    /// Marks the start of a cooperative mutex slow-path wait.
+    #[cfg(target_arch = "loongarch64")]
+    #[inline]
+    pub fn begin_mutex_wait(&self, address: usize, owner_id: u64, caller: usize) {
+        self.mutex_wait_address.store(address, Ordering::Relaxed);
+        self.mutex_wait_owner_id
+            .store(owner_id, Ordering::Relaxed);
+        self.mutex_wait_caller.store(caller, Ordering::Relaxed);
+        self.mutex_wait_started_ns.store(
+            axhal::time::monotonic_time_nanos().max(1),
+            Ordering::Release,
+        );
+    }
+
+    /// Refreshes the observed owner while a task remains on the same mutex.
+    #[cfg(target_arch = "loongarch64")]
+    #[inline]
+    pub fn update_mutex_wait_owner(&self, owner_id: u64) {
+        self.mutex_wait_owner_id
+            .store(owner_id, Ordering::Relaxed);
+    }
+
+    /// Clears the cooperative mutex slow-path marker after acquisition.
+    #[cfg(target_arch = "loongarch64")]
+    #[inline]
+    pub fn end_mutex_wait(&self) {
+        self.mutex_wait_started_ns.store(0, Ordering::Release);
+    }
+
+    /// Returns a stable `(start_time_ns, mutex_address, owner_id, caller)` wait snapshot.
+    #[cfg(target_arch = "loongarch64")]
+    #[inline]
+    pub fn mutex_wait_snapshot(&self) -> Option<(u64, usize, u64, usize)> {
+        let started_ns = self.mutex_wait_started_ns.load(Ordering::Acquire);
+        if started_ns == 0 {
+            return None;
+        }
+        let address = self.mutex_wait_address.load(Ordering::Relaxed);
+        let owner_id = self.mutex_wait_owner_id.load(Ordering::Relaxed);
+        let caller = self.mutex_wait_caller.load(Ordering::Relaxed);
+        (self.mutex_wait_started_ns.load(Ordering::Acquire) == started_ns)
+            .then_some((started_ns, address, owner_id, caller))
+    }
+
     /// Gets the cpu affinity mask of the task.
     ///
     /// Returns the cpu affinity mask of the task in type [`AxCpuMask`].
@@ -309,8 +379,8 @@ impl TaskInner {
         Self {
             id,
             name: SpinNoIrq::new(name),
-            is_idle: false,
-            is_init: false,
+            is_idle: AtomicBool::new(false),
+            is_init: AtomicBool::new(false),
             entry: Cell::new(None),
             state: AtomicU8::new(TaskState::Ready as u8),
             // By default, the task is allowed to run on all CPUs.
@@ -320,6 +390,14 @@ impl TaskInner {
             on_cpu: AtomicBool::new(false),
             has_run: AtomicBool::new(false),
             schedule_count: AtomicU64::new(0),
+            #[cfg(target_arch = "loongarch64")]
+            mutex_wait_address: AtomicUsize::new(0),
+            #[cfg(target_arch = "loongarch64")]
+            mutex_wait_owner_id: AtomicU64::new(0),
+            #[cfg(target_arch = "loongarch64")]
+            mutex_wait_caller: AtomicUsize::new(0),
+            #[cfg(target_arch = "loongarch64")]
+            mutex_wait_started_ns: AtomicU64::new(0),
             #[cfg(feature = "preempt")]
             need_resched: AtomicBool::new(false),
             #[cfg(feature = "preempt")]
@@ -347,17 +425,53 @@ impl TaskInner {
     /// they will be filled automatically when the task is switches out.
     pub(crate) fn new_init(name: String) -> Self {
         let mut t = Self::new_common(TaskId::new(), name);
-        t.is_init = true;
+        t.is_init.store(true, Ordering::Release);
         #[cfg(feature = "smp")]
         t.set_on_cpu(true);
         if t.name() == "idle" {
-            t.is_idle = true;
+            t.is_idle.store(true, Ordering::Release);
         }
         t
     }
 
     pub(crate) fn into_arc(self) -> AxTaskRef {
-        Arc::new(AxTask::new(self))
+        let task = Arc::new(AxTask::new(self));
+
+        // Initialize scheduler-owned atomics in their final allocation.  The
+        // pinned LoongArch nightly has been observed to corrupt `need_resched`
+        // while moving the large TaskInner return value through RRTask/Arc.
+        // Final atomic stores are independent of that large-object move and
+        // make every newly wrapped task start from one canonical state.
+        task.is_init
+            .store(task.kstack.is_none(), Ordering::Release);
+        task.is_idle
+            .store(task.name() == "idle", Ordering::Release);
+        task.set_state(TaskState::Ready);
+        task.cpu_id.store(0, Ordering::Release);
+        #[cfg(feature = "smp")]
+        task.on_cpu.store(false, Ordering::Release);
+        task.has_run.store(false, Ordering::Release);
+        task.schedule_count.store(0, Ordering::Release);
+        #[cfg(target_arch = "loongarch64")]
+        {
+            task.mutex_wait_address.store(0, Ordering::Release);
+            task.mutex_wait_owner_id.store(0, Ordering::Release);
+            task.mutex_wait_caller.store(0, Ordering::Release);
+            task.mutex_wait_started_ns.store(0, Ordering::Release);
+        }
+        #[cfg(feature = "preempt")]
+        {
+            task.need_resched.store(false, Ordering::Release);
+            task.preempt_disable_count.store(0, Ordering::Release);
+        }
+        task.interrupted.store(false, Ordering::Release);
+        task.exit_code.store(0, Ordering::Release);
+
+        TASK_REGISTRY
+            .lock()
+            .insert(task.id().as_u64(), Arc::downgrade(&task));
+
+        task
     }
 
     /// Returns the current state of the task.
@@ -397,19 +511,31 @@ impl TaskInner {
     }
 
     #[inline]
-    pub(crate) const fn is_init(&self) -> bool {
-        self.is_init
+    pub(crate) fn is_init(&self) -> bool {
+        self.is_init.load(Ordering::Acquire)
     }
 
     #[inline]
-    pub(crate) const fn is_idle(&self) -> bool {
-        self.is_idle
+    pub(crate) fn is_idle(&self) -> bool {
+        self.is_idle.load(Ordering::Acquire)
     }
 
     #[inline]
     #[cfg(feature = "preempt")]
     pub(crate) fn set_preempt_pending(&self, pending: bool) {
         self.need_resched.store(pending, Ordering::Release)
+    }
+
+    #[inline]
+    #[cfg(feature = "preempt")]
+    pub(crate) fn preempt_pending(&self) -> bool {
+        self.need_resched.load(Ordering::Acquire)
+    }
+
+    #[inline]
+    #[cfg(feature = "preempt")]
+    pub(crate) fn preempt_disable_count(&self) -> usize {
+        self.preempt_disable_count.load(Ordering::Acquire)
     }
 
     #[inline]
@@ -427,7 +553,8 @@ impl TaskInner {
     #[inline]
     #[cfg(feature = "preempt")]
     pub(crate) fn enable_preempt(&self, resched: bool) {
-        if self.preempt_disable_count.fetch_sub(1, Ordering::Release) == 1 && resched {
+        let old_count = self.preempt_disable_count.fetch_sub(1, Ordering::Release);
+        if old_count == 1 && resched {
             // If current task is pending to be preempted, do rescheduling.
             Self::current_check_preempt_pending();
         }
@@ -498,6 +625,7 @@ impl fmt::Debug for TaskInner {
 
 impl Drop for TaskInner {
     fn drop(&mut self) {
+        TASK_REGISTRY.lock().remove(&self.id.as_u64());
         debug!("task drop: {}", self.id_name());
     }
 }

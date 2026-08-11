@@ -1,8 +1,13 @@
 //! A blocking mutex implementation.
 
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
+#[cfg(not(target_arch = "loongarch64"))]
+use core::sync::atomic::AtomicUsize;
 
-use axtask::{current, future::block_on};
+use axtask::{current, yield_now};
+#[cfg(not(target_arch = "loongarch64"))]
+use axtask::future::block_on;
+#[cfg(not(target_arch = "loongarch64"))]
 use event_listener::{Event, listener};
 
 /// A [`lock_api::RawMutex`] implementation.
@@ -11,8 +16,10 @@ use event_listener::{Event, listener};
 /// wait queue. When the mutex is unlocked, one task waiting on the queue
 /// will be woken up.
 pub struct RawMutex {
+    #[cfg(not(target_arch = "loongarch64"))]
     event: Event,
     owner_id: AtomicU64,
+    #[cfg(not(target_arch = "loongarch64"))]
     waiters: AtomicUsize,
 }
 
@@ -21,8 +28,10 @@ impl RawMutex {
     #[inline(always)]
     pub const fn new() -> Self {
         Self {
+            #[cfg(not(target_arch = "loongarch64"))]
             event: Event::new(),
             owner_id: AtomicU64::new(0),
+            #[cfg(not(target_arch = "loongarch64"))]
             waiters: AtomicUsize::new(0),
         }
     }
@@ -62,17 +71,48 @@ unsafe impl lock_api::RawMutex for RawMutex {
     const INIT: Self = RawMutex::new();
 
     #[inline(always)]
+    #[track_caller]
     fn lock(&self) {
         let current_id = current().id().as_u64();
         let mut spin = Spin(0);
         let mut owner_id = self.owner_id.load(Ordering::Relaxed);
+        #[cfg(target_arch = "loongarch64")]
+        let mut waiting = false;
 
         loop {
+            #[cfg(target_arch = "loongarch64")]
+            if owner_id != 0
+                && owner_id != current_id
+                && axtask::task_by_id(owner_id)
+                    .is_none_or(|owner| owner.state() == axtask::TaskState::Exited)
+            {
+                match self.owner_id.compare_exchange(
+                    owner_id,
+                    current_id,
+                    Ordering::Acquire,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => {
+                        axtask::report_recovered_mutex(
+                            self as *const Self as usize,
+                            owner_id,
+                            core::panic::Location::caller(),
+                        );
+                        break;
+                    }
+                    Err(x) => {
+                        owner_id = x;
+                        continue;
+                    }
+                }
+            }
+
             assert_ne!(
                 owner_id,
                 current_id,
-                "{} tried to acquire mutex it already owns.",
-                current().id_name()
+                "{} tried to acquire mutex {:p} it already owns.",
+                current().id_name(),
+                self
             );
 
             if owner_id == 0 {
@@ -93,18 +133,50 @@ unsafe impl lock_api::RawMutex for RawMutex {
                 continue;
             }
 
-            listener!(self.event => listener);
-
-            self.waiters.fetch_add(1, Ordering::SeqCst);
-            owner_id = self.owner_id.load(Ordering::SeqCst);
-            if owner_id == 0 {
-                self.waiters.fetch_sub(1, Ordering::SeqCst);
+            // On the LS2K1000LA, the event-listener slow path has repeatedly
+            // observed Event::inner as the invalid pointer 0x1 under the
+            // cagent local-TCP workload.  Keep the mutex ownership protocol
+            // unchanged, but avoid that heap-backed listener path on
+            // LoongArch while its lifetime corruption is isolated.  Yielding
+            // still lets the owner run and release the mutex, and leaves all
+            // other architectures on the normal blocking implementation.
+            #[cfg(target_arch = "loongarch64")]
+            {
+                if !waiting {
+                    let caller = core::panic::Location::caller() as *const _ as usize;
+                    current().begin_mutex_wait(
+                        self as *const Self as usize,
+                        owner_id,
+                        caller,
+                    );
+                    waiting = true;
+                }
+                yield_now();
+                owner_id = self.owner_id.load(Ordering::Acquire);
+                current().update_mutex_wait_owner(owner_id);
                 continue;
             }
 
-            block_on(listener);
-            self.waiters.fetch_sub(1, Ordering::SeqCst);
-            owner_id = self.owner_id.load(Ordering::Acquire);
+            #[cfg(not(target_arch = "loongarch64"))]
+            {
+                listener!(self.event => listener);
+
+                self.waiters.fetch_add(1, Ordering::SeqCst);
+                owner_id = self.owner_id.load(Ordering::SeqCst);
+                if owner_id == 0 {
+                    self.waiters.fetch_sub(1, Ordering::SeqCst);
+                    continue;
+                }
+
+                block_on(listener);
+                self.waiters.fetch_sub(1, Ordering::SeqCst);
+                owner_id = self.owner_id.load(Ordering::Acquire);
+            }
+        }
+
+        #[cfg(target_arch = "loongarch64")]
+        if waiting {
+            current().end_mutex_wait();
         }
     }
 
@@ -127,8 +199,11 @@ unsafe impl lock_api::RawMutex for RawMutex {
             "{} tried to release mutex it doesn't own",
             current().id_name()
         );
-        if self.waiters.load(Ordering::SeqCst) != 0 {
-            self.event.notify(1);
+        #[cfg(not(target_arch = "loongarch64"))]
+        {
+            if self.waiters.load(Ordering::SeqCst) != 0 {
+                self.event.notify(1);
+            }
         }
     }
 
@@ -142,6 +217,38 @@ unsafe impl lock_api::RawMutex for RawMutex {
 pub type Mutex<T> = lock_api::Mutex<RawMutex, T>;
 /// An alias of [`lock_api::MutexGuard`].
 pub type MutexGuard<'a, T> = lock_api::MutexGuard<'a, RawMutex, T>;
+
+/// Initializes a cooperative mutex directly in its final unpublished storage.
+///
+/// # Safety
+///
+/// `dst` must point to valid, aligned, uninitialized storage for one
+/// [`Mutex<T>`]. The object must remain private until initialization finishes.
+#[inline]
+pub unsafe fn write_unpublished_in_place<T>(dst: *mut Mutex<T>, value: T) {
+    unsafe { Mutex::write_unpublished_in_place(dst, value) }
+}
+
+/// Reinitializes the raw state of a newly constructed, unpublished mutex.
+///
+/// This is a narrow workaround for the pinned LoongArch toolchain corrupting
+/// atomic fields while moving a large aggregate into its final allocation.
+/// The protected value is preserved. On LoongArch the raw state consists only
+/// of the owner atomic: that architecture already uses the cooperative-yield
+/// slow path, so keeping an unused heap-backed `Event` would add movable and
+/// droppable state without participating in lock or unlock.
+///
+/// # Safety
+///
+/// The mutex must be freshly constructed, exclusively borrowed, and not yet
+/// visible to another task. It must never have had a waiter or a live guard.
+#[inline]
+pub unsafe fn reinitialize_unpublished<T>(mutex: &mut Mutex<T>) -> u64 {
+    let raw = unsafe { mutex.raw_mut() };
+    let previous_owner = raw.owner_id.load(Ordering::Relaxed);
+    unsafe { core::ptr::write(raw, RawMutex::new()) };
+    previous_owner
+}
 
 #[cfg(test)]
 mod tests {

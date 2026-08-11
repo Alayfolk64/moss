@@ -21,7 +21,9 @@ mod mutex;
 
 #[cfg(feature = "multitask")]
 #[doc(cfg(feature = "multitask"))]
-pub use self::mutex::{Mutex, MutexGuard, RawMutex};
+pub use self::mutex::{
+    Mutex, MutexGuard, RawMutex, reinitialize_unpublished, write_unpublished_in_place,
+};
 
 #[cfg(not(feature = "multitask"))]
 #[doc(cfg(not(feature = "multitask")))]

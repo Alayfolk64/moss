@@ -42,6 +42,7 @@ cfg_if::cfg_if! {
         mod run_queue;
         mod task;
         mod api;
+        mod block_context;
         mod wait_queue;
 
         #[cfg(feature = "irq")]

@@ -105,6 +105,15 @@ impl WaitQueue {
                     return true;
                 }
                 listener!(self.event => listener);
+                // Register first and then recheck, matching Linux
+                // prepare_to_wait_event(). A notify between the first check
+                // and registration would otherwise be lost until timeout.
+                if condition() {
+                    return false;
+                }
+                if wall_time() >= deadline {
+                    return true;
+                }
                 let _ = timeout_at(Some(deadline), listener).await;
             }
         })

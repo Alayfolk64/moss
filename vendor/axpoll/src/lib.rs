@@ -141,6 +141,32 @@ impl PollSet {
         }
     }
 
+    /// Creates a shared poll set directly in its final allocation.
+    pub fn new_shared() -> Arc<Self> {
+        let mut storage = Arc::<Self>::new_uninit();
+        let dst = Arc::get_mut(&mut storage)
+            .expect("new poll-set allocation must be unique")
+            .as_mut_ptr();
+        unsafe {
+            Self::write_unpublished_in_place(dst);
+            storage.assume_init()
+        }
+    }
+
+    /// Initializes a poll set directly in its final unpublished storage.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must be valid, aligned, uninitialized storage for one `PollSet`
+    /// and must not be published until initialization completes.
+    pub unsafe fn write_unpublished_in_place(dst: *mut Self) {
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).inner)
+                .write(Lazy::new(|| Mutex::new(Inner::new())));
+            core::ptr::addr_of_mut!((*dst).has_waiters).write(AtomicBool::new(false));
+        }
+    }
+
     /// Registers a waker.
     pub fn register(&self, waker: &Waker) {
         let mut inner = self.inner.lock();

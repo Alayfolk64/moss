@@ -11,7 +11,7 @@ use futures_util::task::AtomicWaker;
 use alloc::sync::Weak;
 
 use axsched::BaseScheduler;
-use kernel_guard::BaseGuard;
+use kernel_guard::{BaseGuard, NoPreempt};
 use kspin::{SpinRaw, SpinNoIrqGuard};
 use lazyinit::LazyInit;
 
@@ -350,7 +350,10 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
     #[cfg(feature = "irq")]
     pub fn scheduler_timer_tick(&mut self) {
         let curr = &self.current_task;
-        if !curr.is_idle() && self.inner.scheduler.lock().task_tick(curr) {
+        let may_preempt =
+            crate::block_context::timer_tick_may_preempt(curr.is_init(), curr.is_idle());
+        let time_slice_expired = may_preempt && self.inner.scheduler.lock().task_tick(curr);
+        if time_slice_expired {
             #[cfg(feature = "preempt")]
             curr.set_preempt_pending(true);
         }
@@ -514,11 +517,12 @@ impl AxRunQueue {
 
         let mut scheduler = Scheduler::new();
         scheduler.add_task(gc_task);
+        let running_task = !crate::current().is_idle();
         Self {
             cpu_id,
             scheduler: SpinRaw::new(scheduler),
             ready_tasks: AtomicUsize::new(1),
-            running_task: AtomicBool::new(!crate::current().is_idle()),
+            running_task: AtomicBool::new(running_task),
             idle_kick_pending: AtomicBool::new(false),
         }
     }
@@ -809,7 +813,8 @@ pub(crate) fn init_secondary() {
     let cpu_id = this_cpu_id();
 
     // Put the subsequent execution into the `idle` task.
-    let idle_task = TaskInner::new_init("idle".into()).into_arc();
+    let idle_inner = TaskInner::new_init("idle".into());
+    let idle_task = idle_inner.into_arc();
     #[cfg(feature = "smp")]
     idle_task.set_cpu_id(cpu_id as _);
     idle_task.mark_has_run();
@@ -819,11 +824,16 @@ pub(crate) fn init_secondary() {
     });
     unsafe { CurrentTask::init_current(idle_task) }
 
-    RUN_QUEUE.with_current(|rq| {
-        rq.init_once(AxRunQueue::new(cpu_id));
-    });
+    // Keep preemption disabled until this CPU's run queue is both initialized
+    // and published. Dropping the per-CPU access guard earlier lets a pending
+    // reschedule observe a partially initialized secondary scheduler.
+    let scheduler_init_guard = NoPreempt::new();
+    let rq = unsafe { RUN_QUEUE.current_ref_raw() };
+    rq.call_once(|| AxRunQueue::new(cpu_id))
+        .expect("secondary run queue was already initialized");
     unsafe {
         RUN_QUEUES[cpu_id].write(RUN_QUEUE.current_ref_mut_raw());
     }
     RUN_QUEUE_READY[cpu_id].store(true, Ordering::Release);
+    drop(scheduler_init_guard);
 }

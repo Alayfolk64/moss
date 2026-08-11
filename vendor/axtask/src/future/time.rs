@@ -30,7 +30,8 @@ impl TimerRuntime {
     }
 
     fn add(&mut self, deadline: TimeValue) -> Option<TimerKey> {
-        if deadline <= wall_time() {
+        let now = wall_time();
+        if deadline <= now {
             return None;
         }
 
