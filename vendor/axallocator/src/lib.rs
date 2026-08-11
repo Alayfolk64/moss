@@ -80,6 +80,16 @@ pub trait ByteAllocator: BaseAllocator {
     /// Deallocate memory at the given position, size, and alignment.
     fn dealloc(&mut self, pos: NonNull<u8>, layout: Layout);
 
+    /// Takes one completely unused memory region that can be returned to the
+    /// allocator which supplied it.
+    ///
+    /// Most byte allocators keep every region for their entire lifetime. A
+    /// reclaimable implementation may override this after `dealloc`; the
+    /// initial region passed to `init` must never be returned.
+    fn take_released_memory(&mut self) -> Option<(usize, usize)> {
+        None
+    }
+
     /// Returns total memory size in bytes.
     fn total_bytes(&self) -> usize;
 

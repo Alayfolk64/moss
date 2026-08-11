@@ -68,6 +68,10 @@ ls2k1000 = [
     "axplat-loongarch64-ls2k1000/rtc",
     "axplat-loongarch64-ls2k1000/smp",
 ]
+watchdog-smoke = [
+    "ls2k1000",
+    "axplat-loongarch64-ls2k1000/watchdog-smoke",
+]
 shell-init = []
 pre-init = []
 smp = ["axfeat/smp"]
@@ -91,6 +95,8 @@ axplat-loongarch64-ls2k1000 = { path = "vendor/axplat-loongarch64-ls2k1000", opt
 axplat-riscv64-visionfive2 = { path = "vendor/axplat-riscv64-visionfive2", optional = true }
 
 [patch.crates-io]
+axalloc = { path = "vendor/axalloc" }
+axallocator = { path = "vendor/axallocator" }
 axcpu = { path = "vendor/axcpu" }
 axfeat = { path = "vendor/axfeat" }
 axdriver = { path = "vendor/axdriver" }

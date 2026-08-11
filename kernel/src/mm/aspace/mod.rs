@@ -569,6 +569,42 @@ impl AddrSpace {
         Ok(())
     }
 
+    /// Evicts private anonymous COW frames while retaining their VMAs.
+    /// Directly mapped file-cache pages, shared mappings and locked VMAs are
+    /// deliberately excluded.
+    pub(crate) fn swap_out_anonymous_pages(&mut self, limit: usize, allow_recent: bool) -> usize {
+        if limit == 0 {
+            return 0;
+        }
+        let mut reclaimed = 0;
+        let mut pt = self.pt.modify();
+        loop {
+            let before_pass = reclaimed;
+            for area in self.areas.iter() {
+                if reclaimed >= limit {
+                    break;
+                }
+                if !area.flags().contains(MappingFlags::USER)
+                    || area.metadata().shared()
+                    || area.metadata().locked()
+                {
+                    continue;
+                }
+                reclaimed += area.backend().swap_out_pages(
+                    area.va_range(),
+                    &mut pt,
+                    area.flags(),
+                    limit - reclaimed,
+                    allow_recent,
+                );
+            }
+            if reclaimed >= limit || reclaimed == before_pass {
+                break;
+            }
+        }
+        reclaimed
+    }
+
     /// To process data in this area with the given function.
     ///
     /// Now it supports reading and writing data in the given interval.

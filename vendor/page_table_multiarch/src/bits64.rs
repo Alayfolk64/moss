@@ -561,6 +561,23 @@ impl<'a, M: PagingMetaData, PTE: GenericPTE, H: PagingHandler> PageTable64Mut<'a
         Ok(size)
     }
 
+    /// Clears a leaf entry's architecture-specific dirty state.
+    ///
+    /// On LoongArch this preserves write permission (PTE.W) while clearing
+    /// PTE.D. The next write raises PageModify, providing a hardware-backed
+    /// second-chance signal on CPUs that do not expose an accessed/young bit.
+    pub fn clear_dirty(&mut self, vaddr: M::VirtAddr) -> PagingResult<Option<bool>> {
+        let (entry, _size) = self.get_entry_mut(vaddr)?;
+        if !entry.is_present() {
+            return Err(PagingError::NotMapped);
+        }
+        let changed = entry.clear_dirty();
+        if changed == Some(true) {
+            self.flush(vaddr);
+        }
+        Ok(changed)
+    }
+
     /// Unmaps the mapping starts with `vaddr`.
     ///
     /// Returns [`Err(PagingError::NotMapped)`](PagingError::NotMapped) if the

@@ -25,6 +25,7 @@ use strum::{IntoStaticStr, VariantArray};
 
 const PAGE_SIZE: usize = 0x1000;
 const MIN_HEAP_SIZE: usize = 0x8000; // 32 K
+const MAX_HEAP_EXPAND_SIZE: usize = 16 * 1024 * 1024;
 
 mod page;
 pub use page::GlobalPage;
@@ -208,10 +209,15 @@ impl GlobalAllocator {
 
     /// Add the given region to the allocator.
     ///
-    /// It will add the whole region to the byte allocator.
+    /// In the two-level allocator, the page allocator owns every physical
+    /// memory region and grows the byte allocator on demand. This prevents a
+    /// secondary RAM bank from becoming byte-heap-only and therefore
+    /// unavailable to user address spaces.
     pub fn add_memory(&self, start_vaddr: usize, size: usize) -> AllocResult {
-        let result = self.balloc.lock().add_memory(start_vaddr, size);
         #[cfg(feature = "level-1")]
+        let result = self.balloc.lock().add_memory(start_vaddr, size);
+        #[cfg(not(feature = "level-1"))]
+        let result = self.palloc.lock().add_memory(start_vaddr, size);
         if result.is_ok() {
             self.managed_pages
                 .fetch_add(size / PAGE_SIZE, Ordering::Relaxed);
@@ -257,28 +263,37 @@ impl GlobalAllocator {
                 return Ok(ptr);
             } else {
                 let old_size = balloc.total_bytes();
+                // A buddy-backed byte allocator rounds large allocations up
+                // to a power of two and requires the resulting block to have
+                // the same alignment.  Grow the byte heap with that invariant
+                // instead of handing it an exactly-sized, merely page-aligned
+                // region that it can never use for `layout`.
+                let required_span = layout.size().max(layout.align());
+                // Doubling the whole byte heap can reserve hundreds of MiB
+                // from the page allocator while the Rust heap has only a
+                // fraction of that memory live. Bound ordinary growth so a
+                // 1-GiB machine retains pages for user address spaces.
                 let expand_size = old_size
-                    .max(layout.size())
+                    .min(MAX_HEAP_EXPAND_SIZE)
+                    .max(required_span)
                     .next_power_of_two()
                     .max(PAGE_SIZE);
 
                 let mut try_size = expand_size;
-                let min_size = PAGE_SIZE.max(layout.size());
+                let min_size = PAGE_SIZE.max(required_span);
                 loop {
-                    let heap_ptr = match self.alloc_pages(
-                        try_size / PAGE_SIZE,
-                        PAGE_SIZE,
-                        UsageKind::RustHeap,
-                    ) {
-                        Ok(ptr) => ptr,
-                        Err(err) => {
-                            try_size /= 2;
-                            if try_size < min_size {
-                                return Err(err);
+                    let heap_ptr =
+                        match self.alloc_pages(try_size / PAGE_SIZE, try_size, UsageKind::RustHeap)
+                        {
+                            Ok(ptr) => ptr,
+                            Err(err) => {
+                                try_size /= 2;
+                                if try_size < min_size {
+                                    return Err(err);
+                                }
+                                continue;
                             }
-                            continue;
-                        }
-                    };
+                        };
                     debug!(
                         "expand heap memory: [{:#x}, {:#x})",
                         heap_ptr,
@@ -299,8 +314,19 @@ impl GlobalAllocator {
     ///
     /// [`alloc`]: GlobalAllocator::alloc
     pub fn dealloc(&self, pos: NonNull<u8>, layout: Layout) {
-        self.balloc.lock().dealloc(pos, layout);
         self.usages.dealloc(UsageKind::RustHeap, layout.size());
+        let released = {
+            let mut balloc = self.balloc.lock();
+            balloc.dealloc(pos, layout);
+            balloc.take_released_memory()
+        };
+        #[cfg(not(feature = "level-1"))]
+        if let Some((start, size)) = released {
+            debug!("release empty heap pool: [{start:#x}, {:#x})", start + size);
+            self.palloc.lock().dealloc_pages(start, size / PAGE_SIZE);
+        }
+        #[cfg(feature = "level-1")]
+        let _ = released;
     }
 
     /// Allocates contiguous pages.
@@ -748,4 +774,43 @@ pub fn global_add_memory(start_vaddr: usize, size: usize) -> AllocResult {
         start_vaddr + size
     );
     GLOBAL_ALLOCATOR.add_memory(start_vaddr, size)
+}
+
+#[cfg(all(test, feature = "slab", not(feature = "level-1")))]
+mod tests {
+    extern crate std;
+
+    use std::alloc::{alloc_zeroed, dealloc};
+
+    use super::*;
+
+    const LARGE_BLOCK_SIZE: usize = 16 * 1024 * 1024;
+
+    #[test]
+    fn slab_heap_growth_aligns_large_buddy_pool() {
+        const BACKING_SIZE: usize = 3 * LARGE_BLOCK_SIZE;
+        const MANAGED_SIZE: usize = 2 * LARGE_BLOCK_SIZE;
+
+        let backing_layout = Layout::from_size_align(BACKING_SIZE, LARGE_BLOCK_SIZE).unwrap();
+        let backing = unsafe { alloc_zeroed(backing_layout) };
+        assert!(!backing.is_null());
+
+        // Deliberately begin the managed range one page after a 16-MiB
+        // boundary.  A page-aligned 16-MiB pool cannot serve a 16-MiB buddy
+        // allocation, while a size-aligned pool selected from this same range
+        // can.
+        {
+            let allocator = GlobalAllocator::new();
+            allocator.init(backing as usize + PAGE_SIZE, MANAGED_SIZE);
+
+            let layout = Layout::from_size_align(LARGE_BLOCK_SIZE - 0x100, 1).unwrap();
+            let ptr = allocator
+                .alloc(layout)
+                .expect("large allocation should use an aligned heap pool");
+            assert_eq!(ptr.as_ptr() as usize % LARGE_BLOCK_SIZE, 0);
+            allocator.dealloc(ptr, layout);
+        }
+
+        unsafe { dealloc(backing, backing_layout) };
+    }
 }

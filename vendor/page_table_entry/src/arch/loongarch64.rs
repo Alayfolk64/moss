@@ -4,9 +4,11 @@
 //!
 //! <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#section-multi-level-page-table-structure-supported-by-page-walking>
 
-use crate::{GenericPTE, MappingFlags};
 use core::fmt;
+
 use memory_addr::PhysAddr;
+
+use crate::{GenericPTE, MappingFlags};
 
 bitflags::bitflags! {
     /// Page-table entry flags.
@@ -67,7 +69,12 @@ impl From<PTEFlags> for MappingFlags {
         if !f.contains(PTEFlags::NR) {
             ret |= Self::READ;
         }
-        if f.contains(PTEFlags::W) {
+        // W records that writes are permitted by the mapping, while D records
+        // that the current translation may complete a write.  Reclaim clears
+        // D (but not W) to sample the working set through a PageModify fault.
+        // Report such an entry as temporarily non-writable so the ordinary
+        // private-fault path restores D and records the access.
+        if f.contains(PTEFlags::W | PTEFlags::D) {
             ret |= Self::WRITE;
         }
         if !f.contains(PTEFlags::NX) {
@@ -162,6 +169,18 @@ impl GenericPTE for LA64PTE {
             flags |= PTEFlags::GH;
         }
         self.0 = (self.0 & Self::PHYS_ADDR_MASK) | flags.bits();
+    }
+    fn clear_dirty(&mut self) -> Option<bool> {
+        let flags = PTEFlags::from_bits_truncate(self.0);
+        if flags.contains(PTEFlags::V | PTEFlags::P | PTEFlags::W) {
+            let was_dirty = flags.contains(PTEFlags::D);
+            if was_dirty {
+                self.0 &= !PTEFlags::D.bits();
+            }
+            Some(was_dirty)
+        } else {
+            None
+        }
     }
     fn bits(self) -> usize {
         self.0 as usize

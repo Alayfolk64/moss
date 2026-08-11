@@ -78,8 +78,28 @@ impl<const PAGE_SIZE: usize> BaseAllocator for BitmapPageAllocator<PAGE_SIZE> {
         self.next_contiguous_search = start_idx;
     }
 
-    fn add_memory(&mut self, _start: usize, _size: usize) -> AllocResult {
-        Err(AllocError::NoMemory) // unsupported
+    fn add_memory(&mut self, start: usize, size: usize) -> AllocResult {
+        let end = crate::align_down(
+            start.checked_add(size).ok_or(AllocError::InvalidParam)?,
+            PAGE_SIZE,
+        );
+        let start = crate::align_up(start, PAGE_SIZE);
+        if start >= end || start < self.base {
+            return Err(AllocError::InvalidParam);
+        }
+
+        let start_idx = (start - self.base) / PAGE_SIZE;
+        let end_idx = (end - self.base) / PAGE_SIZE;
+        if end_idx > BitAllocUsed::CAP {
+            return Err(AllocError::NoMemory);
+        }
+        if self.inner.next(start_idx).is_some_and(|idx| idx < end_idx) {
+            return Err(AllocError::MemoryOverlap);
+        }
+
+        self.inner.insert(start_idx..end_idx);
+        self.total_pages += end_idx - start_idx;
+        Ok(())
     }
 }
 
@@ -212,6 +232,35 @@ mod tests {
         assert_eq!(addr, 0x1000);
         assert_eq!(allocator.used_pages(), 1);
         assert_eq!(allocator.available_pages(), 0);
+    }
+
+    #[test]
+    fn test_bitmap_page_allocator_adds_discontiguous_memory() {
+        let mut allocator = BitmapPageAllocator::<PAGE_SIZE>::new();
+        allocator.init(2 * PAGE_SIZE, 2 * PAGE_SIZE);
+        allocator.add_memory(8 * PAGE_SIZE, 2 * PAGE_SIZE).unwrap();
+
+        assert_eq!(allocator.total_pages(), 4);
+        assert!(matches!(
+            allocator.alloc_pages(2, PAGE_SIZE),
+            Ok(addr) if addr == 2 * PAGE_SIZE
+        ));
+        assert!(matches!(
+            allocator.alloc_pages(2, PAGE_SIZE),
+            Ok(addr) if addr == 8 * PAGE_SIZE
+        ));
+        assert_eq!(allocator.available_pages(), 0);
+    }
+
+    #[test]
+    fn test_bitmap_page_allocator_rejects_overlapping_memory() {
+        let mut allocator = BitmapPageAllocator::<PAGE_SIZE>::new();
+        allocator.init(2 * PAGE_SIZE, 4 * PAGE_SIZE);
+
+        assert!(matches!(
+            allocator.add_memory(4 * PAGE_SIZE, 4 * PAGE_SIZE),
+            Err(AllocError::MemoryOverlap)
+        ));
     }
 
     #[test]

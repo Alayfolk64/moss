@@ -8,7 +8,7 @@ use alloc::{
 use core::sync::atomic::AtomicU8;
 use core::{
     ops::Range,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     task::Context,
     time::Duration,
 };
@@ -317,9 +317,10 @@ const PAGE_SIZE: usize = 4096;
 // Linux's watermark-driven page-cache policy more closely than a fixed cache
 // size: a small machine retains less, while an otherwise idle large machine
 // can use most of its memory for useful cache.
-const MIN_FREE_MEMORY_BYTES: usize = 64 * 1024 * 1024;
-const FREE_MEMORY_LOW_DIVISOR: usize = 16;
-const FREE_MEMORY_TARGET_DIVISOR: usize = 8;
+const MIN_FREE_MEMORY_BYTES: usize = 192 * 1024 * 1024;
+const MIN_FREE_TARGET_MEMORY_BYTES: usize = 256 * 1024 * 1024;
+const FREE_MEMORY_LOW_DIVISOR: usize = 8;
+const FREE_MEMORY_TARGET_DIVISOR: usize = 4;
 const MAX_READAHEAD_BYTES: usize = 1024 * 1024;
 const BUFFERED_READAHEAD_BYTES: usize = 128 * 1024;
 const FOLIO_INDEX_SHARDS: usize = 64;
@@ -329,8 +330,15 @@ const MAX_FOLIO_ORDER: u8 = 4;
 const MAX_FOLIO_PAGES: usize = 1 << MAX_FOLIO_ORDER;
 const LOCAL_LARGE_FOLIO_CACHE_CAPACITY: usize = 8;
 const LOCAL_PAGE_FRAME_CACHE_SHARDS: usize = 64;
+const LARGE_FOLIO_RETRY_NANOS: u64 = 30 * 1_000_000_000;
+const LARGE_FOLIO_REPORT_NANOS: u64 = 60 * 1_000_000_000;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 static FILE_CACHE_CLOCK: AtomicU64 = AtomicU64::new(1);
+static LARGE_FOLIO_RETRY_AFTER_NS: [AtomicU64; MAX_FOLIO_ORDER as usize] =
+    [const { AtomicU64::new(0) }; MAX_FOLIO_ORDER as usize];
+static LARGE_FOLIO_ALLOCATION_FAILURES: [AtomicU64; MAX_FOLIO_ORDER as usize] =
+    [const { AtomicU64::new(0) }; MAX_FOLIO_ORDER as usize];
+static LARGE_FOLIO_LAST_REPORT_NS: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default)]
 struct SleepRwState {
@@ -486,6 +494,41 @@ fn local_large_folio_cache() -> &'static SpinNoIrq<LocalLargeFolioCache> {
     &LOCAL_LARGE_FOLIO_CACHES[axhal::percpu::this_cpu_id() % LOCAL_PAGE_FRAME_CACHE_SHARDS]
 }
 
+fn large_folio_backed_off(order: u8, now_ns: u64) -> bool {
+    let slot = usize::from(order - 1);
+    now_ns < LARGE_FOLIO_RETRY_AFTER_NS[slot].load(Ordering::Acquire)
+}
+
+fn note_large_folio_allocation_failure(order: u8, now_ns: u64) {
+    let slot = usize::from(order - 1);
+    LARGE_FOLIO_RETRY_AFTER_NS[slot].store(
+        now_ns.saturating_add(LARGE_FOLIO_RETRY_NANOS),
+        Ordering::Release,
+    );
+    let total = LARGE_FOLIO_ALLOCATION_FAILURES[slot].fetch_add(1, Ordering::Relaxed) + 1;
+    let last = LARGE_FOLIO_LAST_REPORT_NS.load(Ordering::Acquire);
+    if now_ns.saturating_sub(last) >= LARGE_FOLIO_REPORT_NANOS
+        && LARGE_FOLIO_LAST_REPORT_NS
+            .compare_exchange(last, now_ns, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    {
+        warn!(
+            "large folio allocation is fragmented: order={order} failures={total}; \
+             using smaller folios and retrying after {} s",
+            LARGE_FOLIO_RETRY_NANOS / 1_000_000_000
+        );
+    }
+}
+
+/// Number of failed contiguous large-folio allocation attempts. Backoff makes
+/// this a fragmentation diagnostic rather than a count of fallback reads.
+pub fn large_folio_allocation_failures() -> u64 {
+    LARGE_FOLIO_ALLOCATION_FAILURES
+        .iter()
+        .map(|count| count.load(Ordering::Relaxed))
+        .sum()
+}
+
 fn alloc_page_frame() -> VfsResult<VirtAddr> {
     global_allocator()
         .alloc_page_cached(
@@ -534,20 +577,29 @@ fn alloc_folio_frame(order: u8) -> VfsResult<FolioFrame> {
     } else if let Some(frame) = local_large_folio_cache().lock().pop(order) {
         frame
     } else {
+        let now_ns = axhal::time::monotonic_time_nanos();
+        if large_folio_backed_off(order, now_ns) {
+            return Err(VfsError::NoMemory);
+        }
         let (start, frames) = match global_allocator().alloc_pages(
             pages * LOCAL_LARGE_FOLIO_CACHE_CAPACITY,
             pages * PAGE_SIZE,
             UsageKind::PageCache,
         ) {
             Ok(start) => (start, LOCAL_LARGE_FOLIO_CACHE_CAPACITY),
-            Err(_) => (
-                global_allocator()
-                    .alloc_pages(pages, pages * PAGE_SIZE, UsageKind::PageCache)
-                    .inspect_err(|err| warn!("Failed to allocate order-{order} folio: {err:?}"))
-                    .map_err(|_| VfsError::NoMemory)?,
-                1,
-            ),
+            Err(_) => match global_allocator().alloc_pages(
+                pages,
+                pages * PAGE_SIZE,
+                UsageKind::PageCache,
+            ) {
+                Ok(start) => (start, 1),
+                Err(_) => {
+                    note_large_folio_allocation_failure(order, now_ns);
+                    return Err(VfsError::NoMemory);
+                }
+            },
         };
+        LARGE_FOLIO_RETRY_AFTER_NS[usize::from(order - 1)].store(0, Ordering::Release);
         let frame = VirtAddr::from(start);
         let mut cache = local_large_folio_cache().lock();
         let mut first_uncached = frames;
@@ -824,6 +876,8 @@ impl CachedFileRecord {
 static FILE_CACHES: [RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>; FILE_CACHE_SHARDS] =
     [const { RwLock::new(BTreeMap::new()) }; FILE_CACHE_SHARDS];
 static PAGE_CACHE_RECLAIM_LOCK: Mutex<()> = Mutex::new(());
+const PRESSURE_RECLAIM_RETRY_PAGES: usize = 1024;
+static NEXT_PRESSURE_RECLAIM_AT_PAGES: AtomicUsize = AtomicUsize::new(usize::MAX);
 
 pub struct CachedFile {
     inner: Location,
@@ -1511,6 +1565,12 @@ impl CachedFile {
             return Ok(());
         }
 
+        let (low, _) = Self::memory_watermarks();
+        if global_allocator().available_pages() < low {
+            // Speculative I/O must yield its memory budget to demand faults.
+            return Ok(());
+        }
+
         let len = self.len()?;
         if offset >= len {
             return Ok(());
@@ -2001,34 +2061,33 @@ impl CachedFile {
         let total = allocator.used_pages() + allocator.available_pages();
         let minimum = MIN_FREE_MEMORY_BYTES / PAGE_SIZE;
         let low = (total / FREE_MEMORY_LOW_DIVISOR).max(minimum).min(total);
-        let target = (total / FREE_MEMORY_TARGET_DIVISOR).max(low).min(total);
+        let target = (total / FREE_MEMORY_TARGET_DIVISOR)
+            .max(MIN_FREE_TARGET_MEMORY_BYTES / PAGE_SIZE)
+            .max(low)
+            .min(total);
         (low, target)
     }
 
-    /// Reclaim least-recently-used folios without holding an index lock during
-    /// writeback. Mapped folios remain pinned until the owning PTE is removed.
-    fn reclaim_pages(&self, limit: usize) -> VfsResult<usize> {
+    /// Reclaim least-recently-used clean folios. Mapped folios remain pinned
+    /// until the owning PTE is removed.
+    ///
+    /// Memory-pressure reclaim must not start writeback. The block layer and
+    /// ext4 path can themselves need page-cache or heap memory, so trying to
+    /// write dirty folios after the allocator reaches its low watermark turns
+    /// pressure into a recursive allocation failure. Normal fsync/close paths
+    /// remain responsible for dirty writeback.
+    fn reclaim_pages(&self, limit: usize) -> usize {
         if self.in_memory() || limit == 0 {
-            return Ok(0);
+            return 0;
         }
 
-        let file = self.inner().entry().as_file()?;
-        let file_len = self.len()?;
         let mut folios = self.folios_snapshot();
         folios.sort_unstable_by_key(|folio| folio.last_used.load(Ordering::Relaxed));
 
         let mut reclaimed = 0;
-        let mut wrote = false;
         for folio in folios {
             if reclaimed >= limit {
                 break;
-            }
-            // See writeback_folios_in_range: never sleep on a loading folio
-            // while holding invalidate_lock.
-            folio.wait_uptodate()?;
-            {
-                let _invalidate = self.shared().invalidate_lock.read();
-                wrote |= self.writeback_folio(file, file_len, &folio)?;
             }
 
             let invalidate = self.shared().invalidate_lock.write();
@@ -2045,10 +2104,7 @@ impl CachedFile {
                 drop(invalidate);
             }
         }
-        if wrote {
-            self.commit_len()?;
-        }
-        Ok(reclaimed)
+        reclaimed
     }
 
     fn reclaim_page_cache_if_needed(retain_key: FileCacheKey) {
@@ -2058,14 +2114,20 @@ impl CachedFile {
             return;
         }
 
-        let Some(_reclaim_guard) = PAGE_CACHE_RECLAIM_LOCK.try_lock() else {
-            // Another task is already making progress. Let this allocation
-            // continue instead of forming a process-wide reclaim convoy.
-            return;
-        };
+        // A demand file fault must wait for an in-flight reclaim pass. If it
+        // races ahead while free memory is below the low watermark, its folio
+        // allocation can fail and userspace receives SIGBUS even though the
+        // other task is about to release clean pages.
+        let _reclaim_guard = PAGE_CACHE_RECLAIM_LOCK.lock();
         if allocator.available_pages() >= low {
             return;
         }
+
+        Self::reclaim_page_caches_to(target, Some(retain_key));
+    }
+
+    fn reclaim_page_caches_to(target: usize, retain_key: Option<FileCacheKey>) {
+        let allocator = global_allocator();
 
         let mut records = Self::all_records()
             .into_iter()
@@ -2073,7 +2135,7 @@ impl CachedFile {
             .collect::<Vec<_>>();
         records.sort_unstable_by_key(|record| {
             (
-                record.key == retain_key,
+                Some(record.key) == retain_key,
                 record.last_used.load(Ordering::Relaxed),
             )
         });
@@ -2085,9 +2147,7 @@ impl CachedFile {
             }
             let wanted = target - available;
             let cached = Self::from_record(&record);
-            if let Err(err) = cached.reclaim_pages(wanted) {
-                warn!("Failed to reclaim file cache pages: {err:?}");
-            }
+            cached.reclaim_pages(wanted);
         }
     }
 
@@ -2133,6 +2193,45 @@ impl Drop for CachedFile {
         self.record.touch();
         Self::reclaim_page_cache_if_needed(self.record.key);
     }
+}
+
+/// Reclaims clean file-cache folios before an anonymous user-page allocation
+/// consumes the final free pages.
+///
+/// File reads already enter watermark reclaim while growing the page cache.
+/// Anonymous COW/brk faults do not grow that cache, so without this hook a
+/// compiler can consume the remaining RAM while old source and object pages
+/// are still reclaimable. Serialize pressure reclaim and restore the normal
+/// target watermark before the caller retries allocation.
+pub fn reclaim_global_file_cache_for_memory_pressure() {
+    let allocator = global_allocator();
+    let (low, target) = CachedFile::memory_watermarks();
+    let available = allocator.available_pages();
+    if available >= low {
+        NEXT_PRESSURE_RECLAIM_AT_PAGES.store(usize::MAX, Ordering::Release);
+        return;
+    }
+    if available > NEXT_PRESSURE_RECLAIM_AT_PAGES.load(Ordering::Acquire) {
+        return;
+    }
+
+    let _reclaim_guard = PAGE_CACHE_RECLAIM_LOCK.lock();
+    let available = allocator.available_pages();
+    if available >= low {
+        NEXT_PRESSURE_RECLAIM_AT_PAGES.store(usize::MAX, Ordering::Release);
+        return;
+    }
+    if available > NEXT_PRESSURE_RECLAIM_AT_PAGES.load(Ordering::Acquire) {
+        return;
+    }
+    CachedFile::reclaim_page_caches_to(target, None);
+    let available = allocator.available_pages();
+    let next = if available >= low {
+        usize::MAX
+    } else {
+        available.saturating_sub(PRESSURE_RECLAIM_RETRY_PAGES)
+    };
+    NEXT_PRESSURE_RECLAIM_AT_PAGES.store(next, Ordering::Release);
 }
 
 pub fn sync_global_file_caches() -> VfsResult<()> {

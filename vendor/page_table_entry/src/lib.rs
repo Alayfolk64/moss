@@ -5,6 +5,7 @@
 mod arch;
 
 use core::fmt::{self, Debug};
+
 use memory_addr::PhysAddr;
 
 pub use self::arch::*;
@@ -55,6 +56,16 @@ pub trait GenericPTE: Debug + Clone + Copy + Sync + Send + Sized {
     fn set_paddr(&mut self, paddr: PhysAddr);
     /// Set flags of the entry.
     fn set_flags(&mut self, flags: MappingFlags, is_huge: bool);
+
+    /// Clears the architecture's hardware dirty state, if it has one.
+    ///
+    /// `Some(true)` means that a recorded write was cleared, `Some(false)`
+    /// means that a writable entry was already clean, and `None` means that
+    /// this entry cannot provide the signal. Architectures without a
+    /// software-visible dirty state use the default implementation.
+    fn clear_dirty(&mut self) -> Option<bool> {
+        None
+    }
 
     /// Returns the raw bits of this entry.
     fn bits(self) -> usize;

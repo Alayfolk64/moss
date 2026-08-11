@@ -17,6 +17,13 @@ use crate::{
     task::{ProcessData, Thread, add_task_to_table, new_user_task, spawn_alarm_task},
 };
 
+#[inline]
+fn boot_progress(stage: &str) {
+    warn!("MOSS_BOOT stage={stage}");
+    #[cfg(feature = "ls2k1000")]
+    crate::watchdog::note_progress();
+}
+
 fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
     let mut candidates = vec![args.to_vec()];
 
@@ -34,6 +41,16 @@ fn launch_candidates(args: &[String]) -> Vec<Vec<String>> {
             candidate[0] = alt.to_string();
             candidates.push(candidate);
         }
+    }
+
+    // The final test script only needs a POSIX shell.  Some minimal rootfs
+    // images intentionally provide BusyBox sh but no GNU Bash, so a missing
+    // /bin/bash is a recoverable rootfs capability difference, not a kernel
+    // invariant that should panic during boot.
+    if exec == "/bin/bash" {
+        let mut candidate = args.to_vec();
+        candidate[0] = "/bin/sh".to_string();
+        candidates.push(candidate);
     }
 
     candidates
@@ -82,13 +99,24 @@ pub fn init(args: &[String], envs: &[String]) {
     // block completions may safely execute in their own task.
     enable_async_block_io();
 
+    #[cfg(feature = "ls2k1000")]
+    crate::watchdog::spawn_monitor();
+
     #[cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))]
     crate::mm::init_tlb_shootdown();
+    boot_progress("tlb-shootdown-ready");
+
+    #[cfg(feature = "ls2k1000")]
+    crate::swap::init();
+    boot_progress("swap-ready");
 
     pseudofs::mount_all().expect("Failed to mount pseudofs");
+    boot_progress("pseudofs-ready");
     spawn_alarm_task();
+    boot_progress("alarm-task-spawned");
 
     let (args, path, name) = resolve_init_command(args);
+    boot_progress("init-command-resolved");
 
     let mut uspace = new_user_aspace_empty()
         .and_then(|mut it| {
@@ -96,9 +124,11 @@ pub fn init(args: &[String], envs: &[String]) {
             Ok(it)
         })
         .expect("Failed to create user address space");
+    boot_progress("user-address-space-ready");
 
     let (entry_vaddr, ustack_top) = load_user_app(&mut uspace, None, &args, envs)
         .unwrap_or_else(|e| panic!("Failed to load user app: {}", e));
+    boot_progress("user-image-loaded");
 
     let uctx = UserContext::new(entry_vaddr.into(), ustack_top, 0);
     let mut task = new_user_task(&name, uctx, 0);
@@ -130,10 +160,14 @@ pub fn init(args: &[String], envs: &[String]) {
 
     let task = spawn_task(task);
     add_task_to_table(&task);
+    boot_progress("init-task-spawned");
 
     // TODO: wait for all processes to finish
+    boot_progress("init-task-join");
     let exit_code = task.join();
     info!("Init process exited with code: {exit_code:?}");
+    #[cfg(feature = "ls2k1000")]
+    crate::watchdog::note_progress();
 
     // File close no longer forces synchronous writeback. Flush dirty folios
     // while every mount is still reachable, then let unmount and the final
@@ -143,11 +177,24 @@ pub fn init(args: &[String], envs: &[String]) {
     cx.root_dir()
         .unmount_all()
         .expect("Failed to unmount all filesystems");
+    #[cfg(feature = "ls2k1000")]
+    crate::watchdog::note_progress();
     cx.root_dir()
         .filesystem()
         .flush()
         .expect("Failed to flush rootfs");
+    #[cfg(feature = "ls2k1000")]
+    crate::watchdog::note_progress();
 
-    info!("Init flow completed, powering off");
-    axhal::power::system_off();
+    #[cfg(feature = "ls2k1000")]
+    {
+        info!("Init flow completed, rebooting LS2K1000LA for the next automated run");
+        crate::watchdog::stop();
+        axhal::power::system_reset();
+    }
+    #[cfg(not(feature = "ls2k1000"))]
+    {
+        info!("Init flow completed, powering off");
+        axhal::power::system_off();
+    }
 }

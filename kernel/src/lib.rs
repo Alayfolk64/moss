@@ -22,6 +22,13 @@ mod file;
 mod ipi;
 mod mm;
 mod pseudofs;
+#[cfg(feature = "ls2k1000")]
+mod swap;
+#[cfg(not(feature = "ls2k1000"))]
+#[path = "swap_stub.rs"]
+mod swap;
 mod syscall;
 mod task;
 mod time;
+#[cfg(feature = "ls2k1000")]
+mod watchdog;

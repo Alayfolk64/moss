@@ -172,8 +172,6 @@ dependencies = [
 [[package]]
 name = "axalloc"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71b65a834aad62cd89cf1fe1dbeba0a71fd13e4b04dbbd9baef347e9b6a3da71"
 dependencies = [
  "axallocator",
  "axbacktrace",
@@ -189,8 +187,6 @@ dependencies = [
 [[package]]
 name = "axallocator"
 version = "0.1.3-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1af235e0e403b05aef675f5273ded7f54e79d78ffb358a7b46e950434c4e1fd8"
 dependencies = [
  "ax_slab_allocator",
  "bitmap-allocator",

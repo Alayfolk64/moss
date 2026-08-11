@@ -189,25 +189,35 @@ unsafe fn zero_fresh_frame(frame: PhysAddr, size: usize) {
 fn alloc_frame(zeroed: bool, size: PageSize) -> AxResult<PhysAddr> {
     let page_size = size as usize;
     let num_pages = page_size / PAGE_SIZE_4K;
-    let frame = if size == PageSize::Size4K {
-        let vaddr = VirtAddr::from(
-            global_allocator()
-                .alloc_page_cached(
-                    axhal::percpu::this_cpu_id(),
-                    axhal::cpu_num(),
-                    UsageKind::VirtMem,
-                )
-                .map_err(|_| AxError::NoMemory)?,
-        );
-        virt_to_phys(vaddr)
-    } else {
-        let vaddr = VirtAddr::from(
-            global_allocator()
-                .alloc_pages(num_pages, page_size, UsageKind::VirtMem)
-                .map_err(|_| AxError::NoMemory)?,
-        );
-        virt_to_phys(vaddr)
+    // Anonymous compiler memory used to bypass the file cache's watermark
+    // path and could exhaust the last page while clean source/object folios
+    // were still resident. Reclaim at the low watermark before allocating.
+    axfs::reclaim_global_file_cache_for_memory_pressure();
+    #[cfg(feature = "ls2k1000")]
+    crate::swap::reclaim_current_if_needed();
+
+    let allocate = || {
+        if size == PageSize::Size4K {
+            global_allocator().alloc_page_cached(
+                axhal::percpu::this_cpu_id(),
+                axhal::cpu_num(),
+                UsageKind::VirtMem,
+            )
+        } else {
+            global_allocator().alloc_pages(num_pages, page_size, UsageKind::VirtMem)
+        }
     };
+    let mut allocation = allocate();
+    #[cfg(feature = "ls2k1000")]
+    if allocation.is_err() {
+        let reclaimed = crate::swap::reclaim_current(8192);
+        if reclaimed == 0 {
+            crate::swap::wait_for_reclaim();
+        }
+        allocation = allocate();
+    }
+    let vaddr = VirtAddr::from(allocation.map_err(|_| AxError::NoMemory)?);
+    let frame = virt_to_phys(vaddr);
     if zeroed {
         unsafe { zero_fresh_frame(frame, page_size) };
     }
@@ -339,6 +349,22 @@ impl Backend {
             (Self::Shared(left), Self::Shared(right)) => left.merge_compatible(right),
             (Self::File(left), Self::File(right)) => left.merge_compatible(right),
             _ => false,
+        }
+    }
+
+    pub(crate) fn swap_out_pages(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut<'_>,
+        mapping_flags: MappingFlags,
+        limit: usize,
+        allow_recent: bool,
+    ) -> usize {
+        match self {
+            Self::Cow(backend) => {
+                backend.swap_out_pages(range, pt, mapping_flags, limit, allow_recent)
+            }
+            _ => 0,
         }
     }
 

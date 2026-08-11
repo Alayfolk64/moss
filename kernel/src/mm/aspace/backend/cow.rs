@@ -1,7 +1,7 @@
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::{
     slice,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
 };
 
 use axerrno::{AxError, AxResult};
@@ -22,6 +22,12 @@ use super::{
 
 const FRAME_TABLE_SHARDS: usize = 64;
 const FILE_PAGE_SHARDS: usize = 64;
+const RECENT_PAGE_SHARDS: usize = 64;
+const WORKING_SET_HOT_NANOS: u64 = 120 * 1_000_000_000;
+const WORKING_SET_PROBE_NANOS: u64 = 5 * 1_000_000_000;
+const WORKING_SET_SCAN_PAGES: usize = 8192;
+const NO_FAULT_FILE_PAGE: u64 = u64::MAX;
+const COW_MMAP_READAHEAD_PAGES: u64 = 32;
 
 #[derive(Clone, Copy)]
 struct FrameRefRange {
@@ -217,6 +223,179 @@ struct FilePageRefs {
     shards: [Mutex<FilePageShard>; FILE_PAGE_SHARDS],
 }
 
+struct SwappedPageRefs {
+    pages: Mutex<BTreeMap<VirtAddr, usize>>,
+}
+
+/// Software working-set signal for LA264, whose PTE format has no accessed
+/// bit. Newly faulted, copied or swapped-in anonymous pages get one bounded
+/// generation of protection from proactive reclaim; an actual allocation
+/// failure may still reclaim them.
+struct RecentPageRefs {
+    shards: [Mutex<BTreeMap<VirtAddr, u64>>; RECENT_PAGE_SHARDS],
+}
+
+impl RecentPageRefs {
+    fn new() -> Self {
+        Self {
+            shards: [const { Mutex::new(BTreeMap::new()) }; RECENT_PAGE_SHARDS],
+        }
+    }
+
+    fn shard(&self, vaddr: VirtAddr) -> &Mutex<BTreeMap<VirtAddr, u64>> {
+        let page = vaddr.as_usize() / memory_addr::PAGE_SIZE_4K;
+        &self.shards[page % RECENT_PAGE_SHARDS]
+    }
+
+    fn extend_until(&self, vaddr: VirtAddr, hot_until: u64) {
+        let mut shard = self.shard(vaddr).lock();
+        shard
+            .entry(vaddr)
+            .and_modify(|current| *current = (*current).max(hot_until))
+            .or_insert(hot_until);
+    }
+
+    fn mark_active(&self, vaddr: VirtAddr) {
+        self.extend_until(
+            vaddr,
+            axhal::time::monotonic_time_nanos().saturating_add(WORKING_SET_HOT_NANOS),
+        );
+    }
+
+    fn mark_probe(&self, vaddr: VirtAddr, now: u64) {
+        self.extend_until(vaddr, now.saturating_add(WORKING_SET_PROBE_NANOS));
+    }
+
+    /// A refault proves that the previous eviction selected a live working-set
+    /// page. Keep it out of proactive reclaim for the rest of this process;
+    /// an actual allocation failure still uses `allow_recent` and may reclaim
+    /// it as the last resort.
+    fn mark_refaulted(&self, vaddr: VirtAddr) {
+        self.extend_until(vaddr, u64::MAX);
+    }
+
+    fn is_recent(&self, vaddr: VirtAddr, now: u64) -> bool {
+        let mut shard = self.shard(vaddr).lock();
+        match shard.get(&vaddr).copied() {
+            Some(hot_until) if hot_until > now => true,
+            Some(_) => {
+                shard.remove(&vaddr);
+                false
+            }
+            None => false,
+        }
+    }
+
+    fn remove(&self, vaddr: VirtAddr) {
+        self.shard(vaddr).lock().remove(&vaddr);
+    }
+
+    fn remove_range(&self, range: VirtAddrRange) {
+        for shard in &self.shards {
+            shard
+                .lock()
+                .retain(|vaddr, _| *vaddr < range.start || *vaddr >= range.end);
+        }
+    }
+}
+
+impl SwappedPageRefs {
+    fn new() -> Self {
+        Self {
+            pages: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    fn get(&self, vaddr: VirtAddr) -> Option<usize> {
+        self.pages.lock().get(&vaddr).copied()
+    }
+
+    fn contains(&self, vaddr: VirtAddr) -> bool {
+        self.pages.lock().contains_key(&vaddr)
+    }
+
+    fn insert(&self, vaddr: VirtAddr, slot: usize) {
+        let old = self.pages.lock().insert(vaddr, slot);
+        assert!(old.is_none(), "replacing an existing swapped COW page");
+    }
+
+    fn release_range(&self, range: VirtAddrRange) {
+        self.pages.lock().retain(|vaddr, slot| {
+            if *vaddr >= range.start && *vaddr < range.end {
+                crate::swap::release_slot(*slot);
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    fn clone_range_into(&self, range: VirtAddrRange, destination: &Self) -> AxResult {
+        let pages = self.pages.lock();
+        let mut destination = destination.pages.lock();
+        for (vaddr, slot) in pages.range(range.start..range.end) {
+            if !crate::swap::retain_slot(*slot) {
+                return Err(AxError::Io);
+            }
+            let old = destination.insert(*vaddr, *slot);
+            assert!(old.is_none(), "fork duplicated a swapped COW page");
+        }
+        Ok(())
+    }
+}
+
+impl Drop for SwappedPageRefs {
+    fn drop(&mut self) {
+        for (_, slot) in core::mem::take(&mut *self.pages.lock()) {
+            crate::swap::release_slot(slot);
+        }
+    }
+}
+
+struct CowReadaheadState {
+    last_fault_file_page: AtomicU64,
+    next_readahead_file_page: AtomicU64,
+}
+
+impl CowReadaheadState {
+    const fn new() -> Self {
+        Self {
+            last_fault_file_page: AtomicU64::new(NO_FAULT_FILE_PAGE),
+            next_readahead_file_page: AtomicU64::new(0),
+        }
+    }
+
+    fn after_fault(&self, file: &FileBackend, file_offset: u64, file_end: Option<u64>) {
+        let page_size = memory_addr::PAGE_SIZE_4K as u64;
+        if !file_offset.is_multiple_of(page_size) {
+            return;
+        }
+        let fault_page = file_offset / page_size;
+        let previous = self
+            .last_fault_file_page
+            .swap(fault_page, Ordering::Relaxed);
+        if previous.checked_add(1) != Some(fault_page) {
+            return;
+        }
+
+        let start = fault_page.saturating_add(1);
+        if start < self.next_readahead_file_page.load(Ordering::Relaxed) {
+            return;
+        }
+        let mut end = start.saturating_add(COW_MMAP_READAHEAD_PAGES);
+        if let Some(file_end) = file_end {
+            end = end.min(file_end.div_ceil(page_size));
+        }
+        if start >= end {
+            return;
+        }
+
+        self.next_readahead_file_page.store(end, Ordering::Relaxed);
+        let count = usize::try_from((end - start) * page_size).unwrap_or(usize::MAX);
+        let _ = file.readahead(start * page_size, count);
+    }
+}
+
 impl FilePageRefs {
     fn new() -> Self {
         Self {
@@ -261,6 +440,14 @@ pub struct CowBackend {
     /// Directly mapped file pages need an owning reference for as long as
     /// their PTEs exist. Clones used to split one VMA share this table.
     file_pages: Option<Arc<FilePageRefs>>,
+    /// Anonymous pages evicted from this private mapping. VMA splits share
+    /// the map; fork creates a new map and increments each slot reference.
+    swapped_pages: Arc<SwappedPageRefs>,
+    recent_pages: Arc<RecentPageRefs>,
+    swap_cursor: Arc<AtomicUsize>,
+    /// Splits of one private mapping share a sequential-fault window. Forked
+    /// address spaces start independent windows to avoid cross-process noise.
+    readahead: Arc<CowReadaheadState>,
 }
 
 impl Clone for CowBackend {
@@ -272,6 +459,10 @@ impl Clone for CowBackend {
             has_mappings: self.has_mappings.clone(),
             identity: self.identity.clone(),
             file_pages: self.file_pages.clone(),
+            swapped_pages: self.swapped_pages.clone(),
+            recent_pages: self.recent_pages.clone(),
+            swap_cursor: self.swap_cursor.clone(),
+            readahead: self.readahead.clone(),
         }
     }
 }
@@ -285,6 +476,14 @@ enum CowFaultSource {
     Anonymous(PhysAddr),
     /// A cloned folio reference pins a directly mapped file page.
     File(FolioPageRef),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SwapCandidate {
+    vaddr: VirtAddr,
+    paddr: PhysAddr,
+    flags: MappingFlags,
+    slot: usize,
 }
 
 impl CowFaultSource {
@@ -307,11 +506,19 @@ pub(crate) struct CowFaultPlan {
     access_flags: MappingFlags,
     frame: Option<PhysAddr>,
     file_pages: Vec<(VirtAddr, FolioPageRef)>,
+    swap_slot: Option<usize>,
+    readahead: Arc<CowReadaheadState>,
     source: Option<CowFaultSource>,
 }
 
 impl CowFaultPlan {
     pub(crate) fn execute(&mut self) -> AxResult {
+        if let Some(slot) = self.swap_slot {
+            let frame = alloc_referenced_frame(false, self.size)?;
+            self.frame = Some(frame);
+            crate::swap::read_page(slot, frame)?;
+            return Ok(());
+        }
         if let Some(source) = &self.source {
             if matches!(source, CowFaultSource::Exclusive(_)) {
                 return Ok(());
@@ -352,6 +559,8 @@ impl CowFaultPlan {
                 && start == 0
                 && max_read == self.size as usize
             {
+                self.readahead
+                    .after_fault(file, fault_file_start, *file_end);
                 let page_size = self.size as usize;
                 if let Some(fault_page) = file.page_ref_at(fault_file_start)? {
                     let folio_page_offset = fault_page.folio_page_offset();
@@ -417,6 +626,9 @@ impl Drop for CowFaultPlan {
                 CowFaultSource::File(_) => {}
             }
         }
+        if let Some(slot) = self.swap_slot.take() {
+            crate::swap::release_slot(slot);
+        }
     }
 }
 
@@ -452,6 +664,10 @@ impl CowBackend {
                 .file_pages
                 .as_ref()
                 .map(|_| Arc::new(FilePageRefs::new())),
+            swapped_pages: Arc::new(SwappedPageRefs::new()),
+            recent_pages: Arc::new(RecentPageRefs::new()),
+            swap_cursor: Arc::new(AtomicUsize::new(self.start.as_usize())),
+            readahead: Arc::new(CowReadaheadState::new()),
         }
     }
 
@@ -538,6 +754,8 @@ impl CowBackend {
                 gather.push_anonymous(paddr, self.size, pt);
             }
         }
+        self.swapped_pages.release_range(range);
+        self.recent_pages.remove_range(range);
         Ok(())
     }
 
@@ -587,24 +805,41 @@ impl CowBackend {
                         access_flags,
                         frame: None,
                         file_pages: Vec::new(),
+                        swap_slot: None,
+                        readahead: self.readahead.clone(),
                         source: Some(source),
                     })
                 } else {
                     FaultPreparation::Fallback
                 }
             }
-            Err(PagingError::NotMapped) => FaultPreparation::Cow(CowFaultPlan {
-                identity: self.identity.clone(),
-                vaddr,
-                mapping_start: self.start,
-                area_range,
-                size: self.size,
-                file: self.file.clone(),
-                access_flags,
-                frame: None,
-                file_pages: Vec::new(),
-                source: None,
-            }),
+            Err(PagingError::NotMapped) => {
+                let swap_slot = self.swapped_pages.get(vaddr).map(|slot| {
+                    assert!(
+                        crate::swap::retain_slot(slot),
+                        "swapped COW page lost its slot ownership"
+                    );
+                    slot
+                });
+                FaultPreparation::Cow(CowFaultPlan {
+                    identity: self.identity.clone(),
+                    vaddr,
+                    mapping_start: self.start,
+                    area_range,
+                    size: self.size,
+                    file: if swap_slot.is_some() {
+                        None
+                    } else {
+                        self.file.clone()
+                    },
+                    access_flags,
+                    frame: None,
+                    file_pages: Vec::new(),
+                    swap_slot,
+                    readahead: self.readahead.clone(),
+                    source: None,
+                })
+            }
             Err(_) => FaultPreparation::Fallback,
         }
     }
@@ -688,6 +923,7 @@ impl CowBackend {
                         drop_referenced_frame(paddr, self.size);
                     }
                     plan.frame = None;
+                    self.recent_pages.mark_active(plan.vaddr);
                     Ok(FaultCommit::Handled)
                 } else {
                     Ok(FaultCommit::Stale)
@@ -696,6 +932,29 @@ impl CowBackend {
             Err(PagingError::NotMapped) => {
                 if plan.source.is_some() {
                     return Ok(FaultCommit::Stale);
+                }
+                if let Some(slot) = plan.swap_slot {
+                    let frame = plan.frame.ok_or(AxError::BadAddress)?;
+                    let mut swapped = self.swapped_pages.pages.lock();
+                    if swapped.get(&plan.vaddr).copied() != Some(slot) {
+                        return Ok(FaultCommit::Stale);
+                    }
+                    match pt.map_4k_concurrent(plan.vaddr, frame, flags) {
+                        Ok(()) => {
+                            swapped.remove(&plan.vaddr);
+                        }
+                        Err(PagingError::AlreadyMapped) => return Ok(FaultCommit::Stale),
+                        Err(err) => return Err(err.into()),
+                    }
+                    drop(swapped);
+                    // Drop the mapping's slot owner. The plan pin remains
+                    // until CowFaultPlan is dropped after this commit.
+                    crate::swap::release_slot(slot);
+                    plan.frame = None;
+                    crate::swap::note_working_set_refault();
+                    self.recent_pages.mark_refaulted(plan.vaddr);
+                    self.mark_mapped();
+                    return Ok(FaultCommit::Handled);
                 }
                 if !plan.file_pages.is_empty() {
                     let Some((file, ..)) = plan.file.as_ref() else {
@@ -761,6 +1020,7 @@ impl CowBackend {
                     Err(PagingError::AlreadyMapped) => return Ok(FaultCommit::Stale),
                     Err(err) => return Err(err.into()),
                 }
+                self.recent_pages.mark_active(plan.vaddr);
                 self.mark_mapped();
                 Ok(FaultCommit::Handled)
             }
@@ -800,6 +1060,37 @@ impl CowBackend {
             self.drop_new_frame(frame);
             return Err(err.into());
         }
+        self.recent_pages.mark_active(vaddr);
+        self.mark_mapped();
+        Ok(())
+    }
+
+    fn swap_in_at(
+        &self,
+        vaddr: VirtAddr,
+        slot: usize,
+        flags: MappingFlags,
+        pt: &mut PageTableMut,
+    ) -> AxResult {
+        let frame = self.alloc_new_frame(false)?;
+        if let Err(err) = crate::swap::read_page(slot, frame) {
+            self.drop_new_frame(frame);
+            return Err(err);
+        }
+        if let Err(err) = pt.map(vaddr, frame, self.size, flags) {
+            self.drop_new_frame(frame);
+            return Err(err.into());
+        }
+        let removed = self.swapped_pages.pages.lock().remove(&vaddr);
+        if removed != Some(slot) {
+            let _ = pt.unmap(vaddr);
+            pt.finish();
+            self.drop_new_frame(frame);
+            return Err(AxError::BadAddress);
+        }
+        crate::swap::release_slot(slot);
+        crate::swap::note_working_set_refault();
+        self.recent_pages.mark_refaulted(vaddr);
         self.mark_mapped();
         Ok(())
     }
@@ -874,6 +1165,7 @@ impl CowBackend {
             }
             pt.finish();
             drop(page);
+            self.recent_pages.mark_active(vaddr);
             return Ok(());
         }
 
@@ -889,6 +1181,7 @@ impl CowBackend {
             })
             .ok_or(AxError::BadAddress)??;
         if exclusive {
+            self.recent_pages.mark_active(vaddr);
             return Ok(());
         }
 
@@ -907,8 +1200,159 @@ impl CowBackend {
         }
         pt.finish();
         drop_referenced_frame(paddr, self.size);
-
+        self.recent_pages.mark_active(vaddr);
         Ok(())
+    }
+
+    pub(super) fn swap_out_pages(
+        &self,
+        range: VirtAddrRange,
+        pt: &mut PageTableMut,
+        mapping_flags: MappingFlags,
+        limit: usize,
+        allow_recent: bool,
+    ) -> usize {
+        const BATCH_PAGES: usize = 128;
+        if self.size != PageSize::Size4K || limit == 0 || !crate::swap::enabled() {
+            return 0;
+        }
+
+        let saved_cursor = VirtAddr::from_usize(self.swap_cursor.load(Ordering::Relaxed));
+        let first = if saved_cursor >= range.start && saved_cursor < range.end {
+            saved_cursor
+        } else {
+            range.start
+        };
+        let mut cursor = first;
+        let mut wrapped = false;
+        let mut inspected = 0usize;
+        let mut sampled = 0usize;
+        let mut candidates = heapless::Vec::<SwapCandidate, BATCH_PAGES>::new();
+        let now = axhal::time::monotonic_time_nanos();
+
+        while candidates.len() < limit.min(BATCH_PAGES) && inspected < WORKING_SET_SCAN_PAGES {
+            if cursor >= range.end {
+                if wrapped || first == range.start {
+                    break;
+                }
+                cursor = range.start;
+                wrapped = true;
+            }
+            if wrapped && cursor >= first {
+                break;
+            }
+            let vaddr = cursor;
+            cursor += memory_addr::PAGE_SIZE_4K;
+            inspected += 1;
+
+            if self
+                .file_pages
+                .as_ref()
+                .is_some_and(|pages| pages.get(vaddr).is_some())
+                || self.swapped_pages.contains(vaddr)
+            {
+                continue;
+            }
+            if !allow_recent && self.recent_pages.is_recent(vaddr, now) {
+                continue;
+            }
+            let Ok((paddr, _flags, page_size)) = pt.query(vaddr) else {
+                continue;
+            };
+            if page_size != PageSize::Size4K {
+                continue;
+            }
+            if frame_refs().count(paddr) != Some(1) {
+                // Shared fork pages and fault-plan pins cannot be evicted by
+                // this first implementation; their ownership stays in RAM.
+                continue;
+            }
+            // LA264 has no PTE accessed bit, but it does have a software-
+            // visible dirty bit. The first pass clears D while preserving W;
+            // a real write raises PageModify and the ordinary COW fault path
+            // marks the page active. Only an entry that remains clean through
+            // the grace period reaches eviction. Forced allocation-failure
+            // reclaim bypasses sampling so it can always make progress.
+            if !allow_recent && mapping_flags.contains(MappingFlags::WRITE) {
+                match pt.clear_dirty(vaddr) {
+                    Ok(Some(true)) => {
+                        self.recent_pages.mark_probe(vaddr, now);
+                        sampled += 1;
+                        continue;
+                    }
+                    Ok(Some(false)) | Ok(None) => {}
+                    Err(_) => continue,
+                }
+            }
+            let Some(slot) = crate::swap::reserve_slot() else {
+                break;
+            };
+            match pt.unmap(vaddr) {
+                Ok((unmapped, _flags, PageSize::Size4K)) if unmapped == paddr => {
+                    candidates
+                        .push(SwapCandidate {
+                            vaddr,
+                            paddr,
+                            // `flags` intentionally reports WRITE as absent
+                            // while LoongArch D is clear. Preserve the VMA's
+                            // real permissions for I/O-error rollback.
+                            flags: mapping_flags,
+                            slot,
+                        })
+                        .expect("bounded swap candidate batch");
+                }
+                Ok(_) | Err(_) => crate::swap::release_slot(slot),
+            }
+        }
+        self.swap_cursor.store(
+            if cursor < range.end {
+                cursor.as_usize()
+            } else {
+                range.start.as_usize()
+            },
+            Ordering::Relaxed,
+        );
+
+        crate::swap::note_working_set_probes(sampled);
+        if candidates.is_empty() {
+            if sampled != 0 {
+                // Clearing D is permission tightening. Flush both CPUs before
+                // userspace can run and provide the PageModify signal.
+                pt.finish();
+            }
+            return 0;
+        }
+        // No CPU may keep accessing a page while AHCI copies it to disk.
+        pt.finish();
+
+        let mut reclaimed = 0;
+        for candidate in candidates {
+            match crate::swap::write_page(candidate.slot, candidate.paddr) {
+                Ok(()) => {
+                    self.recent_pages.remove(candidate.vaddr);
+                    self.swapped_pages.insert(candidate.vaddr, candidate.slot);
+                    drop_referenced_frame(candidate.paddr, PageSize::Size4K);
+                    reclaimed += 1;
+                }
+                Err(_) => {
+                    // Keep the original page alive if disk I/O failed. Restore
+                    // its PTE before returning to userspace.
+                    if let Err(err) = pt.map(
+                        candidate.vaddr,
+                        candidate.paddr,
+                        PageSize::Size4K,
+                        candidate.flags,
+                    ) {
+                        error!(
+                            "MOSS_SWAP failed to restore {:?} after I/O error: {:?}",
+                            candidate.vaddr, err
+                        );
+                    }
+                    crate::swap::release_slot(candidate.slot);
+                }
+            }
+        }
+        reclaimed
     }
 }
 
@@ -954,7 +1398,11 @@ impl BackendOps for CowBackend {
                 }
                 // If the page is not mapped, try map it.
                 Err(PagingError::NotMapped) => {
-                    self.alloc_new_at(addr, flags, pt)?;
+                    if let Some(slot) = self.swapped_pages.get(addr) {
+                        self.swap_in_at(addr, slot, flags, pt)?;
+                    } else {
+                        self.alloc_new_at(addr, flags, pt)?;
+                    }
                     pages += 1;
                 }
                 Err(_) => return Err(AxError::BadAddress),
@@ -972,6 +1420,8 @@ impl BackendOps for CowBackend {
         _new_aspace: &Arc<AddrSpaceLock>,
     ) -> AxResult<Backend> {
         let new_backend = self.clone_for_fork();
+        self.swapped_pages
+            .clone_range_into(range, &new_backend.swapped_pages)?;
         // Forking untouched lazy COW regions is common (e.g. fork14). In that
         // case, there is nothing in page tables to duplicate.
         if !self.has_mappings.load(Ordering::Relaxed) {
@@ -1044,6 +1494,10 @@ impl Backend {
             has_mappings: Arc::new(AtomicBool::new(false)),
             identity: Arc::new(()),
             file_pages: Some(Arc::new(FilePageRefs::new())),
+            swapped_pages: Arc::new(SwappedPageRefs::new()),
+            recent_pages: Arc::new(RecentPageRefs::new()),
+            swap_cursor: Arc::new(AtomicUsize::new(start.as_usize())),
+            readahead: Arc::new(CowReadaheadState::new()),
         })
     }
 
@@ -1055,6 +1509,10 @@ impl Backend {
             has_mappings: Arc::new(AtomicBool::new(false)),
             identity: Arc::new(()),
             file_pages: None,
+            swapped_pages: Arc::new(SwappedPageRefs::new()),
+            recent_pages: Arc::new(RecentPageRefs::new()),
+            swap_cursor: Arc::new(AtomicUsize::new(start.as_usize())),
+            readahead: Arc::new(CowReadaheadState::new()),
         })
     }
 }
