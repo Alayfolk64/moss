@@ -1,0 +1,5 @@
+# LS2K1000LA SPI read-only backup captured from Linux /dev/mtd*ro on 2026-08-09.
+829ed715a707199effa9c1dbd43211171d60ded99172cf3b944ce8008c901f10  /srv/tftp/ls2k1000la-spi-bdinfo-20260809.bin
+71189f7fb6aed638640078fba3a35fda6c39c8962e74dcc75935aac948da9063  /srv/tftp/ls2k1000la-spi-dtb-20260809.bin
+e6b462fc2f6788838bcdacc896bb7f53942f657ec1a51f5481dc306d05ce3381  /srv/tftp/ls2k1000la-spi-uboot-20260809.bin
+5220642077b698f02de6fc5ae4ad3456cb90e6a79d4df662d78c6b69865ddd7b  /srv/tftp/ls2k1000la-spi-uboot-env-20260809.bin

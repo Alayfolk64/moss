@@ -2,12 +2,17 @@
 
 本文记录 `main` 基线上的第一阶段实现。目标是让同一份板级内核根据 U-Boot
 提供的 DTB 启动两个 CPU，并从 DTB 发现启动和运行所需外设，而不是把板卡地址写死在
-Rust 平台配置中。由于当前没有开发板，本阶段的结论仅包括代码审查、交叉构建和静态
-检查；不能替代真机启动、SATA 数据完整性和 GMAC 收发验收。
+Rust 平台配置中。本轮修改先以代码审查、交叉构建、状态机测例和反汇编完成静态闭环；
+在首个调度时间片问题没有形成完整因果链前不重复给板卡上电。静态结果不能替代最终的
+SATA 数据完整性和 GMAC 收发验收。
 
-参考实现固定为 TGOSKits 提交
-`e04580c5c06868035fa39d3ca63baf179e9fcdca`，主要参考其 LoongArch 启动参数保留、
-LIOINTC、AHCI 和 GMAC 初始化次序，没有直接复制其全局固定地址配置。
+正确性基线固定为 Linux 上游提交
+`f9a2394a23482bfd330911e9c8295b71724feacd`：LoongArch 入口和任务切换对照
+`arch/loongarch/kernel/{head,switch}.S` 与 `arch/loongarch/include/asm/stackframe.h`；
+GMAC 对照 `drivers/net/ethernet/stmicro/stmmac` 的 dwmac1000 描述符、DMA、中断和
+`probe -> ndo_open` 生命周期；AHCI 对照 `drivers/ata/libahci.c` 的命令发布、完成判定
+以及先清端口状态、后清 HBA 状态的电平中断次序。TGOSKits 只用于观察同一板卡的固件
+和外设现象，不作为寄存器语义或并发正确性的依据。
 
 ## 已实现的启动合同
 
@@ -18,8 +23,11 @@ LIOINTC、AHCI 和 GMAC 初始化次序，没有直接复制其全局固定地�
 - CPU1 通过 2K1000 IOCSR mailbox 设置入口和启动栈，再由 IPI 释放。
 - 早期/运行时 UART、LIOINTC、RTC、AHCI、GMAC0、重启和关机寄存器均从 DTB
   的 `compatible`、`reg`、`interrupts`、alias/phandle 或 syscon 属性获得。
-- RAM 区域最终以 DTB `/memory` 为准；链接和最初建立页表所需的启动窗口仍属于镜像
+- RAM 区域优先以 DTB `/memory` 为准；板载 U-Boot 的 DTB 不含该标准节点时，回退到
+  构建配置中记录的固件 DRAM bank。链接和最初建立页表所需的启动窗口仍属于镜像
   ABI，不是外设探测配置。
+- 板载 U-Boot 的 `bdinfo` 还把低端 DRAM bank 顶部 16 MiB 标记为 LMB 保留区；
+  平台内存布局会始终排除该固件工作区。
 - AHCI 根设备接受 `/chosen/bootargs` 中的 `/dev/sda`、`/dev/sdaN`、`PARTUUID=` 和
   `PARTLABEL=`。未提供 `root=` 时，仅在唯一 ext4 分区（或整盘 ext4）可判定时启动，
   不再固定选择某个分区。
@@ -43,7 +51,8 @@ rdrive 动态驱动模型。
 - `ethernet0` alias 指向希望启用的 DWMAC 节点，并提供 MAC 地址、PHY mode、
   `phy-handle`、中断和 DMA mask；
 - RTC 节点、`syscon-reboot` 和 `syscon-poweroff`（后两者缺失时只能安全停机）；
-- 正确的 `/memory` 和 `/chosen/bootargs`。
+- 正确的 `/chosen/bootargs`。推荐提供 `/memory`；缺失时平台必须有与固件
+  DRAM bank 一致的回退配置。
 
 仓库中的 [静态检查用 DTS](../tests/fixtures/ls2k1000la.dts) 只用于验证解析合同，应以
 板卡 U-Boot 实际导出的 DTB 为准，不应直接假定其地址和中断与所有 2K1000LA 板卡一致。
@@ -69,14 +78,16 @@ make kernel-la-2k1000
 `BUILDSTORM_COMPILE mode=multi ok=true`，以及 QEMU 正常关机。本检查验证 `main` 的
 通用运行时/SMP 改动没有破坏 QEMU，不表示 QEMU 模拟了 2K1000LA 外设。
 
-静态检查脚本也会在宿主机运行 17 个不访问 MMIO 的驱动状态机测例，覆盖 AHCI 完成
-状态、非 NCQ 单命令准入、块范围溢出检查、GMAC TX 环形队列和中断屏蔽、LIOINTC
-映射与单源分发；同时检查样例 DTB 中 UART、AHCI、GMAC、RTC、reboot 和 poweroff
-的启动合同。
+静态检查脚本也会在宿主机运行 46 个不访问 MMIO 的解析和驱动状态机测例，覆盖 AHCI 完成
+状态、完成槽复用竞态、错误恢复准入、非 NCQ 单命令准入、块范围溢出检查、GMAC TX 环形
+队列、RX 资源耗尽回收、MAC/DMA 中断屏蔽和 Clause 22 PHY 协商，以及 LIOINTC 映射与
+单源分发；脚本还会检查限时等待在注册 listener 后二次判断条件，验证样例 DTB 中 UART、
+AHCI、GMAC、RTC、reboot 和 poweroff 的启动合同，并从板级 ELF 反汇编确认入口关闭中断
+和任务切换保存/恢复 `CSR.PRMD`。
 
 2026-08-07 在本功能分支上的实际结果：
 
-- `./scripts/check_ls2k1000_static.sh` 通过，板级镜像为 3,797,632 字节；
+- `./scripts/check_ls2k1000_static.sh` 通过，当前板级镜像为 3,834,496 字节；
 - RISC-V QEMU 内核交叉构建通过；
 - LoongArch QEMU 两轮均报告 `cpu_nodes=12`、`online=12`，cagent 完整结束；
 - 两轮 buildstorm 均为 `ok=true`，分别用时 370.81 秒和 371.39 秒，输出大小均为
@@ -101,10 +112,21 @@ go 0x9000000098000040 0x9000000003000000
 风暴；目标 SATA 分区可反复读写并在断电重启后通过文件系统检查；GMAC0 能持续双向
 收发；reboot/poweroff 动作与板卡 syscon 定义一致。
 
-当前 GMAC 在 DT IRQ 注册成功后启用 DMA 中断，硬中断只确认并屏蔽对应队列，描述符
-回收和中断重开在网络轮询阶段完成；缺少 IRQ 或注册失败时保留轮询降级路径。AHCI
+当前 GMAC 探测阶段只读取能力、MAC/PHY 和注册 DT IRQ，保持 MAC、DMA 与硬件中断源
+停止；第一次网络队列操作才按 Linux `ndo_open` 生命周期复位 DMA、初始化描述符并启动
+收发。PBL、burst 和可选 AXI 参数来自 `snps,*` 设备树属性，未提供时使用 Linux 默认值，
+不再写板级固定 AXI 参数。MAC-core 中没有对应处理函数的 RGMII/PCS/PMT/timestamp 源
+保持屏蔽，硬中断只确认并屏蔽对应 DMA 队列；描述符回收和中断重开在网络轮询阶段完成，
+RX 网络缓冲池暂时耗尽时也会先把描述符归还 DMA。缺少 IRQ 或注册失败时保留轮询降级
+路径。链路初始速率和双工按 DT `phy-handle` 指向的 Clause 22 PHY 标准寄存器协商结果
+配置；PHY 未连接或协商未完成时返回可重试错误，不再固定猜测 1000/full，也不把未解释
+的 GMAC RGMII/PCS 原始状态当成速率。当前尚未实现 Linux phylib 的周期性 link-change 状态机，
+运行中拔插或重新协商仍需要真机补充验收。AHCI
 要求 DT 提供可翻译 IRQ，按控制器能力分配最多 32 个命令槽和独立完成状态，并让等待
 槽位/完成的任务睡眠；当前读写仍使用非 NCQ ATA DMA 命令，因此按 Linux libata 规则
-只允许一个命令在途，不会错误地把 HBA 多槽能力当成 NCQ。超时或致命错误会串行复位
-控制器。上述状态机和交叉构建已经静态验收，但 QEMU 通用路径使用 VirtIO，仍不能代替
-真机 SATA 数据完整性、GMAC 持续收发和中断风暴测试。
+只允许一个命令在途，不会错误地把 HBA 多槽能力当成 NCQ。超时或致命错误会串行停止
+命令引擎，在保持 FIS 接收开启的状态下执行 SATA COMRESET；任一步超时、链路未恢复或
+设备持续忙时，端口保持中断屏蔽并失败关闭，不再忽略失败后继续发命令。上述状态机和
+交叉构建已经静态验收，
+但 QEMU 通用路径使用 VirtIO，仍不能代替真机 SATA 数据完整性、GMAC 持续收发和中断
+风暴测试。
