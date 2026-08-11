@@ -543,8 +543,6 @@ dependencies = [
 [[package]]
 name = "axnet"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86073a98c41a18205a482c7b223fc9ce043935f6922bd1f89a1e02976e0de02e"
 dependencies = [
  "async-channel",
  "async-trait",

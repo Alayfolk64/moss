@@ -188,7 +188,13 @@ impl GeneralOptions {
                 poll_interfaces();
                 block_on(timeout(
                     deadline,
-                    poll_io(pollable, events, self.nonblocking(), f),
+                    poll_io(pollable, events, self.nonblocking(), || {
+                        // A device interrupt normally wakes this future.  A
+                        // bounded timer fallback may do so instead, in which
+                        // case the stack must be polled before retrying I/O.
+                        poll_interfaces();
+                        f()
+                    }),
                 ))?
             }
             Err(err) => Err(err),

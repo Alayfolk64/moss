@@ -107,6 +107,7 @@ axplat-riscv64-qemu-virt = { path = "vendor/axplat-riscv64-qemu-virt" }
 axplat-loongarch64-qemu-virt = { path = "vendor/axplat-loongarch64-qemu-virt" }
 axfs = { path = "vendor/axfs" }
 axmm = { path = "vendor/axmm" }
+axnet = { path = "vendor/axnet" }
 axruntime = { path = "vendor/axruntime" }
 axfs-ng-vfs = { path = "vendor/axfs-ng-vfs" }
 kernel-elf-parser = { path = "vendor/kernel-elf-parser" }
