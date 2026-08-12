@@ -9,8 +9,10 @@
 ## 1. 已确认的硬件与磁盘基线
 
 - 星云版为 2 核 LA264、1 GiB DDR3；原厂固件显示的 2 GiB 不是可靠的物理探测结果。
-- `/dev/sda1` 约 17.816 GiB，保留原厂 Linux、旧内核和 2 GiB `/swapfile-moss`。
-- `/dev/sda2` 严格 12 GiB，保存比赛根文件系统，也是 MOSS 的根分区。
+- `/dev/sda1` 约 11.8 GiB，保留原厂 Linux、旧内核和 2 GiB `/swapfile-moss`。
+- `/dev/sda2` 严格 12 GiB，保留原 MOSS/glibc 比赛环境，不改动其起始扇区。
+- `/dev/sda3` 严格 6 GiB，由官方 LoongArch64 Alpine 镜像扩容而来，作为 2025 现场赛
+  `git`、`vim`、`gcc`、`rustc` 环境和 MOSS 根分区。
 - 原厂 Linux 5.10 和旧内核均未删除。Linux 6.12 只完成过 RAM-chain 验收，没有替换默认内核。
 - Linux 6.12 已实测 cagent 10/10；buildstorm 输出 133 条 `Compiling`，43 分 54 秒完成，
   最终为 `ok=true elapsed_s=2663.92 cores=2 bytes=1714568 arch=loongarch64`。
@@ -42,8 +44,8 @@
    - 实际构建并检查生产、交互两个镜像，不再用大量源码正则猜测实现顺序。
 2. `scripts/run_ls2k1000_serial_tftp.py`
    - 使用 Python `pyserial`，直接操作 `/dev/ttyUSB0`，不需要浏览器；
-   - 从原厂 Linux 安全卸载 sda2、解析 `/swapfile-moss` 的物理 extent，然后重启并连续发送
-     U-Boot 停止键；
+   - 从原厂 Linux 停止 udev 的私有自动挂载，按 `--root-device` 安全卸载 sda2 或 sda3，解析
+     `/swapfile-moss` 的物理 extent，然后重启并连续发送 U-Boot 停止键；
    - 自动设置网络、DT bootargs、swap extent、AHCI/GMAC 属性，TFTP 加载镜像并采集串口日志；
    - 在 `go` 前安装 30 秒 U-Boot watchdog，覆盖 TFTP 后到 MOSS 早期初始化的空窗。交互镜像
      进入 MOSS 后会主动关闭它。
@@ -90,8 +92,13 @@ make kernel-la-2k1000-shell
 sudo install -o tftp -g tftp -m 0644 \
   moss-2k1000la-shell.bin /srv/tftp/moss-shell.bin
 python3 scripts/run_ls2k1000_serial_tftp.py moss-shell.bin \
+  --root-device /dev/sda3 \
   --monitor-seconds 180 --log /tmp/moss-ls2k1000la-shell.log
 ```
+
+两个 LS2K1000LA 构建目标默认写入板卡地址 `192.168.88.2` 和网关 `192.168.88.1`；需要更换
+现场网段时仍可在构建命令中传入 `IP=... GW=...` 覆盖。sda3 现场赛逐项结果见
+[现场赛软件验收报告](ls2k1000la-onsite-final-2025-report-20260812.md)。
 
 runner 的监视时间只决定主机脚本何时退出，不会给板上 workload 设置截止时间。脚本退出后可用
 任意 115200 8N1 串口终端重新打开 `/dev/ttyUSB0`，继续操作交互 shell。

@@ -137,6 +137,8 @@ kernel-la-2k1000: toolchain
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000.toml \
 		APP_FEATURES="ls2k1000" \
 		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
+		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
+		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
 		CPU_CAPACITY=2 SMP=2 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la.bin
 	@printf "    \033[36mLS2K1000LA image\033[0m: moss-2k1000la.bin\n"
@@ -149,6 +151,8 @@ kernel-la-2k1000-shell: toolchain
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000-shell.toml \
 		APP_FEATURES="ls2k1000 shell-init ls2k1000-shell-mode" \
 		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
+		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
+		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
 		CPU_CAPACITY=2 SMP=2 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la-shell.bin
 	@printf "    \033[36mLS2K1000LA interactive image\033[0m: moss-2k1000la-shell.bin\n"

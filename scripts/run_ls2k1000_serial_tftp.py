@@ -217,6 +217,12 @@ def discover_swap_extents(runner: SerialRunner) -> list[tuple[int, int, int]]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="TFTP filename of the MOSS image")
+    parser.add_argument(
+        "--root-device",
+        default="/dev/sda2",
+        choices=("/dev/sda2", "/dev/sda3"),
+        help="root filesystem passed to MOSS (default: /dev/sda2)",
+    )
     parser.add_argument("--device", default="/dev/ttyUSB0")
     parser.add_argument("--linux-timeout", type=float, default=600)
     parser.add_argument("--monitor-seconds", type=float, default=75)
@@ -242,7 +248,14 @@ def main() -> None:
         # Linux's board startup script may mount the competition partition.
         # Make the handoff explicit so MOSS never opens an ext4 filesystem that
         # Linux still has mounted or has not finished flushing.
-        runner.linux_command("umount /dev/sda2 2>/dev/null || true; sync")
+        runner.linux_command(
+            "systemctl stop systemd-udevd-control.socket "
+            "systemd-udevd-kernel.socket systemd-udevd.service "
+            "2>/dev/null || true"
+        )
+        runner.linux_command(
+            f"umount {args.root_device} 2>/dev/null || true; sync"
+        )
         # Capture the known-good Linux stmmac descriptor mode immediately
         # before handoff. CSR0 bit 7 is ATDS (eight-word descriptor stride),
         # while DMA_HW_FEATURE bit 24 advertises enhanced descriptors.
@@ -282,7 +295,7 @@ def main() -> None:
             ("tftpboot 0x900000000a000000 board.dtb", 20),
             ("fdt addr 0x900000000a000000", 5),
             ("fdt resize 4096", 5),
-            ("fdt set /chosen bootargs root=/dev/sda2", 5),
+            (f"fdt set /chosen bootargs root={args.root_device}", 5),
             *swap_fdt_commands,
             (
                 "fdt set /aliases ethernet0 /2k1000-soc/ethernet@40040000",
