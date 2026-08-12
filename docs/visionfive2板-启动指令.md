@@ -108,6 +108,9 @@ sudo minicom -D /dev/ttyACM0 -b 115200 -o
 - 开发板复位或上电后，在倒计时期间按任意键：进入 U-Boot。
 - 若已开始自动网络启动，按 `Ctrl-C`，直到出现 `StarFive #`。
 
+进入 MOSS 后如需量化单键回显、持续输出竞争和长粘贴完整性，关闭 minicom 后运行
+[VF2 与 LS2K1000LA 串口输入延迟修复和验收](board-console-input-latency.md)中的通用脚本。
+
 ## 6. 通过 TFTP 加载并启动 Moss
 
 在 `StarFive #` 下执行：

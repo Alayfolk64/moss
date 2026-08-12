@@ -106,6 +106,8 @@ python3 scripts/run_ls2k1000_serial_tftp.py moss-shell.bin \
 
 runner 的监视时间只决定主机脚本何时退出，不会给板上 workload 设置截止时间。脚本退出后可用
 任意 115200 8N1 串口终端重新打开 `/dev/ttyUSB0`，继续操作交互 shell。
+单键回显延迟和 22/262/518 字节粘贴可按
+[VF2 与 LS2K1000LA 串口输入延迟修复和验收](board-console-input-latency.md)执行统一量化测试。
 
 ## 6. 当前验收边界
 
