@@ -120,15 +120,41 @@ pub mod context {
 pub use axcpu::asm;
 #[cfg(feature = "uspace")]
 pub use axcpu::uspace;
-pub use axplat::init::init_later;
-#[cfg(feature = "smp")]
-pub use axplat::init::{init_early_secondary, init_later_secondary};
 
 /// Initializes the platform and boot argument.
 /// This function should be called as early as possible.
-pub fn init_early(cpu_id: usize, arg: usize) {
-    dtb::init(arg, cpu_id);
-    axplat::init::init_early(cpu_id, arg);
+pub fn init_early(hardware_cpu_id: usize, arg: usize) {
+    dtb::init(arg, hardware_cpu_id);
+    axplat::init::init_early(hardware_cpu_id, arg);
+}
+
+/// Initializes the platform for the primary CPU after topology discovery.
+pub fn init_later(cpu_id: usize, arg: usize) {
+    axplat::init::init_later(platform_cpu_id(cpu_id), arg);
+}
+
+/// Initializes early platform state for a secondary logical CPU.
+#[cfg(feature = "smp")]
+pub fn init_early_secondary(cpu_id: usize) {
+    axplat::init::init_early_secondary(platform_cpu_id(cpu_id));
+}
+
+/// Initializes late platform state for a secondary logical CPU.
+#[cfg(feature = "smp")]
+pub fn init_later_secondary(cpu_id: usize) {
+    axplat::init::init_later_secondary(platform_cpu_id(cpu_id));
+}
+
+#[inline]
+fn platform_cpu_id(cpu_id: usize) -> usize {
+    #[cfg(target_arch = "riscv64")]
+    {
+        cpu_hardware_id(cpu_id)
+    }
+    #[cfg(not(target_arch = "riscv64"))]
+    {
+        cpu_id
+    }
 }
 
 /// Returns the number of CPUs available at runtime.

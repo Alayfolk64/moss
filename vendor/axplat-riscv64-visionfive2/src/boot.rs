@@ -31,13 +31,8 @@ unsafe fn init_boot_page_table() {
 
 unsafe fn init_mmu() {
     unsafe {
-        // This runs before axruntime clears `.bss`. Do not use
-        // `axcpu::asm::write_kernel_page_table` here: the current axcpu version
-        // consults callback state stored in `.bss`, which is not initialized
-        // yet when entered directly from U-Boot.
-        let root = pa!(&raw const BOOT_PT_SV39 as usize).as_usize();
-        riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, root >> 12);
-        riscv::asm::sfence_vma_all();
+        axcpu::asm::write_boot_page_table(pa!(&raw const BOOT_PT_SV39 as usize));
+        axcpu::asm::flush_tlb(None);
     }
 }
 

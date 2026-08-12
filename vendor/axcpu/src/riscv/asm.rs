@@ -74,8 +74,10 @@ pub fn halt() {
 
 /// Reads the current page table root register for user space (`satp`).
 ///
-/// RISC-V does not have a separate page table root register for user and
-/// kernel space, so this operation is the same as [`read_kernel_page_table`].
+/// RISC-V uses the same hardware register for temporary boot, user, and kernel
+/// page tables. This operation reports the root active on the current CPU;
+/// [`read_kernel_page_table`] instead reports the globally published final
+/// kernel root.
 ///
 /// Returns the physical address of the page table root.
 #[inline]
@@ -83,28 +85,71 @@ pub fn read_user_page_table() -> PhysAddr {
     pa!(satp::read().ppn() << 12)
 }
 
-/// Reads the current page table root register for kernel space (`satp`).
+/// Reads the globally published kernel page table root.
 ///
 /// RISC-V does not have a separate hardware register for the kernel page table,
-/// so the root last installed by [`write_kernel_page_table`] is kept in
-/// software.
+/// so the final kernel root is published once in software before kernel tasks
+/// are created. The temporary boot page table is deliberately not visible
+/// through this interface.
 ///
 /// Returns the physical address of the page table root.
 #[inline]
 pub fn read_kernel_page_table() -> PhysAddr {
     let root = KERNEL_PAGE_TABLE_ROOT.load(Ordering::Acquire);
-    if root == 0 {
-        read_user_page_table()
-    } else {
-        PhysAddr::from(root)
+    assert_ne!(root, 0, "kernel page table root has not been published");
+    PhysAddr::from(root)
+}
+
+/// Installs a temporary boot page table in the current CPU's `satp` register.
+///
+/// This operation neither publishes a kernel page table root nor invokes the
+/// page-table switch callback. It is intended for the early boot path before
+/// per-CPU state and the final kernel address space are available.
+///
+/// Note that the TLB is **NOT** flushed after this operation.
+///
+/// # Safety
+///
+/// The given root must map the code and data needed to continue early boot on
+/// the current CPU.
+#[inline]
+pub unsafe fn write_boot_page_table(root_paddr: PhysAddr) {
+    let root = root_paddr.as_usize();
+    assert_ne!(root, 0, "boot page table root must not be zero");
+    unsafe { satp::set(satp::Mode::Sv39, 0, root >> 12) };
+}
+
+/// Publishes the final kernel page table root exactly once.
+///
+/// This operation records the root in software but does not modify any CPU's
+/// `satp` register. Only the primary CPU's memory-management initialization may
+/// call it.
+///
+/// # Safety
+///
+/// The given root must remain a valid kernel page table for the rest of the
+/// current boot lifecycle.
+#[inline]
+pub unsafe fn publish_kernel_page_table(root_paddr: PhysAddr) {
+    let root = root_paddr.as_usize();
+    assert_ne!(root, 0, "kernel page table root must not be zero");
+    if let Err(published) = KERNEL_PAGE_TABLE_ROOT.compare_exchange(
+        0,
+        root,
+        Ordering::Release,
+        Ordering::Acquire,
+    ) {
+        panic!(
+            "kernel page table root was already published: published={published:#x}, attempted={root:#x}"
+        );
     }
 }
 
 /// Writes the register to update the current page table root for user space
 /// (`satp`).
 ///
-/// RISC-V does not have a separate page table root register for user
-/// and kernel space, so this operation is the same as [`write_kernel_page_table`].
+/// Unlike [`write_kernel_page_table`], this operation accepts roots belonging
+/// to user address spaces and does not require the final kernel root.
 ///
 /// Note that the TLB is **NOT** flushed after this operation.
 ///
@@ -122,10 +167,12 @@ pub unsafe fn write_user_page_table(root_paddr: PhysAddr) {
     unsafe { satp::set(satp::Mode::Sv39, 0, root_paddr.as_usize() >> 12) };
 }
 
-/// Records and installs the kernel page table root in `satp`.
+/// Installs the globally published kernel page table root in the current CPU's
+/// `satp` register.
 ///
-/// RISC-V does not have a separate page table root register for user
-/// and kernel space, so this operation is the same as [`write_user_page_table`].
+/// The root must first be published by [`publish_kernel_page_table`]. This
+/// operation is local to the current CPU and does not change the published
+/// root.
 ///
 /// Note that the TLB is **NOT** flushed after this operation.
 ///
@@ -134,7 +181,11 @@ pub unsafe fn write_user_page_table(root_paddr: PhysAddr) {
 /// This function is unsafe as it changes the virtual memory address space.
 #[inline]
 pub unsafe fn write_kernel_page_table(root_paddr: PhysAddr) {
-    KERNEL_PAGE_TABLE_ROOT.store(root_paddr.as_usize(), Ordering::Release);
+    let published = read_kernel_page_table();
+    assert_eq!(
+        root_paddr, published,
+        "attempted to install a page table other than the published kernel root"
+    );
     unsafe { write_user_page_table(root_paddr) };
 }
 

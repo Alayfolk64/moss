@@ -9,19 +9,19 @@ pub type IrqHandler = handler_table::Handler;
 pub enum IpiTarget {
     /// Send to the current CPU.
     Current {
-        /// The CPU ID of the current CPU.
+        /// The hardware ID of the current CPU.
         cpu_id: usize,
     },
     /// Send to a specific CPU.
     Other {
-        /// The CPU ID of the target CPU.
+        /// The hardware ID of the target CPU.
         cpu_id: usize,
     },
     /// Send to all other CPUs.
     AllExceptCurrent {
-        /// The CPU ID of the current CPU.
+        /// The hardware ID of the current CPU.
         cpu_id: usize,
-        /// The total number of CPUs.
+        /// The number of densely numbered hardware CPUs.
         cpu_num: usize,
     },
 }

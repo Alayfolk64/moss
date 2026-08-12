@@ -79,10 +79,8 @@ fn call_handler(slot: &AtomicPtr<()>) {
     }
 }
 
-fn send_ipi_to_logical_cpu(cpu_id: usize) {
-    // The JH7110's hart 0 has no S-mode. Moss logical CPU N maps to physical
-    // hart N+1; the initial single-core target therefore sends to hart 1.
-    let result = sbi_rt::send_ipi(HartMask::from_mask_base(1 << (cpu_id + 1), 0));
+fn send_ipi_to_hart(hart_id: usize) {
+    let result = sbi_rt::send_ipi(HartMask::from_mask_base(1, hart_id));
     if result.is_err() {
         warn!("send_ipi failed: {result:?}");
     }
@@ -201,12 +199,12 @@ impl IrqIf for IrqIfImpl {
     fn send_ipi(_irq_num: usize, target: IpiTarget) {
         match target {
             IpiTarget::Current { cpu_id } | IpiTarget::Other { cpu_id } => {
-                send_ipi_to_logical_cpu(cpu_id);
+                send_ipi_to_hart(cpu_id);
             }
             IpiTarget::AllExceptCurrent { cpu_id, cpu_num } => {
                 for target_cpu in 0..cpu_num {
                     if target_cpu != cpu_id {
-                        send_ipi_to_logical_cpu(target_cpu);
+                        send_ipi_to_hart(target_cpu);
                     }
                 }
             }

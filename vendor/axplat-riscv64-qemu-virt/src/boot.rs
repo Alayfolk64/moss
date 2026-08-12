@@ -37,7 +37,7 @@ unsafe fn init_boot_page_table(dtb: usize) {
 
 unsafe fn init_mmu() {
     unsafe {
-        axcpu::asm::write_kernel_page_table(pa!(&raw const BOOT_PT_SV39 as usize));
+        axcpu::asm::write_boot_page_table(pa!(&raw const BOOT_PT_SV39 as usize));
         axcpu::asm::flush_tlb(None);
     }
 }

@@ -1,7 +1,7 @@
 use core::{
     num::NonZeroU32,
     ptr::NonNull,
-    sync::atomic::{AtomicPtr, Ordering},
+    sync::atomic::{AtomicPtr, AtomicUsize, Ordering},
 };
 
 use axplat::{
@@ -32,6 +32,9 @@ static TIMER_HANDLER: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
 
 static IPI_HANDLER: AtomicPtr<()> = AtomicPtr::new(core::ptr::null_mut());
 
+static PLIC_CONTEXTS: [AtomicUsize; crate::config::plat::CPU_NUM] =
+    [const { AtomicUsize::new(usize::MAX) }; crate::config::plat::CPU_NUM];
+
 /// The maximum number of IRQs.
 pub const MAX_IRQ_COUNT: usize = 1024;
 
@@ -42,11 +45,21 @@ static PLIC: SpinNoIrq<Plic> = SpinNoIrq::new(unsafe {
 });
 
 fn this_context() -> usize {
-    let hart_id = this_cpu_id();
-    hart_id * 2 + 1 // supervisor context
+    let context = PLIC_CONTEXTS[this_cpu_id()].load(Ordering::Acquire);
+    assert_ne!(context, usize::MAX, "PLIC context is not initialized");
+    context
 }
 
-pub(super) fn init_percpu() {
+pub(super) fn init_percpu(hardware_cpu_id: usize) {
+    // QEMU virt exposes machine and supervisor PLIC contexts for every hart,
+    // in that order. Cache device state by logical CPU, as Linux's PLIC driver
+    // does, instead of deriving a hart context from the logical CPU number.
+    let context = hardware_cpu_id
+        .checked_mul(2)
+        .and_then(|value| value.checked_add(1))
+        .expect("PLIC context overflow");
+    PLIC_CONTEXTS[this_cpu_id()].store(context, Ordering::Release);
+
     // enable soft interrupts, timer interrupts, and external interrupts
     unsafe {
         sie::set_ssoft();
@@ -56,8 +69,22 @@ pub(super) fn init_percpu() {
     PLIC.lock().init_by_context(this_context());
 }
 
+fn send_ipi_to_hart(hart_id: usize) {
+    // SBI v0.2 encodes one arbitrary hart as mask=1 and base=hart_id.
+    let result = sbi_rt::send_ipi(HartMask::from_mask_base(1, hart_id));
+    if result.is_err() {
+        warn!("send_ipi to hart {hart_id} failed: {result:?}");
+    }
+}
+
 macro_rules! with_cause {
-    ($cause: expr, @S_TIMER => $timer_op: expr, @S_SOFT => $ipi_op: expr, @S_EXT => $ext_op: expr, @EX_IRQ => $plic_op: expr $(,)?) => {
+    (
+        $cause:expr, @S_TIMER =>
+        $timer_op:expr, @S_SOFT =>
+        $ipi_op:expr, @S_EXT =>
+        $ext_op:expr, @EX_IRQ =>
+        $plic_op:expr $(,)?
+    ) => {
         match $cause {
             S_TIMER => $timer_op,
             S_SOFT => $ipi_op,
@@ -226,25 +253,11 @@ impl IrqIf for IrqIfImpl {
     /// Sends an inter-processor interrupt (IPI) to the specified target CPU or all CPUs.
     fn send_ipi(_irq_num: usize, target: IpiTarget) {
         match target {
-            IpiTarget::Current { cpu_id } => {
-                let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << cpu_id, 0));
-                if res.is_err() {
-                    warn!("send_ipi failed: {res:?}");
-                }
-            }
-            IpiTarget::Other { cpu_id } => {
-                let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << cpu_id, 0));
-                if res.is_err() {
-                    warn!("send_ipi failed: {res:?}");
-                }
-            }
+            IpiTarget::Current { cpu_id } | IpiTarget::Other { cpu_id } => send_ipi_to_hart(cpu_id),
             IpiTarget::AllExceptCurrent { cpu_id, cpu_num } => {
                 for i in 0..cpu_num {
                     if i != cpu_id {
-                        let res = sbi_rt::send_ipi(HartMask::from_mask_base(1 << i, 0));
-                        if res.is_err() {
-                            warn!("send_ipi_all_others failed: {res:?}");
-                        }
+                        send_ipi_to_hart(i);
                     }
                 }
             }

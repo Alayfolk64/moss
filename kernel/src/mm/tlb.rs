@@ -46,6 +46,15 @@ mod riscv64 {
         ACTIVE_PAGE_TABLE_ROOTS[cpu].store(root_paddr.as_usize(), Ordering::Release);
     }
 
+    fn remote_sfence_vma(hart_mask: usize, hart_mask_base: usize, start: usize, size: usize) {
+        let result = sbi_rt::remote_sfence_vma(
+            HartMask::from_mask_base(hart_mask, hart_mask_base),
+            start,
+            size,
+        );
+        assert!(!result.is_err(), "SBI remote SFENCE.VMA failed: {result:?}");
+    }
+
     pub(super) fn flush_tlb_on_active_cpus(root_paddr: PhysAddr, vaddr: Option<VirtAddr>) {
         // Moss currently uses ASID 0 and performs a local full TLB flush
         // whenever a CPU changes page-table roots. Therefore a CPU can retain
@@ -63,7 +72,16 @@ mod riscv64 {
         }
 
         let cpu_num = axhal::cpu_num();
+        let mask_width = usize::BITS as usize;
         let (start, size) = vaddr.map_or((0, usize::MAX), |addr| (addr.as_usize(), PAGE_SIZE_4K));
+
+        // Follow Linux's SBI v0.2 RFENCE batching: select CPUs in the logical
+        // namespace, translate each one to a firmware hart ID, then emit one
+        // or more XLEN-wide HartMasks. Hart IDs need not be dense or ordered;
+        // in particular, the OpenSBI boot hart occupies logical CPU slot zero.
+        let mut hart_mask = 0usize;
+        let mut hart_mask_base = 0usize;
+        let mut highest_hart = 0usize;
 
         for cpu in 0..cpu_num {
             if cpu == current
@@ -73,13 +91,31 @@ mod riscv64 {
                 continue;
             }
 
-            // SBI masks address physical hart IDs, whereas Moss schedules with
-            // dense logical CPU IDs. They differ on JH7110 because hart 0 is a
-            // non-S-mode management core.
             let hart_id = axhal::cpu_hardware_id(cpu);
-            let result =
-                sbi_rt::remote_sfence_vma(HartMask::from_mask_base(1, hart_id), start, size);
-            assert!(!result.is_err(), "SBI remote SFENCE.VMA failed: {result:?}");
+            if hart_mask != 0 {
+                let too_far_below = hart_id < highest_hart && highest_hart - hart_id >= mask_width;
+                let too_far_above =
+                    hart_id >= hart_mask_base && hart_id - hart_mask_base >= mask_width;
+                if too_far_below || too_far_above {
+                    remote_sfence_vma(hart_mask, hart_mask_base, start, size);
+                    hart_mask = 0;
+                } else if hart_id < hart_mask_base {
+                    hart_mask <<= hart_mask_base - hart_id;
+                    hart_mask_base = hart_id;
+                }
+            }
+
+            if hart_mask == 0 {
+                hart_mask_base = hart_id;
+                highest_hart = hart_id;
+            } else {
+                highest_hart = highest_hart.max(hart_id);
+            }
+            hart_mask |= 1usize << (hart_id - hart_mask_base);
+        }
+
+        if hart_mask != 0 {
+            remote_sfence_vma(hart_mask, hart_mask_base, start, size);
         }
     }
 }

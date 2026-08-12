@@ -11,8 +11,7 @@ pub trait InitIf {
     ///
     /// # Arguments
     ///
-    /// * `cpu_id` is the logical CPU ID (0, 1, ..., N-1, N is the number of CPU
-    /// cores on the platform).
+    /// * `cpu_id` is the hardware CPU ID reported by firmware.
     /// * `arg` is passed from the bootloader (typically the device tree blob
     /// address).
     ///
@@ -43,8 +42,7 @@ pub trait InitIf {
     ///
     /// # Arguments
     ///
-    /// * `cpu_id` is the logical CPU ID (0, 1, ..., N-1, N is the number of CPU
-    /// cores on the platform).
+    /// * `cpu_id` is the hardware CPU ID reported by firmware.
     /// * `arg` is passed from the bootloader (typically the device tree blob
     /// address).
     ///

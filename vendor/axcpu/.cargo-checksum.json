@@ -24,7 +24,7 @@
     "src/loongarch64/unaligned.rs": "43be5f97249efee52de8e83626e52c3eac83c4859b3143252458cb138a00479f",
     "src/loongarch64/user_copy.S": "e5f8c55c5641a0b01e1387ac174ec0078c20aaac12e2f6c508f16e317f9e6017",
     "src/loongarch64/uspace.rs": "29c19523e6bd691b4ca3a4a7532be4512e3a562ac033d859f810cb21894d72e1",
-    "src/riscv/asm.rs": "1fea5e3e237f21c8ede461b997e86c10720ca8494adc380f8311a2d08261fb8d",
+    "src/riscv/asm.rs": "3b43bba33c59764306984ae1de8f5903816669650f3bb8a7da2ecb3ea58b40f8",
     "src/riscv/context.rs": "8bdefbfded39dc1c946b63f37fbed901066ccfae11a756150f3a6554adba853f",
     "src/riscv/init.rs": "70a8cf22b61e39f00fb81587d6fd10fdaa94f02fa2daa2b5b0ceb8c892f29b48",
     "src/riscv/macros.rs": "a626fa5e8ae52d71c1db2b860a355223551357facbffd43583882827e1109cff",
