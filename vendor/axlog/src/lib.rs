@@ -217,13 +217,113 @@ impl Log for Logger {
     fn flush(&self) {}
 }
 
+#[cfg(not(feature = "std"))]
+struct RecordLockState {
+    owner_cpu: Option<usize>,
+    owner_task: Option<u64>,
+    depth: usize,
+}
+
+#[cfg(not(feature = "std"))]
+impl RecordLockState {
+    const fn new() -> Self {
+        Self {
+            owner_cpu: None,
+            owner_task: None,
+            depth: 0,
+        }
+    }
+}
+
+/// Serializes complete log records without keeping local IRQs disabled while
+/// the 115200-baud UART shifts the record out.
+///
+/// The outer guard disables task preemption but keeps IRQs enabled. An IRQ may
+/// therefore nest using the interrupted task's identity, while other CPUs spin
+/// between short metadata critical sections. This lets console RX continue and
+/// prevents the record owner from migrating while its CPU ownership is stored.
+#[cfg(not(feature = "std"))]
+struct RecordLock(kspin::SpinNoIrq<RecordLockState>);
+
+#[cfg(not(feature = "std"))]
+impl RecordLock {
+    const fn new() -> Self {
+        Self(kspin::SpinNoIrq::new(RecordLockState::new()))
+    }
+
+    fn lock(&self) -> RecordLockGuard<'_> {
+        let cpu = call_interface!(LogIf::current_cpu_id);
+        let task = call_interface!(LogIf::current_task_id);
+        loop {
+            let mut state = self.0.lock();
+            if state.depth == 0 {
+                state.owner_cpu = cpu;
+                state.owner_task = task;
+                state.depth = 1;
+                return RecordLockGuard { lock: self };
+            }
+            // IRQs observe the interrupted task ID and can reenter. Before
+            // task initialization, CPU identity is the best available owner.
+            if (task.is_some() && state.owner_task == task)
+                || (task.is_none() && cpu.is_some() && state.owner_cpu == cpu)
+                || (cpu.is_none()
+                    && task.is_none()
+                    && state.owner_cpu.is_none()
+                    && state.owner_task.is_none())
+            {
+                state.depth += 1;
+                return RecordLockGuard { lock: self };
+            }
+            drop(state);
+            core::hint::spin_loop();
+        }
+    }
+}
+
+#[cfg(not(feature = "std"))]
+struct RecordLockGuard<'a> {
+    lock: &'a RecordLock,
+}
+
+#[cfg(not(feature = "std"))]
+impl Drop for RecordLockGuard<'_> {
+    fn drop(&mut self) {
+        let mut state = self.lock.0.lock();
+        assert!(state.depth != 0, "console record lock depth underflow");
+        state.depth -= 1;
+        if state.depth == 0 {
+            state.owner_cpu = None;
+            state.owner_task = None;
+        }
+    }
+}
+
+/// Runs one normal console write under the shared console record lock.
+///
+/// Interactive terminal echo deliberately bypasses this lock so it can appear
+/// between characters of a long normal write. IRQ writes remain reentrant and
+/// therefore cannot deadlock on the interrupted record owner.
+pub fn with_console_lock<T>(write: impl FnOnce() -> T) -> T {
+    #[cfg(feature = "std")]
+    {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = LOCK.lock().unwrap();
+        write()
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        static LOCK: RecordLock = RecordLock::new();
+        // Keep the owner on this CPU while allowing UART RX interrupts between
+        // physical characters of a synchronous console write.
+        let _preempt_guard = kernel_guard::NoPreempt::new();
+        let _guard = LOCK.lock();
+        write()
+    }
+}
+
 /// Prints the formatted string to the console.
 pub fn print_fmt(args: fmt::Arguments) -> fmt::Result {
-    use kspin::SpinNoIrq; // TODO: more efficient
-    static LOCK: SpinNoIrq<()> = SpinNoIrq::new(());
-
-    let _guard = LOCK.lock();
-    Logger.write_fmt(args)
+    with_console_lock(|| Logger.write_fmt(args))
 }
 
 #[doc(hidden)]

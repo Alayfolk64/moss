@@ -256,6 +256,12 @@ pub(crate) struct AxRunQueue {
     running_task: AtomicBool,
     /// Coalesces repeated remote wakeup IPIs while this CPU is idle.
     idle_kick_pending: AtomicBool,
+    /// Records a latency-sensitive task queued ahead of the current task.
+    #[cfg(feature = "preempt")]
+    latency_resched_pending: AtomicBool,
+    /// Coalesces in-flight latency-sensitive IPIs for a remote CPU.
+    #[cfg(all(feature = "smp", feature = "ipi", feature = "preempt"))]
+    resched_ipi_in_flight: AtomicBool,
 }
 
 /// A reference to the run queue with specific guard.
@@ -334,12 +340,17 @@ impl<G: BaseGuard> AxRunQueueRef<'_, G> {
             let cpu_id = self.inner.cpu_id;
             debug!("task unblock: {task_id_name} on run_queue {cpu_id}");
             #[cfg(all(feature = "smp", feature = "ipi"))]
-            self.inner.kick_if_idle();
-            // Note: when the task is unblocked on another CPU's run queue,
-            // we just ingiore the `resched` flag.
-            if resched && cpu_id == this_cpu_id() {
-                #[cfg(feature = "preempt")]
-                crate::current().set_preempt_pending(true);
+            if !resched || !cfg!(feature = "preempt") {
+                self.inner.kick_if_idle();
+            }
+            if resched {
+                if cpu_id == this_cpu_id() {
+                    #[cfg(feature = "preempt")]
+                    crate::current().set_preempt_pending(true);
+                } else {
+                    #[cfg(all(feature = "smp", feature = "ipi", feature = "preempt"))]
+                    self.inner.request_reschedule_ipi();
+                }
             }
         }
     }
@@ -422,9 +433,30 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
             can_preempt
         );
         if can_preempt {
-            self.inner
-                .put_task_with_state(curr.clone(), TaskState::Running, true);
-            self.inner.resched();
+            if self
+                .inner
+                .latency_resched_pending
+                .load(Ordering::Acquire)
+            {
+                // Pick the latency-sensitive task before putting an RR task
+                // with time remaining back at the front. Ordinary timer and
+                // driver preemption retain the scheduler's original policy.
+                if let Some(next) = self.inner.pick_next_ready_task() {
+                    let enqueued = self.inner.put_task_with_state(
+                        curr.clone(),
+                        TaskState::Running,
+                        true,
+                    );
+                    assert!(enqueued || curr.is_idle());
+                    self.inner.switch_to(crate::current(), next);
+                } else {
+                    curr.set_preempt_pending(false);
+                }
+            } else {
+                self.inner
+                    .put_task_with_state(curr.clone(), TaskState::Running, true);
+                self.inner.resched();
+            }
         } else {
             curr.set_preempt_pending(true);
         }
@@ -524,6 +556,10 @@ impl AxRunQueue {
             ready_tasks: AtomicUsize::new(1),
             running_task: AtomicBool::new(running_task),
             idle_kick_pending: AtomicBool::new(false),
+            #[cfg(feature = "preempt")]
+            latency_resched_pending: AtomicBool::new(false),
+            #[cfg(all(feature = "smp", feature = "ipi", feature = "preempt"))]
+            resched_ipi_in_flight: AtomicBool::new(false),
         }
     }
 
@@ -538,6 +574,26 @@ impl AxRunQueue {
             && !self.running_task.load(Ordering::Acquire)
             && self
                 .idle_kick_pending
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+        {
+            axhal::irq::send_ipi(
+                axhal::irq::IPI_IRQ,
+                axhal::irq::IpiTarget::Other {
+                    cpu_id: self.cpu_id,
+                },
+            );
+        }
+    }
+
+    /// Wakes a latency-sensitive task on a busy remote CPU without waiting
+    /// for its next 10 ms scheduler tick.
+    #[cfg(all(feature = "smp", feature = "ipi", feature = "preempt"))]
+    fn request_reschedule_ipi(&self) {
+        if self.cpu_id != this_cpu_id()
+            && self.latency_resched_pending.load(Ordering::Acquire)
+            && self
+                .resched_ipi_in_flight
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
                 .is_ok()
         {
@@ -588,7 +644,16 @@ impl AxRunQueue {
             // TODO: priority
             #[cfg(feature = "smp")]
             task.set_cpu_id(self.cpu_id as _);
-            self.scheduler.lock().put_prev_task(task, preempt);
+            let mut scheduler = self.scheduler.lock();
+            // Publish the reschedule request while holding the scheduler lock.
+            // A target CPU that has already picked this task clears the flag
+            // under the same lock, avoiding a stale IPI that preempts it again.
+            #[cfg(feature = "preempt")]
+            if current_state == TaskState::Blocked && preempt {
+                self.latency_resched_pending
+                    .store(true, Ordering::Release);
+            }
+            scheduler.put_prev_task(task, preempt);
             self.ready_tasks.fetch_add(1, Ordering::Relaxed);
             true
         } else {
@@ -604,8 +669,7 @@ impl AxRunQueue {
         // becomes visible below or sends another IPI.
         self.idle_kick_pending.store(false, Ordering::Release);
 
-        let next = if let Some(next) = self.scheduler.lock().pick_next_task() {
-            self.ready_tasks.fetch_sub(1, Ordering::Relaxed);
+        let next = if let Some(next) = self.pick_next_ready_task() {
             next
         } else {
             unsafe {
@@ -620,6 +684,27 @@ impl AxRunQueue {
             next.state()
         );
         self.switch_to(crate::current(), next);
+    }
+
+    /// Removes the next ready task while atomically consuming any urgent
+    /// wake-up that this scheduler decision satisfies.
+    fn pick_next_ready_task(&mut self) -> Option<AxTaskRef> {
+        let next = {
+            let mut scheduler = self.scheduler.lock();
+            let next = scheduler.pick_next_task();
+            if next.is_some() {
+                #[cfg(feature = "preempt")]
+                self.latency_resched_pending
+                    .store(false, Ordering::Release);
+                #[cfg(all(feature = "smp", feature = "ipi", feature = "preempt"))]
+                self.resched_ipi_in_flight.store(false, Ordering::Release);
+            }
+            next
+        };
+        if next.is_some() {
+            self.ready_tasks.fetch_sub(1, Ordering::Relaxed);
+        }
+        next
     }
 
     fn switch_to(&mut self, prev_task: CurrentTask, next_task: AxTaskRef) {
@@ -687,6 +772,25 @@ impl AxRunQueue {
             // to indicate that it has finished its scheduling process and no longer running on this CPU.
             #[cfg(feature = "smp")]
             clear_prev_task_on_cpu();
+        }
+    }
+}
+
+#[cfg(feature = "ipi")]
+pub(crate) fn on_reschedule_ipi() {
+    #[cfg(all(feature = "smp", feature = "preempt"))]
+    {
+        let run_queue = current_run_queue::<kernel_guard::NoPreemptIrqSave>();
+        run_queue
+            .inner
+            .resched_ipi_in_flight
+            .store(false, Ordering::Release);
+        if run_queue
+            .inner
+            .latency_resched_pending
+            .load(Ordering::Acquire)
+        {
+            run_queue.current_task.set_preempt_pending(true);
         }
     }
 }

@@ -23,13 +23,15 @@ pub use time::*;
 struct AxWaker {
     task: WeakAxTaskRef,
     woke: SpinNoIrq<bool>,
+    reschedule_on_wake: bool,
 }
 
 impl AxWaker {
-    fn new(task: &AxTaskRef) -> Arc<Self> {
+    fn new(task: &AxTaskRef, reschedule_on_wake: bool) -> Arc<Self> {
         Arc::new(AxWaker {
             task: Arc::downgrade(task),
             woke: SpinNoIrq::new(false),
+            reschedule_on_wake,
         })
     }
 }
@@ -42,7 +44,8 @@ impl Wake for AxWaker {
     fn wake_by_ref(self: &Arc<Self>) {
         if let Some(task) = self.task.upgrade() {
             *self.woke.lock() = true;
-            select_run_queue::<NoPreemptIrqSave>(&task).unblock_task(task, false);
+            select_run_queue::<NoPreemptIrqSave>(&task)
+                .unblock_task(task, self.reschedule_on_wake);
         }
     }
 }
@@ -52,6 +55,19 @@ impl Wake for AxWaker {
 /// Note that this doesn't handle interruption and is not recommended for direct
 /// use in most cases.
 pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
+    block_on_with_wake_policy(f, false)
+}
+
+/// Blocks the current task and schedules it promptly after a wake-up.
+///
+/// This is reserved for latency-sensitive kernel workers such as console RX.
+/// Routine futures should use [`block_on`] to avoid unnecessary preemption and
+/// cross-CPU reschedule IPIs.
+pub fn block_on_latency_sensitive<F: IntoFuture>(f: F) -> F::Output {
+    block_on_with_wake_policy(f, true)
+}
+
+fn block_on_with_wake_policy<F: IntoFuture>(f: F, reschedule_on_wake: bool) -> F::Output {
     let mut fut = pin!(f.into_future());
 
     let curr = current();
@@ -60,7 +76,7 @@ pub fn block_on<F: IntoFuture>(f: F) -> F::Output {
     let task = curr.clone();
     let may_park = crate::block_context::block_on_may_park(task.is_idle());
 
-    let axwaker = AxWaker::new(&task);
+    let axwaker = AxWaker::new(&task, reschedule_on_wake);
     let waker = Waker::from(axwaker.clone());
     let mut cx = Context::from_waker(&waker);
 

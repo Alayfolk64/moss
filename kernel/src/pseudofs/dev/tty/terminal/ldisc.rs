@@ -9,7 +9,7 @@ use core::{
 
 use axerrno::{AxError, AxResult};
 use axpoll::{IoEvents, PollSet, Pollable};
-use axtask::future::{block_on, poll_io};
+use axtask::future::{block_on, block_on_latency_sensitive, poll_io};
 use linux_raw_sys::general::{
     ECHOCTL, ECHOK, ICRNL, IGNCR, ISIG, NOFLSH, VEOF, VERASE, VKILL, VMIN, VTIME,
 };
@@ -23,6 +23,7 @@ use super::{Terminal, termios::Termios2};
 use crate::task::send_signal_to_process_group;
 
 const BUF_SIZE: usize = 80;
+const ECHO_BUF_SIZE: usize = BUF_SIZE * 3;
 
 type ReadBuf = Arc<ringbuf::StaticRb<u8, BUF_SIZE>>;
 
@@ -66,6 +67,58 @@ pub trait TtyRead: Send + Sync + 'static {
 }
 pub trait TtyWrite: Send + Sync + 'static {
     fn write(&self, buf: &[u8]);
+
+    /// Writes terminal-generated echo output.
+    ///
+    /// Devices may override this to let interactive echo pass a long normal
+    /// write at a safe hardware boundary. PTYs retain ordinary write ordering.
+    fn write_echo(&self, buf: &[u8]) {
+        self.write(buf);
+    }
+}
+
+struct EchoBuffer {
+    bytes: [u8; ECHO_BUF_SIZE],
+    len: usize,
+}
+
+impl EchoBuffer {
+    const fn new() -> Self {
+        Self {
+            bytes: [0; ECHO_BUF_SIZE],
+            len: 0,
+        }
+    }
+
+    fn extend(&mut self, bytes: &[u8]) {
+        // InputReader consumes at most BUF_SIZE input bytes per poll and each
+        // byte expands to at most the three-byte erase sequence.
+        assert!(self.len + bytes.len() <= self.bytes.len());
+        self.bytes[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+        self.len += bytes.len();
+    }
+
+    fn flush<W: TtyWrite>(&mut self, writer: &W) {
+        if self.len != 0 {
+            writer.write_echo(&self.bytes[..self.len]);
+            self.len = 0;
+        }
+    }
+}
+
+fn buffer_echo_char(term: &Termios2, ch: u8, output: &mut EchoBuffer) {
+    match ch {
+        b'\n' => output.extend(b"\n"),
+        b'\r' => output.extend(b"\r\n"),
+        ch if ch == term.special_char(VERASE) => output.extend(b"\x08 \x08"),
+        ch if ch == b' ' || ch.is_ascii_graphic() => output.extend(&[ch]),
+        ch if ch.is_ascii_control() && term.has_lflag(ECHOCTL) => {
+            output.extend(&[b'^', (ch + 0x40)]);
+        }
+        other => {
+            warn!("Ignored echo char: {other:#x}");
+        }
+    }
 }
 
 struct InputReader<R, W> {
@@ -85,6 +138,7 @@ struct InputReader<R, W> {
 }
 impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
     pub fn poll(&mut self) -> bool {
+        let mut echo = EchoBuffer::new();
         if self.clear_line_buf.swap(false, Ordering::Relaxed) {
             self.line_buf.clear();
         }
@@ -125,13 +179,13 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
 
             if self.check_send_signal(&term, ch) {
                 if term.echo() {
-                    self.output_char(&term, ch);
+                    buffer_echo_char(&term, ch, &mut echo);
                 }
                 // ISIG characters are terminal controls, not input bytes.
                 continue;
             }
             if term.echo() {
-                self.output_char(&term, ch);
+                buffer_echo_char(&term, ch, &mut echo);
             }
             if !term.canonical() {
                 self.buf_tx.try_push(ch).unwrap();
@@ -165,6 +219,7 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
             }
         }
 
+        echo.flush(&self.writer);
         sent > 0
     }
 
@@ -197,27 +252,68 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
         }
         true
     }
-
-    fn output_char(&self, term: &Termios2, ch: u8) {
-        match ch {
-            b'\n' => self.writer.write(b"\n"),
-            b'\r' => self.writer.write(b"\r\n"),
-            ch if ch == term.special_char(VERASE) => self.writer.write(b"\x08 \x08"),
-            ch if ch == b' ' || ch.is_ascii_graphic() => self.writer.write(&[ch]),
-            ch if ch.is_ascii_control() && term.has_lflag(ECHOCTL) => {
-                self.writer.write(&[b'^', (ch + 0x40)]);
-            }
-            other => {
-                warn!("Ignored echo char: {other:#x}");
-            }
-        }
-    }
 }
 
 struct SimpleReader<R> {
     reader: R,
     read_buf: [u8; BUF_SIZE],
     buf_tx: CachingProd<ReadBuf>,
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::{vec, vec::Vec};
+
+    use kspin::SpinNoIrq;
+    use linux_raw_sys::general::{VERASE, VINTR};
+
+    use super::{EchoBuffer, TtyWrite, buffer_echo_char};
+    use crate::pseudofs::dev::tty::terminal::termios::Termios2;
+
+    struct RecordingWriter(SpinNoIrq<Vec<Vec<u8>>>);
+
+    impl Default for RecordingWriter {
+        fn default() -> Self {
+            Self(SpinNoIrq::new(Vec::new()))
+        }
+    }
+
+    impl TtyWrite for RecordingWriter {
+        fn write(&self, buf: &[u8]) {
+            self.0.lock().push(buf.to_vec());
+        }
+    }
+
+    #[test]
+    fn batches_printable_and_control_echo_into_one_write() {
+        let term = Termios2::default();
+        let writer = RecordingWriter::default();
+        let mut output = EchoBuffer::new();
+
+        buffer_echo_char(&term, b'a', &mut output);
+        buffer_echo_char(&term, b'\n', &mut output);
+        buffer_echo_char(&term, term.special_char(VERASE), &mut output);
+        buffer_echo_char(&term, term.special_char(VINTR), &mut output);
+        output.flush(&writer);
+
+        assert_eq!(*writer.0.lock(), vec![b"a\n\x08 \x08^C".to_vec()]);
+    }
+
+    #[test]
+    fn holds_the_worst_case_input_batch_without_partial_writes() {
+        let term = Termios2::default();
+        let writer = RecordingWriter::default();
+        let mut output = EchoBuffer::new();
+
+        for _ in 0..super::BUF_SIZE {
+            buffer_echo_char(&term, term.special_char(VERASE), &mut output);
+        }
+        output.flush(&writer);
+
+        let writes = writer.0.lock();
+        assert_eq!(writes.len(), 1);
+        assert_eq!(writes[0].len(), super::ECHO_BUF_SIZE);
+    }
 }
 impl<R: TtyRead> SimpleReader<R> {
     pub fn poll(&mut self) {
@@ -309,7 +405,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
                         let poll_rx = poll_rx.clone();
                         let poll_tx = poll_tx.clone();
                         move || {
-                            block_on(poll_fn(|cx| {
+                            block_on_latency_sensitive(poll_fn(|cx| {
                                 while reader.poll() {
                                     poll_rx.wake();
                                 }

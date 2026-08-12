@@ -47,6 +47,9 @@ default-features = true
 [dependencies.crate_interface]
 version = "0.1.4"
 
+[dependencies.kernel_guard]
+version = "0.1"
+
 [dependencies.kspin]
 version = "0.1"
 

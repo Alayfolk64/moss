@@ -509,11 +509,10 @@ dependencies = [
 [[package]]
 name = "axlog"
 version = "0.2.2-preview.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d061cd7ec45902f758710ab17ca30a01d7aa9af1455d6eb2232aa217456184"
 dependencies = [
  "cfg-if",
  "crate_interface",
+ "kernel_guard",
  "kspin",
  "log",
 ]
@@ -776,8 +775,6 @@ dependencies = [
 [[package]]
 name = "axtask"
 version = "0.2.2-preview.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ea1ee808218981a12bbcfd0322d88f576d88201b6ab029c5bf1a2036383ff68"
 dependencies = [
  "axconfig",
  "axerrno 0.2.2",

@@ -20,6 +20,13 @@ impl TtyRead for Console {
 }
 impl TtyWrite for Console {
     fn write(&self, buf: &[u8]) {
+        axlog::with_console_lock(|| axhal::console::write_bytes(buf));
+    }
+
+    fn write_echo(&self, buf: &[u8]) {
+        // Echo is latency-sensitive and may be inserted between physical UART
+        // characters of a normal write. The platform MMIO lock still prevents
+        // register races, while ordinary TTY writers remain serialized above.
         axhal::console::write_bytes(buf);
     }
 }

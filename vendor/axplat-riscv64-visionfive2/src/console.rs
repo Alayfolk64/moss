@@ -118,14 +118,14 @@ struct ConsoleIfImpl;
 #[impl_plat_interface]
 impl ConsoleIf for ConsoleIfImpl {
     fn write_bytes(bytes: &[u8]) {
-        // Keep one userspace/kernel write contiguous on SMP. Locking once per
-        // byte lets writers on different U74 cores splice their text together.
-        let mut uart = UART.lock();
+        // Normal TTY writes and log records are serialized by their callers.
+        // Keep the IRQ-off MMIO section to one physical character so an RX IRQ
+        // or high-priority echo can run between characters of a long write.
         for &byte in bytes {
             if byte == b'\n' {
-                uart.port.send_raw(b'\r');
+                UART.lock().port.send_raw(b'\r');
             }
-            uart.port.send_raw(byte);
+            UART.lock().port.send_raw(byte);
         }
     }
 

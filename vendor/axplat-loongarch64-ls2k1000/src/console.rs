@@ -160,12 +160,14 @@ struct ConsoleIfImpl;
 #[impl_plat_interface]
 impl ConsoleIf for ConsoleIfImpl {
     fn write_bytes(bytes: &[u8]) {
-        let uart = UART.lock();
+        // Higher layers serialize normal writes. Releasing the IRQ-safe UART
+        // lock after each character bounds RX IRQ blocking to one character
+        // time at 115200 baud instead of the duration of the whole buffer.
         for &byte in bytes {
             if byte == b'\n' {
-                uart.put(b'\r');
+                UART.lock().put(b'\r');
             }
-            uart.put(byte);
+            UART.lock().put(byte);
         }
     }
 

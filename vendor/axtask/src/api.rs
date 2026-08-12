@@ -348,6 +348,15 @@ pub fn request_reschedule() {
     current().set_preempt_pending(true);
 }
 
+/// Consumes a latency-sensitive reschedule request delivered by an IPI.
+///
+/// The runtime calls this from its IPI handler. The context switch remains
+/// deferred until the outer interrupt preemption guard is released.
+#[cfg(feature = "ipi")]
+pub fn on_reschedule_ipi() {
+    crate::run_queue::on_reschedule_ipi();
+}
+
 /// Current task is going to sleep for the given duration.
 ///
 /// If the feature `irq` is not enabled, it uses busy-wait instead.

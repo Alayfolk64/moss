@@ -445,6 +445,8 @@ fn init_interrupt() {
     #[cfg(feature = "ipi")]
     axhal::irq::register(axhal::irq::IPI_IRQ, || {
         axipi::ipi_handler();
+        #[cfg(feature = "multitask")]
+        axtask::on_reschedule_ipi();
     });
 
     // Prime the first scheduler tick before drivers begin issuing commands
