@@ -197,8 +197,8 @@ pub fn init(args: &[String], envs: &[String]) {
     crate::watchdog::note_progress();
     cx.root_dir()
         .filesystem()
-        .flush()
-        .expect("Failed to flush rootfs");
+        .shutdown()
+        .expect("Failed to finalize rootfs");
     #[cfg(feature = "ls2k1000")]
     crate::watchdog::note_progress();
 

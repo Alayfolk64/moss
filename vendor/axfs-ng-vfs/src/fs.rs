@@ -34,6 +34,16 @@ pub trait FilesystemOps: Send + Sync {
     fn flush(&self) -> VfsResult<()> {
         Ok(())
     }
+
+    /// Finalizes a filesystem before its block device is handed to another
+    /// operating system or the machine is reset.
+    ///
+    /// Most in-memory filesystems need no work beyond a flush.  On-disk
+    /// filesystems can override this hook to update their superblock's clean
+    /// state after all mounts have been detached.
+    fn shutdown(&self) -> VfsResult<()> {
+        self.flush()
+    }
 }
 
 #[derive(Clone)]

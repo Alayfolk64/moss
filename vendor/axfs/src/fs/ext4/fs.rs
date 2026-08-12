@@ -379,4 +379,9 @@ impl FilesystemOps for Ext4Filesystem {
     fn flush(&self) -> VfsResult<()> {
         self.flush_all()
     }
+
+    fn shutdown(&self) -> VfsResult<()> {
+        self.lock().shutdown().map_err(into_vfs_err)?;
+        self.disk.flush().map_err(|_| axfs_ng_vfs::VfsError::Io)
+    }
 }

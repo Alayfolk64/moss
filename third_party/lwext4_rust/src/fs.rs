@@ -45,6 +45,7 @@ pub struct StatFs {
 pub struct Ext4Filesystem<Hal: SystemHal, Dev: BlockDevice> {
     inner: Box<ext4_fs>,
     bdev: Ext4BlockDevice<Dev>,
+    finalized: bool,
     _phantom: PhantomData<Hal>,
 }
 
@@ -69,6 +70,7 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
             let mut result = Self {
                 inner: fs,
                 bdev,
+                finalized: false,
                 _phantom: PhantomData,
             };
             let bd = result.bdev.inner.as_mut();
@@ -287,14 +289,33 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         }
         Ok(())
     }
+
+    /// Flush all cached metadata and mark the ext4 superblock clean.
+    ///
+    /// `Drop` normally performs this transition, but a kernel reset does not
+    /// run destructors for globally referenced filesystems.  The shutdown
+    /// path therefore needs an explicit, idempotent finalization operation.
+    pub fn shutdown(&mut self) -> Ext4Result<()> {
+        if self.finalized {
+            return Ok(());
+        }
+        self.flush()?;
+        unsafe {
+            ext4_fs_fini(self.inner.as_mut()).context("ext4_fs_fini")?;
+        }
+        self.finalized = true;
+        Ok(())
+    }
 }
 
 impl<Hal: SystemHal, Dev: BlockDevice> Drop for Ext4Filesystem<Hal, Dev> {
     fn drop(&mut self) {
         unsafe {
-            let r = ext4_fs_fini(self.inner.as_mut());
-            if r != 0 {
-                log::error!("ext4_fs_fini failed: {}", Ext4Error::new(r, None));
+            if !self.finalized {
+                let r = ext4_fs_fini(self.inner.as_mut());
+                if r != 0 {
+                    log::error!("ext4_fs_fini failed: {}", Ext4Error::new(r, None));
+                }
             }
             let bdev = self.bdev.inner.as_mut();
             ext4_bcache_cleanup(bdev.bc);
