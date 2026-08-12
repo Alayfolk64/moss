@@ -70,4 +70,10 @@ impl ConsoleIf for ConsoleIfImpl {
         // their interrupt-driven console paths.
         None
     }
+
+    #[cfg(feature = "irq")]
+    fn enable_rx_interrupt() {
+        // This console deliberately uses polling (see `irq_num`), so there is
+        // no device-side receive interrupt to enable.
+    }
 }
