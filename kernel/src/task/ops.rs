@@ -9,7 +9,7 @@ use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use bytemuck::AnyBitPattern;
 use linux_raw_sys::general::ROBUST_LIST_LIMIT;
 use spin::RwLock;
-use starry_process::{Pid, ProcessGroup, Session};
+use starry_process::{Pid, ProcessGroup, Session, init_proc};
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
 use weak_map::WeakMap;
@@ -90,7 +90,23 @@ pub fn get_task(tid: Pid) -> AxResult<AxTaskRef> {
     if tid == 0 {
         return Ok(current().clone());
     }
-    TASK_TABLE.read().get(&tid).ok_or(AxError::NoSuchProcess)
+    if let Some(task) = TASK_TABLE.read().get(&tid) {
+        return Ok(task);
+    }
+
+    // Scheduler task IDs are allocated before userspace starts, so the
+    // internal ID of the initial userspace task is not necessarily 1.  PID 1
+    // is nevertheless the Linux-visible identity of init (and is already
+    // exposed as such by procfs).  Resolve that identity at the common task
+    // lookup boundary so thread-directed Linux APIs agree with procfs.
+    if tid == 1 {
+        return TASK_TABLE
+            .read()
+            .get(&init_proc().pid())
+            .ok_or(AxError::NoSuchProcess);
+    }
+
+    Err(AxError::NoSuchProcess)
 }
 
 /// Lists all processes.
@@ -125,7 +141,21 @@ pub fn get_process_data(pid: Pid) -> AxResult<Arc<ProcessData>> {
             return Ok(proc_data.clone());
         }
     }
-    PROCESS_TABLE.read().get(&pid).ok_or(AxError::NoSuchProcess)
+    if let Some(proc_data) = PROCESS_TABLE.read().get(&pid) {
+        return Ok(proc_data);
+    }
+
+    // See `get_task`: userspace must be able to address init as PID 1 even
+    // though its scheduler-allocated internal process ID may be different.
+    // In particular, BusyBox poweroff/reboot signal PID 1 by default.
+    if pid == 1 {
+        return PROCESS_TABLE
+            .read()
+            .get(&init_proc().pid())
+            .ok_or(AxError::NoSuchProcess);
+    }
+
+    Err(AxError::NoSuchProcess)
 }
 
 /// Finds the process group with the given PGID.

@@ -9,6 +9,7 @@ use axfs::{FS_CONTEXT, enable_async_block_io, sync_global_file_caches};
 use axhal::uspace::UserContext;
 use axtask::{AxTaskExt, spawn_task};
 use starry_process::{Pid, Process};
+use starry_signal::Signo;
 
 use crate::{
     file::FD_TABLE,
@@ -200,6 +201,17 @@ pub fn init(args: &[String], envs: &[String]) {
         .expect("Failed to flush rootfs");
     #[cfg(feature = "ls2k1000")]
     crate::watchdog::note_progress();
+
+    // BusyBox asks init to shut down by signal unless `-f` is used:
+    // SIGUSR2 requests power-off and SIGTERM requests reboot.  Preserve the
+    // distinction after the init task exits so every platform reaches the
+    // corresponding hardware operation after filesystems have been flushed.
+    if exit_code == Signo::SIGUSR2 as i32 {
+        axhal::power::system_off();
+    }
+    if exit_code == Signo::SIGTERM as i32 {
+        axhal::power::system_reset();
+    }
 
     #[cfg(feature = "ls2k1000")]
     {
