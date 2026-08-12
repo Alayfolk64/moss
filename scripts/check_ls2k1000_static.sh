@@ -88,6 +88,7 @@ state_tests=(
     "vendor/simple-ahci/src/completion.rs:ahci-completion-tests"
     "vendor/axtask/src/block_context.rs:task-block-context-tests"
     "vendor/axdriver_block/src/block_range.rs:block-range-tests"
+    "vendor/axdriver_net/src/dwmac_common_state.rs:dwmac-common-state-tests"
     "vendor/axdriver_net/src/dwmac_ls2k1000_state.rs:dwmac-state-tests"
     "vendor/axdriver/src/ls2k1000_irq.rs:ls2k1000-irq-tests"
     "vendor/axplat-loongarch64-ls2k1000/src/irq_state.rs:liointc-state-tests"

@@ -1,6 +1,6 @@
 # VisionFive 2 移植与调试工作总结
 
-本文总结截至 2026-08-12，Moss 在 StarFive VisionFive 2（JH7110）上的移植、驱动接入、问题定位和实板验证结果。日常构建、写卡、TFTP 和 U-Boot 命令见 [VisionFive 2 上板常用指令](visionfive2-quickstart.md)。
+本文总结截至 2026-08-13，Moss 在 StarFive VisionFive 2（JH7110）上的移植、驱动接入、问题定位和实板验证结果。日常构建、写卡、TFTP 和 U-Boot 命令见 [VisionFive 2 上板常用指令](visionfive2板-启动指令.md)。
 
 ## 1. 当前结论
 
@@ -130,13 +130,20 @@ SD 数据阶段目前仍是 PIO。为了避免任务睡眠后不能及时处理 
 为 JH7110 GMAC1 接入了 DesignWare MAC 驱动，完成：
 
 - GMAC1 时钟启用和 AXI/AHB reset 解除；
-- RGMII 模式配置；
-- 从 DTB 的 `ethernet1` 读取 MAC 地址；
+- 仅接受 VF2 v1.3B 的 `rgmii-id` 接线，明确拒绝 v1.2A RMII；
+- 同时解析主线 Linux `starfive,jh7110-dwmac` 和 StarFive U-Boot 2021.10 `starfive,jh7110-eqos-5.20` DT；
+- 从 DTB 的 `ethernet1` 读取寄存器、IRQ、MAC、PHY、FIFO、PBL、AXI burst 和 syscon 配置；
 - 描述符环、TX/RX 数据路径和缓存一致性处理；
-- GMAC 中断注册；注册失败时保留轮询降级路径；
+- probe 阶段保持 DMA 停止，第一次网络队列操作才启动；
+- 双读 Clause 22 BMSR，并随链路协商结果更新 10/100/1000 Mbps、双工和 pause 流控；
+- 识别 YT8531 后按速率更新 TX 时钟反相位，PHY delay 和驱动强度仍沿用 U-Boot 的冷启动配置；
+- 中断处理按 RX/TX 源屏蔽并在 deferred poll 后重开，注册失败时保留轮询降级路径；
+- RX 丢包和内存不足路径总会归还描述符，fatal DMA bus error 会完整停止、reset 并重建队列；
 - 与 Moss `axnet`/TCP/IP 栈对接。
 
 实板已经完成 Moss 与直连 PC 之间的双向 TCP 数据收发。当前只接入 GMAC1，即 U-Boot 日志中的 `ethernet@16040000`。
+
+2026-08-13 的链路管理与错误恢复增强已通过 host 状态机测试、两套 DT fixture 和 VF2 交叉构建；由于当前没有接入 VF2 实板，本轮新增的断链恢复、三速重协商及 `apk fetch` 自动化脚本尚未执行，不能沿用此前基础 TCP 结果写成“增强路径已实板通过”。实板命令见 `scripts/run_vf2_gmac_test.py`。
 
 `git clone https://github.com/...` 未成功并不等同于网卡驱动失败。当时直接原因包括 rootfs 中 DNS 解析不可用，以及缺少 `ssh-keygen`/SSH 客户端；访问公网 Git 还需要 DNS、HTTPS CA 证书和相应用户态工具共同可用。
 
@@ -188,6 +195,8 @@ MOSS_SMP online=4
 | cagent glibc 测试组 | 全部结束并报告 pass |
 | loopback TCP 服务 | 通过 |
 | VF2 与 PC 双向 TCP | 通过 |
+| GMAC1 断链恢复、1000/100/10 Mbps 重协商 | 已提供自动化脚本，本轮未接实板执行 |
+| `apk update` / `apk fetch` 公网分层验证 | 已提供可选脚本，本轮未接实板执行 |
 | Git 初始化、暂存和提交路径 | 已运行并修复相关缓存问题 |
 | 板载 Rust Hello World 编译运行 | 通过 |
 

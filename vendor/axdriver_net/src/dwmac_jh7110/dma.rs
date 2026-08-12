@@ -10,13 +10,16 @@ use axdriver_base::{DevError, DevResult};
 
 pub(super) const RING_SIZE: usize = 64;
 pub(super) const DMA_BUFFER_LEN: usize = 2048;
+const BASIC_DESCRIPTOR_LEN: usize = 16;
+const JH7110_AXI_BUS_WIDTH: usize = 8;
 
 pub(super) const DESC3_OWN: u32 = 1 << 31;
 pub(super) const DESC3_IOC_OR_CONTEXT: u32 = 1 << 30;
 pub(super) const DESC3_FD: u32 = 1 << 29;
 pub(super) const DESC3_LD: u32 = 1 << 28;
 pub(super) const RX_DESC3_BUF1V: u32 = 1 << 24;
-pub(super) const RX_DESC3_ERROR: u32 = 1 << 15;
+/// Error summary is in bit 15 for both normal RX and normal TX write-back.
+pub(super) const DESC3_ERROR: u32 = 1 << 15;
 pub(super) const RX_DESC3_LEN_MASK: u32 = 0x7fff;
 const TX_DESC2_IOC: u32 = 1 << 31;
 const TX_DESC2_LEN_MASK: u32 = 0x3fff;
@@ -42,6 +45,16 @@ const EMPTY_DESC: DmaDesc = DmaDesc {
 impl DmaDesc {
     pub(super) const fn size() -> usize {
         size_of::<Self>()
+    }
+
+    /// Number of AXI-width words skipped after each 16-byte EQoS descriptor.
+    ///
+    /// One descriptor occupies a complete 64-byte cache line so invalidating a
+    /// DMA-updated descriptor cannot discard CPU changes to its neighbour. The
+    /// DWMAC DSL field is measured in bus widths (8 bytes on JH7110), not in
+    /// bytes or 32-bit words: `(64 - 16) / 8 == 6`.
+    pub(super) const fn skip_length() -> u32 {
+        ((Self::size() - BASIC_DESCRIPTOR_LEN) / JH7110_AXI_BUS_WIDTH) as u32
     }
 
     pub(super) fn status(&self) -> u32 {

@@ -8,8 +8,8 @@
 
 use alloc::sync::Arc;
 use core::{
-    mem::size_of,
     marker::PhantomData,
+    mem::size_of,
     ptr::{read_volatile, write_volatile},
     sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
 };
@@ -18,7 +18,13 @@ use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
 use log::{info, warn};
 
 use crate::{
-    EthernetAddress, NetBuf, NetBufPool, NetBufPtr, NetDriverOps, dwmac_ls2k1000_state::*,
+    EthernetAddress, NetBuf, NetBufPool, NetBufPtr, NetDriverOps,
+    dwmac_common_state::{
+        DmaLifecycle, LinkState, LinkTransition, PhyLinkMode, PhySample, RxDescriptorDisposition,
+        TxRingState, clause22_gigabit_capable, clause22_link_mode, link_transition,
+        rx_descriptor_disposition,
+    },
+    dwmac_ls2k1000_state::*,
 };
 
 // Keep the upstream queue depth of 128. The buffers live in a static DMA
@@ -405,7 +411,8 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
         let hardware_features = self.read_reg(DMA_HW_FEATURE);
         if hardware_features & DMA_HW_FEATURE_ENHANCED_DESCRIPTOR == 0 {
             warn!(
-                "LS2K1000 GMAC0 lacks enhanced descriptor support: DMA_HW_FEATURE={hardware_features:#010x}"
+                "LS2K1000 GMAC0 lacks enhanced descriptor support: \
+                 DMA_HW_FEATURE={hardware_features:#010x}"
             );
             return Err(DevError::BadState);
         }
@@ -437,7 +444,8 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             ),
         );
         info!(
-            "LS2K1000 GMAC0 DMA descriptor mode: HW_FEATURE={hardware_features:#010x} BUS_MODE={:#010x} ATDS=true",
+            "LS2K1000 GMAC0 DMA descriptor mode: HW_FEATURE={hardware_features:#010x} \
+             BUS_MODE={:#010x} ATDS=true",
             self.read_reg(DMA_BUS_MODE),
         );
         if let Some(axi) = self.dma.axi {

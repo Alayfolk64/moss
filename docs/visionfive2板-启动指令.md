@@ -36,6 +36,12 @@ moss-vf2.bin
 
 VF2 上的功能测试统一使用该内核。`scripts/run_rv.sh` 用于 PC 上启动 QEMU，不用于 VF2 实板。
 
+提交前可运行 GMAC1 静态检查。它会验证主线 Linux 与 StarFive U-Boot 2021.10 两种 DT 格式、运行状态机，并重新构建 VF2 镜像：
+
+```bash
+scripts/check_vf2_gmac_static.sh
+```
+
 ## 3. 配置网络和 TFTP
 
 配置 PC 网口：
@@ -206,6 +212,33 @@ busybox nc -l -p 19001
 printf 'MOSS_VF2_RX_OK\n' | nc -w 3 192.168.1.10 19001
 ```
 
+### 自动化 GMAC1 验收
+
+关闭占用 `/dev/ttyACM0` 的 minicom 后，可由脚本完成临时 U-Boot 配置、TFTP 启动、双向 64 KiB TCP 哈希校验和断链恢复测试：
+
+```bash
+sudo scripts/run_vf2_gmac_test.py \
+  --serial /dev/ttyACM0 \
+  --interface enp108s0 \
+  --log vf2-gmac.log
+```
+
+脚本启动后再复位开发板。它不执行 `saveenv`；退出时会恢复 PC 网口的管理状态、测速修改过的 ethtool 参数和原有 TFTP 目标文件。若还要覆盖 1000/100/10 Mbps 重协商：
+
+```bash
+sudo scripts/run_vf2_gmac_test.py --speed-suite --log vf2-gmac-speed.log
+```
+
+若 rootfs 已配置 Alpine 仓库、DNS 和 CA 证书，可额外测试拉取软件包：
+
+```bash
+sudo scripts/run_vf2_gmac_test.py \
+  --apk-package busybox \
+  --log vf2-gmac-apk.log
+```
+
+该选项依次检查 ICMP、双向 TCP、DNS、TLS、`apk update` 和 `apk fetch`，并确认目标目录中确实生成 `.apk` 文件，因此 APK 失败时可以区分是网卡、域名解析、证书/TLS 还是仓库/包的问题。
+
 ## 10. 常见问题
 
 - `Card did not respond to voltage select! : -110` 通常来自未就绪的 `mmc 0`；SD 卡应使用 `mmc 1`。
@@ -213,3 +246,5 @@ printf 'MOSS_VF2_RX_OK\n' | nc -w 3 192.168.1.10 19001
 - 一个网口 PHY 超时不代表 TFTP 一定失败；成功时通常会切换到 `ethernet@16040000`。
 - `tftpboot` 失败时检查网线、PC 网口 IP、TFTP 服务和 `/srv/tftp/kernel`。
 - Moss 已支持 VF2 物理网口的 TCP/IP 通信；`scp` 仍取决于 rootfs 是否提供 SSH 客户端或服务端。更新内核建议继续使用 U-Boot TFTP。
+- MOSS 只接管 PHY 运行期的链路、速率、双工、流控和 YT8531 TX 时钟相位；上电后的 RX/TX delay 与驱动强度仍由 U-Boot 初始化。因此不要跳过 VF2 v1.3B 的正常固件启动链直接进入 MOSS。
+- 当前驱动仅支持 VF2 v1.3B 的 GMAC1 `rgmii-id`。v1.2A 的 GMAC1 为 RMII 接线，驱动会明确拒绝该模式。
