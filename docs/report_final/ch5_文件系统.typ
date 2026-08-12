@@ -25,7 +25,7 @@ StarryOS 为这个问题提供了一套完整的基础框架。分四层：axfs-
 - *Location*：将目录项与所属挂载点绑定为统一句柄，路径解析穿越挂载点时自动切换文件系统；
 - *Mountpoint 树*：子节点用 `Weak` 引用，卸载时自动释放，跨设备检测用 `Arc::ptr_eq` 对比挂载点指针；
 - *NodeFlags*：四个标志位（`STREAM`、`NON_CACHEABLE`、`ALWAYS_CACHE`、`BLOCKING`）让节点声明自身 I/O 契约，上层无需判断节点类型；
-- *FsContext* + 路径解析：每个任务独立的 `root_dir` 和 `current_dir`，四个解析变体覆盖不同 syscall 语义，符号链接循环检测上限 40 层；
+- *FsContext* + 路径解析：记录任务的 `root_dir` 和 `current_dir`，创建进程时默认复制，在 `CLONE_FS` 下共享；四个解析变体覆盖不同 syscall 语义，符号链接循环检测上限为 40 层；
 - *文件系统后端*：lwext4_rust 接入 ext4，starry-fatfs 接入 FAT32，MemoryFs 提供内存文件系统，SimpleFs 框架支撑 procfs/devfs。
 
 #figure(
@@ -37,7 +37,7 @@ StarryOS 为这个问题提供了一套完整的基础框架。分四层：axfs-
   caption: [Mountpoint 树],
 ) <fig:mount-tree>
 
-MossOS 在这套框架上的工作集中在六个方面：挂载系统调用的完善、新式挂载 API 的实现、inode 元数据缓存的引入、扩展属性的支持、文件事件通知（inotify 与 fanotify），以及 I/O 路径的性能优化。下面按这几个方向展开。
+MossOS 在此基础上完善了传统与新式挂载接口，引入 inode 元数据缓存和 Folio 文件页缓存，并补充扩展属性、inotify、fanotify 等功能。下面按这些方向展开。
 
 == 挂载子系统
 
@@ -54,13 +54,13 @@ MossOS 在这套框架上的工作集中在六个方面：挂载系统调用的�
     stroke: 0.5pt + gray,
     table.header([标志], [含义]),
     [`MS_BIND`], [bind mount：让已有目录树在另一条路径下可见，直接复用源挂载点对象，不创建新文件系统实例],
-    [`MS_MOVE`], [迁移挂载点：将挂载从一个路径移到另一个路径，底层做 bind + unmount 原子操作],
+    [`MS_MOVE`], [迁移挂载点：先在目标路径建立 bind mount，再卸载源挂载],
     [`MS_REMOUNT`], [修改现有挂载的标志（如读写→只读），修改前检查是否有打开的写文件],
   ),
   caption: [sys_mount 新增的操作模式],
 ) <tab:mount-flags>
 
-此外，MossOS 增加了权限检查（要求 euid == 0），支持 10 种挂载标志（`MS_RDONLY`、`MS_NODEV`、`MS_NOEXEC`、`MS_NOSUID`、`MS_NOATIME`、`MS_NODIRATIME`、`MS_RELATIME`、`MS_STRICTATIME`、`MS_REMOUNT`、`MS_NOSYMFOLLOW`），并将 `fs_type` 从单一的 `"tmpfs"` 扩展到 ext4、FAT32 及 LTP 兼容的多种文件系统。
+此外，MossOS 增加了权限检查（要求 euid == 0），支持 10 种挂载标志（`MS_RDONLY`、`MS_NODEV`、`MS_NOEXEC`、`MS_NOSUID`、`MS_NOATIME`、`MS_NODIRATIME`、`MS_RELATIME`、`MS_STRICTATIME`、`MS_REMOUNT`、`MS_NOSYMFOLLOW`）。普通磁盘和 Loop 设备上的 ext2、ext3、ext4 统一由 ext4 后端解析；`xfs`、`btrfs`、`vfat`、`exfat`、`ntfs` 等类型目前用于兼容测试中的挂载流程，挂载后提供隔离的内存文件系统，不解析对应的磁盘格式。
 
 `sys_umount2` 同样做了大量补全：
 
@@ -70,8 +70,8 @@ MossOS 在这套框架上的工作集中在六个方面：挂载系统调用的�
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([标志 / 行为], [说明]),
-    [`MNT_DETACH`], [延迟卸载：即使文件被占用也移除挂载，busy 文件在最后一个 fd 关闭后自动释放],
-    [`MNT_EXPIRE`], [两阶段过期：首次调用标记到期，再次调用时若无打开文件则卸载，否则返回 EAGAIN],
+    [`MNT_DETACH`], [延迟卸载：跳过打开写文件的 busy 检查，并从挂载树中移除挂载],
+    [`MNT_EXPIRE`], [两阶段过期：首次调用标记并返回 EAGAIN；其间未再次访问时，第二次调用执行卸载],
     [`UMOUNT_NOFOLLOW`], [不跟随符号链接，直接操作路径本身],
     [卸载前清理], [移除页缓存（`drop_file_caches_by_device`）、刷新文件系统脏数据（`flush`）、发送 inotify `IN_UNMOUNT` 事件],
     [忙碌检查], [`MNT_DETACH` 未设置时检查是否有打开的写文件，有则返回 EBUSY],
@@ -81,7 +81,7 @@ MossOS 在这套框架上的工作集中在六个方面：挂载系统调用的�
 
 === 新式挂载 API
 
-传统 `sys_mount` 有一个历史包袱：调用者必须同时拥有源设备访问权限和目标路径挂载权限。容器场景里这很别扭——容器进程应该能在自己的命名空间里自由挂载，却因为没有宿主机路径权限而卡住。Linux 5.2 引入的新式挂载 API 将配置和挂载拆为两步，StarryOS 没有实现这套接口，MossOS 补上了主要路径。
+Linux 新式挂载 API 将文件系统配置、实例化和接入目录树拆开。StarryOS 没有实现这套接口，MossOS 补充了其主要调用链。
 
 #figure(
   [
@@ -93,16 +93,16 @@ MossOS 在这套框架上的工作集中在六个方面：挂载系统调用的�
     move_mount(mfd, "", "/mnt", MOVE_MOUNT_F_EMPTY_PATH)
     ```
   ],
-  caption: [新式挂载 API 的完整调用流程],
+  caption: [新式挂载 API 的主要调用流程],
 ) <lst:new-mount-api>
 
-五个新系统调用各有明确的职责：
+当前实现覆盖以下职责：
 
 - `fsopen`：按文件系统类型名创建上下文，返回 `FsContextFd`；
-- `fsconfig`：对上下文进行配置（设置 source 路径、发出 create 命令），支持 `FSCONFIG_SET_STRING` 和 `FSCONFIG_CMD_CREATE` 两种操作；
-- `fsmount`：将配置完成的上下文实例化为 `DetachedMountFd`，此时文件系统已创建但尚未附加到任何路径——"分离的挂载"；
+- `fsconfig`：设置 `source` 路径并处理 `FSCONFIG_CMD_CREATE`；其余部分命令仅完成参数兼容，尚未保存为文件系统配置；
+- `fsmount`：将配置完成的上下文实例化为 `DetachedMountFd`，其中只有只读属性会转换为实际挂载标志；
 - `open_tree`：打开已挂载的文件系统树作为 detached mount fd（`OPEN_TREE_CLONE` 模式），为 bind mount 提供基于 fd 的接口；
-- `move_mount`：将 detached mount fd 挂载到目标路径，支持 `MOVE_MOUNT_F_EMPTY_PATH` 标志（空路径表示直接挂载 fd 本身）。
+- `move_mount`：在 `MOVE_MOUNT_F_EMPTY_PATH` 模式下将 detached mount fd 接入目标路径，尚未支持路径到路径的移动。
 
 `DetachedMountFd` 是一个关键设计——它在挂载操作期间作为"尚未附加的挂载对象"存在，可以是全新文件系统（`Filesystem { fs, mount_flags }`）或已有挂载树的引用（`Bind { source: Location }`）。这个中间态让配置和挂载的分离成为可能。
 
@@ -121,14 +121,14 @@ MossOS 为此实现了 `LoopFileBlockDevice`：
     }
 
     impl BlockDriverOps for LoopFileBlockDevice {
-        fn read_block(&mut self, block_id: u64, buf: &mut [u8]) -> DevResult {
+        fn read_block(&self, block_id: u64, buf: &mut [u8]) -> DevResult {
             let offset = self.checked_range(block_id, buf.len())?;
             // 循环 read_at 直到读完，处理短读
         }
-        fn write_block(&mut self, block_id: u64, buf: &[u8]) -> DevResult {
+        fn write_block(&self, block_id: u64, buf: &[u8]) -> DevResult {
             // 块号 → 文件偏移的换算：offset = block_id * block_size
         }
-        fn flush(&mut self) -> DevResult {
+        fn flush(&self) -> DevResult {
             self.file.sync(false)  // 将脏数据写回底层文件
         }
     }
@@ -143,32 +143,21 @@ MossOS 为此实现了 `LoopFileBlockDevice`：
 
 频繁的 `stat` 调用和读写伴随的时间戳更新如果每次都穿透到底层文件系统，会在 I/O 密集场景产生大量元数据写——进程只是想读文件，却要附带一次写的开销。StarryOS 的 `metadata()` 直接访问底层节点，未引入额外的缓存层。MossOS 在 VFS 层增加了一套 inode 元数据缓存，以减少频繁穿透底层文件系统带来的开销。
 
-#figure(
-  [
-    ```rust
-    type InodeMetadataCacheKey = (usize, u64);          // (fs_ptr, inode)，唯一定位
-    static INODE_METADATA_CACHES:
-        Lazy<Mutex<BTreeMap<InodeMetadataCacheKey, SharedInodeMetadataCache>>> = ...;
+缓存以 `(fs_ptr, inode)` 为键，同一文件被多个进程、多个 fd 或多条路径访问时共享同一份元数据。全局索引划分为 64 个分片，每个分片使用独立的 `RwLock`；冷加载和写回分别使用可睡眠锁，避免慢速文件系统访问占用自旋锁。目录同样进入缓存，目录项增删后主动使相关缓存失效；`NON_CACHEABLE` 节点则始终直接读取底层信息。
 
-    struct InodeMetadataCache {
-        metadata: Metadata,            // 缓存的 size/atime/mtime/ctime 等
-        dirty_size: bool,              // 文件大小变更但未提交
-        dirty_update: MetadataUpdate,  // 时间戳/权限等待提交的更新
-    }
-    ```
-  ],
-  caption: [inode 元数据缓存：以 (fs_ptr, inode) 为键的全局 BTreeMap],
-) <lst:metadata-cache>
+元数据更新先合并到缓存，再在 `fsync`、全局同步、缓存失效或卸载时提交。atime 默认遵循 relatime：只有 atime 不晚于 mtime 或 ctime，或者距上次更新超过 24 小时时才记录新值；`MS_NOATIME` 和 `MS_STRICTATIME` 可覆盖该策略。这样既能合并重复更新，也避免普通文件关闭时产生不必要的同步写入。
 
-缓存以 `(fs_ptr, inode)` 为键存入全局 `BTreeMap`，同一文件被多个进程、多个 fd、多条路径访问时共享同一份缓存。目录的 nlink 随子节点增删变化，缓存容易读到过期值，被排除在外；`NON_CACHEABLE` 节点（procfs 等）内容动态生成，同样不进入缓存。
+== Folio 文件页缓存
 
-元数据更新采用延迟提交策略：各字段的修改先合并到 `dirty_update` 中，`sync` 或文件关闭时统一提交，将多次独立的元数据写合并为一次底层调用。atime 遵循 relatime 策略——只有当 atime 早于 mtime 或 ctime、或距上次更新超过 24 小时时，读操作才触发 atime 更新。`MS_NOATIME` 和 `MS_STRICTATIME` 挂载标志可以覆盖这个策略。这个设计让大多数只读访问不再产生元数据写开销。
+MossOS 使用 Folio 作为普通文件的数据缓存单元。一个 Folio 由 1 到 16 个连续的 4 KiB 页面组成，并统一记录加载、脏页、写回和截断状态。相邻页面可以成组加载和写回，随机访问仍可退化为单页处理。
 
-缓存在以下时机被同步或失效：`fsync`/`close` 时调用 `flush_metadata_cache` 将脏数据写回；文件被删除时 `invalidate_inode_metadata_cache` 先 flush 再移除；设备卸载时 `drop_file_caches_by_device` 批量清理。
+同一 inode 的不同 fd 和进程共享一份文件地址空间。文件缓存和 Folio 索引均采用 64 个分片，缓存容量不再按单个文件固定为 256 页，而是根据可用内存水位回收较冷的 Folio。Direct I/O 读前会写回重叠范围内的脏缓存，写后使对应的干净缓存失效，从而保持两条 I/O 路径的一致性。
+
+`readahead` 和 `POSIX_FADV_WILLNEED` 会把预读任务交给后台工作队列，单次最多处理 1 MiB；文件映射缺页也会按访问模式预取相邻页面。Folio 在 BuildStorm 场景中的锁粒度、并发缺页和性能优化已在专项报告中展开，本节只说明其在文件系统中的基础作用。
 
 == 扩展属性
 
-扩展属性（xattr）是文件系统上以键值对形式存储的元数据，用于 ACL、SELinux 安全标签、文件校验和等场景。与 inode 自带的 mode/uid/gid 不同，xattr 由用户态自由定义和扩展。StarryOS 尚未包含 xattr 相关接口，MossOS 从 syscall、VFS trait 和 inode 存储三个层面补充了这套机制。
+扩展属性（xattr）是附加在文件上的键值对，可用于 ACL、安全标签和文件校验信息等场景。StarryOS 尚未包含相关接口，MossOS 补充了系统调用和 VFS 接口，并实现了当前所需的内存存储路径。
 
 #figure(
   table(
@@ -176,9 +165,9 @@ MossOS 为此实现了 `LoopFileBlockDevice`：
     inset: 6pt,
     stroke: 0.5pt + gray,
     table.header([层次], [MossOS 实现]),
-    [syscall 层], [12 个系统调用：setxattr/getxattr/listxattr/removexattr × 三个变体（路径版、l-符号链接版、fd 版），共 291 行],
+    [syscall 层], [12 个系统调用：setxattr/getxattr/listxattr/removexattr × 三个变体（路径版、l-符号链接版、fd 版）],
     [VFS trait 层], [NodeOps 新增 4 个方法（set_xattr/get_xattr/list_xattr/remove_xattr），默认返回 OperationNotSupported；Location 通过 inherit_methods 透出对应方法],
-    [存储层], [per-inode 的 XattrStore（`Mutex<BTreeMap<Vec<u8>, Vec<u8>>>`）挂在 Location 的 TypeMap 上，惰性创建；ext4 通过 lwext4 接口直接读写磁盘 xattr],
+    [存储层], [`XattrStore`（`Mutex<BTreeMap<Vec<u8>, Vec<u8>>>`）挂在目录项关联的 TypeMap 上并按需创建；当前系统调用使用该内存存储],
   ),
   caption: [xattr 三层实现],
 ) <tab:xattr-layers>
@@ -186,9 +175,11 @@ MossOS 为此实现了 `LoopFileBlockDevice`：
 实现中处理了几个规范语义：
 
 - *命名空间*：支持 `user.`、`security.`、`trusted.`、`system.` 四个前缀，`user.` 仅允许普通文件和目录使用；
-- *标志语义*：`XATTR_CREATE` 要求属性不存在才写入，`XATTR_REPLACE` 要求存在才替换，与 `setxattr(2)` 完全一致；
+- *标志语义*：`XATTR_CREATE` 要求属性不存在，`XATTR_REPLACE` 要求属性已经存在；
 - *大小限制*：属性名最长 255 字节，值最长 65536 字节；
-- *inode flags 集成*：immutable 或 append-only 文件自动拒绝 xattr 写入。
+- *inode flags 集成*：设置属性时，immutable 或 append-only 文件会被拒绝。
+
+ext4 后端已经提供直接读写磁盘 xattr 的 VFS 方法，但尚未接入上述系统调用路径，因此当前扩展属性不会持久化到 ext4 磁盘。
 
 == 文件事件通知
 
@@ -277,62 +268,18 @@ mark 可以挂在单个文件、目录或整个挂载点上：
 
 === 无监听快速路径
 
-inotify 和 fanotify 需要在 read、write、open、close 等热路径上插入事件投递逻辑。没有注册监听者时，这些逻辑不应带来任何额外开销。MossOS 用全局计数和掩码做早期过滤：inotify 维护全局 watch 计数，为零时通知函数立即返回；fanotify 维护全局兴趣掩码，对当前事件无命中时跳过后续所有处理。两处检查都只需一次原子读，无监听者时不进入任何路径解析、mark 匹配或事件队列操作。
+inotify 和 fanotify 需要在 read、write、open、close 等热路径上插入事件投递逻辑。MossOS 用全局计数和掩码提前过滤：inotify 的全局 watch 计数为零时，通知函数通过一次原子读取直接返回；fanotify 先检查全局兴趣掩码，当前事件无命中时跳过后续处理，命中后再检查仍然有效的 fd 和 mark。这样可以降低未监听事件在普通 I/O 路径上的额外开销。
 
-== I/O 性能优化
+== 文件 I/O 测试
 
-文件系统的性能差异在 StarryOS 和 MossOS 之间非常显著：iozone 测试中，顺序写提升约 7--13 倍，顺序读提升约 5 倍，随机读写提升约 5--9 倍。这些提升根源于页缓存和元数据缓存的几项关键优化。
-
-=== 页缓存增强
-
-StarryOS 已经有基础的页缓存机制，但 MossOS 做了三个关键改进。
-
-*全局索引 + per-file LRU*。StarryOS 的页缓存文件查找路径较长。MossOS 以 `(fs_ptr, inode)` 为键建立全局 `BTreeMap`，同一文件被多个 fd 打开时找到同一份缓存记录。每个文件的缓存数据放在独立的 LRU 中，默认容量 256 个 4KiB 页（1MiB），单个文件的大规模顺序扫描不会挤出其他文件的缓存。
-
-*避免 read-before-write*。页缓存以 4KiB 为单位操作，朴素的实现在目标页缺失时会先读出完整旧页再部分覆盖——这对修改已有文件中间段是必要的，但对新文件顺序写或 EOF 之后 append 而言是浪费。MossOS 判断写入是否完全覆盖了页内旧有效区域，如果是则直接分配清零页而不调用底层 `read_at()`，消除了新页写入前的无效读取。
-
-*脏页合并写回*。脏页按页号排序，连续页合并成一批写入，每批最多 16 页（64KiB）。相比逐页提交，顺序写场景下的块设备请求数量明显减少。
-
-#figure(
-  [
-    #align(center)[
-      #image("./pictrues/图-5-5-1.svg", width: 78%)
-    ]
-  ],
-  caption: [I/O 读写三条路径：cached、direct 和 in-memory],
-) <fig:io-paths>
-
-#figure(
-  [
-    #align(center)[
-      #image("./pictrues/图-5-5-2.svg", width: 82%)
-    ]
-  ],
-  caption: [脏页按页号排序后合并为批次写回],
-) <fig:dirty-writeback>
-
-Direct I/O 与 Cached I/O 之间的一致性也得到了处理：direct 读前先将目标范围内的 dirty cached 页写回，direct 写后使对应干净页失效，两条路径在重叠区域不会读到不一致的内容。
-
-=== 元数据缓存
-
-元数据缓存的实现细节已在第三节中描述。这里补充其在性能上的意义：IOPS 密集场景下，大量 `stat`/`fstat` 调用不再穿透底层文件系统；atime 的 relatime 策略使绝大多数只读访问不产生任何元数据写；延迟提交将多次独立的元数据更新合并为一次底层调用。
-
-=== 预读
-
-预读在应用程序实际访问页面之前提前将文件内容放入页缓存，降低后续访问的等待时间。StarryOS 的 `fadvise(WILLNEED)` 仅做参数检查，未执行实际预读，MossOS 补全了这条路径：`sys_readahead()` 和 `fadvise(POSIX_FADV_WILLNEED)` 找到文件对应的 cached backend，按请求范围同步地将页面放入缓存，单次最多 1MiB。direct I/O 场景保持 no-op，符合绕过缓存的语义。
-
-mmap 访问时每次 page fault 只处理当前缺失页。MossOS 在 fault 后检查 `last_fault_page`：若当前页号比上次大 1，说明是顺序扫描，额外将后续 4 页预热入缓存。预读只放入页缓存不建立页表映射，后续 fault 命中缓存时延迟更低，且不影响随机访问场景下单次 fault 的延迟。
-
-=== 性能数据
-
-为验证优化效果，使用 iozone 在 QEMU RISC-V 虚拟机上进行吞吐对比。对比对象为优化前的 StarryOS、优化后的 MossOS（均 1 核 1GB 内存，与竞赛评测环境配置一致），以及 Ubuntu 26.04 基准（4 核 4GB 内存）。
+初赛阶段曾使用 iozone 在 QEMU RISC-V 环境中对文件 I/O 吞吐量进行测试。下表保留当时记录的优化前基线、MossOS 测量值和 Ubuntu 参考值，用于说明初赛阶段文件缓存改造的效果；决赛阶段针对 BuildStorm 继续完成的文件系统性能优化及测试数据见专项报告。
 
 #figure(
   table(
     columns: (1.5fr, 1fr, 1fr, 1fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
-    table.header([测试场景], [优化前], [优化后], [Ubuntu]),
+    table.header([测试场景], [优化前], [初赛 MossOS], [Ubuntu 参考]),
     [顺序写], [3524], [33221], [51922],
     [顺序读], [13136], [81470], [104754],
     [顺序重写], [7471], [81639], [72760],
@@ -342,7 +289,7 @@ mmap 访问时每次 page fault 只处理当前缺失页。MossOS 在 fault 后�
     [pread 并发读], [14184], [108348], [125270],
     [pwrite 并发写], [3724], [28263], [39335],
   ),
-  caption: [iozone 性能对比（glibc，单位 kB/sec）],
+  caption: [初赛阶段 iozone 性能记录（glibc，单位 kB/sec）],
 ) <tab:iozone-glibc>
 
 #figure(
@@ -351,7 +298,7 @@ mmap 访问时每次 page fault 只处理当前缺失页。MossOS 在 fault 后�
       #image("./pictrues/code/iozone_glibc_before_after.svg", width: 96%)
     ]
   ],
-  caption: [iozone 优化前后吞吐量对比（glibc）],
+  caption: [初赛阶段 iozone 吞吐量对比（glibc）],
 ) <fig:iozone-glibc-opt>
 
 #figure(
@@ -359,7 +306,7 @@ mmap 访问时每次 page fault 只处理当前缺失页。MossOS 在 fault 后�
     columns: (1.5fr, 1fr, 1fr, 1fr),
     inset: 6pt,
     stroke: 0.5pt + gray,
-    table.header([测试场景], [优化前], [优化后], [Ubuntu]),
+    table.header([测试场景], [优化前], [初赛 MossOS], [Ubuntu 参考]),
     [顺序写], [3524], [26407], [44818],
     [顺序读], [13136], [62733], [98518],
     [顺序重写], [7471], [62254], [69316],
@@ -369,7 +316,7 @@ mmap 访问时每次 page fault 只处理当前缺失页。MossOS 在 fault 后�
     [pread 并发读], [14184], [88315], [141988],
     [pwrite 并发写], [3724], [28192], [49303],
   ),
-  caption: [iozone 性能对比（musl，单位 kB/sec）],
+  caption: [初赛阶段 iozone 性能记录（musl，单位 kB/sec）],
 ) <tab:iozone-musl>
 
 #figure(
@@ -378,11 +325,11 @@ mmap 访问时每次 page fault 只处理当前缺失页。MossOS 在 fault 后�
       #image("./pictrues/code/iozone_musl_before_after.svg", width: 96%)
     ]
   ],
-  caption: [iozone 优化前后吞吐量对比（musl）],
+  caption: [初赛阶段 iozone 吞吐量对比（musl）],
 ) <fig:iozone-musl-opt>
 
-综合两组 libc 结果，MossOS 在所有测试项上均显著优于优化前的 StarryOS。随机读写吞吐接近 Ubuntu 基准，顺序重写已在 glibc 环境下超出 Ubuntu。
+两组 libc 的测试项均高于优化前基线，其中 glibc 环境下的顺序重写、随机读写已达到同期 Ubuntu 参考值附近。由于这些数据采集于初赛阶段，不作为当前决赛版本的最终性能结论。
 
 == 本章小结
 
-本章介绍了 MossOS 在 StarryOS 文件系统框架上的六项增量工作。挂载子系统从 tmpfs 扩展到多种文件系统，并补充了 bind/move/remount 及新式 API；inode 元数据缓存将频繁的 stat 和时间戳更新从"穿透底层"变为"内存命中"，并采用 relatime 和延迟提交策略减少元数据写；扩展属性从无到有三层实现，覆盖 12 个系统调用和 ext4 透传；inotify 和 fanotify 填补了文件事件通知的空白，无监听者时通过全局计数和兴趣掩码零开销过滤。I/O 性能优化——全局索引页缓存、避免 read-before-write、脏页合并写回、预读补全——将这些设计选择转化为 iozone 上 5--13 倍的吞吐提升。
+本章介绍了 MossOS 对文件系统功能和缓存结构的完善。挂载子系统补充了 bind、move、remount、卸载检查、新式挂载 API 和 Loop 设备；inode 元数据缓存通过分片索引、relatime 和延迟提交减少底层访问；Folio 为普通文件 I/O、预读和文件映射提供统一的数据缓存；扩展属性、inotify 和 fanotify 则补齐了相关 Linux 接口。文件系统支持范围和扩展属性持久化仍有明确边界，后续工作将在现有 VFS 接口上继续完善。

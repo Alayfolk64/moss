@@ -131,6 +131,12 @@ pub fn cpu_hardware_ids() -> Option<&'static [usize]> {
                 .and_then(|mut regs| regs.next())
                 .map(|reg| reg.address as usize)
                 .unwrap_or_else(|| panic!("enabled CPU node {} has no reg property", node.name()));
+            // Some vendor VF2 device trees leave the JH7110 S7 management
+            // hart enabled and even give it an Sv MMU. It has no S-mode PLIC
+            // context, so only this platform must exclude physical hart 0.
+            if axconfig::PLATFORM == "visionfive2" && id == 0 {
+                continue;
+            }
             assert!(
                 !ids.contains(&id),
                 "duplicate CPU hardware ID {id:#x} in DTB"
