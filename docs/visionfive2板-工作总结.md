@@ -127,6 +127,8 @@ SD 数据阶段目前仍是 PIO。为了避免任务睡眠后不能及时处理 
 
 ## 7. GMAC1 网络
 
+本节记录结果概要；完整驱动结构、硬件契约、错误恢复和 APK 分层验收见 [VisionFive 2 GMAC1 驱动实现与验收](visionfive2-gmac1驱动实现与验收.md)。
+
 为 JH7110 GMAC1 接入了 DesignWare MAC 驱动，完成：
 
 - GMAC1 时钟启用和 AXI/AHB reset 解除；

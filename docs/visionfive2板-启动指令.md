@@ -2,6 +2,8 @@
 
 本文记录在 VisionFive 2 上构建、传输和启动 Moss 的常用操作。以下命令按当前测试环境编写，设备名变化时请相应替换。
 
+GMAC1 的驱动架构、DMA/PHY/中断实现和分层验收依据见 [VisionFive 2 GMAC1 驱动实现与验收](visionfive2-gmac1驱动实现与验收.md)。
+
 | 项目 | 当前配置 |
 | --- | --- |
 | 串口 | `/dev/ttyACM0`，115200 波特率 |
