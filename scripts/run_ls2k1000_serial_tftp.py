@@ -121,6 +121,36 @@ class SerialRunner:
                 return tail
         raise TimeoutError(f"Linux command timed out: {line}")
 
+    def shell_command(self, line: str, timeout: float = 20) -> bytes:
+        """Run one command in the interactive MOSS shell without RX loss."""
+        marker = b"__MOSS_SHELL_DONE__"
+        self.emit_line(f"[serial-run] >>> MOSS shell: {line}")
+        # Discard any incomplete line left by a previous interrupted host
+        # session, then let BusyBox ash redraw its prompt before typing.
+        self.write(b"\x03\r")
+        prompt_deadline = time.monotonic() + 0.5
+        prompt_data = b""
+        while time.monotonic() < prompt_deadline:
+            prompt_data += self.read_and_emit(4096)
+            if b"\x1b[6n" in prompt_data:
+                # BusyBox ash asks an ANSI terminal for the cursor position
+                # before editing a line.  A human terminal answers this DSR;
+                # an unattended serial runner must do the same.
+                self.write(b"\x1b[1;1R")
+                prompt_data = b""
+        command = (
+            line.encode("ascii")
+            + b"; printf '\\n__MOSS_SHELL_%s__\\n' DONE\r"
+        )
+        self.write(command)
+        deadline = time.monotonic() + timeout
+        tail = b""
+        while time.monotonic() < deadline:
+            tail = (tail + self.read_and_emit())[-65536:]
+            if marker in tail:
+                return tail
+        raise TimeoutError(f"MOSS shell command timed out: {line}")
+
     def command(self, line: str, timeout: float = 20) -> bytes:
         self.emit_line(f"[serial-run] >>> {line}")
         self.write(line.encode("ascii") + b"\r")

@@ -76,6 +76,7 @@ echo "[2/7] run host-side state-machine tests"
 test_bin_dir="$repo_root/target/driver-tests"
 mkdir -p "$test_bin_dir"
 state_tests=(
+    "vendor/axplat/src/console_rx.rs:console-rx-buffer-tests"
     "vendor/axplat-loongarch64-ls2k1000/src/boot_arg.rs:ls2k1000-boot-arg-tests"
     "vendor/axplat-loongarch64-ls2k1000/src/node_clock_state.rs:ls2k1000-node-clock-tests"
     "vendor/fdt-parser/src/lib.rs:fdt-parser-tests"

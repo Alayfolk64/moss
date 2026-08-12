@@ -88,6 +88,14 @@ macro_rules! console_if_impl {
             fn irq_num() -> Option<usize> {
                 Some(crate::config::devices::UART_IRQ as _)
             }
+
+            #[cfg(feature = "irq")]
+            fn enable_rx_interrupt() {}
+
+            #[cfg(feature = "irq")]
+            fn register_rx_waker(_waker: &core::task::Waker) -> bool {
+                false
+            }
         }
     };
 }

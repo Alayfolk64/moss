@@ -74,10 +74,16 @@ pub mod paging;
 /// Console input and output.
 pub mod console {
     #[cfg(all(feature = "irq", any(feature = "defplat", feature = "myplat")))]
-    pub use axplat::console::{enable_rx_interrupt, irq_num};
+    pub use axplat::console::{enable_rx_interrupt, irq_num, register_rx_waker};
     #[cfg(all(feature = "irq", not(any(feature = "defplat", feature = "myplat"))))]
     pub fn irq_num() -> Option<usize> {
         None
+    }
+    #[cfg(all(feature = "irq", not(any(feature = "defplat", feature = "myplat"))))]
+    pub fn enable_rx_interrupt() {}
+    #[cfg(all(feature = "irq", not(any(feature = "defplat", feature = "myplat"))))]
+    pub fn register_rx_waker(_waker: &core::task::Waker) -> bool {
+        false
     }
     pub use axplat::console::{read_bytes, write_bytes};
 }

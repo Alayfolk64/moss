@@ -1,6 +1,9 @@
 //! Console input and output.
 
-use core::fmt::{Arguments, Result, Write};
+use core::{
+    fmt::{Arguments, Result, Write},
+    task::Waker,
+};
 
 /// Console input and output interface.
 #[def_plat_interface]
@@ -24,6 +27,16 @@ pub trait ConsoleIf {
     /// with receive interrupts already enabled may keep the default no-op.
     #[cfg(feature = "irq")]
     fn enable_rx_interrupt() {}
+
+    /// Registers a receive waiter with a platform-managed UART interrupt.
+    ///
+    /// Returns `true` when the platform continuously drains the UART into a
+    /// software buffer. The default `false` keeps the generic one-shot IRQ
+    /// waker as a compatibility path for simpler consoles.
+    #[cfg(feature = "irq")]
+    fn register_rx_waker(_waker: &Waker) -> bool {
+        false
+    }
 }
 
 struct EarlyConsole;

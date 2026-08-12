@@ -33,7 +33,10 @@ impl InitIf for InitIfImpl {
 
     fn init_later(_cpu_id: usize, _arg: usize) {
         #[cfg(feature = "irq")]
-        crate::irq::init();
+        {
+            crate::irq::init();
+            crate::console::init_irq();
+        }
         crate::time::init_percpu();
         #[cfg(all(feature = "smp", feature = "irq"))]
         axplat::irq::set_enable(crate::config::devices::IPI_IRQ, true);

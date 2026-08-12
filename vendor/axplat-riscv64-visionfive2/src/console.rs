@@ -1,5 +1,8 @@
+use core::task::Waker;
+
 use axplat::{
     console::ConsoleIf,
+    console_rx::ConsoleRxBuffer,
     mem::{pa, phys_to_virt},
 };
 use kspin::SpinNoIrq;
@@ -13,60 +16,28 @@ use crate::config::{
 
 const UART_REGISTER_STRIDE: usize = 4;
 const UART_IER_OFFSET: usize = UART_REGISTER_STRIDE;
+const UART_FCR_OFFSET: usize = 2 * UART_REGISTER_STRIDE;
+const UART_LSR_OFFSET: usize = 5 * UART_REGISTER_STRIDE;
 const UART_IER_RX_AVAILABLE: u32 = 1;
-const RX_BUFFER_SIZE: usize = 1024;
+const UART_FCR_ENABLE_AND_CLEAR: u32 = 0x07;
+const UART_LSR_OVERRUN_ERROR: u32 = 1 << 1;
+const RX_BUFFER_SIZE: usize = 8 * 1024;
 const RX_DRAIN_LIMIT: usize = 256;
 
 struct ConsoleUart {
     port: MmioSerialPort,
-    rx_buffer: [u8; RX_BUFFER_SIZE],
-    rx_head: usize,
-    rx_len: usize,
-    rx_dropped: usize,
 }
 
 impl ConsoleUart {
     fn new(base: usize) -> Self {
         Self {
             port: unsafe { MmioSerialPort::new_with_stride(base, UART_REGISTER_STRIDE) },
-            rx_buffer: [0; RX_BUFFER_SIZE],
-            rx_head: 0,
-            rx_len: 0,
-            rx_dropped: 0,
-        }
-    }
-
-    fn push_rx(&mut self, byte: u8) {
-        if self.rx_len == RX_BUFFER_SIZE {
-            self.rx_dropped = self.rx_dropped.saturating_add(1);
-            return;
-        }
-        let tail = (self.rx_head + self.rx_len) % RX_BUFFER_SIZE;
-        self.rx_buffer[tail] = byte;
-        self.rx_len += 1;
-    }
-
-    fn pop_rx(&mut self) -> Option<u8> {
-        if self.rx_len == 0 {
-            return None;
-        }
-        let byte = self.rx_buffer[self.rx_head];
-        self.rx_head = (self.rx_head + 1) % RX_BUFFER_SIZE;
-        self.rx_len -= 1;
-        Some(byte)
-    }
-
-    fn drain_hardware_rx(&mut self) {
-        for _ in 0..RX_DRAIN_LIMIT {
-            let Ok(byte) = self.port.try_receive() else {
-                break;
-            };
-            self.push_rx(byte);
         }
     }
 }
 
 static UART: LazyInit<SpinNoIrq<ConsoleUart>> = LazyInit::new();
+static RX: SpinNoIrq<ConsoleRxBuffer<RX_BUFFER_SIZE>> = SpinNoIrq::new(ConsoleRxBuffer::new());
 
 fn set_rx_interrupt(enabled: bool) {
     let value = if enabled { UART_IER_RX_AVAILABLE } else { 0 };
@@ -75,8 +46,49 @@ fn set_rx_interrupt(enabled: bool) {
     }
 }
 
+fn set_fifo() {
+    unsafe {
+        ((PHYS_VIRT_OFFSET + UART_PADDR + UART_FCR_OFFSET) as *mut u32)
+            .write_volatile(UART_FCR_ENABLE_AND_CLEAR);
+    }
+}
+
+fn line_status() -> u32 {
+    unsafe { ((PHYS_VIRT_OFFSET + UART_PADDR + UART_LSR_OFFSET) as *const u32).read_volatile() }
+}
+
+fn drain_hardware_rx() -> Option<Waker> {
+    let mut batch = [0; RX_DRAIN_LIMIT];
+    let (received, hardware_overruns) = {
+        let mut uart = UART.lock();
+        let mut received = 0;
+        let mut hardware_overruns = 0usize;
+        while received < batch.len() {
+            if line_status() & UART_LSR_OVERRUN_ERROR != 0 {
+                hardware_overruns = hardware_overruns.saturating_add(1);
+            }
+            let Ok(byte) = uart.port.try_receive() else {
+                break;
+            };
+            batch[received] = byte;
+            received += 1;
+        }
+        (received, hardware_overruns)
+    };
+
+    let mut rx = RX.lock();
+    rx.note_hardware_overruns(hardware_overruns);
+    if received == 0 {
+        return None;
+    }
+    rx.push_slice(&batch[..received]);
+    rx.pending_waker()
+}
+
 fn handle_uart_interrupt() {
-    UART.lock().drain_hardware_rx();
+    if let Some(waker) = drain_hardware_rx() {
+        waker.wake();
+    }
 }
 
 pub(crate) fn init_early() {
@@ -89,6 +101,7 @@ pub(crate) fn init_early() {
     // Firmware owns the UART before Moss starts. Mask its device-side source
     // until the PLIC handler has been installed during late platform init.
     set_rx_interrupt(false);
+    set_fifo();
 }
 
 #[cfg(feature = "irq")]
@@ -97,6 +110,7 @@ pub(crate) fn init_irq() {
         axplat::irq::register(UART_IRQ, handle_uart_interrupt),
         "failed to register VF2 UART IRQ {UART_IRQ}"
     );
+    set_rx_interrupt(true);
 }
 
 struct ConsoleIfImpl;
@@ -116,18 +130,8 @@ impl ConsoleIf for ConsoleIfImpl {
     }
 
     fn read_bytes(bytes: &mut [u8]) -> usize {
-        let mut uart = UART.lock();
-        for (index, byte) in bytes.iter_mut().enumerate() {
-            if let Some(received) = uart.pop_rx() {
-                *byte = received;
-                continue;
-            }
-            match uart.port.try_receive() {
-                Ok(received) => *byte = received,
-                Err(_) => return index,
-            }
-        }
-        bytes.len()
+        drop(drain_hardware_rx());
+        RX.lock().pop_slice(bytes)
     }
 
     #[cfg(feature = "irq")]
@@ -136,7 +140,14 @@ impl ConsoleIf for ConsoleIfImpl {
     }
 
     #[cfg(feature = "irq")]
-    fn enable_rx_interrupt() {
-        set_rx_interrupt(true);
+    fn enable_rx_interrupt() {}
+
+    #[cfg(feature = "irq")]
+    fn register_rx_waker(waker: &Waker) -> bool {
+        let pending = RX.lock().register_waker(waker);
+        if pending {
+            waker.wake_by_ref();
+        }
+        true
     }
 }

@@ -37,12 +37,13 @@ fn new_n_tty() -> Arc<NTtyDriver> {
             writer: Console,
             process_mode: if let Some(irq) = axhal::console::irq_num() {
                 ProcessMode::External(Box::new(move |waker| {
-                    // Drain once before this callback, then publish the waker
-                    // and unmask the interrupt controller before enabling the
-                    // NS16550 receive interrupt.  This ordering avoids a lost
-                    // first byte and an unhandled level interrupt window.
-                    register_irq_waker(irq, &waker);
-                    axhal::console::enable_rx_interrupt();
+                    // LS2K and VF2 keep their UART interrupt enabled and drain
+                    // into a platform ring. Other consoles retain the generic
+                    // one-shot IRQ masking behavior as a compatibility path.
+                    if !axhal::console::register_rx_waker(&waker) {
+                        register_irq_waker(irq, &waker);
+                        axhal::console::enable_rx_interrupt();
+                    }
                 }) as _)
             } else {
                 ProcessMode::Polling(Duration::from_millis(10))

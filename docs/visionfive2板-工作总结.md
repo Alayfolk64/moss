@@ -1,6 +1,6 @@
 # VisionFive 2 移植与调试工作总结
 
-本文总结截至 2026-08-11，Moss 在 StarFive VisionFive 2（JH7110）上的移植、驱动接入、问题定位和实板验证结果。日常构建、写卡、TFTP 和 U-Boot 命令见 [VisionFive 2 上板常用指令](visionfive2-quickstart.md)。
+本文总结截至 2026-08-12，Moss 在 StarFive VisionFive 2（JH7110）上的移植、驱动接入、问题定位和实板验证结果。日常构建、写卡、TFTP 和 U-Boot 命令见 [VisionFive 2 上板常用指令](visionfive2-quickstart.md)。
 
 ## 1. 当前结论
 
@@ -73,12 +73,18 @@ JH7110 UART 是 8250 兼容设备，但寄存器步长为 4 字节。Moss 沿用
 完成的改动包括：
 
 - UART RX 接入 PLIC，不再由 shell 持续轮询硬件；
-- 增加 1 KiB 软件接收环形缓冲区；
-- UART 中断中批量排空硬件 FIFO；
+- 使用与 LS2K1000LA 共用的无堆分配 8 KiB 软件接收环；
+- UART 中断每轮最多抽取 256 字节并批量排空硬件 FIFO，释放锁后再唤醒 TTY；
+- PLIC handler 注册成功后才开启 UART RX interrupt，并保持设备中断持续启用，不再使用会在
+  每次唤醒后屏蔽 source 的通用 one-shot IRQ waker；
 - SMP 输出使用同一把锁保持单次写入连续；
 - 修正终端行规程中的退格、控制字符和信号处理。
 
 早期 shell 中出现的按键无响应、退格显示 `^H`、方向键输出转义字符、命令残留后进入 `>` 提示等问题，属于 UART 输入与 TTY 行规程缺陷，不是 VF2 对 shell 命令格式的特殊要求。
+
+2026-08-12 的这次 RX 重构已通过 `make kernel-vf2`。本轮 VF2 未连接，因此这里不把构建通过
+写成新的实板长粘贴验收；下次上板应保持回显开启，用一次串口写入复测 22、262 和 518 字节
+完整命令。
 
 ## 6. SD 卡与 ext4
 

@@ -4,7 +4,9 @@
 
 本文只记录当前可继续使用的方案。完整实验过程和旧镜像证据保留在
 [调试状态报告](ls2k1000la-debugging-status-20260808.md) 与
-[Linux 6.12 验收报告](ls2k1000la-linux612-usage-report-20260811.md) 中。
+[Linux 6.12 验收报告](ls2k1000la-linux612-usage-report-20260811.md) 中。串口长文本粘贴、文件复制
+和宿主机向板子传文件的分层检查见
+[复制与串口长输入排查](ls2k1000la-copy-troubleshooting.md)。
 
 ## 1. 已确认的硬件与磁盘基线
 
@@ -38,7 +40,8 @@
 
 1. `scripts/check_ls2k1000_static.sh`
    - 使用 `dtc`、`fdtget` 验证双核、AHCI、GMAC、RTC、watchdog 和 syscon 的 DT 合同；
-   - 使用宿主机 `rustc --test` 运行 15 组不访问 MMIO 的解析/状态机测试；
+   - 使用宿主机 `rustc --test` 运行 16 组不访问 MMIO 的解析/状态机测试，其中包括公共串口
+     RX 环的顺序、回绕、溢出计数和 waker 测试；
    - 使用 `llvm-readelf`、`llvm-objdump` 检查 LoongArch 入口、上下文切换、DTB 访问和
      `.dma_uncached` 段；
    - 实际构建并检查生产、交互两个镜像，不再用大量源码正则猜测实现顺序。
@@ -48,7 +51,8 @@
      `/swapfile-moss` 的物理 extent，然后重启并连续发送 U-Boot 停止键；
    - 自动设置网络、DT bootargs、swap extent、AHCI/GMAC 属性，TFTP 加载镜像并采集串口日志；
    - 在 `go` 前安装 30 秒 U-Boot watchdog，覆盖 TFTP 后到 MOSS 早期初始化的空窗。交互镜像
-     进入 MOSS 后会主动关闭它。
+     进入 MOSS 后会主动关闭它；自动向交互 shell 输入时会回应 ANSI 光标查询，并把完整命令
+     一次写入串口，不再使用固定逐字节节流。
 
 此前的 BSP2 chain、rescue initramfs、旧 Linux uImage runner、分区写盘脚本均属于一次性实验
 工具，不再作为当前生产流程入口；其结果和命令仍可从两份历史报告追溯。

@@ -1,14 +1,21 @@
-use axplat::console::ConsoleIf;
+use core::task::Waker;
+
+use axplat::{console::ConsoleIf, console_rx::ConsoleRxBuffer};
 use kspin::SpinNoIrq;
 
 use crate::fdt::{UartResource, resources, uncached_addr};
 
 const UART_RBR_THR: usize = 0;
 const UART_IER: usize = 1;
+const UART_FCR: usize = 2;
 const UART_LSR: usize = 5;
 const UART_IER_RECEIVED_DATA_AVAILABLE: u8 = 1;
+const UART_FCR_ENABLE_AND_CLEAR: u8 = 0x07;
 const UART_LSR_DATA_READY: u32 = 1;
+const UART_LSR_OVERRUN_ERROR: u32 = 1 << 1;
 const UART_LSR_THR_EMPTY: u32 = 1 << 5;
+const RX_BUFFER_SIZE: usize = 8 * 1024;
+const RX_DRAIN_LIMIT: usize = 256;
 
 struct Ns16550 {
     base: usize,
@@ -37,6 +44,7 @@ impl Ns16550 {
         // Preserve the firmware baud divisor; the board DT commonly describes
         // the source through a clock controller rather than clock-frequency.
         uart.write(UART_IER, 0);
+        uart.write(UART_FCR, UART_FCR_ENABLE_AND_CLEAR);
         uart
     }
 
@@ -77,6 +85,47 @@ impl Ns16550 {
 // also copies the lock's seven padding bytes; the pinned LoongArch backend
 // widened that padding copy into unaligned word loads/stores on LA264.
 static UART: SpinNoIrq<Ns16550> = SpinNoIrq::new(Ns16550::uninit());
+static RX: SpinNoIrq<ConsoleRxBuffer<RX_BUFFER_SIZE>> = SpinNoIrq::new(ConsoleRxBuffer::new());
+
+/// Drains the bounded NS16550 hardware FIFO into the larger software ring.
+///
+/// The UART lock is released before the RX lock is acquired, and the caller
+/// wakes the tty outside both locks. This keeps the IRQ path non-recursive.
+fn drain_hardware_rx() -> Option<Waker> {
+    let mut batch = [0; RX_DRAIN_LIMIT];
+    let (received, hardware_overruns) = {
+        let uart = UART.lock();
+        let mut received = 0;
+        let mut hardware_overruns = 0usize;
+        while received < batch.len() {
+            let status = uart.read(UART_LSR);
+            if status & UART_LSR_OVERRUN_ERROR != 0 {
+                hardware_overruns = hardware_overruns.saturating_add(1);
+            }
+            if status & UART_LSR_DATA_READY == 0 {
+                break;
+            }
+            batch[received] = uart.read(UART_RBR_THR) as u8;
+            received += 1;
+        }
+        (received, hardware_overruns)
+    };
+
+    let mut rx = RX.lock();
+    rx.note_hardware_overruns(hardware_overruns);
+    if received == 0 {
+        return None;
+    }
+    rx.push_slice(&batch[..received]);
+    rx.pending_waker()
+}
+
+#[cfg(feature = "irq")]
+fn handle_uart_interrupt() {
+    if let Some(waker) = drain_hardware_rx() {
+        waker.wake();
+    }
+}
 
 pub(crate) fn init_early() {
     let resource = resources().uart;
@@ -86,6 +135,24 @@ pub(crate) fn init_early() {
          irq={:?}",
         resource.paddr, resource.reg_shift, resource.reg_io_width, resource.clock_hz, resource.irq,
     );
+}
+
+#[cfg(feature = "irq")]
+pub(crate) fn init_irq() {
+    let irq = resources()
+        .uart
+        .irq
+        .expect("LS2K1000 UART is missing its DT interrupt");
+    assert!(
+        axplat::irq::register(irq, handle_uart_interrupt),
+        "failed to register LS2K1000 UART IRQ {irq}"
+    );
+
+    // The controller and handler are live before the NS16550 can assert its
+    // level interrupt, so queued firmware-era input cannot hit an empty slot.
+    let uart = UART.lock();
+    let ier = uart.read(UART_IER) as u8;
+    uart.write(UART_IER, ier | UART_IER_RECEIVED_DATA_AVAILABLE);
 }
 
 struct ConsoleIfImpl;
@@ -103,14 +170,10 @@ impl ConsoleIf for ConsoleIfImpl {
     }
 
     fn read_bytes(bytes: &mut [u8]) -> usize {
-        let uart = UART.lock();
-        for (index, byte) in bytes.iter_mut().enumerate() {
-            if uart.read(UART_LSR) & UART_LSR_DATA_READY == 0 {
-                return index;
-            }
-            *byte = uart.read(UART_RBR_THR) as u8;
-        }
-        bytes.len()
+        // Poll once as well as servicing IRQs. This covers the short interval
+        // before late IRQ initialization and makes diagnostics deterministic.
+        drop(drain_hardware_rx());
+        RX.lock().pop_slice(bytes)
     }
 
     #[cfg(feature = "irq")]
@@ -119,21 +182,14 @@ impl ConsoleIf for ConsoleIfImpl {
     }
 
     #[cfg(feature = "irq")]
-    fn enable_rx_interrupt() {
-        let changed = {
-            let uart = UART.lock();
-            let ier = uart.read(UART_IER) as u8;
-            if ier & UART_IER_RECEIVED_DATA_AVAILABLE == 0 {
-                uart.write(UART_IER, ier | UART_IER_RECEIVED_DATA_AVAILABLE);
-                true
-            } else {
-                false
-            }
-        };
-        // Never print through ConsoleIf while holding UART: the print path
-        // takes the same lock and would deadlock before the first RX IRQ.
-        if changed {
-            warn!("LS2K1000 console RX interrupt enabled");
+    fn enable_rx_interrupt() {}
+
+    #[cfg(feature = "irq")]
+    fn register_rx_waker(waker: &Waker) -> bool {
+        let pending = RX.lock().register_waker(waker);
+        if pending {
+            waker.wake_by_ref();
         }
+        true
     }
 }

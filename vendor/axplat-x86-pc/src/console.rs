@@ -54,4 +54,12 @@ impl ConsoleIf for ConsoleIfImpl {
     fn irq_num() -> Option<usize> {
         None
     }
+
+    #[cfg(feature = "irq")]
+    fn enable_rx_interrupt() {}
+
+    #[cfg(feature = "irq")]
+    fn register_rx_waker(_waker: &core::task::Waker) -> bool {
+        false
+    }
 }

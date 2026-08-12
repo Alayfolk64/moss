@@ -76,4 +76,9 @@ impl ConsoleIf for ConsoleIfImpl {
         // This console deliberately uses polling (see `irq_num`), so there is
         // no device-side receive interrupt to enable.
     }
+
+    #[cfg(feature = "irq")]
+    fn register_rx_waker(_waker: &core::task::Waker) -> bool {
+        false
+    }
 }

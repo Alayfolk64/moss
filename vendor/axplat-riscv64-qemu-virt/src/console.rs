@@ -56,4 +56,9 @@ impl ConsoleIf for ConsoleIfImpl {
     fn enable_rx_interrupt() {
         // `MmioSerialPort::init` enables the receive interrupt already.
     }
+
+    #[cfg(feature = "irq")]
+    fn register_rx_waker(_waker: &core::task::Waker) -> bool {
+        false
+    }
 }
