@@ -5,13 +5,19 @@ use volatile::VolatilePtr;
 
 use crate::{
     cmd::{Command, DataXfer},
-    regs::{ClkDiv, ClkEna, IntMask, RegisterBlock, RegisterBlockVolatileFieldAccess, TmOut},
+    idmac::{self, Descriptor, DmaConfig},
+    interrupt::{IDMAC_COMPLETE, IDMAC_ERROR, InterruptWait},
+    regs::{
+        ClkDiv, ClkEna, IntMask, RIntSts, RegisterBlock, RegisterBlockVolatileFieldAccess, TmOut,
+    },
     utils::{Cid, CsdV2},
 };
 
 /// An SD/MMC block transfer error.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SdMmcError {
+    /// A block range or DMA buffer does not meet the controller requirements.
+    InvalidParameter,
     /// The controller rejected or failed a command after all retry attempts.
     CommandFailed,
     /// The controller could not be returned to an idle state after an error.
@@ -28,18 +34,6 @@ where
     while !f() {
         core::hint::spin_loop();
     }
-}
-
-/// Platform hooks used by the interrupt-driven SD/MMC path.
-pub trait InterruptWait: Sync {
-    /// Discards the previous notification before starting a command.
-    fn prepare(&self);
-    /// Waits for the controller interrupt. Returns `false` on timeout.
-    fn wait(&self, timeout: Duration) -> bool;
-    /// Unmasks the controller interrupt after its status has been acknowledged.
-    fn rearm(&self);
-    /// Returns a monotonic timestamp in milliseconds.
-    fn current_ms(&self) -> u64;
 }
 
 /// Enables or disables the controller's global interrupt output.
@@ -60,6 +54,8 @@ pub struct SdMmc {
     regs: VolatilePtr<'static, RegisterBlock>,
     num_blocks: u64,
     interrupt: Option<&'static dyn InterruptWait>,
+    dma: Option<DmaConfig>,
+    dma_reported: bool,
 }
 
 impl SdMmc {
@@ -68,6 +64,7 @@ impl SdMmc {
     const FLUSH_TIMEOUT_MS: u64 = 10_000;
     const RESET_TIMEOUT_MS: u64 = 100;
     const BLOCK_ATTEMPTS: usize = 3;
+    const IDMAC_FIFO_THRESHOLD: u32 = 0x300f_0010;
 
     /// Creates a new `SdMmc` instance from the given base address.
     ///
@@ -82,6 +79,8 @@ impl SdMmc {
             regs,
             num_blocks: 0,
             interrupt: None,
+            dma: None,
+            dma_reported: false,
         };
         this.init();
         this
@@ -99,8 +98,41 @@ impl SdMmc {
             regs,
             num_blocks: 0,
             interrupt: Some(interrupt),
+            dma: None,
+            dma_reported: false,
         };
         this.init();
+        this
+    }
+
+    /// Creates an interrupt-driven SD/MMC instance with the internal DMA engine.
+    ///
+    /// # Safety
+    ///
+    /// The caller must uphold the MMIO and interrupt requirements of
+    /// [`Self::new_with_interrupt`] and the memory requirements of
+    /// [`DmaConfig::new`].
+    pub unsafe fn new_with_interrupt_and_dma(
+        base: usize,
+        interrupt: &'static dyn InterruptWait,
+        dma: DmaConfig,
+    ) -> Self {
+        assert!(dma.descriptors.is_multiple_of(16));
+        assert!(dma.buffer.is_multiple_of(4096));
+        assert!(dma.max_transfer_len() >= Self::BLOCK_SIZE);
+        let regs = unsafe { VolatilePtr::new(NonNull::new_unchecked(base as *mut _)) };
+        let mut this = Self {
+            regs,
+            num_blocks: 0,
+            interrupt: Some(interrupt),
+            dma: Some(dma),
+            dma_reported: false,
+        };
+        this.init();
+        info!(
+            "SD/MMC IDMAC enabled with {} KiB bounce buffer",
+            dma.max_transfer_len() / 1024
+        );
         this
     }
 
@@ -241,7 +273,7 @@ impl SdMmc {
 
         if let Some(interrupt) = self.interrupt {
             self.configure_interrupt_mask();
-            interrupt.prepare();
+            interrupt.finish();
             interrupt.rearm();
         }
 
@@ -352,8 +384,6 @@ impl SdMmc {
     }
 
     fn send_cmd_interrupt(&self, command: Command<'_>) -> Option<[u32; 4]> {
-        const COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
-
         trace!("send_cmd {command:#x?}");
         let (cmd, arg, mut xfer) = command.build();
         assert_eq!(cmd.data_expected(), xfer.is_some());
@@ -382,22 +412,6 @@ impl SdMmc {
         let stale = self.regs.rintsts().read();
         self.regs.rintsts().write(stale);
         let interrupt = self.interrupt.unwrap();
-        interrupt.prepare();
-        interrupt.rearm();
-
-        self.regs.cmdarg().write(arg);
-        self.regs.cmd().write(cmd);
-
-        let word_bytes = self.fifo_word_bytes();
-        let fifo_locations = word_bytes.div_ceil(4);
-        let transfer_len = if xfer.is_some() {
-            self.regs.bytcnt().read() as usize
-        } else {
-            0
-        };
-        let mut offset = 0usize;
-        let mut command_done = false;
-        let mut data_done = xfer.is_none();
 
         if xfer.is_some() {
             // RXDR/TXDR require prompt FIFO service. Sleeping until the driver
@@ -405,7 +419,17 @@ impl SdMmc {
             // starvation timeout under load. Until DMA is available, keep the
             // requesting CPU active for the short data phase and use the raw
             // status register as the completion source.
+            interrupt.finish();
             self.regs.ctrl().update(|r| r.with_int_enable(false));
+            self.regs.cmdarg().write(arg);
+            self.regs.cmd().write(cmd);
+
+            let word_bytes = self.fifo_word_bytes();
+            let fifo_locations = word_bytes.div_ceil(4);
+            let transfer_len = self.regs.bytcnt().read() as usize;
+            let mut offset = 0usize;
+            let mut command_done = false;
+            let mut data_done = false;
             let deadline = interrupt
                 .current_ms()
                 .saturating_add(Self::COMMAND_TIMEOUT_MS);
@@ -448,7 +472,6 @@ impl SdMmc {
                         cmd.cmd_index(),
                         self.regs.resp().read()
                     );
-                    interrupt.prepare();
                     interrupt.rearm();
                     return None;
                 }
@@ -458,7 +481,6 @@ impl SdMmc {
                         DataXfer::Read(buf) => buf.len(),
                         DataXfer::Write(buf) => buf.len(),
                     });
-                    interrupt.prepare();
                     interrupt.rearm();
                     if offset != expected {
                         warn!(
@@ -477,7 +499,6 @@ impl SdMmc {
                         self.regs.rintsts().read(),
                         self.regs.status().read(),
                     );
-                    interrupt.prepare();
                     interrupt.rearm();
                     return None;
                 }
@@ -485,8 +506,19 @@ impl SdMmc {
             }
         }
 
+        interrupt.prepare();
+        interrupt.rearm();
+        self.regs.cmdarg().write(arg);
+        self.regs.cmd().write(cmd);
+        let deadline = interrupt
+            .current_ms()
+            .saturating_add(Self::COMMAND_TIMEOUT_MS);
+
         loop {
-            if !interrupt.wait(COMMAND_TIMEOUT) {
+            let now = interrupt.current_ms();
+            if now >= deadline
+                || !interrupt.wait(Duration::from_millis(deadline.saturating_sub(now)))
+            {
                 warn!(
                     "SD/MMC CMD{} interrupt timed out: rintsts={:?}, mintsts={:?}, status={:?}",
                     cmd.cmd_index(),
@@ -494,37 +526,13 @@ impl SdMmc {
                     self.regs.mintsts().read(),
                     self.regs.status().read(),
                 );
+                interrupt.finish();
                 interrupt.rearm();
                 return None;
             }
 
-            let status = self.regs.rintsts().read();
-            command_done |= status.command_done();
-            data_done |= status.data_transfer_over();
-
-            if let Some(ref mut xfer) = xfer {
-                match xfer {
-                    DataXfer::Read(buf)
-                        if status.receive_fifo_data_request() || status.data_transfer_over() =>
-                    {
-                        while self.fifo_cnt() >= fifo_locations
-                            && offset + word_bytes <= transfer_len
-                        {
-                            self.read_fifo_word(&mut buf[offset..offset + word_bytes]);
-                            offset += word_bytes;
-                        }
-                    }
-                    DataXfer::Write(buf) if status.transmit_fifo_data_request() => {
-                        while self.fifo_cnt() < 120 && offset + word_bytes <= transfer_len {
-                            self.write_fifo_word(&buf[offset..offset + word_bytes]);
-                            offset += word_bytes;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            self.regs.rintsts().write(status);
+            let events = interrupt.take_status();
+            let status = RIntSts::from_bits(events & 0xffff);
             let failed = status.error();
             interrupt.rearm();
 
@@ -534,25 +542,237 @@ impl SdMmc {
                     cmd.cmd_index(),
                     self.regs.resp().read()
                 );
+                interrupt.finish();
                 return None;
             }
-            if command_done && data_done {
-                if let Some(ref xfer) = xfer {
-                    let buffer_len = match xfer {
-                        DataXfer::Read(buf) => buf.len(),
-                        DataXfer::Write(buf) => buf.len(),
-                    };
-                    let expected = transfer_len.min(buffer_len);
-                    if offset != expected {
-                        warn!(
-                            "SD/MMC CMD{} transferred {offset}/{expected} bytes",
-                            cmd.cmd_index()
-                        );
-                        return None;
-                    }
-                }
+            if status.command_done() {
+                interrupt.finish();
                 return Some(self.regs.resp().read());
             }
+        }
+    }
+
+    fn reset_idmac(&self) -> bool {
+        self.regs.ctrl().update(|r| r.with_dma_reset(true));
+        if !self.wait_until_bounded(Self::RESET_TIMEOUT_MS, || {
+            !self.regs.ctrl().read().dma_reset()
+        }) {
+            return false;
+        }
+        self.regs.bmod().update(|r| r.with_de(false).with_swr(true));
+        self.wait_until_bounded(Self::RESET_TIMEOUT_MS, || !self.regs.bmod().read().swr())
+    }
+
+    fn stop_idmac(&self, fifo_threshold: u32) {
+        self.regs.idinten().write(0);
+        self.regs.bmod().update(|r| r.with_de(false));
+        self.regs
+            .ctrl()
+            .update(|r| r.with_dma_enable(false).with_use_internal_dmac(false));
+        self.regs.fifoth().write(fifo_threshold.into());
+        let idmac = self.regs.idsts().read() & idmac::INT_CLEAR;
+        if idmac != 0 {
+            self.regs.idsts().write(idmac);
+        }
+        let controller = self.regs.rintsts().read();
+        if controller.into_bits() != 0 {
+            self.regs.rintsts().write(controller);
+        }
+        if let Some(interrupt) = self.interrupt {
+            interrupt.finish();
+            interrupt.rearm();
+        }
+    }
+
+    fn send_cmd_dma(&mut self, command: Command<'_>) -> bool {
+        let (Some(dma), Some(interrupt)) = (self.dma, self.interrupt) else {
+            return false;
+        };
+        let (cmd, arg, Some(xfer)) = command.build() else {
+            return false;
+        };
+        let (transfer_len, write) = match &xfer {
+            DataXfer::Read(buf) => (buf.len(), false),
+            DataXfer::Write(buf) => (buf.len(), true),
+        };
+        if transfer_len == 0
+            || !transfer_len.is_multiple_of(Self::BLOCK_SIZE)
+            || transfer_len > dma.max_transfer_len()
+        {
+            return false;
+        }
+        if !self.wait_until_interrupt(1_000, || self.can_send_cmd())
+            || !self.wait_until_interrupt(1_000, || self.can_send_data())
+        {
+            warn!(
+                "SD/MMC controller stayed busy before DMA CMD{}",
+                cmd.cmd_index()
+            );
+            return false;
+        }
+
+        // SAFETY: DmaConfig guarantees exclusive static memory, and SdMmc is
+        // exclusively borrowed for this entire transfer.
+        let bounce =
+            unsafe { core::slice::from_raw_parts_mut(dma.buffer as *mut u8, transfer_len) };
+        if let DataXfer::Write(buf) = &xfer {
+            bounce.copy_from_slice(buf);
+        }
+        let table_phys = (dma.virt_to_phys)(dma.descriptors);
+        let buffer_phys = (dma.virt_to_phys)(dma.buffer);
+        // SAFETY: DmaConfig guarantees an aligned descriptor region and
+        // max_transfer_len bounds the number of descriptors written below.
+        let descriptors = unsafe {
+            core::slice::from_raw_parts_mut(
+                dma.descriptors as *mut Descriptor,
+                dma.descriptor_count,
+            )
+        };
+        let Some(descriptor_count) =
+            idmac::prepare_descriptors(descriptors, table_phys, buffer_phys, transfer_len)
+        else {
+            warn!("SD/MMC IDMAC memory is outside its 32-bit address domain");
+            return false;
+        };
+
+        let fifo_threshold = self.regs.fifoth().read().into_bits();
+        if !self.reset_idmac() {
+            warn!("SD/MMC IDMAC reset timed out");
+            return false;
+        }
+        let controller = self.regs.rintsts().read();
+        self.regs.rintsts().write(controller);
+        self.regs.idsts().write(idmac::INT_CLEAR);
+        self.set_transaction_size(Self::BLOCK_SIZE as u16, transfer_len as u32);
+        self.regs.fifoth().write(Self::IDMAC_FIFO_THRESHOLD.into());
+
+        interrupt.prepare();
+        (dma.barrier)();
+        self.regs.dbaddr().write(table_phys as u32);
+        self.regs.ctrl().update(|r| {
+            r.with_use_internal_dmac(true)
+                .with_dma_enable(true)
+                .with_int_enable(true)
+        });
+        self.regs.idinten().write(idmac::INT_ENABLE);
+        self.regs
+            .bmod()
+            .update(|r| r.with_swr(false).with_fb(true).with_de(true));
+        (dma.barrier)();
+        self.regs.pldmnd().write(1);
+        interrupt.rearm();
+        self.regs.cmdarg().write(arg);
+        self.regs.cmd().write(cmd);
+
+        let deadline = interrupt
+            .current_ms()
+            .saturating_add(Self::COMMAND_TIMEOUT_MS);
+        let mut command_done = false;
+        let mut controller_done = false;
+        let mut idmac_done = false;
+        let mut success = false;
+        loop {
+            let now = interrupt.current_ms();
+            if now >= deadline
+                || !interrupt.wait(Duration::from_millis(deadline.saturating_sub(now)))
+            {
+                warn!(
+                    "SD/MMC CMD{} IDMAC timeout: cmd={} dto={} dma={} rint={:#010x} id={:#010x} \
+                     status={:#010x} tcb={} tbb={} desc={:#010x} buf={:#010x}",
+                    cmd.cmd_index(),
+                    command_done,
+                    controller_done,
+                    idmac_done,
+                    self.regs.rintsts().read().into_bits(),
+                    self.regs.idsts().read(),
+                    self.regs.status().read().into_bits(),
+                    self.regs.tcbcnt().read(),
+                    self.regs.tbbcnt().read(),
+                    self.regs.dscaddr().read(),
+                    self.regs.bufaddr().read(),
+                );
+                break;
+            }
+
+            let events = interrupt.take_status();
+            let status = RIntSts::from_bits(events & 0xffff);
+            command_done |= status.command_done();
+            controller_done |= status.data_transfer_over();
+            idmac_done |= events & IDMAC_COMPLETE != 0;
+            if status.error() || events & IDMAC_ERROR != 0 {
+                warn!(
+                    "SD/MMC CMD{} IDMAC failed: events={events:#010x} resp={:?}",
+                    cmd.cmd_index(),
+                    self.regs.resp().read(),
+                );
+                break;
+            }
+            if command_done && controller_done && idmac_done {
+                success = true;
+                break;
+            }
+            interrupt.rearm();
+        }
+
+        (dma.barrier)();
+        self.stop_idmac(fifo_threshold);
+        if success && !write {
+            if let DataXfer::Read(buf) = xfer {
+                buf.copy_from_slice(bounce);
+            } else {
+                return false;
+            }
+        }
+        if success && !self.dma_reported {
+            info!(
+                "SD/MMC IDMAC transfer verified: CMD{} blocks={} descriptors={descriptor_count}",
+                cmd.cmd_index(),
+                transfer_len / Self::BLOCK_SIZE,
+            );
+            self.dma_reported = true;
+        }
+        success
+    }
+
+    fn recover_idmac(&self) -> bool {
+        self.regs.idinten().write(0);
+        self.regs.bmod().update(|r| r.with_de(false));
+        self.regs.ctrl().update(|r| {
+            r.with_int_enable(false)
+                .with_dma_enable(false)
+                .with_use_internal_dmac(false)
+                .with_fifo_reset(true)
+                .with_dma_reset(true)
+        });
+        let reset_done = self.wait_until_bounded(Self::RESET_TIMEOUT_MS, || {
+            let ctrl = self.regs.ctrl().read();
+            !ctrl.fifo_reset() && !ctrl.dma_reset()
+        });
+        self.regs.bmod().update(|r| r.with_swr(true));
+        let bmod_done =
+            self.wait_until_bounded(Self::RESET_TIMEOUT_MS, || !self.regs.bmod().read().swr());
+        self.regs.idsts().write(idmac::INT_CLEAR);
+        let status = self.regs.rintsts().read();
+        self.regs.rintsts().write(status);
+        self.configure_timeouts();
+        self.configure_interrupt_mask();
+        let Some(interrupt) = self.interrupt else {
+            return false;
+        };
+        interrupt.finish();
+        interrupt.rearm();
+        reset_done && bmod_done
+    }
+
+    fn stop_transmission(&self) -> bool {
+        if self.send_cmd(Command::StopTransmission).is_none() {
+            return false;
+        }
+        if self.wait_until_bounded(Self::COMMAND_TIMEOUT_MS, || self.can_send_data()) {
+            true
+        } else {
+            warn!("SD/MMC CMD12 busy phase timed out");
+            false
         }
     }
 
@@ -605,7 +825,7 @@ impl SdMmc {
             self.configure_interrupt_mask();
             self.regs.ctrl().update(|r| r.with_int_enable(true));
             let interrupt = self.interrupt.unwrap();
-            interrupt.prepare();
+            interrupt.finish();
             interrupt.rearm();
         }
 
@@ -675,6 +895,9 @@ impl SdMmc {
 
     /// Reads a single block from the SD/MMC card.
     pub fn read_block(&mut self, block: u32, buf: &mut [u8; 512]) -> Result<(), SdMmcError> {
+        if self.dma.is_some() {
+            return self.read_blocks(block, buf);
+        }
         self.set_transaction_size(512, 512);
         for attempt in 1..=Self::BLOCK_ATTEMPTS {
             if self
@@ -696,6 +919,9 @@ impl SdMmc {
 
     /// Writes a single block to the SD/MMC card.
     pub fn write_block(&mut self, block: u32, buf: &[u8; 512]) -> Result<(), SdMmcError> {
+        if self.dma.is_some() {
+            return self.write_blocks(block, buf);
+        }
         self.set_transaction_size(512, 512);
         for attempt in 1..=Self::BLOCK_ATTEMPTS {
             if self
@@ -713,6 +939,98 @@ impl SdMmc {
             self.set_transaction_size(512, 512);
         }
         Err(SdMmcError::CommandFailed)
+    }
+
+    /// Reads one or more contiguous blocks, using IDMAC when configured.
+    pub fn read_blocks(&mut self, block: u32, buf: &mut [u8]) -> Result<(), SdMmcError> {
+        if buf.is_empty() || !buf.len().is_multiple_of(Self::BLOCK_SIZE) {
+            return Err(SdMmcError::InvalidParameter);
+        }
+        let block_count = u32::try_from(buf.len() / Self::BLOCK_SIZE)
+            .map_err(|_| SdMmcError::InvalidParameter)?;
+        if block.checked_add(block_count).is_none() {
+            return Err(SdMmcError::InvalidParameter);
+        }
+        let Some(dma) = self.dma else {
+            let (blocks, _) = buf.as_chunks_mut::<{ Self::BLOCK_SIZE }>();
+            for (offset, data) in blocks.iter_mut().enumerate() {
+                self.read_block(block + offset as u32, data)?;
+            }
+            return Ok(());
+        };
+        if buf.len() > dma.max_transfer_len() {
+            return Err(SdMmcError::InvalidParameter);
+        }
+
+        for attempt in 1..=Self::BLOCK_ATTEMPTS {
+            let command = if block_count == 1 {
+                Command::ReadSingleBlock(block, buf)
+            } else {
+                Command::ReadMultipleBlocks(block, buf)
+            };
+            let data_ok = self.send_cmd_dma(command);
+            let stop_ok = block_count == 1 || self.stop_transmission();
+            if data_ok && stop_ok {
+                return Ok(());
+            }
+            warn!(
+                "SD/MMC blocks {block}..{} DMA read attempt {attempt} failed",
+                block + block_count,
+            );
+            if !self.recover_idmac() {
+                return Err(SdMmcError::RecoveryFailed);
+            }
+        }
+        Err(SdMmcError::CommandFailed)
+    }
+
+    /// Writes one or more contiguous blocks, using IDMAC when configured.
+    pub fn write_blocks(&mut self, block: u32, buf: &[u8]) -> Result<(), SdMmcError> {
+        if buf.is_empty() || !buf.len().is_multiple_of(Self::BLOCK_SIZE) {
+            return Err(SdMmcError::InvalidParameter);
+        }
+        let block_count = u32::try_from(buf.len() / Self::BLOCK_SIZE)
+            .map_err(|_| SdMmcError::InvalidParameter)?;
+        if block.checked_add(block_count).is_none() {
+            return Err(SdMmcError::InvalidParameter);
+        }
+        let Some(dma) = self.dma else {
+            let (blocks, _) = buf.as_chunks::<{ Self::BLOCK_SIZE }>();
+            for (offset, data) in blocks.iter().enumerate() {
+                self.write_block(block + offset as u32, data)?;
+            }
+            return Ok(());
+        };
+        if buf.len() > dma.max_transfer_len() {
+            return Err(SdMmcError::InvalidParameter);
+        }
+
+        for attempt in 1..=Self::BLOCK_ATTEMPTS {
+            let command = if block_count == 1 {
+                Command::WriteSingleBlock(block, buf)
+            } else {
+                Command::WriteMultipleBlocks(block, buf)
+            };
+            let data_ok = self.send_cmd_dma(command);
+            let stop_ok = block_count == 1 || self.stop_transmission();
+            if data_ok && stop_ok {
+                return Ok(());
+            }
+            warn!(
+                "SD/MMC blocks {block}..{} DMA write attempt {attempt} failed",
+                block + block_count,
+            );
+            if !self.recover_idmac() {
+                return Err(SdMmcError::RecoveryFailed);
+            }
+        }
+        Err(SdMmcError::CommandFailed)
+    }
+
+    /// Maximum number of blocks accepted by one request.
+    pub fn max_transfer_blocks(&self) -> usize {
+        self.dma
+            .map_or(1, |dma| dma.max_transfer_len() / Self::BLOCK_SIZE)
     }
 
     /// Waits until the card has finished programming all previously written data.

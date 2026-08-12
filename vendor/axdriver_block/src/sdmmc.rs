@@ -2,7 +2,9 @@
 
 use axdriver_base::{BaseDriverOps, DevError, DevResult, DeviceType};
 use simple_sdmmc::SdMmc;
-pub use simple_sdmmc::{InterruptWait, set_interrupt_enabled};
+pub use simple_sdmmc::{
+    DmaConfig, InterruptMailbox, InterruptWait, acknowledge_interrupt, set_interrupt_enabled,
+};
 use spin::Mutex;
 
 use crate::BlockDriverOps;
@@ -25,6 +27,17 @@ impl SdMmcDriver {
     pub unsafe fn new_with_interrupt(base: usize, interrupt: &'static dyn InterruptWait) -> Self {
         Self(Mutex::new(unsafe {
             SdMmc::new_with_interrupt(base, interrupt)
+        }))
+    }
+
+    /// Creates an interrupt-driven driver backed by DWMMC IDMAC memory.
+    pub unsafe fn new_with_interrupt_and_dma(
+        base: usize,
+        interrupt: &'static dyn InterruptWait,
+        dma: DmaConfig,
+    ) -> Self {
+        Self(Mutex::new(unsafe {
+            SdMmc::new_with_interrupt_and_dma(base, interrupt, dma)
         }))
     }
 }
@@ -62,10 +75,13 @@ impl BlockDriverOps for SdMmcDriver {
         if end_block > inner.num_blocks() || end_block > u32::MAX as u64 + 1 {
             return Err(DevError::InvalidParam);
         }
-        for (i, block) in blocks.iter_mut().enumerate() {
+        let max_bytes = inner.max_transfer_blocks() * SdMmc::BLOCK_SIZE;
+        let mut offset = 0usize;
+        for data in buf.chunks_mut(max_bytes) {
             inner
-                .read_block(block_id as u32 + i as u32, block)
+                .read_blocks(block_id as u32 + (offset / SdMmc::BLOCK_SIZE) as u32, data)
                 .map_err(|_| DevError::Io)?;
+            offset += data.len();
         }
 
         Ok(())
@@ -85,10 +101,13 @@ impl BlockDriverOps for SdMmcDriver {
         if end_block > inner.num_blocks() || end_block > u32::MAX as u64 + 1 {
             return Err(DevError::InvalidParam);
         }
-        for (i, block) in blocks.iter().enumerate() {
+        let max_bytes = inner.max_transfer_blocks() * SdMmc::BLOCK_SIZE;
+        let mut offset = 0usize;
+        for data in buf.chunks(max_bytes) {
             inner
-                .write_block(block_id as u32 + i as u32, block)
+                .write_blocks(block_id as u32 + (offset / SdMmc::BLOCK_SIZE) as u32, data)
                 .map_err(|_| DevError::Io)?;
+            offset += data.len();
         }
 
         Ok(())

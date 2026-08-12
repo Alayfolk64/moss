@@ -116,6 +116,7 @@ sdmmc = [
     "axdriver_block/sdmmc",
 ]
 sdmmc-irq = ["sdmmc", "dep:axtask"]
+sdmmc-idmac = ["sdmmc-irq"]
 virtio = [
     "dep:axdriver_virtio",
     "dep:axalloc",
