@@ -55,3 +55,4 @@ gmac1-irq = 78
 ccache-paddr = 0x0201_0000
 syscrg-paddr = 0x1302_0000
 syscon-paddr = 0x1303_0000
+rtc-paddr = 0x1704_0000

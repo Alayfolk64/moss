@@ -680,6 +680,8 @@ dependencies = [
  "axconfig-macros",
  "axcpu",
  "axplat",
+ "chrono",
+ "fdt-parser",
  "kspin",
  "lazyinit",
  "log",

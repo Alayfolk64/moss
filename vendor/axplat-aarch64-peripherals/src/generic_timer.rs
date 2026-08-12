@@ -1,7 +1,6 @@
 //! ARM Generic Timer.
 
-use aarch64_cpu::registers::{CNTFRQ_EL0, CNTP_TVAL_EL0, CNTPCT_EL0};
-use aarch64_cpu::registers::{Readable, Writeable};
+use aarch64_cpu::registers::{CNTFRQ_EL0, CNTP_TVAL_EL0, CNTPCT_EL0, Readable, Writeable};
 use int_ratio::Ratio;
 
 static mut CNTPCT_TO_NANOS_RATIO: Ratio = Ratio::zero();
@@ -90,6 +89,10 @@ macro_rules! time_if_impl {
             /// clock start).
             fn epochoffset_nanos() -> u64 {
                 $crate::pl031::epochoffset_nanos()
+            }
+
+            fn set_rtc_time(_unix_seconds: u64) -> bool {
+                false
             }
 
             /// Returns the IRQ number for the timer interrupt.

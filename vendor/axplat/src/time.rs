@@ -1,7 +1,6 @@
 //! Time-related operations.
 
 use core::sync::atomic::{AtomicI64, Ordering};
-
 pub use core::time::Duration;
 
 /// A measurement of the system clock.
@@ -38,6 +37,11 @@ pub trait TimeIf {
     /// Return epoch offset in nanoseconds (wall time offset to monotonic
     /// clock start).
     fn epochoffset_nanos() -> u64;
+
+    /// Persists a UTC Unix timestamp to the platform RTC, if available.
+    fn set_rtc_time(_unix_seconds: u64) -> bool {
+        false
+    }
 
     /// Returns the IRQ number for the timer interrupt.
     #[cfg(feature = "irq")]

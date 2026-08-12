@@ -158,7 +158,7 @@ kernel-la-2k1000-shell: toolchain
 	@printf "    \033[36mLS2K1000LA interactive image\033[0m: moss-2k1000la-shell.bin\n"
 
 kernel-vf2: toolchain
-	$(MAKE) -C make \
+	MOSS_BUILD_EPOCH=$${SOURCE_DATE_EPOCH:-$$(date +%s)} $(MAKE) -C make \
 		ARCH=riscv64 \
 		MYPLAT=axplat-riscv64-visionfive2 \
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \

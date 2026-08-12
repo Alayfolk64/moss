@@ -10,12 +10,15 @@ description = "Minimal ArceOS platform support for the StarFive VisionFive 2 boa
 default = []
 fp-simd = ["axcpu/fp-simd"]
 irq = ["axplat/irq", "dep:riscv_plic"]
+rtc = ["dep:chrono", "dep:fdt-parser"]
 smp = ["axplat/smp"]
 
 [dependencies]
 axconfig-macros = "0.2"
 axcpu = "0.3.0-preview.2"
 axplat = ">=0.3.0-preview.2, <0.3.0"
+chrono = { version = "0.4", optional = true, default-features = false }
+fdt-parser = { version = "0.4", optional = true }
 kspin = "0.1"
 lazyinit = "0.2"
 log = "0.4"

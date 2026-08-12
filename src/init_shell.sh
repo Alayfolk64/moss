@@ -34,7 +34,7 @@ if [ ! -x /bin/sh ]; then
         echo "root:x:0:0:root:/root:/bin/sh"
         echo "nobody:x:65534:65534:nobody:/:/bin/sh"
     } >/etc/passwd
-    echo "nameserver 8.8.8.8" >/etc/resolv.conf
+    printf 'nameserver 223.5.5.5\nnameserver 1.1.1.1\n' >/etc/resolv.conf
 fi
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
@@ -50,7 +50,19 @@ fi
 
 if command -v ntpd >/dev/null 2>&1; then
     echo "Synchronizing system time with NTP..."
-    ntpd -nq -p ntp.aliyun.com || echo "Warning: NTP time synchronization failed"
+    NTP_OK=0
+    NTP_ATTEMPT=1
+    while [ "$NTP_ATTEMPT" -le 3 ]; do
+        if ntpd -nq -p 203.107.6.88 || ntpd -nq -p 192.168.1.2; then
+            NTP_OK=1
+            break
+        fi
+        NTP_ATTEMPT=$((NTP_ATTEMPT + 1))
+        sleep 1
+    done
+    if [ "$NTP_OK" -ne 1 ]; then
+        echo "Warning: NTP time synchronization failed"
+    fi
 fi
 
 echo "Entering interactive shell..."

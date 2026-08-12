@@ -83,6 +83,7 @@ vf2 = [
     "dep:axplat-riscv64-visionfive2",
     "axplat-riscv64-visionfive2/fp-simd",
     "axplat-riscv64-visionfive2/irq",
+    "axplat-riscv64-visionfive2/rtc",
     "axplat-riscv64-visionfive2/smp",
 ]
 

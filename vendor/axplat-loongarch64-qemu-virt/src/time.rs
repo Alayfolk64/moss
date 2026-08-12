@@ -101,6 +101,10 @@ impl TimeIf for TimeIfImpl {
         unsafe { RTC_EPOCHOFFSET_NANOS }
     }
 
+    fn set_rtc_time(_unix_seconds: u64) -> bool {
+        false
+    }
+
     /// Converts hardware ticks to nanoseconds.
     fn ticks_to_nanos(ticks: u64) -> u64 {
         ticks * *NANOS_PER_TICK

@@ -4,10 +4,10 @@ struct InitIfImpl;
 
 #[impl_plat_interface]
 impl InitIf for InitIfImpl {
-    fn init_early(_cpu_id: usize, _mbi: usize) {
+    fn init_early(_cpu_id: usize, mbi: usize) {
         axcpu::init::init_trap();
         crate::console::init_early();
-        crate::time::init_early();
+        crate::time::init_early(mbi);
     }
 
     #[cfg(feature = "smp")]

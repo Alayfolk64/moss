@@ -7,7 +7,7 @@ use core::{
 use axerrno::{AxError, AxResult};
 use axhal::time::{
     TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, realtime_time,
-    set_realtime_offset_nanos, wall_time,
+    set_realtime_offset_nanos, set_rtc_time, wall_time,
 };
 use axtask::{WaitQueue, current, yield_now};
 use lazy_static::lazy_static;
@@ -252,6 +252,7 @@ pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> A
         .try_into()
         .map_err(|_| AxError::InvalidInput)?;
     set_realtime_offset_nanos(offset);
+    let _ = set_rtc_time(target.as_secs());
     wake_posix_timer_workers();
     Ok(0)
 }

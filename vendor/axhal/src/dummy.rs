@@ -101,6 +101,10 @@ impl TimeIf for DummyTime {
         0
     }
 
+    fn set_rtc_time(_unix_seconds: u64) -> bool {
+        false
+    }
+
     #[cfg(feature = "irq")]
     fn irq_num() -> usize {
         0

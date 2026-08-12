@@ -127,6 +127,10 @@ impl TimeIf for TimeIfImpl {
         RTC_EPOCHOFFSET_NANOS.load(Ordering::Relaxed)
     }
 
+    fn set_rtc_time(_unix_seconds: u64) -> bool {
+        false
+    }
+
     fn ticks_to_nanos(ticks: u64) -> u64 {
         ticks.saturating_mul(*NANOS_PER_TICK)
     }
