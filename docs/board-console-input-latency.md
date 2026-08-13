@@ -1,5 +1,8 @@
 # VF2 与 LS2K1000LA 串口输入延迟修复和验收
 
+VF2 GMAC1 与串口两项改动的原问题、根因和优化路径总览见
+[VF2 GMAC1 与双板串口交互优化总结](vf2-gmac-console-optimization-summary.md)。
+
 ## 1. 现象与定位结论
 
 本次问题在 VisionFive 2 和 LS2K1000LA 上表现一致：U-Boot 输入正常，进入 MOSS shell

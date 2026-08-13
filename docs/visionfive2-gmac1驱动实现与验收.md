@@ -3,6 +3,7 @@
 本文记录 MOSS 在 StarFive VisionFive 2 v1.3B 上接入 GMAC1 实体网口的实现、设计边界和验收方法。实现基线为提交 `d803c88e`（`feat: 完善 VF2 GMAC1 以太网驱动`），记录日期为 2026-08-13。
 
 日常构建、TFTP 和 U-Boot 操作见 [VisionFive 2 上板常用指令](visionfive2板-启动指令.md)，整板移植历史见 [VisionFive 2 工作总结](visionfive2板-工作总结.md)。
+两项改动的原问题、根因和优化路径总览见 [VF2 GMAC1 与双板串口交互优化总结](vf2-gmac-console-optimization-summary.md)。
 
 ## 1. 结论与验收边界
 
