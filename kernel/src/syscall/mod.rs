@@ -625,6 +625,13 @@ pub fn handle_syscall(uctx: &mut UserContext) {
             uctx.arg4() as _,
             uctx.arg5() as _,
         ),
+        Sysno::futex_waitv => sys_futex_waitv(
+            uctx.arg0() as _,
+            uctx.arg1() as _,
+            uctx.arg2() as _,
+            uctx.arg3() as _,
+            uctx.arg4() as _,
+        ),
         Sysno::get_robust_list => {
             sys_get_robust_list(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _)
         }

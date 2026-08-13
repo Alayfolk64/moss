@@ -61,7 +61,12 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(any(feature = "dyn", feature = "jh7110", feature = "ls2k1000"))]
+#[cfg(any(
+    feature = "dyn",
+    feature = "jh7110",
+    feature = "ls2k1000",
+    feature = "sdmmc"
+))]
 extern crate alloc;
 
 #[macro_use]

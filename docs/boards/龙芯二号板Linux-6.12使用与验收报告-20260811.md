@@ -133,9 +133,9 @@ swap_umount_rc=0
 
 原始证据：
 
-- [cagent 真机日志](hardware-linux-ls2k1000la-20260811-linux612-1g-swap-cagent-buildstorm.log)
-- [buildstorm 完整真机日志](hardware-linux-ls2k1000la-20260811-linux612-1g-swap-buildstorm-v3.log)
-- [无 swap OOM 对照](hardware-linux-ls2k1000la-20260811-linux612-cagent-buildstorm-tftp.log)
+- [cagent 真机日志](../hardware-linux-ls2k1000la-20260811-linux612-1g-swap-cagent-buildstorm.log)
+- [buildstorm 完整真机日志](../hardware-linux-ls2k1000la-20260811-linux612-1g-swap-buildstorm-v3.log)
+- [无 swap OOM 对照](../hardware-linux-ls2k1000la-20260811-linux612-cagent-buildstorm-tftp.log)
 
 ## 7. 正确退出与文件系统保护
 
@@ -154,9 +154,9 @@ ext4 orphan 条目，下一次 `e2fsck -fn` 报 `corrupted orphan linked list` �
 
 修复后的 smoke 已输出 `root_ro_rc=0`，复位后的 sda2 `e2fsck -fn` 返回 0：
 
-- [安全退出 smoke](hardware-linux-ls2k1000la-20260811-linux612-root-ro-cleanup-smoke.log)
-- [退出后 fsck](hardware-linux-ls2k1000la-20260811-sda2-root-ro-cleanup-verify.log)
-- [旧 orphan 修复记录](hardware-linux-ls2k1000la-20260811-sda2-post-buildstorm-repair.log)
+- [安全退出 smoke](../hardware-linux-ls2k1000la-20260811-linux612-root-ro-cleanup-smoke.log)
+- [退出后 fsck](../hardware-linux-ls2k1000la-20260811-sda2-root-ro-cleanup-verify.log)
+- [旧 orphan 修复记录](../hardware-linux-ls2k1000la-20260811-sda2-post-buildstorm-repair.log)
 
 ## 8. 保留的镜像与恢复边界
 

@@ -38,6 +38,38 @@ impl WaitQueue {
     pub fn new() -> Self {
         Self::default()
     }
+    
+    pub fn register_waiter(
+        &self,
+        bitset: u32,
+        notified: Arc<AtomicBool>,
+        poll: Arc<PollSet>,
+        condition: impl FnOnce() -> bool,
+    ) -> bool {
+        let mut queue = self.queue.lock();
+
+        if !condition() {
+            return false;
+        }
+
+        queue.push_back((
+            notified, 
+            bitset, 
+            poll
+        ));
+        true
+    }
+
+    pub fn unregister_waiter(
+        &self,
+        notified: &Arc<AtomicBool>,
+    ) {
+        self.queue.lock().retain(
+            |(waiter, ..)| {
+                !Arc::ptr_eq(waiter, notified)
+            },
+        );
+    }
 
     /// Waits if the given condition is met.
     ///
@@ -53,11 +85,14 @@ impl WaitQueue {
         let poll = Arc::new(PollSet::new());
 
         {
-            let mut queue = self.queue.lock();
-            if !condition() {
+            if !self.register_waiter(
+                bitset,
+                notified.clone(),
+                poll.clone(),
+                condition,
+            ) {
                 return Ok(false);
             }
-            queue.push_back((notified.clone(), bitset, poll.clone()));
         }
 
         let result = block_on(interruptible(timeout(
@@ -78,13 +113,11 @@ impl WaitQueue {
         match result {
             Ok(Ok(())) => Ok(true),
             Ok(Err(_)) => {
-                let mut queue = self.queue.lock();
-                queue.retain(|(waiter, ..)| !Arc::ptr_eq(waiter, &notified));
-                return Err(AxError::TimedOut);
+                self.unregister_waiter(&notified);
+                Err(AxError::TimedOut)
             }
             Err(_) => {
-                let mut queue = self.queue.lock();
-                queue.retain(|(waiter, ..)| !Arc::ptr_eq(waiter, &notified));
+                self.unregister_waiter(& notified);
                 Err(AxError::Interrupted)
             }
         }

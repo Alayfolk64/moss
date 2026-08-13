@@ -49,20 +49,25 @@ if [ ! -s /etc/resolv.conf ]; then
 fi
 
 if command -v ntpd >/dev/null 2>&1; then
-    echo "Synchronizing system time with NTP..."
-    NTP_OK=0
-    NTP_ATTEMPT=1
-    while [ "$NTP_ATTEMPT" -le 3 ]; do
-        if ntpd -nq -p 203.107.6.88 || ntpd -nq -p 192.168.1.2; then
-            NTP_OK=1
-            break
+    # Network bring-up must never gate the recovery shell. In particular,
+    # BusyBox ntpd uses SIGALRM while waiting for a reply, so a disconnected
+    # board used to remain in this retry loop instead of presenting a prompt.
+    (
+        echo "Synchronizing system time with NTP in background..."
+        NTP_OK=0
+        NTP_ATTEMPT=1
+        while [ "$NTP_ATTEMPT" -le 3 ]; do
+            if ntpd -nq -p 203.107.6.88 || ntpd -nq -p 192.168.1.2; then
+                NTP_OK=1
+                break
+            fi
+            NTP_ATTEMPT=$((NTP_ATTEMPT + 1))
+            sleep 1
+        done
+        if [ "$NTP_OK" -ne 1 ]; then
+            echo "Warning: NTP time synchronization failed"
         fi
-        NTP_ATTEMPT=$((NTP_ATTEMPT + 1))
-        sleep 1
-    done
-    if [ "$NTP_OK" -ne 1 ]; then
-        echo "Warning: NTP time synchronization failed"
-    fi
+    ) &
 fi
 
 echo "Entering interactive shell..."

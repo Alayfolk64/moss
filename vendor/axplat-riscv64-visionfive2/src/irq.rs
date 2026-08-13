@@ -144,8 +144,16 @@ impl IrqIf for IrqIfImpl {
                 false
             }
             _ => {
-                if device_irq(irq).is_none() || !DEVICE_HANDLERS.register_handler(irq, handler) {
-                    warn!("register handler for VF2 PLIC source {irq} failed");
+                if device_irq(irq).is_none() {
+                    warn!("invalid VF2 PLIC source {irq}");
+                    return false;
+                }
+                // A source can already have a real device handler when the
+                // async I/O layer attempts to install its marker handler.
+                // The shared post-IRQ hook still wakes that waiter, so let the
+                // caller interpret a duplicate registration without emitting
+                // a misleading platform-level warning.
+                if !DEVICE_HANDLERS.register_handler(irq, handler) {
                     return false;
                 }
                 Self::set_enable(irq, true);

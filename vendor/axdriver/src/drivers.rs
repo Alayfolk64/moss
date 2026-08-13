@@ -49,10 +49,7 @@ register_block_driver!(
 );
 
 #[cfg(block_dev = "sdmmc")]
-register_block_driver!(
-    crate::sdmmc::SdMmcDriver,
-    axdriver_block::sdmmc::SdMmcDriver
-);
+register_block_driver!(crate::sdmmc::SdMmcDriver, crate::sdmmc::SdMmcRootDevice);
 
 #[cfg(net_dev = "virtio-net")]
 register_net_driver!(

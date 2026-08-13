@@ -164,7 +164,9 @@ kernel-vf2: toolchain
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.vf2.toml \
 		APP_FEATURES="vf2 shell-init" \
-		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=4G IP=192.168.1.10 GW=192.168.1.2 \
+		LOG=$(if $(strip $(LOG)),$(LOG),warn) BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
+		IP=$(if $(strip $(IP)),$(IP),192.168.1.10) \
+		GW=$(if $(strip $(GW)),$(GW),192.168.1.2) \
 		CPU_CAPACITY=4 SMP=4 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_visionfive2.bin $(A)/moss-vf2.bin
 	@printf "    \033[36mVisionFive 2 image\033[0m: moss-vf2.bin\n"
@@ -290,7 +292,7 @@ shell_rv:
 	fi; \
 	rm -f "$$tmp_img"; \
 	cp -f "$$img" "$$tmp_img"; \
-	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default -drive file=tmp-rv-shell.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -snapshot -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
+	qemu-system-riscv64 -machine virt -kernel kernel-rv -m $(MEM) -nographic -smp 1 -bios default -drive file=sdcard-rv.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 -snapshot -no-reboot -device virtio-net-device,netdev=net -netdev user,id=net -rtc base=utc 2>&1 | tee $(OUTPUT_RV)
 
 rv-shell: shell_rv
 
