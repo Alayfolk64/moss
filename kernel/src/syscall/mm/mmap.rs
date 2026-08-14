@@ -808,8 +808,147 @@ pub fn sys_madvise(addr: usize, length: usize, advice: i32) -> AxResult<isize> {
     Ok(0)
 }
 
+struct MsyncTarget {
+    backend: Backend,
+    range: VirtAddrRange,
+}
+
 pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
-    debug!("sys_msync <= addr: {addr:#x}, length: {length:x}, flags: {flags:#x}");
+    debug!(
+        "sys_msync <= addr: {addr:#x},
+        length: {length:x},
+        flags: {flags:#x}"
+    );
+
+    const VALID_FLAGS: u32 = 
+        MS_ASYNC | MS_INVALIDATE | MS_SYNC;
+
+    // 不能有未知 flag
+    if flags & VALID_FLAGS != 0 {
+        return Err(AxError::InvalidInput);
+    }
+
+    // MS_ASYNC 和 MS_SYNC 不能同时绑定
+    if flags & MS_ASYNC != 0 
+        && flags & MS_SYNC != 0 
+    {
+        return Err(AxError::InvalidInput);
+    }
+
+    // 起始地址必须page aligned
+    if !addr.is_multiple_of(
+        PageSize::Size4K as usize
+    ) {
+        return Err(AxError::InvalidInput);
+    }
+
+    if length == 0 {
+        return Ok(0);
+    }
+
+    // Linux 将长度向上取整到页
+    let length = length
+        .checked_add(
+            PageSize::Size4K as usize - 1
+        )
+        .map(|len| {
+            len & !(PageSize::Size4K as usize - 1)
+        })
+        .ok_or(AxError::NoMemory)?;
+
+    let end_addr = addr
+        .checked_add(length)
+        .ok_or(AxError::NoMemory)?;
+    
+    let start = VirtAddr::from(addr);
+    let end = VirtAddr::from(end_addr);
+
+    let cur = current();
+    let aspace_ref = 
+        cur.as_thread().proc_data.aspace();
+
+    let mut targets = Vec::new();
+    let mut has_hole = false;
+
+    {
+        // 这里只是在看 VMA，不改地址空间
+        // 所以拿 read lock
+        let aspace = aspace_ref.read();
+
+        let mut cursor = start;
+
+        for area in aspace.areas() {
+            // VMA 当前完全在 cursor 左边
+            if area.end() < cursor {
+                break;
+            }
+
+            // cursor 到这个 VMA 之间没有映射
+            if area.start() > cursor {
+                has_hole = true;
+
+                cursor = area.start();
+
+                if cursor >= end {
+                    break;
+                }
+            }
+
+            let range_start = 
+                area.start().max(cursor);
+            let range_end = 
+                area.end().min(end);
+            
+            if range_start >= range_end {
+                continue;
+            }
+
+            // 只有 MAP_SHARED file mapping
+            // 才需要把修改同步回文件
+            if area.metadata().shared()
+                && area.metadata().file_backed()
+            {
+                targets.push(MsyncTarget {
+                    backend: area.backend().clone(),
+                    range: VirtAddrRange::new(
+                        range_start,
+                        range_end,
+                    ),
+                });
+            }
+
+            cursor = range_end;
+
+            if cursor >= end {
+                break;
+            }
+        }
+        if cursor < end {
+            has_hole = true;
+        }
+    }
+
+    if flags & MS_INVALIDATE != 0 {
+        return Err(AxError::OperationNotPermitted);
+    }
+ 
+    if flags & MS_SYNC != 0 {
+        for target in &targets {
+            target
+                .backend
+                .sync_file_range(target.range)?;
+        }
+    }
+
+    // MS_ASYNC 当前不主动发起 writeback
+    // dirty page 已经由 page cache 追踪
+
+    if has_hole {
+        return Err(AxError::NoMemory);
+    }
+    debug!(
+        "msync range: {addr:#x}..{addr:#x}"
+    );
 
     Ok(0)
 }

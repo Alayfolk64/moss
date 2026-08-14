@@ -367,6 +367,38 @@ impl FileBackend {
             Some(Err(err)) => Err(err.into()),
         }
     }
+
+    pub(crate) fn sync_range(
+        &self,
+        range: VirtAddrRange,
+    ) -> AxResult {
+        let page_size =    
+            PAGE_SIZE_4K as u64;
+        
+        let mapping_offset: u64 = 
+            self.0.offset_page as u64 * page_size;
+
+        let start_offset = 
+            (range.start - self.0.start) as u64;
+        
+        let end_offset = 
+            (range.end - self.0.start) as u64;
+
+        let file_start = 
+            mapping_offset
+                .checked_add(start_offset)
+                .ok_or(AxError::InvalidInput)?;
+        
+        let file_end = 
+            mapping_offset
+                .checked_add(end_offset)
+                .ok_or(AxError::InvalidInput)?;
+        
+        self.0 
+            .cache
+            .sync_range(file_start..file_end)
+            .map_err(Into::into)
+    }
 }
 
 impl FileBackend {

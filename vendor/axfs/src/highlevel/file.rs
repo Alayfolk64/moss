@@ -2181,6 +2181,22 @@ impl CachedFile {
     pub fn location(&self) -> &Location {
         self.inner()
     }
+
+    pub fn sync_range(
+        &self,
+        range: Range<u64>,
+    ) -> VfsResult<()> {
+        if self.in_memory() {
+            return Ok(());
+        }
+
+        self.writeback_folios_in_range(range)?;
+        let file = 
+            self.inner().entry().as_file()?;
+
+        file.sync(true)?;
+        Ok(())
+    }
 }
 
 impl Drop for CachedFile {
