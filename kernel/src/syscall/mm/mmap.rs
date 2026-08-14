@@ -824,7 +824,7 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
         MS_ASYNC | MS_INVALIDATE | MS_SYNC;
 
     // 不能有未知 flag
-    if flags & VALID_FLAGS != 0 {
+    if flags & !VALID_FLAGS != 0 {
         return Err(AxError::InvalidInput);
     }
 
@@ -879,8 +879,8 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
 
         for area in aspace.areas() {
             // VMA 当前完全在 cursor 左边
-            if area.end() < cursor {
-                break;
+            if area.end() <= cursor {
+                continue;
             }
 
             // cursor 到这个 VMA 之间没有映射
@@ -947,7 +947,7 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
         return Err(AxError::NoMemory);
     }
     debug!(
-        "msync range: {addr:#x}..{addr:#x}"
+        "msync range: {addr:#x}..{end_addr:#x}"
     );
 
     Ok(0)
