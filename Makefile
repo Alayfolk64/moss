@@ -127,7 +127,10 @@ clean: makeclean
 build run debug disasm: toolchain defconfig
 	@$(MAKE) -C make $@
 
-all: kernel-rv kernel-la
+all: 
+	rm -rf target
+	$(MAKE) kernel-rv
+	$(MAKE) kernel-la
 
 kernel-la-2k1000: toolchain
 	$(MAKE) -C make \
