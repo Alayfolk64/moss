@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+#############
+#
+# 使用方法: python3 scripts/update_vendor_checksum.py vendor/axfs
+#
+############
+
 import hashlib
 import json
 import sys
