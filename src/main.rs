@@ -5,24 +5,71 @@
 extern crate alloc;
 
 use alloc::{borrow::ToOwned, vec::Vec};
+use starry_kernel::runtime_cpu_count;
 
-#[cfg(feature = "pre-init")]
-pub const INIT_SCRIPT: &str = include_str!("init.sh");
-#[cfg(all(not(feature = "pre-init"), feature = "shell-init"))]
-pub const INIT_SCRIPT: &str = include_str!("init_shell.sh");
-#[cfg(all(not(feature = "pre-init"), not(feature = "shell-init")))]
-pub const INIT_SCRIPT: &str = include_str!("init_final.sh");
-#[cfg(feature = "pre-init")]
+pub const INIT_PRE: &str   = include_str!("init_pre.sh");
+pub const INIT_SHELL: &str = include_str!("init_shell.sh");
+pub const INIT_FINAL: &str = include_str!("init_final.sh");
+
+#[derive(Debug, Clone, Copy)]
+enum InitProfile {
+    Pre,
+    Final,
+    Shell,
+}
+
+impl InitProfile {
+    fn name(&self) -> &'static str {
+        match self {
+            InitProfile::Pre   => "pre",
+            InitProfile::Shell => "shell",
+            InitProfile::Final => "final",
+        }
+    }
+}
+
+fn select_init_profile() -> InitProfile {
+    #[cfg(feature = "shell-init")]
+    {
+        return InitProfile::Shell;
+    }
+
+    if runtime_cpu_count() == 1 {
+        InitProfile::Pre
+    } else {
+        InitProfile::Final
+    }
+}
+
+fn build_args(profile: InitProfile) -> Vec<alloc::string::String> {
+    let cmdline: &[&str] = match profile {
+        InitProfile::Pre => &[
+            "/musl/busybox",
+            "sh",
+            "-c",
+            INIT_PRE,
+        ],
+        InitProfile::Final => &[
+            "/bin/bash",
+            "-c",
+            INIT_FINAL,
+        ],
+        InitProfile::Shell => &[
+            "/bin/sh",
+            "-c",
+            INIT_SHELL,
+        ],
+    };
+    cmdline
+        .iter()
+        .copied()
+        .map(str::to_owned)
+        .collect()
+}
+
 pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases.sh");
 
-#[cfg(feature = "pre-init")]
-pub const CMDLINE: &[&str] = &["/musl/busybox", "sh", "-c", INIT_SCRIPT];
-#[cfg(all(not(feature = "pre-init"), feature = "shell-init"))]
-pub const CMDLINE: &[&str] = &["/bin/sh", "-c", INIT_SCRIPT];
-#[cfg(not(any(feature = "pre-init", feature = "shell-init")))]
-pub const CMDLINE: &[&str] = &["/bin/bash", "-c", INIT_SCRIPT];
 
-#[cfg(feature = "pre-init")]
 fn build_ltp_cases_env() -> alloc::string::String {
     let mut env = alloc::string::String::from("LTP_CASES=");
     let mut first = true;
@@ -42,20 +89,21 @@ fn build_ltp_cases_env() -> alloc::string::String {
 
 #[unsafe(no_mangle)]
 fn main() {
-    let args = CMDLINE
-        .iter()
-        .copied()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    #[cfg(any(feature = "pre-init", feature = "shell-init"))]
-    let mut envs = Vec::new();
-    #[cfg(not(any(feature = "pre-init", feature = "shell-init")))]
-    let envs = Vec::new();
-    #[cfg(feature = "pre-init")]
-    envs.push(build_ltp_cases_env());
-    #[cfg(feature = "shell-init")]
-    envs.push("STARRY_SHELL_MODE=1".to_owned());
+    let profile = select_init_profile();
+    let cpu_num = runtime_cpu_count();
 
+    let args = build_args(profile);
+    let mut envs = Vec::new();
+
+    match profile {
+        InitProfile::Pre => {
+            envs.push(build_ltp_cases_env());
+        }
+        InitProfile::Shell => {
+            envs.push("STARRY_SHELL_MODE=1".to_owned());
+        }
+        InitProfile::Final => {}
+    }
     starry_kernel::entry::init(&args, &envs);
 }
 

@@ -15,6 +15,10 @@ extern crate axruntime;
 extern crate axlog;
 
 pub mod entry;
+/// Returns the number of CPUs available to Moss at runtime.
+pub fn runtime_cpu_count() -> usize {
+    axhal::cpu_num()
+}
 
 mod config;
 mod file;
