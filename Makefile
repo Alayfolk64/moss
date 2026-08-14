@@ -5,6 +5,7 @@ export DWARF := n
 export MODE := release
 export MEMTRACK := n
 export SHELL_INIT ?= n
+export SITE_INIT ?= n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
 RUSTUP ?= rustup
 RUST_LLD ?= rust-lld
@@ -37,6 +38,10 @@ endif
 
 ifeq ($(SHELL_INIT), y)
 	APP_FEATURES += shell-init
+endif
+
+ifeq ($(SITE_INIT), y)
+	APP_FEATURES += site-init
 endif
 
 default: build
