@@ -3,6 +3,7 @@ use core::ffi::c_char;
 use axerrno::{AxError, AxResult, LinuxError};
 use axsync::Mutex;
 use axtask::current;
+use starry_signal::Signo;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use linux_raw_sys::general::{__user_cap_data_struct, __user_cap_header_struct, CAP_LAST_CAP};
@@ -359,6 +360,20 @@ pub fn sys_prctl(
         }
         PR_SET_SECCOMP => {}
         PR_MCE_KILL => {}
+        PR_GET_PDEATHSIG => {
+            let signo = current().as_thread().pdeath_signal();
+            let ptr = arg2 as *mut i32;
+            ptr.vm_write(signo as i32)?;
+        }
+        PR_SET_PDEATHSIG => {
+            if arg2 != 0 {
+                let signo = u8::try_from(arg2).map_err(|_| AxError::InvalidInput)?;
+                Signo::from_repr(signo).ok_or(AxError::InvalidInput)?;
+            }
+            current()
+                .as_thread()
+                .set_pdeath_signal(arg2 as u32);
+        }
         PR_CAPBSET_READ => {
             let cap = arg2 as u32;
 

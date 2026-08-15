@@ -139,6 +139,11 @@ pub struct Thread {
     /// The head of the robust list
     robust_list_head: AtomicUsize,
 
+    /// signal sent when the parent dies
+    /// 
+    /// 0 means disabled
+    pdeath_signal: AtomicU32,
+
     /// The thread-level signal manager
     pub signal: Arc<ThreadSignalManager>,
 
@@ -181,6 +186,7 @@ impl Thread {
             proc_data,
             clear_child_tid: AtomicUsize::new(0),
             robust_list_head: AtomicUsize::new(0),
+            pdeath_signal: AtomicU32::new(0),
             time: AssumeSync(RefCell::new(TimeManager::new())),
             exit: Arc::new(AtomicBool::new(false)),
             exec_exit: AtomicBool::new(false),
@@ -212,6 +218,16 @@ impl Thread {
     pub fn set_robust_list_head(&self, robust_list_head: usize) {
         self.robust_list_head
             .store(robust_list_head, Ordering::SeqCst);
+    }
+
+    /// Get the parent-death signal
+    pub fn pdeath_signal(&self) -> u32 {
+        self.pdeath_signal.load(Ordering::Relaxed)
+    }
+
+    /// Set the parent-death signal 
+    pub fn set_pdeath_signal(&self, signo: u32) {
+        self.pdeath_signal.store(signo, Ordering::Relaxed);
     }
 
     /// Get the oom score adjustment value.
