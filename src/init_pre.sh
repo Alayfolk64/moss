@@ -352,12 +352,16 @@ skip_group() {
     echo "#### OS COMP TEST GROUP END $1-$2 ####"
 }
 
+run_test_script() {
+    /bin/sh "$1"
+}
+
 cd /musl
 
 musl_runtime
 if [ "$iozone" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./iozone_testcode.sh
+    run_test_script ./iozone_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iozone musl
@@ -366,7 +370,7 @@ fi
 if [ "$iperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     cleanup_iperf_daemons
-    ./iperf_testcode.sh
+    run_test_script ./iperf_testcode.sh
     cleanup_iperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
@@ -377,7 +381,7 @@ if [ "$netperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     cleanup_netperf_daemons
     prepare_netperf_testcode
-    ./netperf_testcode.sh
+    run_test_script ./netperf_testcode.sh
     cleanup_netperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
@@ -386,7 +390,7 @@ fi
 
 if [ "$lmbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
+    run_test_script ./lmbench_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lmbench musl
@@ -394,7 +398,7 @@ fi
 
 if [ "$libcbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./libcbench_testcode.sh
+    run_test_script ./libcbench_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libcbench musl
@@ -402,7 +406,7 @@ fi
 
 if [ "$cyclictest" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./cyclictest_testcode.sh
+    run_test_script ./cyclictest_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group cyclictest musl
@@ -410,7 +414,7 @@ fi
 
 if [ "$lua" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./lua_testcode.sh
+    run_test_script ./lua_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lua musl
@@ -418,7 +422,7 @@ fi
 
 if [ "$basic" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./basic_testcode.sh
+    run_test_script ./basic_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group basic musl
@@ -426,7 +430,7 @@ fi
 
 if [ "$busybox" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./busybox_testcode.sh
+    run_test_script ./busybox_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox musl
@@ -434,7 +438,7 @@ fi
 
 if [ "$libctest" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./libctest_testcode.sh
+    run_test_script ./libctest_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libctest musl
@@ -453,7 +457,7 @@ cd /glibc
 glibc_runtime
 if [ "$iozone" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./iozone_testcode.sh
+    run_test_script ./iozone_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group iozone glibc
@@ -462,7 +466,7 @@ fi
 if [ "$iperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     cleanup_iperf_daemons
-    ./iperf_testcode.sh
+    run_test_script ./iperf_testcode.sh
     cleanup_iperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
@@ -473,7 +477,7 @@ if [ "$netperf" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
     cleanup_netperf_daemons
     prepare_netperf_testcode
-    ./netperf_testcode.sh
+    run_test_script ./netperf_testcode.sh
     cleanup_netperf_daemons
     date '+%Y-%m-%d-%H-%M-%S'
 else
@@ -482,7 +486,7 @@ fi
 
 if [ "$lmbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./lmbench_testcode.sh
+    run_test_script ./lmbench_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lmbench glibc
@@ -490,7 +494,7 @@ fi
 
 if [ "$libcbench" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./libcbench_testcode.sh
+    run_test_script ./libcbench_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group libcbench glibc
@@ -498,7 +502,7 @@ fi
 
 if [ "$cyclictest" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./cyclictest_testcode.sh
+    run_test_script ./cyclictest_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group cyclictest glibc
@@ -506,7 +510,7 @@ fi
 
 if [ "$lua" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./lua_testcode.sh
+    run_test_script ./lua_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group lua glibc
@@ -514,7 +518,7 @@ fi
 
 if [ "$basic" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./basic_testcode.sh
+    run_test_script ./basic_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group basic glibc
@@ -522,7 +526,7 @@ fi
 
 if [ "$busybox" = 1 ]; then
     date '+%Y-%m-%d-%H-%M-%S'
-    ./busybox_testcode.sh
+    run_test_script ./busybox_testcode.sh
     date '+%Y-%m-%d-%H-%M-%S'
 else
     skip_group busybox glibc
