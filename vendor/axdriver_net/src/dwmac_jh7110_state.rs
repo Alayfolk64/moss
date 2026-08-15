@@ -11,7 +11,7 @@ pub(crate) const DMA_STATUS_AIE: u32 = 1 << 14;
 pub(crate) const DMA_STATUS_NIE: u32 = 1 << 15;
 pub(crate) const DMA_STATUS_RX: u32 = DMA_STATUS_RI | DMA_STATUS_RBU | DMA_STATUS_RPS;
 pub(crate) const DMA_STATUS_TX: u32 = DMA_STATUS_TI | DMA_STATUS_TBU | DMA_STATUS_TPS;
-pub(crate) const DMA_STATUS_FATAL: u32 = DMA_STATUS_FBE | DMA_STATUS_TPS;
+pub(crate) const DMA_STATUS_FATAL: u32 = DMA_STATUS_FBE;
 pub(crate) const DMA_STATUS_HANDLED: u32 = (0x7 << 19) | 0xffff;
 pub(crate) const DMA_IRQ_RX: u32 = DMA_STATUS_RI | DMA_STATUS_RBU | DMA_STATUS_RPS;
 pub(crate) const DMA_IRQ_TX: u32 = DMA_STATUS_TI | DMA_STATUS_TBU;
@@ -53,6 +53,14 @@ pub(crate) const fn dma_events_for_poll(
     hardware_status: u32,
 ) -> u32 {
     (queued_events | if irq_active { 0 } else { hardware_status }) & DMA_STATUS_HANDLED
+}
+
+/// A stopped TX process is actionable only while software still owns queued
+/// work. EQoS also reports TPS together with TI/TBU after it consumes the
+/// exclusive tail boundary and the ring becomes idle; resetting both queues
+/// for that quiescent state can discard unrelated RX traffic.
+pub(crate) const fn dma_requires_recovery(status: u32, tx_in_flight: usize) -> bool {
+    status & DMA_STATUS_FBE != 0 || (status & DMA_STATUS_TPS != 0 && tx_in_flight != 0)
 }
 
 pub(crate) const fn masked_irq_enable(mut enable: u32, status: u32) -> u32 {
@@ -183,8 +191,18 @@ mod tests {
         );
         assert_eq!(
             masked_irq_enable(DMA_IRQ_DEFAULT, DMA_STATUS_TPS),
-            DMA_IRQ_DEFAULT & !(DMA_IRQ_RX | DMA_IRQ_TX | DMA_IRQ_ERRORS)
+            DMA_IRQ_DEFAULT & !DMA_IRQ_TX
         );
+    }
+
+    #[test]
+    fn idle_tx_stop_does_not_reset_rx_and_active_tx_stop_does() {
+        assert!(!dma_requires_recovery(
+            DMA_STATUS_TI | DMA_STATUS_TPS | DMA_STATUS_TBU,
+            0
+        ));
+        assert!(dma_requires_recovery(DMA_STATUS_TPS, 1));
+        assert!(dma_requires_recovery(DMA_STATUS_FBE, 0));
     }
 
     #[test]

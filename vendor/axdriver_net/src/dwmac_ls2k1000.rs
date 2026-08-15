@@ -983,6 +983,10 @@ impl<H: DwmacHal> BaseDriverOps for DwmacLs2k1000<H> {
 }
 
 impl<H: DwmacHal> NetDriverOps for DwmacLs2k1000<H> {
+    fn irq_handler_registered(&self) -> bool {
+        self.lifecycle.irq_registered()
+    }
+
     fn mac_address(&self) -> EthernetAddress {
         EthernetAddress(self.mac)
     }

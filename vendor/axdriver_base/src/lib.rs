@@ -83,4 +83,5 @@ pub trait BaseDriverOps: Send + Sync {
     fn irq_num(&self) -> Option<usize> {
         None
     }
+
 }

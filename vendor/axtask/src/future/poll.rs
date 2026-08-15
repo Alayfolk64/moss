@@ -41,6 +41,21 @@ pub async fn poll_io<P: Pollable, F: FnMut() -> AxResult<T>, T>(
 #[cfg(feature = "irq")]
 /// Registers a waker for the given IRQ number.
 pub fn register_irq_waker(irq: usize, waker: &core::task::Waker) {
+    register_irq_waker_inner(irq, waker, false);
+}
+
+#[cfg(feature = "irq")]
+/// Registers a waker for an IRQ whose device driver already owns the handler.
+pub fn register_driver_irq_waker(irq: usize, waker: &core::task::Waker) {
+    register_irq_waker_inner(irq, waker, true);
+}
+
+#[cfg(feature = "irq")]
+fn register_irq_waker_inner(
+    irq: usize,
+    waker: &core::task::Waker,
+    handler_already_registered: bool,
+) {
     use alloc::collections::{BTreeMap, btree_map::Entry};
 
     use axpoll::PollSet;
@@ -82,7 +97,7 @@ pub fn register_irq_waker(irq: usize, waker: &core::task::Waker) {
         // so the platform does not classify every byte as an unhandled IRQ.
         // A real driver may already own the source, in which case registration
         // correctly fails and only the shared post-IRQ hook is used.
-        if axhal::irq::register(irq, irq_event_marker) {
+        if !handler_already_registered && axhal::irq::register(irq, irq_event_marker) {
             return;
         }
     }

@@ -354,7 +354,11 @@ impl Device for EthernetDevice {
 
     fn register_waker(&self, waker: &Waker) {
         if let Some(irq) = self.inner.irq_num() {
-            register_irq_waker(irq, waker);
+            if self.inner.irq_handler_registered() {
+                axtask::future::register_driver_irq_waker(irq, waker);
+            } else {
+                register_irq_waker(irq, waker);
+            }
         }
     }
 }

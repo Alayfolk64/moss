@@ -13,8 +13,13 @@ use crate::config::devices::{EIOINTC_IRQ, IPI_IRQ, TIMER_IRQ};
 mod eiointc;
 mod pch_pic;
 
-/// The maximum number of IRQs.
-pub const MAX_IRQ_COUNT: usize = 13;
+/// The maximum number of EIOINTC vectors.
+///
+/// CPU interrupt lines only occupy the low entries, but PCI INTx sources are
+/// delivered as external vectors (for example, QEMU's virtio-net uses vector
+/// 18).  Limiting the handler table to the 13 CPU lines made registration of
+/// every such PCI interrupt fail even though the EIOINTC supports 256 vectors.
+pub const MAX_IRQ_COUNT: usize = 256;
 
 const IOCSR_IPI_STATUS: usize = 0x1000;
 const IOCSR_IPI_ENABLE: usize = 0x1004;

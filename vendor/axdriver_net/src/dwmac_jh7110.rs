@@ -23,11 +23,12 @@ use crate::{
         previous_ring_index, rx_descriptor_disposition,
     },
     dwmac_jh7110_state::{
-        DMA_IRQ_DEFAULT, DMA_IRQ_ERRORS, DMA_IRQ_RX, DMA_IRQ_TX, DMA_STATUS_FATAL,
+        DMA_IRQ_DEFAULT, DMA_IRQ_ERRORS, DMA_IRQ_RX, DMA_IRQ_TX,
         DMA_STATUS_HANDLED, DMA_STATUS_NIE, DMA_STATUS_RBU, DMA_STATUS_RPS, DMA_STATUS_RX,
         DMA_STATUS_TBU, DMA_STATUS_TX, TxClockInversion, axi_blen_mask, dma_events_for_poll,
-        dma_sysbus_mode, effective_fifo_depth, hardware_fifo_depth, mac_address_high,
-        mac_packet_filter, masked_irq_enable, mtl_rx_queue_mode, mtl_tx_queue_mode, valid_pbl,
+        dma_requires_recovery, dma_sysbus_mode, effective_fifo_depth, hardware_fifo_depth,
+        mac_address_high, mac_packet_filter, masked_irq_enable, mtl_rx_queue_mode,
+        mtl_tx_queue_mode, valid_pbl,
     },
 };
 
@@ -623,8 +624,12 @@ impl<H: Jh7110Hal> DwmacJh7110<H> {
         };
         let events = dma_events_for_poll(irq_active, queued_events, hardware_status);
 
-        if events & DMA_STATUS_FATAL != 0 {
-            warn!("JH7110 GMAC1 fatal DMA state {events:#010x}; resetting DMA queues");
+        if dma_requires_recovery(events, self.tx_ring.in_flight()) {
+            warn!(
+                "JH7110 GMAC1 unrecoverable DMA state {events:#010x} with {} TX descriptors; \
+                 resetting DMA queues",
+                self.tx_ring.in_flight()
+            );
             return self.recover_dma();
         }
         if events & (DMA_STATUS_RBU | DMA_STATUS_RPS) != 0 {
@@ -943,11 +948,15 @@ impl<H: Jh7110Hal> DwmacJh7110<H> {
     }
 
     fn write_mac_address(&self, mac: [u8; 6]) {
+        // DWMAC4/5 programs the high word before the low word.  The low-word
+        // write commits the complete perfect-match address on implementations
+        // such as JH7110 EQoS; reversing the order leaves broadcasts working
+        // but causes unicast frames for address 0 to be rejected.
+        self.write_reg(MAC_ADDRESS0_HIGH, mac_address_high(mac));
         self.write_reg(
             MAC_ADDRESS0_LOW,
             u32::from_le_bytes([mac[0], mac[1], mac[2], mac[3]]),
         );
-        self.write_reg(MAC_ADDRESS0_HIGH, mac_address_high(mac));
     }
 
     fn valid_mac(mac: [u8; 6]) -> bool {
@@ -992,6 +1001,10 @@ impl<H: Jh7110Hal> Drop for DwmacJh7110<H> {
 }
 
 impl<H: Jh7110Hal> NetDriverOps for DwmacJh7110<H> {
+    fn irq_handler_registered(&self) -> bool {
+        self.lifecycle.irq_registered()
+    }
+
     fn mac_address(&self) -> EthernetAddress {
         EthernetAddress(self.mac)
     }

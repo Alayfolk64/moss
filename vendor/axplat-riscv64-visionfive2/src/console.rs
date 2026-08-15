@@ -9,10 +9,7 @@ use kspin::SpinNoIrq;
 use lazyinit::LazyInit;
 use uart_16550::MmioSerialPort;
 
-use crate::config::{
-    devices::{UART_IRQ, UART_PADDR},
-    plat::PHYS_VIRT_OFFSET,
-};
+use crate::config::{devices::UART_PADDR, plat::PHYS_VIRT_OFFSET};
 
 const UART_REGISTER_STRIDE: usize = 4;
 const UART_IER_OFFSET: usize = UART_REGISTER_STRIDE;
@@ -85,12 +82,6 @@ fn drain_hardware_rx() -> Option<Waker> {
     rx.pending_waker()
 }
 
-fn handle_uart_interrupt() {
-    if let Some(waker) = drain_hardware_rx() {
-        waker.wake();
-    }
-}
-
 pub(crate) fn init_early() {
     UART.init_once({
         // JH7110 exposes the 8250 registers at a four-byte stride. U-Boot has
@@ -105,13 +96,7 @@ pub(crate) fn init_early() {
 }
 
 #[cfg(feature = "irq")]
-pub(crate) fn init_irq() {
-    assert!(
-        axplat::irq::register(UART_IRQ, handle_uart_interrupt),
-        "failed to register VF2 UART IRQ {UART_IRQ}"
-    );
-    set_rx_interrupt(true);
-}
+pub(crate) fn init_irq() {}
 
 struct ConsoleIfImpl;
 
@@ -136,7 +121,11 @@ impl ConsoleIf for ConsoleIfImpl {
 
     #[cfg(feature = "irq")]
     fn irq_num() -> Option<usize> {
-        Some(UART_IRQ)
+        // U-Boot can leave the JH7110 UART source pending even after its FIFO
+        // has been drained. Enabling that level-triggered PLIC source traps the
+        // CPU in S_EXT. Keep the device IER masked and use N_TTY's polling path;
+        // SD/MMC, GMAC, timer, and IPI interrupts remain enabled normally.
+        None
     }
 
     #[cfg(feature = "irq")]

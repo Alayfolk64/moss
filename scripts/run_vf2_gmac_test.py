@@ -16,9 +16,11 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import BinaryIO
 
@@ -35,6 +37,14 @@ class SerialRunner:
 
     def write(self, data: bytes) -> None:
         self.serial.write(data)
+
+    def write_moss(self, data: bytes) -> None:
+        # VF2 deliberately keeps the firmware-stale UART RX interrupt masked
+        # and lets N_TTY poll its 8250 FIFO. Pace automated/pasted commands so
+        # the 16-byte hardware FIFO cannot fill between scheduler ticks.
+        for byte in data:
+            self.serial.write(bytes((byte,)))
+            time.sleep(0.002)
 
     def emit(self, data: bytes) -> None:
         if not data:
@@ -57,23 +67,47 @@ class SerialRunner:
         self.message("reset or power-cycle the board now; interrupting autoboot")
         deadline = time.monotonic() + timeout
         tail = b""
+        interrupt_sent = False
+        # A single pending character is enough to stop autoboot even if the
+        # adapter queues it before U-Boot enables the UART. Repeated Ctrl-C
+        # bytes can instead spill into the command line and corrupt setenv.
+        self.write(b"\r")
         while time.monotonic() < deadline:
-            self.write(b"\x03")
-            tail = (tail + self.read())[-8192:]
+            chunk = self.read()
+            tail = (tail + chunk)[-8192:]
             if b"StarFive #" in tail:
-                self.write(b"\r")
+                quiet_deadline = time.monotonic() + 0.2
+                while time.monotonic() < quiet_deadline:
+                    pending = self.read()
+                    if pending:
+                        quiet_deadline = time.monotonic() + 0.2
                 return
-            time.sleep(0.03)
+            # This U-Boot clears early UART input before bootdelay starts, so
+            # send the one interrupt only after the countdown prompt itself.
+            if not interrupt_sent and b"Hit any key to stop autoboot" in tail:
+                self.write(b"\x03")
+                interrupt_sent = True
         raise TimeoutError("StarFive U-Boot prompt not observed")
 
     def uboot_command(self, line: str, timeout: float = 20) -> bytes:
         self.message(f">>> U-Boot: {line}")
-        self.write(line.encode("ascii") + b"\r")
+        self.serial.reset_input_buffer()
+        marker = b"__VF2_UBOOT_DONE__"
+        # Ctrl-U clears any partial input left by the autoboot interrupt.
+        self.write(b"\x15" + line.encode("ascii") + b"; echo " + marker + b"\r")
         deadline = time.monotonic() + timeout
         tail = b""
         while time.monotonic() < deadline:
             tail = (tail + self.read())[-65536:]
-            if b"StarFive #" in tail:
+            if tail.count(marker) >= 2 and b"StarFive #" in tail:
+                errors = (
+                    b"Unknown command",
+                    b"*** ERROR:",
+                    b"TFTP error",
+                    b"Retry count exceeded",
+                )
+                if any(error in tail for error in errors):
+                    raise RuntimeError(f"U-Boot command failed: {line}")
                 return tail
         raise TimeoutError(f"U-Boot command timed out: {line}")
 
@@ -89,7 +123,7 @@ class SerialRunner:
             line
             + "; __vf2_rc=$?; printf '\n__VF2_RC_%s__\n' \"$__vf2_rc\"\r"
         )
-        self.write(command.encode("ascii"))
+        self.write_moss(command.encode("ascii"))
         deadline = time.monotonic() + timeout
         tail = b""
         marker = re.compile(rb"__VF2_RC_(\d+)__")
@@ -105,14 +139,62 @@ class SerialRunner:
 
     def wait_for_moss_shell(self, timeout: float) -> None:
         deadline = time.monotonic() + timeout
+        tail = b""
         while time.monotonic() < deadline:
-            try:
+            chunk = self.read()
+            if b"\x1b[6n" in chunk:
+                self.write(b"\x1b[1;1R")
+            tail = (tail + chunk)[-8192:]
+            if b"starry:~#" in tail:
                 rc, _ = self.moss_command("echo VF2_SHELL_READY", timeout=5)
                 if rc == 0:
                     return
-            except TimeoutError:
-                pass
         raise TimeoutError("MOSS shell did not become ready")
+
+
+class TcpReceiver:
+    """Receive an exact payload without depending on host netcat EOF semantics."""
+
+    def __init__(self, host: str, port: int, expected_size: int, timeout: float) -> None:
+        self.expected_size = expected_size
+        self.timeout = timeout
+        self.data = bytearray()
+        self.error: BaseException | None = None
+        self.done = threading.Event()
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listener.settimeout(timeout)
+        self.listener.bind((host, port))
+        self.listener.listen(1)
+        self.thread = threading.Thread(target=self._receive, daemon=True)
+        self.thread.start()
+
+    def _receive(self) -> None:
+        try:
+            connection, _ = self.listener.accept()
+            with connection:
+                connection.settimeout(self.timeout)
+                while len(self.data) < self.expected_size:
+                    chunk = connection.recv(self.expected_size - len(self.data))
+                    if not chunk:
+                        break
+                    self.data.extend(chunk)
+        except BaseException as error:
+            self.error = error
+        finally:
+            self.listener.close()
+            self.done.set()
+
+    def collect(self, timeout: float) -> bytes:
+        if not self.done.wait(timeout):
+            raise TimeoutError("host TCP receiver timed out")
+        if self.error is not None:
+            raise self.error
+        return bytes(self.data)
+
+    def close(self) -> None:
+        self.listener.close()
+        self.thread.join(timeout=1)
 
 
 def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
@@ -260,14 +342,27 @@ def require_moss_command(
 
 
 def wait_board_network(runner: SerialRunner, host_ip: str, timeout: float = 30) -> None:
+    payload = b"VF2_LINK_READY"
+    port = 18999
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        rc, _ = runner.moss_command(f"busybox ping -c 1 -W 1 {host_ip}", timeout=4)
-        if rc == 0:
-            runner.message("PASS link/ARP/ICMP")
+        receiver = TcpReceiver(host_ip, port, len(payload), timeout=3)
+        rc = -1
+        try:
+            rc, _ = runner.moss_command(
+                f"printf VF2_LINK_READY | busybox nc -w 2 {host_ip} {port}",
+                timeout=5,
+            )
+            received = receiver.collect(timeout=3)
+        except (OSError, TimeoutError):
+            received = b""
+        finally:
+            receiver.close()
+        if rc == 0 and received == payload:
+            runner.message("PASS link/ARP/TCP")
             return
         time.sleep(1)
-    raise TimeoutError("MOSS could not ping the directly connected host")
+    raise TimeoutError("MOSS could not open TCP to the directly connected host")
 
 
 def network_roundtrip(
@@ -280,10 +375,7 @@ def network_roundtrip(
     tx_port = 19000 + suffix * 2
     rx_port = tx_port + 1
 
-    host_listener = subprocess.Popen(
-        ["nc", "-l", host_ip, str(tx_port)], stdout=subprocess.PIPE
-    )
-    time.sleep(0.2)
+    host_receiver = TcpReceiver(host_ip, tx_port, size, timeout=15)
     try:
         require_moss_command(
             runner,
@@ -291,11 +383,9 @@ def network_roundtrip(
             f"head -c {size} /dev/zero | tr '\\000' V | busybox nc -w 5 {host_ip} {tx_port}",
             timeout=15,
         )
-        received = host_listener.communicate(timeout=10)[0]
+        received = host_receiver.collect(timeout=10)
     finally:
-        if host_listener.poll() is None:
-            host_listener.kill()
-            host_listener.wait()
+        host_receiver.close()
     expected = b"V" * size
     if received != expected:
         raise RuntimeError(
@@ -361,6 +451,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interface", default="enp108s0")
     parser.add_argument("--host-ip", type=ipaddress.IPv4Address, default="192.168.1.2")
     parser.add_argument("--board-ip", type=ipaddress.IPv4Address, default="192.168.1.10")
+    parser.add_argument("--root-device", default="/dev/mmcblk1p2")
     parser.add_argument("--uboot-timeout", type=float, default=120)
     parser.add_argument("--boot-timeout", type=float, default=120)
     parser.add_argument("--skip-link-flap", action="store_true")
@@ -391,6 +482,8 @@ def main() -> None:
         r"[a-z0-9][a-z0-9+_.-]*", args.apk_package
     ):
         raise SystemExit("--apk-package is not a valid Alpine package name")
+    if not re.fullmatch(r"/dev/mmcblk[0-9]+p[0-9]+", args.root_device):
+        raise SystemExit("--root-device must name one SD/MMC partition")
     if not interface_has_address(args.interface, host_ip):
         raise SystemExit(
             f"{args.interface} does not own {host_ip}; run scripts/setup_vf2_network.sh first"
@@ -417,6 +510,8 @@ def main() -> None:
             (f"setenv serverip {host_ip}", 5),
             ("setenv netmask 255.255.255.0", 5),
             (f"tftpboot 0x40200000 {args.tftp_name}", 45),
+            ("fdt addr 0x42200000", 5),
+            (f'fdt set /chosen bootargs "root={args.root_device} rw"', 5),
         ):
             runner.uboot_command(command, timeout)
         runner.message(">>> U-Boot: go 0x40200000")

@@ -34,6 +34,14 @@ pub struct EthernetAddress(pub [u8; 6]);
 
 /// Operations that require a network device (NIC) driver to implement.
 pub trait NetDriverOps: BaseDriverOps {
+    /// Whether the driver already owns the handler for [`BaseDriverOps::irq_num`].
+    ///
+    /// Event waiters use this to attach only a post-IRQ wake hook instead of
+    /// attempting to install a second marker handler for an owned interrupt.
+    fn irq_handler_registered(&self) -> bool {
+        false
+    }
+
     /// The ethernet address of the NIC.
     fn mac_address(&self) -> EthernetAddress;
 
