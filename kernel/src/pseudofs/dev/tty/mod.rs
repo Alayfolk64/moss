@@ -67,15 +67,19 @@ impl<R: TtyRead, W: TtyWrite + Clone> Tty<R, W> {
 impl<R: TtyRead, W: TtyWrite> Tty<R, W> {
     pub fn bind_to(self: &Arc<Self>, proc: &Process) -> AxResult<()> {
         let pg = proc.group();
-        if pg.session().sid() != proc.pid() {
+        let session = pg.session();
+        if session.sid() != proc.pid() {
             return Err(AxError::OperationNotPermitted);
         }
-        assert!(pg.session().set_terminal_with(|| {
-            self.terminal.job_control.set_session(&pg.session());
-            self.clone()
-        }));
+        if session.terminal().is_some() {
+            return Err(AxError::OperationNotPermitted);
+        }
+        self.terminal.job_control.set_session(&session)?;
+        if !session.set_terminal_with(|| self.clone()) {
+            return Err(AxError::OperationNotPermitted);
+        }
 
-        self.terminal.job_control.set_foreground(&pg).unwrap();
+        self.terminal.job_control.set_foreground(&pg)?;
         Ok(())
     }
 

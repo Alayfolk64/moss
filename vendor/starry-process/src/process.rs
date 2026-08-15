@@ -116,12 +116,15 @@ impl Process {
     /// The caller has to ensure that the new [`ProcessGroup`] does not conflict
     /// with any existing [`ProcessGroup`].
     pub fn create_group(self: &Arc<Self>) -> Option<Arc<ProcessGroup>> {
-        if self.group.lock().pgid() == self.pid {
+        let mut current_group = self.group.lock();
+        if current_group.pgid() == self.pid {
             return None;
         }
 
-        let new_group = ProcessGroup::new(self.pid, &self.group.lock().session);
-        self.set_group(&new_group);
+        let new_group = ProcessGroup::new(self.pid, &current_group.session);
+        current_group.processes.lock().remove(&self.pid);
+        new_group.processes.lock().insert(self.pid, self);
+        *current_group = new_group.clone();
 
         Some(new_group)
     }

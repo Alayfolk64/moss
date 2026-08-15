@@ -67,10 +67,19 @@ impl JobControl {
         Ok(())
     }
 
-    pub fn set_session(&self, session: &Arc<Session>) {
+    pub fn set_session(&self, session: &Arc<Session>) -> AxResult<()> {
         let mut guard = self.session.lock();
-        assert!(guard.upgrade().is_none());
+        if let Some(current) = guard.upgrade() {
+            if Arc::ptr_eq(&current, session) {
+                return Ok(());
+            }
+            ax_bail!(
+                OperationNotPermitted,
+                "Terminal is already associated with another session"
+            );
+        }
         *guard = Arc::downgrade(session);
+        Ok(())
     }
 }
 
