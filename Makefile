@@ -137,6 +137,10 @@ all:
 	$(MAKE) kernel-rv
 	$(MAKE) kernel-la
 
+on_site:
+	rm -rf target
+	$(MAKE) SITE_INIT=y kernel-rv kernel-la kernel-vf2 kernel-la-2k1000
+
 kernel-la-2k1000: toolchain
 	rm -rf target
 	$(MAKE) -C make \
@@ -144,7 +148,7 @@ kernel-la-2k1000: toolchain
 		MYPLAT=axplat-loongarch64-ls2k1000 \
 		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000.toml \
-		APP_FEATURES="ls2k1000" \
+		APP_FEATURES="ls2k1000 $(if $(filter y,$(SITE_INIT)),site-init,)" \
 		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
 		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
 		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
@@ -174,7 +178,7 @@ kernel-vf2: toolchain
 		MYPLAT=axplat-riscv64-visionfive2 \
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.vf2.toml \
-		APP_FEATURES="vf2 shell-init" \
+		APP_FEATURES="vf2 $(if $(filter y,$(SITE_INIT)),site-init,shell-init)" \
 		LOG=$(if $(strip $(LOG)),$(LOG),warn) BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
 		IP=$(if $(strip $(IP)),$(IP),192.168.1.10) \
 		GW=$(if $(strip $(GW)),$(GW),192.168.1.2) \
@@ -335,4 +339,4 @@ docker:
 	  docker.io/zhouzhouyi/os-contest:20260510 \
 	  /bin/bash
 
-.PHONY: all build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 kernel-la-2k1000-shell kernel-vf2 vf2 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
+.PHONY: all on_site build run justrun debug disasm clean makeclean kernel-rv kernel-la kernel-la-2k1000 kernel-la-2k1000-shell kernel-vf2 vf2 debug-rv debug-la contest-run-rv repair-sdcard-rv toolchain ensure-cargo-config prepare-sdcard-rv prepare-sdcard-la run_rv run_la run-rv run-la shell_rv shell_la rv-shell la-shell docker
