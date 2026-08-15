@@ -7,16 +7,21 @@ use core::{ffi::c_long, sync::atomic::Ordering};
 use axerrno::{AxError, AxResult};
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use bytemuck::AnyBitPattern;
-use linux_raw_sys::general::ROBUST_LIST_LIMIT;
+use linux_raw_sys::general::{
+    ROBUST_LIST_LIMIT, SI_USER
+};
+use axhal::time::TimeValue;
 use spin::RwLock;
-use starry_process::{Pid, ProcessGroup, Session, init_proc};
+use starry_process::{
+    Pid, Process, ProcessGroup, Session, init_proc
+};
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
 use weak_map::WeakMap;
 
 use super::{
     AsThread, FutexKey, ProcessData, TimerState, futex_table_for, send_signal_thread_inner,
-    send_signal_to_process, send_signal_to_thread,
+    send_signal_to_process, send_signal_to_thread, Thread,
 };
 
 static TASK_TABLE: RwLock<WeakMap<Pid, WeakAxTaskRef>> = RwLock::new(WeakMap::new());
@@ -31,7 +36,7 @@ static SESSION_TABLE: RwLock<WeakMap<Pid, Weak<Session>>> = RwLock::new(WeakMap:
 ///
 /// This function is intended to be used during memory leak analysis to remove
 /// possible noise caused by expired entries in the [`WeakMap`].
-pub fn cleanup_task_tables() {
+pub fn cleanup_task_tables(thr: &Thread) {
     TASK_TABLE.write().cleanup();
     PROCESS_TABLE.write().cleanup();
     PROCESS_GROUP_TABLE.write().cleanup();
@@ -259,15 +264,11 @@ pub fn exit_robust_list(head: *const RobustListHead) -> AxResult<()> {
     Ok(())
 }
 
-pub fn do_exit(exit_code: i32, group_exit: bool) {
-    let curr = current();
-    let thr = curr.as_thread();
-
-    info!("{} exit with code: {}", curr.id_name(), exit_code);
-
+fn cleanup_thread_futex_state(thr: &Thread) {
     let head = thr.robust_list_head() as *const RobustListHead;
+
     if !head.is_null()
-        && let Err(err) = exit_robust_list(head)
+        && let Err(err) = exit_robust_list(head) 
     {
         if err.canonicalize() != AxError::BadAddress {
             warn!("exit robust list failed: {err:?}");
@@ -278,21 +279,86 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
     if clear_child_tid.vm_write(0).is_ok() {
         let key = FutexKey::new_current(clear_child_tid as usize);
         let table = futex_table_for(&key);
-        let guard = table.get(&key);
-        if let Some(futex) = guard {
+        if let Some(futex) = table.get(&key) {
             futex.wq.wake(1, u32::MAX);
         }
         axtask::yield_now();
     }
+}
+
+fn cleanup_thread_runtime_state(thr: &Thread) -> (TimeValue, TimeValue) {
+    thr.signal.detach_from_process();
+    
+    let mut time = thr.time.borrow_mut();
+    let cpu_time = time.output();
+
+    time.cancel_all();
+    cpu_time
+}
+
+fn notify_pdeathsig_children(parent: &Arc<Process>) {
+    let parent_pid = parent.pid();
+
+    for child in parent.children() {
+        let child_pid = child.pid();
+
+        for tid in child.threads() {
+            let Ok(task) = get_task(tid) else {
+                continue;
+            };
+
+            let Some(thr) = task.try_as_thread() else {
+                continue;
+            };
+
+            let raw_signo = thr.pdeath_signal();
+
+            if raw_signo == 0 {
+                continue;
+            }
+
+            let Some(signo) = Signo::from_repr(raw_signo as u8) else {
+                continue;
+            };
+
+            let sig = SignalInfo::new_user(
+                signo,
+                SI_USER as i32,
+                parent_pid,
+            );
+
+            let _ = send_signal_to_process(
+                child_pid, 
+                Some(sig),
+            );
+        }
+    }
+}
+
+fn release_process_mmap_state(proc_data: &ProcessData) {
+    let pid = proc_data.proc.pid();
+    let aspace = proc_data.aspace();
+
+    let locked_bytes = if address_space_shared_with_live_process(&aspace, pid) {
+        0
+    } else {
+        aspace.read().locked_bytes()
+    };
+
+    crate::syscall::release_process_mmap_resources(pid, locked_bytes);
+}
+
+pub fn do_exit(exit_code: i32, group_exit: bool) {
+    let curr = current();
+    let thr = curr.as_thread();
+
+    info!("{} exit with code: {}", curr.id_name(), exit_code);
+
+    cleanup_task_tables(thr);
 
     let tid = curr.id().as_u64() as Pid;
     thr.signal.detach_from_process();
-    let (utime, stime) = {
-        let mut time = thr.time.borrow_mut();
-        let output = time.output();
-        time.cancel_all();
-        output
-    };
+    let (utime, stime) = cleanup_thread_runtime_state(thr);
 
     let process = &thr.proc_data.proc;
     let last_thread = process.exit_thread(tid, exit_code);
@@ -306,17 +372,16 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
         crate::syscall::release_process_aio_resources(process.pid());
         crate::syscall::release_process_cap_state(process.pid());
         crate::syscall::release_process_time_resources(process.pid());
-        let aspace = thr.proc_data.aspace();
-        let mmap_locked_bytes = if address_space_shared_with_live_process(&aspace, process.pid()) {
-            0
-        } else {
-            aspace.read().locked_bytes()
-        };
-        crate::syscall::release_process_mmap_resources(process.pid(), mmap_locked_bytes);
+
+        release_process_mmap_state(&thr.proc_data);
+
         crate::syscall::release_process_fanotify_resources(process.pid());
         crate::syscall::close_all_files_for_current_process();
         reclaim_process_address_space(&thr.proc_data);
         thr.proc_data.complete_vfork();
+
+        notify_pdeathsig_children(process);
+
         process.exit();
         crate::syscall::ptrace_on_process_exit(process.pid());
         crate::syscall::release_posix_locks_for_pid(process.pid());

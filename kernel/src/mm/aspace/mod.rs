@@ -245,6 +245,31 @@ impl VmaMetadata {
     }
 }
 
+#[cfg(feature = "mm-stats")]
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct AddrSpaceStats {
+    /// Number of all memory areas in this address space.
+    pub(crate) area_count: usize,
+
+    /// Total virtual bytes covered by all memory areas.
+    pub(crate) mapped_bytes: usize,
+
+    /// Number of userspace VMAs
+    pub(crate) user_area_count: usize,
+
+    /// Total virtual bytes covered by userspace VMAs.
+    pub(crate) user_mapped_bytes: usize,
+
+    /// Bytes belonging to locked VMAs
+    pub(crate) locked_bytes: usize,
+
+    /// Bytes backed by files.
+    pub(crate) file_backed_bytes: usize,
+
+    /// Bytes backed by anonymous mappings.
+    pub(crate) anonymous_bytes: usize, 
+}
+
 /// The virtual memory address space.
 pub struct AddrSpace {
     va_range: VirtAddrRange,
@@ -322,7 +347,23 @@ fn start_reclaim_worker() {
                     start_reclaim_worker();
                     return;
                 };
-                aspace.lock().clear();
+                let mut aspace = aspace.lock();
+                #[cfg(feature = "mm-stats")]
+                {
+                    let stats = aspace.stats();
+                    trace!(
+                        "Reclaim address space: areas{}, user_areas{}, mapped{:#x}, user_mapped{:#x}, \
+                            locked={:#x}, anonymous={:#x}, file_backed={:#x}",
+                        stats.area_count,
+                        stats.user_area_count,
+                        stats.mapped_bytes,
+                        stats.user_mapped_bytes,
+                        stats.locked_bytes,
+                        stats.anonymous_bytes,
+                        stats.file_backed_bytes,
+                    )
+                }
+                aspace.clear();
             }
         });
         return;
@@ -349,6 +390,35 @@ impl AddrSpace {
     /// Returns the address space size.
     pub fn size(&self) -> usize {
         self.va_range.size()
+    }
+    #[cfg(feature = "mm-stats")]
+    pub(crate) fn stats(&self) -> AddrSpaceStats {
+        let mut stats = AddrSpaceStats::default();
+
+        for area in self.areas.iter() {
+            let size = area.size();
+
+            stats.area_count += 1;
+            stats.mapped_bytes += size;
+
+            if area.flags().contains(MappingFlags::USER) {
+                stats.user_area_count += 1;
+                stats.user_mapped_bytes += size;
+            }
+
+            if area.metadata().locked() {
+                stats.locked_bytes += size;
+            }
+
+            if area.metadata().file_backed() {
+                stats.file_backed_bytes += size;
+            }
+
+            if area.metadata().anonymous() {
+                stats.anonymous_bytes += size;
+            }
+        }
+        stats
     }
 
     /// Returns the reference to the inner page table.

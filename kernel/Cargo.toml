@@ -14,6 +14,7 @@ input = ["dep:axinput", "axfeat/input"]
 ls2k1000 = []
 memtrack = ["axfeat/dwarf", "axalloc/tracking", "dep:gimli", "dep:axbacktrace"]
 net = ["axfeat/net", "dep:axnet"]
+mm-stats = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("vsock"))'] }

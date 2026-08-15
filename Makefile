@@ -4,6 +4,7 @@ export LOG := warn
 export DWARF := n
 export MODE := release
 export MEMTRACK := n
+export MM_STATS ?=n
 export SHELL_INIT ?= n
 export SITE_INIT ?= n
 export RUSTUP_TOOLCHAIN ?= nightly-2025-05-20
@@ -34,6 +35,10 @@ CARGO_CONFIG_TEMPLATE := $(A)/cargo-config.toml
 
 ifeq ($(MEMTRACK), y)
 	APP_FEATURES += starry-api/memtrack
+endif
+
+ifeq ($(MM_STATS), y)
+	APP_FEATURES += mm-stats
 endif
 
 ifeq ($(SHELL_INIT), y)
@@ -187,6 +192,7 @@ kernel-vf2: toolchain
 	@printf "    \033[36mVisionFive 2 image\033[0m: moss-vf2.bin\n"
 
 kernel-rv: toolchain
+	rm -rf target
 	$(MAKE) ARCH=riscv64 MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_riscv64-qemu-virt.elf $(A)/kernel-rv.dbg.elf
@@ -199,6 +205,7 @@ ifneq ($(DWARF), y)
 endif
 
 kernel-la: toolchain
+	rm -rf target
 	$(MAKE) ARCH=loongarch64 BUS=pci MEM=$(MEM) SMP=$(SMP) CPU_CAPACITY=$(CPU_CAPACITY) build
 ifeq ($(DWARF), y)
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-qemu-virt.elf $(A)/kernel-la.dbg.elf

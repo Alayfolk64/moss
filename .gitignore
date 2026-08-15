@@ -28,6 +28,7 @@ __pycache__/
 *.img
 *.gz
 *.xz
+*.gpt
 /docs/output_rv.txt
 /docs/output_la.txt
 /summary_la.txt
