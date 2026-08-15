@@ -731,17 +731,14 @@ pub fn sys_unlinkat(dirfd: i32, path: *const c_char, flags: usize) -> AxResult<i
         );
         let inotify_target = prepare_inotify_location_target(&target);
         let inotify_dirent = prepare_inotify_location_dirent(&parent, &target_name, is_dir);
-        let removed_file_cache = if !is_dir {
-            (target.metadata()?.nlink <= 1).then_some(target.clone())
+        let removed_file_cache = if !is_dir && target.metadata()?.nlink <= 1 {
+            Some(invalidate_removed_file_cache(&target)?)
         } else {
             None
         };
-        if let Some(file) = removed_file_cache.as_ref() {
-            invalidate_removed_file_cache(file)?;
-        }
         parent.unlink(&target_name, remove_dir)?;
-        if let Some(file) = removed_file_cache.as_ref() {
-            finalize_removed_file_cache(file);
+        if let Some(cache) = removed_file_cache {
+            finalize_removed_file_cache(cache);
         }
         Ok((
             is_dir,
@@ -1390,16 +1387,15 @@ pub fn sys_renameat2(
     let inotify_to = prepare_inotify_location_dirent(&new_dir, new_name, is_dir);
     let cookie = next_inotify_cookie();
     let replaced_file_cache = match new_target {
-        Some(loc) if !loc.is_dir() => (loc.metadata()?.nlink <= 1).then_some(loc),
+        Some(loc) if !loc.is_dir() && loc.metadata()?.nlink <= 1 => {
+            Some(invalidate_removed_file_cache(&loc)?)
+        }
         _ => None,
     };
 
-    if let Some(file) = replaced_file_cache.as_ref() {
-        invalidate_removed_file_cache(file)?;
-    }
     old_dir.rename(&old_name, &new_dir, new_name)?;
-    if let Some(file) = replaced_file_cache.as_ref() {
-        finalize_removed_file_cache(file);
+    if let Some(cache) = replaced_file_cache {
+        finalize_removed_file_cache(cache);
     }
     commit_fanotify_path_alias(path_alias);
     drop(namespace_guard);

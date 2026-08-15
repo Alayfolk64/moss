@@ -2340,13 +2340,15 @@ pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
     Ok(())
 }
 
-pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<()> {
+pub struct RemovedFileCache(Option<Arc<CachedFileRecord>>);
+
+pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<RemovedFileCache> {
     let key = CachedFile::file_cache_key(location);
     let cache = CachedFile::cache_for_key(key);
     let Some(record) = cache.read().get(&key).cloned() else {
         // 这里只是 namespace 修改前的准备阶段；失败时必须仍可继续使用原记录。
         location.invalidate_metadata_cache();
-        return Ok(());
+        return Ok(RemovedFileCache(None));
     };
 
     debug_assert_eq!(record.key, key);
@@ -2354,26 +2356,31 @@ pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<()> {
         CachedFile::from_record(&record).drop_cached_pages()?;
     }
     location.invalidate_metadata_cache();
-    Ok(())
+    Ok(RemovedFileCache(Some(record)))
 }
 
 /// 在 unlink 或 rename 替换成功后提交缓存记录退役。
-pub fn finalize_removed_file_cache(location: &Location) {
-    let key = CachedFile::file_cache_key(location);
-    let cache = CachedFile::cache_for_key(key);
-    let Some(record) = cache.read().get(&key).cloned() else {
-        location.discard_metadata_cache();
+pub fn finalize_removed_file_cache(removed: RemovedFileCache) {
+    let Some(record) = removed.0 else {
         return;
     };
+    let key = record.key;
+    let cache = CachedFile::cache_for_key(key);
+    {
+        let mut records = cache.write();
+        if records
+            .get(&key)
+            .is_some_and(|current| Arc::ptr_eq(current, &record))
+        {
+            records.remove(&key);
+        }
+    }
 
-    debug_assert_eq!(record.key, key);
     // tmpfs 的页就是文件内容；只有没有打开文件或 mmap 持有记录时才能丢弃。
-    if record.in_memory && Arc::strong_count(&record) == 2 {
+    if record.in_memory && Arc::strong_count(&record) == 1 {
         CachedFile::from_record(&record).discard_cached_pages();
     }
-    cache.write().remove(&key);
-    location.user_data().remove::<FileUserData>();
-    location.discard_metadata_cache();
+    record.location.user_data().remove::<FileUserData>();
 }
 
 pub fn cached_file_len(location: &Location) -> Option<u64> {
