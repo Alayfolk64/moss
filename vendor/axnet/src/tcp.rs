@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, vec};
 use core::{
     ops::{Deref, DerefMut},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
     task::Context,
 };
 
@@ -61,7 +61,10 @@ pub struct TcpSocketInner {
 
     general: GeneralOptions,
     has_mcast_group: AtomicBool,
-    rx_closed: AtomicBool,
+    // Use an aligned word for the receive-close flag.  The pinned LoongArch
+    // backend can retain a stale slab byte when initializing AtomicBool in a
+    // freshly accepted socket on real SMP hardware.
+    rx_closed: AtomicU32,
     poll_rx_closed: PollSet,
 }
 
@@ -113,7 +116,7 @@ impl TcpSocket {
             core::ptr::addr_of_mut!((*dst).keep_alive).write(AtomicBool::new(false));
             GeneralOptions::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).general));
             core::ptr::addr_of_mut!((*dst).has_mcast_group).write(AtomicBool::new(false));
-            core::ptr::addr_of_mut!((*dst).rx_closed).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).rx_closed).write(AtomicU32::new(0));
             PollSet::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).poll_rx_closed));
 
             Self(storage.assume_init())
@@ -172,18 +175,29 @@ impl TcpSocket {
         result
     }
 
-    /// Reinitializes fresh cooperative locks after an accepted socket reaches
-    /// the allocation that will be published to the file-descriptor table.
+    /// Reinitializes fresh state after an accepted socket reaches the
+    /// allocation that will be published to the file-descriptor table.
     ///
     /// # Safety
     ///
     /// This must be called exactly once on a newly accepted socket before the
     /// socket is shared with another task.
     pub unsafe fn reinitialize_accepted_after_move(&mut self) {
-        let previous_handle_owner =
-            unsafe { axsync::reinitialize_unpublished(&mut self.handle) };
-        let previous_local_owners =
-            unsafe { self.local.reinitialize_accepted_after_move() };
+        // An accepted socket is still exclusive here, so restore all
+        // constructor-only atomics with non-atomic writes at their final
+        // address before publication.
+        self.state.set(State::Connected);
+        *self.ever_connected.get_mut() = true;
+        *self.requested_mss.get_mut() = 0;
+        *self.bytes_since_poll.get_mut() = 0;
+        *self.nagle_enabled.get_mut() = true;
+        *self.quick_ack.get_mut() = false;
+        *self.keep_alive.get_mut() = false;
+        *self.has_mcast_group.get_mut() = false;
+        unsafe { core::ptr::write_volatile(self.rx_closed.get_mut(), 0) };
+
+        let previous_handle_owner = unsafe { axsync::reinitialize_unpublished(&mut self.handle) };
+        let previous_local_owners = unsafe { self.local.reinitialize_accepted_after_move() };
         if previous_handle_owner != 0 || previous_local_owners.iter().any(|owner| *owner != 0) {
             warn!(
                 "reinitialized moved accepted TCP mutexes: handle_owner={}, local_owners={:?}",
@@ -407,7 +421,7 @@ impl TcpSocket {
         let Some(()) = self.try_with_smol_socket(|socket| {
             events.set(
                 IoEvents::IN,
-                !self.rx_closed.load(Ordering::Acquire)
+                self.rx_closed.load(Ordering::Acquire) == 0
                     && (!socket.may_recv() || socket.can_recv()),
             );
             events.set(IoEvents::OUT, !socket.may_send() || socket.can_send());
@@ -824,7 +838,7 @@ impl SocketOps for TcpSocket {
     }
 
     fn recv(&self, mut dst: impl Write + IoBufMut, options: RecvOptions<'_>) -> AxResult<usize> {
-        if self.rx_closed.load(Ordering::Acquire) {
+        if self.rx_closed.load(Ordering::Acquire) != 0 {
             return Err(AxError::NotConnected);
         }
         let peek = options.flags.contains(RecvFlags::PEEK);
@@ -903,7 +917,7 @@ impl SocketOps for TcpSocket {
     fn shutdown(&self, how: Shutdown) -> AxResult {
         // TODO(mivik): shutdown
         if how.has_read() {
-            self.rx_closed.store(true, Ordering::Release);
+            self.rx_closed.store(1, Ordering::Release);
             self.poll_rx_closed.wake();
         }
 
@@ -969,7 +983,7 @@ impl Pollable for TcpSocket {
             State::Listening => self.poll_listener(),
             State::Busy => IoEvents::empty(),
         };
-        events.set(IoEvents::RDHUP, self.rx_closed.load(Ordering::Acquire));
+        events.set(IoEvents::RDHUP, self.rx_closed.load(Ordering::Acquire) != 0);
         events
     }
 
