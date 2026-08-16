@@ -278,6 +278,9 @@ impl CloneArgs {
             proc_data.set_gid(old_proc_data.gid());
             proc_data.set_egid(old_proc_data.egid());
             proc_data.set_sgid(old_proc_data.sgid());
+            if old_proc_data.no_new_privs() {
+                proc_data.set_no_new_privs();
+            }
             proc_data.set_supplementary_groups(old_proc_data.supplementary_groups());
             crate::syscall::inherit_child_timens_offsets(
                 old_proc_data.proc.pid(),

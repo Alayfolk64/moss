@@ -140,7 +140,7 @@ pub struct Thread {
     robust_list_head: AtomicUsize,
 
     /// signal sent when the parent dies
-    /// 
+    ///
     /// 0 means disabled
     pdeath_signal: AtomicU32,
 
@@ -225,7 +225,7 @@ impl Thread {
         self.pdeath_signal.load(Ordering::Relaxed)
     }
 
-    /// Set the parent-death signal 
+    /// Set the parent-death signal
     pub fn set_pdeath_signal(&self, signo: u32) {
         self.pdeath_signal.store(signo, Ordering::Relaxed);
     }
@@ -370,6 +370,7 @@ pub struct ProcessData {
     rseq_abort_generation: AtomicU64,
     sched_policy: AtomicU32,
     sched_priority: AtomicI32,
+    no_new_privs: AtomicBool,
 
     /// The default mask for file permissions.
     umask: AtomicU32,
@@ -426,6 +427,7 @@ impl ProcessData {
             rseq_abort_generation: AtomicU64::new(0),
             sched_policy: AtomicU32::new(0),
             sched_priority: AtomicI32::new(0),
+            no_new_privs: AtomicBool::new(false),
 
             umask: AtomicU32::new(0o022),
             ioprio: AtomicU32::new((2 << 13) | 4),
@@ -578,6 +580,14 @@ impl ProcessData {
     pub fn set_sched_state(&self, policy: u32, priority: i32) {
         self.sched_policy.store(policy, Ordering::SeqCst);
         self.sched_priority.store(priority, Ordering::SeqCst);
+    }
+
+    pub fn no_new_privs(&self) -> bool {
+        self.no_new_privs.load(Ordering::Acquire)
+    }
+
+    pub fn set_no_new_privs(&self) {
+        self.no_new_privs.store(true, Ordering::Release);
     }
 
     pub fn uid(&self) -> u32 {

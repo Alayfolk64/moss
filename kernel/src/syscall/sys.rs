@@ -20,6 +20,7 @@ use starry_vm::{VmMutPtr, vm_load, vm_read_slice, vm_write_slice};
 use crate::{
     file::{resolve_at, with_fs},
     mm::vm_load_string,
+    pseudofs::dev::fill_random_bytes,
     task::{AsThread, processes},
 };
 
@@ -90,13 +91,29 @@ pub fn sys_getegid() -> AxResult<isize> {
 
 pub fn sys_setuid(uid: u32) -> AxResult<isize> {
     debug!("sys_setuid <= uid: {uid}");
-    axtask::current().as_thread().proc_data.set_uid(uid);
+    let curr = axtask::current();
+    let proc_data = &curr.as_thread().proc_data;
+    if proc_data.euid() == 0 {
+        proc_data.set_uid(uid);
+    } else if uid == proc_data.uid() || uid == proc_data.suid() {
+        proc_data.set_euid(uid);
+    } else {
+        return Err(AxError::OperationNotPermitted);
+    }
     Ok(0)
 }
 
 pub fn sys_setgid(gid: u32) -> AxResult<isize> {
     debug!("sys_setgid <= gid: {gid}");
-    axtask::current().as_thread().proc_data.set_gid(gid);
+    let curr = axtask::current();
+    let proc_data = &curr.as_thread().proc_data;
+    if proc_data.euid() == 0 {
+        proc_data.set_gid(gid);
+    } else if gid == proc_data.gid() || gid == proc_data.sgid() {
+        proc_data.set_egid(gid);
+    } else {
+        return Err(AxError::OperationNotPermitted);
+    }
     Ok(0)
 }
 
@@ -228,16 +245,8 @@ pub fn sys_getrandom(buf: *mut u8, len: usize, flags: u32) -> AxResult<isize> {
 
     debug!("sys_getrandom <= buf: {buf:p}, len: {len}, flags: {flags:?}");
 
-    let path = if flags.contains(GetRandomFlags::RANDOM) {
-        "/dev/random"
-    } else {
-        "/dev/urandom"
-    };
-
-    let f = FS_CONTEXT.lock().resolve(path)?;
     let mut kbuf = vec![0; len];
-    let len = f.entry().as_file()?.read_at(&mut kbuf, 0)?;
-
+    fill_random_bytes(&mut kbuf);
     vm_write_slice(buf, &kbuf)?;
 
     Ok(len as _)

@@ -27,6 +27,15 @@ use crate::pseudofs::{Device, DeviceOps, DirMaker, DirMapping, SimpleDir, Simple
 
 const RANDOM_SEED: &[u8; 32] = b"0123456789abcdef0123456789abcdef";
 
+lazy_static::lazy_static! {
+    static ref RANDOM_SOURCE: Mutex<SmallRng> =
+        Mutex::new(SmallRng::from_seed(*RANDOM_SEED));
+}
+
+pub(crate) fn fill_random_bytes(buf: &mut [u8]) {
+    RANDOM_SOURCE.lock().fill_bytes(buf);
+}
+
 pub(crate) fn new_devfs() -> Filesystem {
     SimpleFs::new_with("devfs".into(), 0x01021994, builder)
 }
@@ -72,21 +81,17 @@ impl DeviceOps for Zero {
     }
 }
 
-struct Random {
-    rng: Mutex<SmallRng>,
-}
+struct Random;
 
 impl Random {
     pub fn new() -> Self {
-        Self {
-            rng: Mutex::new(SmallRng::from_seed(*RANDOM_SEED)),
-        }
+        Self
     }
 }
 
 impl DeviceOps for Random {
     fn read_at(&self, buf: &mut [u8], _offset: u64) -> VfsResult<usize> {
-        self.rng.lock().fill_bytes(buf);
+        fill_random_bytes(buf);
         Ok(buf.len())
     }
 

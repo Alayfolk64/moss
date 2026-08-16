@@ -367,6 +367,18 @@ pub fn sys_prctl(
                 return Err(AxError::InvalidInput);
             }
         }
+        PR_SET_NO_NEW_PRIVS => {
+            if arg2 != 1 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+            current().as_thread().proc_data.set_no_new_privs();
+        }
+        PR_GET_NO_NEW_PRIVS => {
+            if arg2 != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+            return Ok(current().as_thread().proc_data.no_new_privs() as isize);
+        }
         PR_SET_SECCOMP => {}
         PR_MCE_KILL => {}
         PR_GET_PDEATHSIG => {
