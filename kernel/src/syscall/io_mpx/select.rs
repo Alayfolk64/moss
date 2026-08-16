@@ -122,20 +122,27 @@ fn do_select(
                 poll_network_once();
                 let mut res = 0usize;
                 for ((fd, interested), index) in fds.0.iter().zip(fd_indices.iter().copied()) {
-                    let events = fd.poll() & *interested;
-                    if events.contains(IoEvents::IN)
+                    let events = fd.poll();
+                    // select(2) reports a descriptor in readfds whenever a
+                    // read would not block.  EOF and an asynchronous error
+                    // both satisfy that rule even though poll(2) represents
+                    // them with POLLHUP/POLLERR instead of POLLIN.
+                    if interested.contains(IoEvents::IN)
+                        && events.intersects(IoEvents::IN | IoEvents::HUP | IoEvents::ERR)
                         && let Some(set) = readfds.as_deref_mut()
                     {
                         res += 1;
                         unsafe { FD_SET(index as _, set) };
                     }
-                    if events.contains(IoEvents::OUT)
+                    if interested.contains(IoEvents::OUT)
+                        && events.intersects(IoEvents::OUT | IoEvents::ERR)
                         && let Some(set) = writefds.as_deref_mut()
                     {
                         res += 1;
                         unsafe { FD_SET(index as _, set) };
                     }
-                    if events.contains(IoEvents::ERR)
+                    if interested.contains(IoEvents::ERR)
+                        && events.contains(IoEvents::ERR)
                         && let Some(set) = exceptfds.as_deref_mut()
                     {
                         res += 1;
