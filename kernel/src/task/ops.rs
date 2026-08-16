@@ -5,23 +5,19 @@ use alloc::{
 use core::{ffi::c_long, sync::atomic::Ordering};
 
 use axerrno::{AxError, AxResult};
+use axhal::time::TimeValue;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
 use bytemuck::AnyBitPattern;
-use linux_raw_sys::general::{
-    ROBUST_LIST_LIMIT, SI_USER
-};
-use axhal::time::TimeValue;
+use linux_raw_sys::general::{ROBUST_LIST_LIMIT, SI_USER};
 use spin::RwLock;
-use starry_process::{
-    Pid, Process, ProcessGroup, Session, init_proc
-};
+use starry_process::{Pid, Process, ProcessGroup, Session, init_proc};
 use starry_signal::{SignalInfo, Signo};
 use starry_vm::{VmMutPtr, VmPtr};
 use weak_map::WeakMap;
 
 use super::{
-    AsThread, FutexKey, ProcessData, TimerState, futex_table_for, send_signal_thread_inner,
-    send_signal_to_process, send_signal_to_thread, Thread,
+    AsThread, FutexKey, ProcessData, Thread, TimerState, futex_table_for, send_signal_thread_inner,
+    send_signal_to_process, send_signal_to_thread,
 };
 
 static TASK_TABLE: RwLock<WeakMap<Pid, WeakAxTaskRef>> = RwLock::new(WeakMap::new());
@@ -268,7 +264,7 @@ fn cleanup_thread_futex_state(thr: &Thread) {
     let head = thr.robust_list_head() as *const RobustListHead;
 
     if !head.is_null()
-        && let Err(err) = exit_robust_list(head) 
+        && let Err(err) = exit_robust_list(head)
     {
         if err.canonicalize() != AxError::BadAddress {
             warn!("exit robust list failed: {err:?}");
@@ -288,7 +284,7 @@ fn cleanup_thread_futex_state(thr: &Thread) {
 
 fn cleanup_thread_runtime_state(thr: &Thread) -> (TimeValue, TimeValue) {
     thr.signal.detach_from_process();
-    
+
     let mut time = thr.time.borrow_mut();
     let cpu_time = time.output();
 
@@ -321,16 +317,9 @@ fn notify_pdeathsig_children(parent: &Arc<Process>) {
                 continue;
             };
 
-            let sig = SignalInfo::new_user(
-                signo,
-                SI_USER as i32,
-                parent_pid,
-            );
+            let sig = SignalInfo::new_user(signo, SI_USER as i32, parent_pid);
 
-            let _ = send_signal_to_process(
-                child_pid, 
-                Some(sig),
-            );
+            let _ = send_signal_to_process(child_pid, Some(sig));
         }
     }
 }

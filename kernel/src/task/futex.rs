@@ -38,7 +38,7 @@ impl WaitQueue {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     pub fn register_waiter(
         &self,
         bitset: u32,
@@ -52,23 +52,14 @@ impl WaitQueue {
             return false;
         }
 
-        queue.push_back((
-            notified, 
-            bitset, 
-            poll
-        ));
+        queue.push_back((notified, bitset, poll));
         true
     }
 
-    pub fn unregister_waiter(
-        &self,
-        notified: &Arc<AtomicBool>,
-    ) {
-        self.queue.lock().retain(
-            |(waiter, ..)| {
-                !Arc::ptr_eq(waiter, notified)
-            },
-        );
+    pub fn unregister_waiter(&self, notified: &Arc<AtomicBool>) {
+        self.queue
+            .lock()
+            .retain(|(waiter, ..)| !Arc::ptr_eq(waiter, notified));
     }
 
     /// Waits if the given condition is met.
@@ -85,12 +76,7 @@ impl WaitQueue {
         let poll = Arc::new(PollSet::new());
 
         {
-            if !self.register_waiter(
-                bitset,
-                notified.clone(),
-                poll.clone(),
-                condition,
-            ) {
+            if !self.register_waiter(bitset, notified.clone(), poll.clone(), condition) {
                 return Ok(false);
             }
         }
@@ -117,7 +103,7 @@ impl WaitQueue {
                 Err(AxError::TimedOut)
             }
             Err(_) => {
-                self.unregister_waiter(& notified);
+                self.unregister_waiter(&notified);
                 Err(AxError::Interrupted)
             }
         }
