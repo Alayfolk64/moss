@@ -2448,11 +2448,20 @@ impl FileBackend {
                     cached
                         .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
                 }
-                dst.read_from(&mut axio::read_fn(|buf| {
-                    loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {
-                        offset += *read as u64;
-                    })
-                }))
+                let mut total = 0;
+                while dst.remaining_mut() > 0 {
+                    match dst.read_from(&mut axio::read_fn(|buf| {
+                        loc.entry().as_file()?.read_at(buf, offset).inspect(|read| {
+                            offset += *read as u64;
+                        })
+                    })) {
+                        Ok(0) => break,
+                        Ok(read) => total += read,
+                        Err(_) if total > 0 => break,
+                        Err(err) => return Err(err),
+                    }
+                }
+                Ok(total)
             }
         }
     }
@@ -2470,14 +2479,25 @@ impl FileBackend {
                     cached
                         .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
                 }
-                let result = src.write_to(&mut axio::write_fn(|buf| {
-                    loc.entry()
-                        .as_file()?
-                        .write_at(buf, offset)
-                        .inspect(|written| {
-                            offset += *written as u64;
-                        })
-                }));
+                let mut total = 0;
+                let result = loop {
+                    match src.write_to(&mut axio::write_fn(|buf| {
+                        loc.entry()
+                            .as_file()?
+                            .write_at(buf, offset)
+                            .inspect(|written| {
+                                offset += *written as u64;
+                            })
+                    })) {
+                        Ok(0) => break Ok(total),
+                        Ok(written) => total += written,
+                        Err(_) if total > 0 => break Ok(total),
+                        Err(err) => break Err(err),
+                    }
+                    if src.remaining() == 0 {
+                        break Ok(total);
+                    }
+                };
                 if offset > start {
                     loc.grow_cached_len_if_present(offset);
                     if let Some(cached) = cached {
