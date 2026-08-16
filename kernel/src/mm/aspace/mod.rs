@@ -830,33 +830,43 @@ impl AddrSpace {
         true
     }
 
+    fn unmap_detached_areas(
+        &mut self,
+        areas: &MemorySet<Backend, VmaMetadata>,
+    ) -> AxResult {
+        let mut pt = self.pt.modify();
+        let mut gather = UnmapGather::new();
+
+        let mut result = Ok(());
+
+        for area in areas.iter() {
+            if let Err(err) =
+                area.backend()
+                    .unmap_for_clear(area.va_range(), &mut pt, &mut gather)
+            {
+                result = Err(err);
+                break;
+            }
+        }
+
+        // Even if one backend failed after clearing some PTEs, all queued TLB
+        // invalidations must finish before deferred page owners can dropped.
+        gather.finish(&mut pt);
+        drop(pt);
+
+        result
+
+    }
+
     /// Removes all mappings in the address space.
     pub fn clear(&mut self) {
         // Retain all backend owners while one page-table cursor and one
         // deferred-frame gather remove every VMA. This turns per-VMA remote
         // shootdowns into shared bounded batches.
         let areas = mem::take(&mut self.areas);
-        let mut pt = self.pt.modify();
-        let mut gather = UnmapGather::new();
-        let mut result = Ok(());
-        for area in areas.iter() {
-            if let Err(err) = area
-                .backend()
-                .unmap_for_clear(area.va_range(), &mut pt, &mut gather)
-            {
-                result = Err(err);
-                break;
-            }
-        }
-        gather.finish(&mut pt);
-        pt.finish();
-        drop(pt);
-        match result {
+        match self.unmap_detached_areas(&areas) {
             Ok(()) => drop(areas),
             Err(err) => {
-                // Preserve backend owners on an impossible metadata/PTE
-                // disagreement; freeing them could recycle a still-mapped
-                // frame after the partial clear.
                 mem::forget(areas);
                 panic!("failed to clear address space: {err}");
             }
