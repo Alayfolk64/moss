@@ -3,10 +3,10 @@ use core::ffi::c_char;
 use axerrno::{AxError, AxResult, LinuxError};
 use axsync::Mutex;
 use axtask::current;
-use starry_signal::Signo;
 use hashbrown::HashMap;
 use lazy_static::lazy_static;
 use linux_raw_sys::general::{__user_cap_data_struct, __user_cap_header_struct, CAP_LAST_CAP};
+use starry_signal::Signo;
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
 
 use crate::{
@@ -358,6 +358,15 @@ pub fn sys_prctl(
             buf[..len].copy_from_slice(&name.as_bytes()[..len]);
             vm_write_slice(arg2 as _, &buf)?;
         }
+        PR_SET_DUMPABLE => {
+            // MOSS does not generate process core dumps yet.  Accept Linux's
+            // disabled/user-dump modes so daemons such as nginx can complete their
+            // worker initialization without changing an unsupported dump
+            // backend.
+            if !matches!(arg2, 0 | 1) || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+        }
         PR_SET_SECCOMP => {}
         PR_MCE_KILL => {}
         PR_GET_PDEATHSIG => {
@@ -370,9 +379,7 @@ pub fn sys_prctl(
                 let signo = u8::try_from(arg2).map_err(|_| AxError::InvalidInput)?;
                 Signo::from_repr(signo).ok_or(AxError::InvalidInput)?;
             }
-            current()
-                .as_thread()
-                .set_pdeath_signal(arg2 as u32);
+            current().as_thread().set_pdeath_signal(arg2 as u32);
         }
         PR_CAPBSET_READ => {
             let cap = arg2 as u32;
