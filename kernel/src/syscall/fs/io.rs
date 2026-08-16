@@ -221,7 +221,11 @@ pub fn sys_lseek(fd: c_int, offset: __kernel_off_t, whence: c_int) -> AxResult<i
         2 => SeekFrom::End(offset as _),
         _ => return Err(AxError::InvalidInput),
     };
-    let off = File::from_fd(fd)?.inner().seek(pos)?;
+    // Pipes, sockets, and other non-seekable descriptors must report ESPIPE.
+    // File::from_fd uses BrokenPipe internally to distinguish a non-File
+    // FileLike, but exposing EPIPE here makes stream-aware consumers such as
+    // dpkg treat a normal seek fallback as a fatal extraction error.
+    let off = positioned_file_from_fd(fd)?.inner().seek(pos)?;
     Ok(off as _)
 }
 

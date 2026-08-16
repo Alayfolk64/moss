@@ -3,13 +3,13 @@ use core::{
     future::poll_fn,
     ops::Range,
     sync::atomic::{AtomicBool, Ordering},
-    task::{Context, Poll, Waker},
+    task::{Poll, Waker},
     time::Duration,
 };
 
 use axerrno::{AxError, AxResult};
-use axpoll::{IoEvents, PollSet, Pollable};
-use axtask::future::{block_on, block_on_latency_sensitive, poll_io};
+use axpoll::PollSet;
+use axtask::future::block_on_latency_sensitive;
 use linux_raw_sys::general::{
     ECHOCTL, ECHOK, ICRNL, IGNCR, ISIG, NOFLSH, VEOF, VERASE, VKILL, VMIN, VTIME,
 };
@@ -342,21 +342,6 @@ pub struct LineDiscipline<R, W> {
     processor: Processor<R, W>,
 }
 
-struct WaitPollable<'a>(Option<&'a Arc<PollSet>>);
-impl Pollable for WaitPollable<'_> {
-    fn poll(&self) -> IoEvents {
-        unreachable!()
-    }
-
-    fn register(&self, context: &mut Context<'_>, _events: IoEvents) {
-        if let Some(set) = self.0 {
-            set.register(context.waker());
-        } else {
-            context.waker().wake_by_ref();
-        }
-    }
-}
-
 impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
     pub fn new(terminal: Arc<Terminal>, config: TtyConfig<R, W>) -> Self {
         let (buf_tx, buf_rx) = ReadBuf::default().split();
@@ -504,26 +489,18 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
             term.special_char(VMIN) as usize
         };
 
-        if buf.len() < vmin as usize {
+        let required = vmin.min(buf.len());
+        if let Processor::Manual(reader) = &mut self.processor {
+            reader.poll();
+        }
+        if self.buf_rx.occupied_len() < required {
             return Err(AxError::WouldBlock);
         }
 
-        let mut total_read = 0;
-        let set = match &self.processor {
-            Processor::Manual(_) => None,
-            Processor::External(set) => Some(set.clone()),
-            _ => unreachable!(),
-        };
-        let pollable = WaitPollable(set.as_ref());
-        block_on(poll_io(&pollable, IoEvents::IN, false, || {
-            if let Processor::Manual(reader) = &mut self.processor {
-                reader.poll();
-            }
-            total_read += self.buf_rx.pop_slice(&mut buf[total_read..]);
+        let read = self.buf_rx.pop_slice(buf);
+        if read != 0 {
             self.poll_tx.wake();
-            (total_read >= vmin)
-                .then_some(total_read)
-                .ok_or(AxError::WouldBlock)
-        }))
+        }
+        Ok(read)
     }
 }
