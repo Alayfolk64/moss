@@ -1,6 +1,6 @@
 use axerrno::{AxError, AxResult, LinuxError};
 use axnet::options::{Configurable, GetSocketOption, SetSocketOption, TcpInfo};
-use linux_raw_sys::net::{SO_ATTACH_BPF, SO_OOBINLINE, SOL_SOCKET, socklen_t};
+use linux_raw_sys::net::{SO_ATTACH_BPF, SO_BINDTODEVICE, SO_OOBINLINE, SOL_SOCKET, socklen_t};
 
 use crate::{
     file::{BpfProgram, FileLike, Socket},
@@ -172,6 +172,12 @@ pub fn sys_getsockopt(
     }
 
     let socket = Socket::from_fd(fd)?;
+    if level == SOL_SOCKET && optname == SO_BINDTODEVICE {
+        // MOSS does not bind sockets to a network device. Linux reports that
+        // state as a successful query with a zero-length interface name.
+        *optlen = 0;
+        return Ok(0);
+    }
     if unsupported_getsockopt(level, optname) {
         check_getsockopt_output(optval, *optlen)?;
         return Err(AxError::from(LinuxError::EOPNOTSUPP));

@@ -447,11 +447,17 @@ impl SocketOps for UdpSocket {
 
     fn local_addr(&self) -> AxResult<SocketAddrEx> {
         match self.local_addr.try_read() {
-            Some(addr) => addr
-                .map(|addr| self.family.format_socket_addr(addr.addr, addr.port))
-                .map(SocketAddrEx::Ip)
-                .ok_or(AxError::NotConnected),
-            None => Err(AxError::NotConnected),
+            Some(addr) => Ok(SocketAddrEx::Ip(addr.map_or_else(
+                || {
+                    self.family
+                        .format_socket_addr(self.family.unspecified_addr(), 0)
+                },
+                |addr| self.family.format_socket_addr(addr.addr, addr.port),
+            ))),
+            None => Ok(SocketAddrEx::Ip(
+                self.family
+                    .format_socket_addr(self.family.unspecified_addr(), 0),
+            )),
         }
     }
 

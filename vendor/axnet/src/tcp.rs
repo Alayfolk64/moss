@@ -895,7 +895,12 @@ impl SocketOps for TcpSocket {
             };
             Ok(SocketAddrEx::Ip(self.family.format_socket_addr(addr, port)))
         })
-        .unwrap_or(Err(AxError::NotConnected))
+        .unwrap_or_else(|| {
+            Ok(SocketAddrEx::Ip(
+                self.family
+                    .format_socket_addr(self.family.unspecified_addr(), 0),
+            ))
+        })
     }
 
     fn peer_addr(&self) -> AxResult<SocketAddrEx> {
