@@ -20,7 +20,7 @@ use crate::{
 
 #[inline]
 fn boot_progress(_stage: &str) {
-    #[cfg(feature = "ls2k1000")]
+    #[cfg(feature = "watchdog")]
     crate::watchdog::note_progress();
 }
 
@@ -115,7 +115,7 @@ pub fn init(args: &[String], envs: &[String]) {
     // block completions may safely execute in their own task.
     enable_async_block_io();
 
-    #[cfg(feature = "ls2k1000")]
+    #[cfg(feature = "watchdog")]
     crate::watchdog::spawn_monitor();
 
     #[cfg(any(target_arch = "loongarch64", target_arch = "riscv64"))]
@@ -182,7 +182,7 @@ pub fn init(args: &[String], envs: &[String]) {
     boot_progress("init-task-join");
     let exit_code = task.join();
     info!("Init process exited with code: {exit_code:?}");
-    #[cfg(feature = "ls2k1000")]
+    #[cfg(feature = "watchdog")]
     crate::watchdog::note_progress();
 
     // File close no longer forces synchronous writeback. Flush dirty folios
@@ -193,13 +193,13 @@ pub fn init(args: &[String], envs: &[String]) {
     cx.root_dir()
         .unmount_all()
         .expect("Failed to unmount all filesystems");
-    #[cfg(feature = "ls2k1000")]
+    #[cfg(feature = "watchdog")]
     crate::watchdog::note_progress();
     cx.root_dir()
         .filesystem()
         .shutdown()
         .expect("Failed to finalize rootfs");
-    #[cfg(feature = "ls2k1000")]
+    #[cfg(feature = "watchdog")]
     crate::watchdog::note_progress();
 
     // BusyBox asks init to shut down by signal unless `-f` is used:
@@ -207,19 +207,23 @@ pub fn init(args: &[String], envs: &[String]) {
     // distinction after the init task exits so every platform reaches the
     // corresponding hardware operation after filesystems have been flushed.
     if exit_code == Signo::SIGUSR2 as i32 {
+        #[cfg(feature = "watchdog")]
+        crate::watchdog::stop();
         axhal::power::system_off();
     }
     if exit_code == Signo::SIGTERM as i32 {
-        axhal::power::system_reset();
-    }
-
-    #[cfg(feature = "ls2k1000")]
-    {
-        info!("Init flow completed, rebooting LS2K1000LA for the next automated run");
+        #[cfg(feature = "watchdog")]
         crate::watchdog::stop();
         axhal::power::system_reset();
     }
-    #[cfg(not(feature = "ls2k1000"))]
+
+    #[cfg(feature = "watchdog")]
+    {
+        info!("Init flow completed, rebooting for the next automated run");
+        crate::watchdog::stop();
+        axhal::power::system_reset();
+    }
+    #[cfg(not(feature = "watchdog"))]
     {
         info!("Init flow completed, powering off");
         axhal::power::system_off();

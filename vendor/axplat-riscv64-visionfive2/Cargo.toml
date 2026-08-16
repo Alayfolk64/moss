@@ -12,6 +12,7 @@ fp-simd = ["axcpu/fp-simd"]
 irq = ["axplat/irq", "dep:riscv_plic"]
 rtc = ["dep:chrono", "dep:fdt-parser"]
 smp = ["axplat/smp"]
+watchdog = ["dep:fdt-parser"]
 
 [dependencies]
 axconfig-macros = "0.2"

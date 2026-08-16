@@ -62,6 +62,7 @@ ls2k1000 = [
     "axfeat/driver-ls2k1000",
     "starry-kernel/net",
     "starry-kernel/ls2k1000",
+    "starry-kernel/watchdog",
     "dep:axplat-loongarch64-ls2k1000",
     "axplat-loongarch64-ls2k1000/fp-simd",
     "axplat-loongarch64-ls2k1000/irq",
@@ -86,6 +87,10 @@ vf2 = [
     "axplat-riscv64-visionfive2/irq",
     "axplat-riscv64-visionfive2/rtc",
     "axplat-riscv64-visionfive2/smp",
+]
+vf2-watchdog = [
+    "starry-kernel/watchdog",
+    "axplat-riscv64-visionfive2/watchdog",
 ]
 
 [[bin]]

@@ -1,4 +1,4 @@
-//! Pure forward-progress policy for the LS2K1000 watchdog monitor.
+//! Pure forward-progress policy shared by hardware-board watchdog monitors.
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum StopReason {

@@ -464,12 +464,11 @@ fn put_u32(buf: &mut [u8], offset: usize, value: u32) {
 
 pub fn sys_reboot(_magic: u32, _magic2: u32, cmd: u32, _arg: *mut c_char) -> AxResult<isize> {
     const LINUX_REBOOT_CMD_RESTART: u32 = 0x0123_4567;
-    #[cfg(feature = "ls2k1000")]
+    #[cfg(feature = "watchdog")]
+    crate::watchdog::stop();
     if cmd == LINUX_REBOOT_CMD_RESTART {
         axhal::power::system_reset();
     }
-    #[cfg(not(feature = "ls2k1000"))]
-    let _ = cmd;
     axhal::power::system_off();
 }
 

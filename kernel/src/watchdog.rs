@@ -1,15 +1,16 @@
-//! Bounded forward-progress lease for the LS2K1000 hardware watchdog.
+//! Bounded forward-progress lease for unattended hardware-board runs.
 
 mod policy;
 
 use alloc::string::String;
 use core::{
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 
-use crate::task::AsThread;
 use policy::{ForwardProgressLease, StopReason};
+
+use crate::task::AsThread;
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(1);
 const RUNTIME_TIMEOUT_SECS: u32 = 30;
@@ -20,6 +21,7 @@ const TEST_DEADLINE_PROPERTY: &str = "moss,watchdog-hard-deadline-secs";
 const NANOS_PER_SEC: u64 = 1_000_000_000;
 
 static LAST_EXPLICIT_PROGRESS_NS: AtomicU64 = AtomicU64::new(0);
+static MONITOR_ENABLED: AtomicBool = AtomicBool::new(false);
 
 fn hard_deadline_secs() -> Option<u64> {
     let raw = axhal::dtb::get_chosen_property(TEST_DEADLINE_PROPERTY)?;
@@ -77,7 +79,9 @@ pub(crate) fn note_progress() {
 }
 
 pub(crate) fn spawn_monitor() {
+    MONITOR_ENABLED.store(true, Ordering::Release);
     if !axhal::watchdog::start(RUNTIME_TIMEOUT_SECS) {
+        MONITOR_ENABLED.store(false, Ordering::Release);
         return;
     }
     note_progress();
@@ -101,12 +105,15 @@ fn monitor() {
     let hard_deadline_ns = hard_deadline_secs.map(|seconds| seconds * NANOS_PER_SEC);
 
     info!(
-        "LS2K1000 watchdog active: hardware={} s, no-progress lease={} s, CPU-only cap={} s",
+        "Hardware watchdog active: timeout={} s, no-progress lease={} s, CPU-only cap={} s",
         RUNTIME_TIMEOUT_SECS, PROGRESS_LEASE_SECS, CPU_ONLY_CAP_SECS
     );
 
     loop {
         axtask::sleep(CHECK_INTERVAL);
+        if !MONITOR_ENABLED.load(Ordering::Acquire) {
+            return;
+        }
         let now_ns = axhal::time::monotonic_time_nanos();
 
         let explicit_ns = LAST_EXPLICIT_PROGRESS_NS.load(Ordering::Acquire);
@@ -143,24 +150,23 @@ fn monitor() {
             match reason {
                 StopReason::HardDeadline => {
                     warn!(
-                        "LS2K1000 watchdog hard test deadline expired after {} s; reset follows \
-                         within {} s",
+                        "Watchdog hard test deadline expired after {} s; reset follows within {} s",
                         runtime_ns / NANOS_PER_SEC,
                         RUNTIME_TIMEOUT_SECS
                     );
                 }
                 StopReason::IdleLease => {
                     warn!(
-                        "LS2K1000 watchdog lease expired after {} s without semantic progress; \
-                         reset follows within {} s",
+                        "Watchdog lease expired after {} s without semantic progress; reset \
+                         follows within {} s",
                         idle_ns / NANOS_PER_SEC,
                         RUNTIME_TIMEOUT_SECS
                     );
                 }
                 StopReason::CpuOnlyCap => {
                     warn!(
-                        "LS2K1000 watchdog CPU-only cap expired after {} s without semantic \
-                         progress (possible livelock); reset follows within {} s",
+                        "Watchdog CPU-only cap expired after {} s without semantic progress \
+                         (possible livelock); reset follows within {} s",
                         idle_ns / NANOS_PER_SEC,
                         RUNTIME_TIMEOUT_SECS
                     );
@@ -174,5 +180,9 @@ fn monitor() {
 }
 
 pub(crate) fn stop() {
+    // Publish monitor shutdown before disabling the device.  A reset path may
+    // immediately arm a short hardware lease; the old monitor must never wake
+    // on another CPU and feed that new lease.
+    MONITOR_ENABLED.store(false, Ordering::Release);
     axhal::watchdog::stop();
 }

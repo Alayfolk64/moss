@@ -22,18 +22,40 @@ impl PowerIf for PowerImpl {
 
     fn system_reset() -> ! {
         info!("Rebooting...");
+        #[cfg(feature = "watchdog")]
+        if crate::watchdog::start(2) {
+            warn!("waiting for VF2 hardware watchdog reset");
+            loop {
+                axcpu::asm::halt();
+            }
+        }
+
+        // Keep SBI reset as the fallback when the watchdog is not compiled in
+        // or its clock/reset/MMIO setup could not be established.
         let result = sbi_rt::system_reset(sbi_rt::ColdReboot, sbi_rt::NoReason);
         warn!("SBI cold reboot returned unexpectedly: {result:?}");
         Self::system_off()
     }
 
-    fn watchdog_start(_timeout_secs: u32) -> bool {
-        false
+    fn watchdog_start(timeout_secs: u32) -> bool {
+        #[cfg(feature = "watchdog")]
+        return crate::watchdog::start(timeout_secs);
+        #[cfg(not(feature = "watchdog"))]
+        {
+            let _ = timeout_secs;
+            false
+        }
     }
 
-    fn watchdog_ping() {}
+    fn watchdog_ping() {
+        #[cfg(feature = "watchdog")]
+        crate::watchdog::ping();
+    }
 
-    fn watchdog_stop() {}
+    fn watchdog_stop() {
+        #[cfg(feature = "watchdog")]
+        crate::watchdog::stop();
+    }
 
     fn system_off() -> ! {
         info!("Shutting down...");

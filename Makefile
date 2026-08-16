@@ -183,7 +183,7 @@ kernel-vf2: toolchain
 		MYPLAT=axplat-riscv64-visionfive2 \
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.vf2.toml \
-		APP_FEATURES="vf2 $(if $(filter y,$(SITE_INIT)),site-init,shell-init)" \
+		APP_FEATURES="vf2 $(if $(filter y,$(APPS_INIT)),apps-init vf2-watchdog,$(if $(filter y,$(SITE_INIT)),site-init vf2-watchdog,shell-init))" \
 		LOG=$(if $(strip $(LOG)),$(LOG),warn) BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
 		IP=$(if $(strip $(IP)),$(IP),192.168.1.10) \
 		GW=$(if $(strip $(GW)),$(GW),192.168.1.2) \

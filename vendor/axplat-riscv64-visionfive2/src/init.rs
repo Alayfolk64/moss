@@ -7,6 +7,8 @@ impl InitIf for InitIfImpl {
     fn init_early(_cpu_id: usize, mbi: usize) {
         axcpu::init::init_trap();
         crate::console::init_early();
+        #[cfg(feature = "watchdog")]
+        crate::watchdog::init_early(mbi);
         crate::time::init_early(mbi);
     }
 

@@ -133,8 +133,7 @@ fn service_uart_interrupts() -> Option<Waker> {
                 if let Some(waker) = drain_hardware_rx() {
                     pending_waker = Some(waker);
                 }
-                if interrupt_id == UART_IIR_RX_TIMEOUT && status & UART_LSR_DATA_READY == 0
-                {
+                if interrupt_id == UART_IIR_RX_TIMEOUT && status & UART_LSR_DATA_READY == 0 {
                     // A read is required even though LSR reports no byte. Hold
                     // the shared UART lock so it cannot race a THR write on SMP.
                     let _uart = UART.lock();

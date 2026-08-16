@@ -34,5 +34,5 @@ mod swap;
 mod syscall;
 mod task;
 mod time;
-#[cfg(feature = "ls2k1000")]
+#[cfg(feature = "watchdog")]
 mod watchdog;
