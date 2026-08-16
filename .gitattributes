@@ -14,3 +14,4 @@ vendor/** -text
 *.xls binary
 *.xlsx binary
 *.zip binary
+*.patch -whitespace

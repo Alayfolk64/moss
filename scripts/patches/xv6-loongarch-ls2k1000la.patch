@@ -1,0 +1,154 @@
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -45,6 +45,7 @@ CFLAGS += -MD
+ CFLAGS += -march=loongarch64 -mabi=lp64s
+ CFLAGS += -ffreestanding -fno-common -nostdlib
+ CFLAGS += -I. -fno-stack-protector
++CFLAGS += -DLS2K1000LA
+ CFLAGS += -fno-pie
+ LDFLAGS = -z max-page-size=4096 --image-base=0
+ 
+@@ -83,6 +84,6 @@ $U/_forktest: $U/forktest.o $(ULIB)
+ 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
+ 
+-SH_FLAGS = -O -fno-omit-frame-pointer -ggdb -MD -march=loongarch64 -mabi=lp64s -ffreestanding -fno-common -nostdlib -I. -fno-stack-protector -fno-pie -c -o
++SH_FLAGS = -O -fno-omit-frame-pointer -ggdb -MD -march=loongarch64 -mabi=lp64s -ffreestanding -fno-common -nostdlib -I. -fno-stack-protector -DLS2K1000LA -fno-pie -c -o
+ 
+ $U/_sh: $U/sh.c $(ULIB)
+ 	$(CC) $(SH_FLAGS) $U/sh.o $U/sh.c
+diff --git a/kernel/console.c b/kernel/console.c
+--- a/kernel/console.c
++++ b/kernel/console.c
+@@ -52,7 +52,11 @@ consolewrite(int user_src, uint64 src, int n)
+     char c;
+     if(either_copyin(&c, user_src, src+i, 1) == -1)
+       break;
++#ifdef LS2K1000LA
++    uartputc_sync(c);
++#else
+     uartputc(c);
++#endif
+   }
+ 
+   return i;
+@@ -76,7 +80,15 @@ consoleread(int user_dst, uint64 dst, int n)
+         release(&cons.lock);
+         return -1;
+       }
++#ifdef LS2K1000LA
++      release(&cons.lock);
++      c = uartgetc();
++      if(c >= 0)
++        consoleintr(c);
++      acquire(&cons.lock);
++#else
+       sleep(&cons.r, &cons.lock);
++#endif
+     }
+ 
+     c = cons.buf[cons.r++ % INPUT_BUF];
+diff --git a/kernel/entry.S b/kernel/entry.S
+--- a/kernel/entry.S
++++ b/kernel/entry.S
+@@ -12,13 +12,14 @@ _entry:
+         # first jump loads from .data instead of the linked high-half target.
+         # The linker script fixes _entry at 0x9000000000200000. Materialize
+         # the 16-byte high-half target directly and keep this sequence fixed.
+-        lu12i.w    $t0, 0x200
+-        ori        $t0, $t0, 0x10
++        lu12i.w    $t0, -425984
++        ori        $t0, $t0, 0x14
++        lu32i.d    $t0, 0
+         lu52i.d    $t0, $t0, -1792
+         jirl        $zero, $t0, 0
+ .global xv6_high_entry
+ xv6_high_entry:
+-.if (xv6_high_entry - _entry) != 0x10
++.if (xv6_high_entry - _entry) != 0x14
+ .error "xv6 high-half entry offset changed"
+ .endif
+         li.d        $t0, 0x9000000000000011   # CA, PLV0, 0x9000 xxxx xxxx xxxx
+diff --git a/kernel/kernel.ld b/kernel/kernel.ld
+--- a/kernel/kernel.ld
++++ b/kernel/kernel.ld
+@@ -3,7 +3,7 @@ ENTRY( _entry )
+ 
+ SECTIONS
+ {
+-  . = 0x9000000000200000;
++  . = 0x9000000098000000;
+ 
+   .text : {
+     *(.text .text.*)
+diff --git a/kernel/main.c b/kernel/main.c
+--- a/kernel/main.c
++++ b/kernel/main.c
+@@ -24,10 +24,12 @@ void main()
+     procinit();      // process table
+ //printf("procinit\n");
+     trapinit();      // trap vectors
+ //printf("trapinit\n");
++#ifndef LS2K1000LA
+     apic_init();     // set up LS7A1000 interrupt controller
+ //printf("apicinit\n");
+     extioi_init();   // extended I/O interrupt controller
++#endif
+ //printf("extioi_init\n");
+     binit();         // buffer cache
+ //printf("binit\n");
+diff --git a/kernel/memlayout.h b/kernel/memlayout.h
+--- a/kernel/memlayout.h
++++ b/kernel/memlayout.h
+@@ -10,8 +10,13 @@
+ 
+ #define DMWIN_MASK 0x9000000000000000
+ 
++#ifdef LS2K1000LA
++// LS2K1000LA firmware console, preserved at its configured baud rate.
++#define UART0 (0x1fe20000UL | DMWIN_MASK)
++#else
+ // qemu puts UART registers here in virtual memory.
+ #define UART0 (0x1fe001e0UL | DMWIN_MASK)
++#endif
+ #define UART0_IRQ 2
+ 
+ /* ============== LS7A registers =============== */
+diff --git a/kernel/trap.c b/kernel/trap.c
+--- a/kernel/trap.c
++++ b/kernel/trap.c
+@@ -24,7 +24,11 @@ void
+ trapinit(void)
+ {
+   initlock(&tickslock, "time");
++#ifdef LS2K1000LA
++  uint32 ecfg = ( 0U << CSR_ECFG_VS_SHIFT ) | TI_VEC;
++#else
+   uint32 ecfg = ( 0U << CSR_ECFG_VS_SHIFT ) | HWI_VEC | TI_VEC;
++#endif
+   uint64 tcfg = 0x1000000UL | CSR_TCFG_EN | CSR_TCFG_PER;
+   w_csr_ecfg(ecfg);
+   w_csr_tcfg(tcfg);
+diff --git a/kernel/uart.c b/kernel/uart.c
+--- a/kernel/uart.c
++++ b/kernel/uart.c
+@@ -49,6 +49,11 @@ uartinit(void)
+   // disable interrupts.
+   WriteReg(IER, 0x00);
+ 
++#ifdef LS2K1000LA
++  // Preserve the divisor programmed by U-Boot for the board console.
++  WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
++  initlock(&uart_tx_lock, "uart");
++#else
+   // special mode to set baud rate.
+   WriteReg(LCR, LCR_BAUD_LATCH);
+ 
+@@ -69,6 +74,7 @@ uartinit(void)
+   WriteReg(IER, IER_TX_ENABLE | IER_RX_ENABLE);
+ 
+   initlock(&uart_tx_lock, "uart");
++#endif
+ }
+ 
+ // add one character to the output buffer and tell the

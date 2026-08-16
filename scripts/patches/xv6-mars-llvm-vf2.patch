@@ -1,0 +1,192 @@
+diff --git a/Makefile b/Makefile
+index 44b8015..0ae884b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -70,8 +70,10 @@ OBJDUMP = $(TOOLPREFIX)objdump
+ STRIP = $(TOOLPREFIX)strip
+ 
+ CFLAGS += -Wall -Werror
++CFLAGS += $(shell $(CC) -Wno-unused-but-set-variable -Werror -E -x c /dev/null >/dev/null 2>&1 && echo -Wno-unused-but-set-variable)
+ CFLAGS += -MD
+-CFLAGS += -mcmodel=medany -fno-plt
++CFLAGS += -mcmodel=medany
++CFLAGS += $(shell $(CC) -fno-plt -Werror -E -x c /dev/null >/dev/null 2>&1 && echo -fno-plt)
+ CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
+ CFLAGS += -Iinclude
+ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+@@ -86,7 +88,7 @@ ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
+ CFLAGS += -fno-pie -nopie
+ endif
+ 
+-LDFLAGS += -z max-page-size=4096
++LDFLAGS += -z max-page-size=4096 --image-base=0
+ 
+ $K/kernel: $(OBJS) $K/kernel.ld $U/initcode
+ 	$(LD) $(LDFLAGS) -T $K/kernel.ld -o $K/kernel $(OBJS)
+@@ -129,8 +131,10 @@ $U/_forktest: $U/forktest.o $(ULIB)
+ 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
+ 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
+ 
++HOSTCC ?= cc
++
+ mkfs/mkfs: mkfs/mkfs.c $I/$K/fs.h $I/$K/param.h
+-	gcc -Werror -Wall -Iinclude -o mkfs/mkfs mkfs/mkfs.c
++	$(HOSTCC) -Werror -Wall -Iinclude -o mkfs/mkfs mkfs/mkfs.c
+ 
+ # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
+ # that disk image changes after first build are persistent until clean.  More
+@@ -159,8 +163,10 @@ UPROGS=\
+ 	$U/_reboot\
+ 	$U/_nice \
+ 
+-fs.img: mkfs/mkfs _README $(UPROGS) $U/_rs
+-	mkfs/mkfs fs.img _README $(UPROGS) $U/_rs
++RUST_UPROGS ?= $U/_rs
++
++fs.img: mkfs/mkfs _README $(UPROGS) $(RUST_UPROGS)
++	mkfs/mkfs fs.img _README $(UPROGS) $(RUST_UPROGS)
+ 
+ -include kernel/*.d user/*.d
+ 
+diff --git a/opts.mk b/opts.mk
+index 80fb13a..b7bb60c 100644
+--- a/opts.mk
++++ b/opts.mk
+@@ -1,6 +1,7 @@
+ # Platform-specific compilation options
+ ifeq ($(PLATFORM),JH7110)
+     CFLAGS = -DCONFIG_JH7110 -march=rv64gc_zba_zbb -mcpu=sifive-u74 -mtune=sifive-7-series
++    ASFLAGS += -DCONFIG_JH7110
+     LDFLAGS += --defsym=KERNBASE=0x40200000
+ else ifeq ($(PLATFORM),QEMU)
+     CFLAGS = -DCONFIG_QEMU -march=rv64gc
+diff --git a/include/kernel/proc.h b/include/kernel/proc.h
+diff --git a/include/kernel/proc.h b/include/kernel/proc.h
+index 7242503..75de952 100644
+--- a/include/kernel/proc.h
++++ b/include/kernel/proc.h
+@@ -122,6 +122,7 @@ struct list_proc {
+ 
+ // proc.c
+ int cpuid(void);
++extern volatile int boot_hartid;
+ void exit(int);
+ int fork(void);
+ int nice(int, int);
+diff --git a/kernel/entry.S b/kernel/entry.S
+index c40c69f..531aa49 100644
+--- a/kernel/entry.S
++++ b/kernel/entry.S
+@@ -2,6 +2,12 @@
+ .global _entry
+ _entry:
+ 
++#ifdef CONFIG_JH7110
++        # U-Boot bootelf does not preserve OpenSBI's a0 argument.  The
++        # VisionFive 2 OpenSBI payload always starts on the first U74 hart.
++        li a0, 1
++#endif
++
+         # keep hartid in tp
+         # hartid is in a0 when we enter the kernel
+         # This is given by openSBI
+diff --git a/kernel/main.c b/kernel/main.c
+index 54047fd..5ea176f 100644
+--- a/kernel/main.c
++++ b/kernel/main.c
+@@ -14,7 +14,7 @@
+ #include <kernel/watchdog.h>
+ 
+ volatile static int started = 0;
+-volatile static int boot_hartid = -1;
++volatile int boot_hartid = -1;
+ 
+ // start() jumps here in supervisor mode on all CPUs.
+ void main() {
+@@ -38,7 +38,6 @@ void main() {
+         fileinit();               // file table
+         ramdiskinit();            // ramdisk initialisation
+ #ifdef CONFIG_JH7110
+-	watchdog_init(); // watchdog init
+         thermal_init();  // thermal sensor initialisation
+ #endif
+         userinit(); // first user process
+diff --git a/kernel/sbi.c b/kernel/sbi.c
+index 75a5ccb..45ab436 100644
+--- a/kernel/sbi.c
++++ b/kernel/sbi.c
+@@ -41,7 +41,16 @@ void startothers(int boot_hartid) {
+         exit(1);
+     }
+-    for (int i = 0; i < NCPU; i++) {
++#ifdef CONFIG_JH7110
++    // JH7110 exposes application harts 1 through 4. Hart 0 is the E24
++    // monitor core, while xv6's generic NCPU limit is larger than the SoC.
++    const int first_hart = 1;
++    const int hart_limit = 5;
++#else
++    const int first_hart = 0;
++    const int hart_limit = NCPU;
++#endif
++    for (int i = first_hart; i < hart_limit; i++) {
+         if (i == boot_hartid)
+             continue;
+         sbi_hart_start(i, (uint64)KERNBASE, 1);
+     }
+diff --git a/kernel/trap.c b/kernel/trap.c
+index 73ffe01..55d401c 100644
+--- a/kernel/trap.c
++++ b/kernel/trap.c
+@@ -196,15 +196,12 @@ void kerneltrap() {
+ }
+ 
+ void clockintr() {
+-    if (cpuid() == 0) {
++    if (cpuid() == boot_hartid) {
+         acquire(&tickslock);
+         ticks++;
+         wakeup(&ticks);
+         release(&tickslock);
+     }
+-    // feed the watchdog
+-    if (!panicked)
+-    	watchdog_feed();
+ 
+     // ask for the next timer interrupt. this also clears
+     // the interrupt request. 1000000 is about a tenth
+diff --git a/kernel/watchdog.c b/kernel/watchdog.c
+index ed4be98..7c1af5d 100644
+--- a/kernel/watchdog.c
++++ b/kernel/watchdog.c
+@@ -37,10 +37,10 @@ void watchdog_init(){
+ 	// Enable reset
+ 	val = ReadReg32(WATCHDOG, WDT_CTRL);
+ 	val |= 0x1 << 0x1; // rst shift
+-	WriteReg(WATCHDOG, WDT_CTRL, val);
++	WriteReg32(WATCHDOG, WDT_CTRL, val);
+ 	
+ 	// Clear interrupt signal before init
+-	WriteReg(WATCHDOG, WDT_INT_CLR, 0x1);
++	WriteReg32(WATCHDOG, WDT_INT_CLR, 0x1);
+ 
+ 	// Set count
+ 	uint32 count = (WDT_TIMEOUT * WDT_FREQ)/2; // Double timeout
+@@ -49,7 +49,7 @@ void watchdog_init(){
+ 	// Enable
+ 	val = ReadReg32(WATCHDOG, WDT_CTRL);
+ 	val |= 0x1 << 0x0; // en shift
+-	WriteReg(WATCHDOG, WDT_CTRL, val);
++	WriteReg32(WATCHDOG, WDT_CTRL, val);
+ }
+ 
+ void watchdog_feed(){
+diff --git a/user/user.ld b/user/user.ld
+index 3da93e0..e7dd8fd 100644
+--- a/user/user.ld
++++ b/user/user.ld
+@@ -1,4 +1,5 @@
+ OUTPUT_ARCH( "riscv" )
++ENTRY( main )
+ 
+ SECTIONS
+ {
