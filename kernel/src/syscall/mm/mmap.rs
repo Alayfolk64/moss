@@ -467,7 +467,7 @@ fn prepare_mmap_address(
             aspace.find_free_area(
                 aspace.base(),
                 length,
-                VirtAddrRange::new(aspace.start(), aspace.end()),
+                VirtAddrRange::new(aspace.base(), aspace.end()),
                 align,
             )
         }).ok_or(AxError::NoMemory)
