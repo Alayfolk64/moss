@@ -83,9 +83,13 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                             }
                         };
                         if let Some(signo) = fault_signal {
-                            info!(
-                                "{:?}: user fault {:?} at {:#x} {:?}",
-                                thr.proc_data.proc, signo, addr, flags
+                            warn!(
+                                "{:?}: fatal user fault {:?} at {:#x} {:?}, ip={:#x}",
+                                thr.proc_data.proc,
+                                signo,
+                                addr,
+                                flags,
+                                uctx.ip()
                             );
                             raise_signal_fatal(SignalInfo::new_kernel(signo))
                                 .expect("Failed to send fault signal");
