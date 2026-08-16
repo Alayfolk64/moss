@@ -17,6 +17,7 @@ use enum_dispatch::enum_dispatch;
 #[cfg(feature = "vsock")]
 use crate::vsock::VsockSocket;
 use crate::{
+    netlink::{NetlinkAddr, NetlinkSocket},
     options::{Configurable, GetSocketOption, SetSocketOption},
     tcp::TcpSocket,
     udp::UdpSocket,
@@ -27,6 +28,7 @@ use crate::{
 pub enum SocketAddrEx {
     Ip(SocketAddr),
     Unix(UnixSocketAddr),
+    Netlink(NetlinkAddr),
     #[cfg(feature = "vsock")]
     Vsock(VsockAddr),
 }
@@ -36,6 +38,7 @@ impl SocketAddrEx {
         match self {
             SocketAddrEx::Ip(addr) => Ok(addr),
             SocketAddrEx::Unix(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
+            SocketAddrEx::Netlink(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
             #[cfg(feature = "vsock")]
             SocketAddrEx::Vsock(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
         }
@@ -45,6 +48,7 @@ impl SocketAddrEx {
         match self {
             SocketAddrEx::Unix(addr) => Ok(addr),
             SocketAddrEx::Ip(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
+            SocketAddrEx::Netlink(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
             #[cfg(feature = "vsock")]
             SocketAddrEx::Vsock(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
         }
@@ -55,6 +59,7 @@ impl SocketAddrEx {
         match self {
             SocketAddrEx::Ip(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
             SocketAddrEx::Unix(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
+            SocketAddrEx::Netlink(_) => Err(AxError::from(LinuxError::EAFNOSUPPORT)),
             SocketAddrEx::Vsock(addr) => Ok(addr),
         }
     }
@@ -168,6 +173,7 @@ pub enum Socket {
     Udp(UdpSocket),
     Tcp(TcpSocket),
     Unix(UnixSocket),
+    Netlink(NetlinkSocket),
     #[cfg(feature = "vsock")]
     Vsock(VsockSocket),
 }
@@ -192,6 +198,7 @@ impl Pollable for Socket {
             Socket::Tcp(tcp) => tcp.poll(),
             Socket::Udp(udp) => udp.poll(),
             Socket::Unix(unix) => unix.poll(),
+            Socket::Netlink(netlink) => netlink.poll(),
             #[cfg(feature = "vsock")]
             Socket::Vsock(vsock) => vsock.poll(),
         }
@@ -202,6 +209,7 @@ impl Pollable for Socket {
             Socket::Tcp(tcp) => tcp.register(context, events),
             Socket::Udp(udp) => udp.register(context, events),
             Socket::Unix(unix) => unix.register(context, events),
+            Socket::Netlink(netlink) => netlink.register(context, events),
             #[cfg(feature = "vsock")]
             Socket::Vsock(vsock) => vsock.register(context, events),
         }

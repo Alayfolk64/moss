@@ -5,6 +5,7 @@ use axerrno::{AxError, AxResult, LinuxError};
 use axnet::vsock::{VsockSocket, VsockStreamTransport};
 use axnet::{
     IpFamily, Shutdown, Socket as SocketInner, SocketAddrEx, SocketOps,
+    netlink::NetlinkSocket,
     tcp::TcpSocket,
     udp::UdpSocket,
     unix::{DgramTransport, StreamTransport, UnixSocket},
@@ -13,9 +14,9 @@ use axtask::current;
 use linux_raw_sys::{
     general::{O_CLOEXEC, O_NONBLOCK},
     net::{
-        AF_INET, AF_INET6, AF_UNIX, AF_VSOCK, IPPROTO_SCTP, IPPROTO_TCP, IPPROTO_UDP,
-        IPPROTO_UDPLITE, SHUT_RD, SHUT_RDWR, SHUT_WR, SOCK_DGRAM, SOCK_SEQPACKET, SOCK_STREAM,
-        sockaddr, socklen_t,
+        AF_INET, AF_INET6, AF_NETLINK, AF_UNIX, AF_VSOCK, IPPROTO_SCTP, IPPROTO_TCP, IPPROTO_UDP,
+        IPPROTO_UDPLITE, SHUT_RD, SHUT_RDWR, SHUT_WR, SOCK_DGRAM, SOCK_RAW, SOCK_SEQPACKET,
+        SOCK_STREAM, sockaddr, socklen_t,
     },
 };
 
@@ -62,11 +63,17 @@ pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
         (AF_UNIX, SOCK_STREAM) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
         (AF_UNIX, SOCK_SEQPACKET) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
         (AF_UNIX, SOCK_DGRAM) => SocketInner::Unix(UnixSocket::new(DgramTransport::new(pid))),
+        (AF_NETLINK, SOCK_RAW | SOCK_DGRAM) => {
+            if proto != 0 {
+                return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
+            }
+            SocketInner::Netlink(NetlinkSocket::new(pid))
+        }
         #[cfg(feature = "vsock")]
         (AF_VSOCK, SOCK_STREAM) => {
             SocketInner::Vsock(VsockSocket::new(VsockStreamTransport::new()))
         }
-        (AF_INET | AF_INET6, _) | (AF_UNIX, _) | (AF_VSOCK, _) => {
+        (AF_INET | AF_INET6, _) | (AF_UNIX, _) | (AF_NETLINK, _) | (AF_VSOCK, _) => {
             warn!("Unsupported socket type: domain: {domain}, ty: {ty}");
             return Err(AxError::from(LinuxError::ESOCKTNOSUPPORT));
         }

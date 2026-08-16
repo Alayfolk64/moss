@@ -25,6 +25,7 @@ mod family;
 mod general;
 mod listen_table;
 mod local;
+pub mod netlink;
 pub mod options;
 mod router;
 mod service;
@@ -38,7 +39,10 @@ pub mod vsock;
 mod wrapper;
 
 use alloc::{borrow::ToOwned, boxed::Box};
-use core::time::Duration;
+use core::{
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    time::Duration,
+};
 
 use axdriver::{AxDeviceContainer, prelude::*};
 use axsync::Mutex;
@@ -60,6 +64,21 @@ static LISTEN_TABLE: LazyInit<ListenTable> = LazyInit::new();
 static SOCKET_SET: LazyInit<SocketSetWrapper> = LazyInit::new();
 
 static SERVICE: LazyInit<Mutex<Service>> = LazyInit::new();
+static ETH0_MAC: AtomicU64 = AtomicU64::new(0);
+static POLL_BUDGET_WARNING_REPORTED: AtomicBool = AtomicBool::new(false);
+
+/// Keep a noisy or faulty device from monopolizing the network service lock.
+/// The interrupt path and the one-second link poll will schedule subsequent
+/// work, so exhausting this budget is a yield point rather than packet loss.
+const MAX_SERVICE_POLL_ROUNDS: usize = 64;
+
+pub(crate) fn eth0_mac() -> Option<[u8; 6]> {
+    let encoded = ETH0_MAC.load(Ordering::Acquire);
+    (encoded != 0).then(|| {
+        let bytes = encoded.to_be_bytes();
+        [bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
+    })
+}
 
 /// Initializes the network subsystem by NIC devices.
 pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
@@ -87,6 +106,19 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
         info!("  use NIC 0: {:?}", dev.device_name());
 
         let eth0_address = EthernetAddress(dev.mac_address().0);
+        ETH0_MAC.store(
+            u64::from_be_bytes([
+                0,
+                0,
+                eth0_address.0[0],
+                eth0_address.0[1],
+                eth0_address.0[2],
+                eth0_address.0[3],
+                eth0_address.0[4],
+                eth0_address.0[5],
+            ]),
+            Ordering::Release,
+        );
         let eth0_ip = Ipv4Cidr::new(IP.parse().expect("Invalid IPv4 address"), IP_PREFIX);
 
         let eth0_dev = router.add_device(Box::new(EthernetDevice::new(
@@ -161,5 +193,14 @@ pub fn init_vsock(mut vsock_devs: AxDeviceContainer<AxVsockDevice>) {
 }
 
 pub fn poll_interfaces() {
-    while SERVICE.lock().poll(&mut SOCKET_SET.inner.lock()) {}
+    for _ in 0..MAX_SERVICE_POLL_ROUNDS {
+        if !SERVICE.lock().poll(&mut SOCKET_SET.inner.lock()) {
+            return;
+        }
+    }
+    if !POLL_BUDGET_WARNING_REPORTED.swap(true, Ordering::AcqRel) {
+        warn!(
+            "network poll budget exhausted; yielding with deferred work still pending"
+        );
+    }
 }

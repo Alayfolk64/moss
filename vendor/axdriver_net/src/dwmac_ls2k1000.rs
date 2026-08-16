@@ -254,6 +254,7 @@ pub struct DwmacLs2k1000<H: DwmacHal> {
     link_state: LinkState,
     next_phy_poll_ms: u64,
     phy_read_failed: bool,
+    phy_unavailable_reported: bool,
     net_pool: Arc<NetBufPool>,
     _hal: PhantomData<H>,
 }
@@ -290,6 +291,7 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             link_state: LinkState::Down,
             next_phy_poll_ms: 0,
             phy_read_failed: false,
+            phy_unavailable_reported: false,
             net_pool: NetBufPool::new(NET_BUFFER_COUNT, NET_BUFFER_LEN)?,
             _hal: PhantomData,
         };
@@ -849,8 +851,9 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
         self.next_phy_poll_ms = now_ms.saturating_add(PHY_POLL_INTERVAL_MS);
         let sample = self.clause22_phy_sample();
         if sample == PhySample::Unavailable {
-            if !self.phy_read_failed {
+            if !self.phy_unavailable_reported {
                 warn!("LS2K1000 GMAC0 PHY became unavailable; preserving prior link state");
+                self.phy_unavailable_reported = true;
             }
             self.phy_read_failed = true;
             if reapply_current {

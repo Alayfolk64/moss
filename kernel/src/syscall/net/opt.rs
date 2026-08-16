@@ -249,6 +249,16 @@ pub fn sys_setsockopt(
     }
 
     let socket = Socket::from_fd(fd)?;
+    const SOL_NETLINK: u32 = 270;
+    const NETLINK_EXT_ACK: u32 = 11;
+    const NETLINK_GET_STRICT_CHK: u32 = 12;
+    if level == SOL_NETLINK && matches!(optname, NETLINK_EXT_ACK | NETLINK_GET_STRICT_CHK) {
+        let _enabled = *get::<i32>(optval, optlen)?;
+        if matches!(&socket.0, axnet::Socket::Netlink(_)) {
+            return Ok(0);
+        }
+        return Err(AxError::from(LinuxError::ENOPROTOOPT));
+    }
     if level == SOL_SOCKET && optname == SO_ATTACH_BPF {
         let prog_fd = *get::<i32>(optval, optlen)?;
         BpfProgram::from_fd(prog_fd)?.execute()?;

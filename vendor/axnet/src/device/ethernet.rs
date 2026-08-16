@@ -271,7 +271,11 @@ impl Device for EthernetDevice {
     }
 
     fn recv(&mut self, buffer: &mut PacketBuffer<()>, timestamp: Instant) -> bool {
-        loop {
+        // Broadcast storms and malformed traffic must not keep SERVICE locked
+        // forever while this loop discards frames that do not reach smoltcp.
+        // Deferred device polling will revisit a still-ready RX descriptor.
+        const MAX_RX_FRAMES_PER_POLL: usize = 64;
+        for _ in 0..MAX_RX_FRAMES_PER_POLL {
             let rx_buf = match self.inner.receive() {
                 Ok(buf) => buf,
                 Err(err) => {
@@ -294,6 +298,7 @@ impl Device for EthernetDevice {
                 return true;
             }
         }
+        false
     }
 
     fn send(&mut self, next_hop: IpAddress, packet: &[u8], timestamp: Instant) -> bool {

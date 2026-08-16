@@ -112,6 +112,7 @@ fn is_unspecified_remote_addr(addr: &SocketAddrEx) -> bool {
         SocketAddrEx::Ip(SocketAddr::V4(addr)) => addr.ip().is_unspecified() && addr.port() == 0,
         SocketAddrEx::Ip(SocketAddr::V6(addr)) => addr.ip().is_unspecified() && addr.port() == 0,
         SocketAddrEx::Unix(_) => false,
+        SocketAddrEx::Netlink(_) => false,
         #[cfg(feature = "vsock")]
         SocketAddrEx::Vsock(_) => false,
     }
