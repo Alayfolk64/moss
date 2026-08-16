@@ -341,22 +341,25 @@ fn sub_locked_bytes(length: usize) {
     }
 }
 
-/// mmap: memory map，内存映射
+#[derive(Debug, Clone, Copy)]
+struct MmapRequest {
+    permission_flags: MmapProt,
+    map_flags: MmapFlags,
+    map_type: MmapFlags,
+    is_shared: bool,
+    offset: usize,
+    page_size: PageSize,
+}
 
-pub fn sys_mmap(
-    addr: usize,   // 希望映射到哪个虚拟地址，可以只是建议
-    length: usize, // 要多大一块内存
-    prot: u32,     // 这块内存能读、写、执行吗
-    flags: u32,    // 映射方式，比如共享、私有、匿名、固定地址
-    fd: i32,       // 如果映射文件，这里是文件描述符
-    offset: isize, // 从文件的哪个位置开始映射
-) -> AxResult<isize> {
-    let curr = current();
-    let pid = curr.as_thread().proc_data.proc.pid();
-    let aspace_ref = curr.as_thread().proc_data.aspace();
-    let mut aspace = aspace_ref.lock();
+fn parse_mmap_request(
+    length: usize,
+    prot: u32,
+    flags: u32,
+    fd: i32,
+    offset: isize,
+) -> AxResult<MmapRequest> {
     let permission_flags = MmapProt::from_bits_truncate(prot);
-    // TODO: check illegal flags for mmap
+
     let map_flags = match MmapFlags::from_bits(flags) {
         Some(flags) => flags,
         None => {
@@ -392,11 +395,6 @@ pub fn sys_mmap(
         return Err(AxError::InvalidInput);
     }
 
-    debug!(
-        "sys_mmap <= addr: {addr:#x?}, length: {length:#x?}, prot: {permission_flags:?}, flags: \
-         {map_flags:?}, fd: {fd:?}, offset: {offset:?}"
-    );
-
     let page_size = if map_flags.contains(MmapFlags::HUGE_1GB) {
         PageSize::Size1G
     } else if map_flags.contains(MmapFlags::HUGE) {
@@ -405,44 +403,115 @@ pub fn sys_mmap(
         PageSize::Size4K
     };
 
+    Ok(MmapRequest {
+        permission_flags,
+        map_type,
+        map_flags,
+        is_shared,
+        offset, 
+        page_size,
+    })
+}
+
+fn normalize_mmap_range(
+    addr: usize,
+    length: usize,
+    page_size: PageSize,
+) -> AxResult<(usize, usize)> {
     let start = addr.align_down(page_size);
-    let end = addr
+    let end = addr 
         .checked_add(length)
         .ok_or(AxError::NoMemory)?
         .align_up(page_size);
-    let mut length = end - start;
+    Ok((start, end - start))
+}
 
-    let start = if map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE) {
-        let dst_addr = VirtAddr::from(start);
+fn prepare_mmap_address(
+    aspace: &mut AddrSpace,
+    pid: u32,
+    requested_start: usize,
+    length: usize,
+    page_size: PageSize,
+    map_flags: MmapFlags,
+) -> AxResult<VirtAddr> {
+    if map_flags.intersects(MmapFlags::FIXED | MmapFlags::FIXED_NOREPLACE) {
+        let dst_addr = VirtAddr::from(requested_start);
+
         if !aspace.contains_range(dst_addr, length) {
             return Err(AxError::NoMemory);
         }
+
         if !map_flags.contains(MmapFlags::FIXED_NOREPLACE) {
             let locked_bytes = aspace.locked_bytes_in_range(dst_addr, length);
+
             aspace.unmap(dst_addr, length)?;
             forget_mmap_aux(pid, dst_addr.as_usize(), length);
+            
             if locked_bytes != 0 {
                 sub_locked_bytes(locked_bytes);
             }
         }
-        dst_addr
-    } else {
-        let align = page_size as usize;
-        aspace
-            .find_free_area(
-                VirtAddr::from(start),
-                length,
-                VirtAddrRange::new(aspace.base(), aspace.end()),
-                align,
-            )
-            .or(aspace.find_free_area(
+        return Ok(dst_addr);
+    }
+
+    let align = page_size as usize;
+
+    aspace
+        .find_free_area(
+            VirtAddr::from(requested_start),
+            length,
+            VirtAddrRange::new(aspace.base(), aspace.end()),
+            align,
+        )
+        .or_else(|| {
+            aspace.find_free_area(
                 aspace.base(),
                 length,
-                VirtAddrRange::new(aspace.base(), aspace.end()),
+                VirtAddrRange::new(aspace.start(), aspace.end()),
                 align,
-            ))
-            .ok_or(AxError::NoMemory)?
-    };
+            )
+        }).ok_or(AxError::NoMemory)
+}
+
+/// mmap: memory map，内存映射
+
+pub fn sys_mmap(
+    addr: usize,   // 希望映射到哪个虚拟地址，可以只是建议
+    length: usize, // 要多大一块内存
+    prot: u32,     // 这块内存能读、写、执行吗
+    flags: u32,    // 映射方式，比如共享、私有、匿名、固定地址
+    fd: i32,       // 如果映射文件，这里是文件描述符
+    offset: isize, // 从文件的哪个位置开始映射
+) -> AxResult<isize> {
+    let curr = current();
+    let pid = curr.as_thread().proc_data.proc.pid();
+    let aspace_ref = curr.as_thread().proc_data.aspace();
+    let mut aspace = aspace_ref.lock();
+
+    let MmapRequest {
+        permission_flags,
+        map_flags,
+        map_type,
+        is_shared,
+        offset,
+        page_size,
+    } = parse_mmap_request(length, prot, flags, fd, offset)?;
+
+    debug!(
+        "sys_mmap <= addr: {addr:#x?}, length: {length:#x?}, prot: {permission_flags:?}, flags: \
+         {map_flags:?}, fd: {fd:?}, offset: {offset:?}"
+    );
+
+    let (requested_start, mut length) = normalize_mmap_range(addr, length, page_size)?;
+
+    let start = prepare_mmap_address(
+        &mut aspace,
+        pid,
+        requested_start,
+        length,
+        page_size,
+        map_flags,
+    )?;
 
     let file = if map_flags.contains(MmapFlags::ANONYMOUS) {
         None
