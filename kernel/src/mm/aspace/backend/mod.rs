@@ -314,18 +314,12 @@ pub enum Backend {
 }
 
 impl Backend {
-    pub(crate) fn sync_file_range(
-        &self,
-        range: VirtAddrRange,
-    ) -> AxResult {
+    pub(crate) fn sync_file_range(&self, range: VirtAddrRange) -> AxResult {
         match self {
-            Self::File(file) => {
-                file.sync_range(range)
-            }
+            Self::File(file) => file.sync_range(range),
             _ => Ok(()),
         }
     }
-
 
     /// Unmaps one VMA while destroying an entire address space. The caller
     /// retains every backend owner until the shared gather has completed.

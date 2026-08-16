@@ -267,7 +267,7 @@ pub(crate) struct AddrSpaceStats {
     pub(crate) file_backed_bytes: usize,
 
     /// Bytes backed by anonymous mappings.
-    pub(crate) anonymous_bytes: usize, 
+    pub(crate) anonymous_bytes: usize,
 }
 
 /// The virtual memory address space.
@@ -352,8 +352,8 @@ fn start_reclaim_worker() {
                 {
                     let stats = aspace.stats();
                     trace!(
-                        "Reclaim address space: areas{}, user_areas{}, mapped{:#x}, user_mapped{:#x}, \
-                            locked={:#x}, anonymous={:#x}, file_backed={:#x}",
+                        "Reclaim address space: areas{}, user_areas{}, mapped{:#x}, \
+                         user_mapped{:#x}, locked={:#x}, anonymous={:#x}, file_backed={:#x}",
                         stats.area_count,
                         stats.user_area_count,
                         stats.mapped_bytes,
@@ -830,19 +830,16 @@ impl AddrSpace {
         true
     }
 
-    fn unmap_detached_areas(
-        &mut self,
-        areas: &MemorySet<Backend, VmaMetadata>,
-    ) -> AxResult {
+    fn unmap_detached_areas(&mut self, areas: &MemorySet<Backend, VmaMetadata>) -> AxResult {
         let mut pt = self.pt.modify();
         let mut gather = UnmapGather::new();
 
         let mut result = Ok(());
 
         for area in areas.iter() {
-            if let Err(err) =
-                area.backend()
-                    .unmap_for_clear(area.va_range(), &mut pt, &mut gather)
+            if let Err(err) = area
+                .backend()
+                .unmap_for_clear(area.va_range(), &mut pt, &mut gather)
             {
                 result = Err(err);
                 break;
@@ -855,7 +852,6 @@ impl AddrSpace {
         drop(pt);
 
         result
-
     }
 
     /// Removes all mappings in the address space.

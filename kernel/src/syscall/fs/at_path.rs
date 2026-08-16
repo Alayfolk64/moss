@@ -4,11 +4,7 @@
 ///
 /// Absolute paths are rooted at the process root and must ignore `dirfd`,
 /// including an otherwise invalid descriptor.
-pub(crate) const fn effective_dirfd(
-    dirfd: i32,
-    path_is_absolute: bool,
-    at_fdcwd: i32,
-) -> i32 {
+pub(crate) const fn effective_dirfd(dirfd: i32, path_is_absolute: bool, at_fdcwd: i32) -> i32 {
     if path_is_absolute { at_fdcwd } else { dirfd }
 }
 

@@ -408,7 +408,7 @@ fn parse_mmap_request(
         map_type,
         map_flags,
         is_shared,
-        offset, 
+        offset,
         page_size,
     })
 }
@@ -419,7 +419,7 @@ fn normalize_mmap_range(
     page_size: PageSize,
 ) -> AxResult<(usize, usize)> {
     let start = addr.align_down(page_size);
-    let end = addr 
+    let end = addr
         .checked_add(length)
         .ok_or(AxError::NoMemory)?
         .align_up(page_size);
@@ -446,7 +446,7 @@ fn prepare_mmap_address(
 
             aspace.unmap(dst_addr, length)?;
             forget_mmap_aux(pid, dst_addr.as_usize(), length);
-            
+
             if locked_bytes != 0 {
                 sub_locked_bytes(locked_bytes);
             }
@@ -470,7 +470,8 @@ fn prepare_mmap_address(
                 VirtAddrRange::new(aspace.base(), aspace.end()),
                 align,
             )
-        }).ok_or(AxError::NoMemory)
+        })
+        .ok_or(AxError::NoMemory)
 }
 
 /// mmap: memory map，内存映射
@@ -889,8 +890,7 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
         flags: {flags:#x}"
     );
 
-    const VALID_FLAGS: u32 = 
-        MS_ASYNC | MS_INVALIDATE | MS_SYNC;
+    const VALID_FLAGS: u32 = MS_ASYNC | MS_INVALIDATE | MS_SYNC;
 
     // 不能有未知 flag
     if flags & !VALID_FLAGS != 0 {
@@ -898,16 +898,12 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
     }
 
     // MS_ASYNC 和 MS_SYNC 不能同时绑定
-    if flags & MS_ASYNC != 0 
-        && flags & MS_SYNC != 0 
-    {
+    if flags & MS_ASYNC != 0 && flags & MS_SYNC != 0 {
         return Err(AxError::InvalidInput);
     }
 
     // 起始地址必须page aligned
-    if !addr.is_multiple_of(
-        PageSize::Size4K as usize
-    ) {
+    if !addr.is_multiple_of(PageSize::Size4K as usize) {
         return Err(AxError::InvalidInput);
     }
 
@@ -917,24 +913,17 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
 
     // Linux 将长度向上取整到页
     let length = length
-        .checked_add(
-            PageSize::Size4K as usize - 1
-        )
-        .map(|len| {
-            len & !(PageSize::Size4K as usize - 1)
-        })
+        .checked_add(PageSize::Size4K as usize - 1)
+        .map(|len| len & !(PageSize::Size4K as usize - 1))
         .ok_or(AxError::NoMemory)?;
 
-    let end_addr = addr
-        .checked_add(length)
-        .ok_or(AxError::NoMemory)?;
-    
+    let end_addr = addr.checked_add(length).ok_or(AxError::NoMemory)?;
+
     let start = VirtAddr::from(addr);
     let end = VirtAddr::from(end_addr);
 
     let cur = current();
-    let aspace_ref = 
-        cur.as_thread().proc_data.aspace();
+    let aspace_ref = cur.as_thread().proc_data.aspace();
 
     let mut targets = Vec::new();
     let mut has_hole = false;
@@ -963,26 +952,19 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
                 }
             }
 
-            let range_start = 
-                area.start().max(cursor);
-            let range_end = 
-                area.end().min(end);
-            
+            let range_start = area.start().max(cursor);
+            let range_end = area.end().min(end);
+
             if range_start >= range_end {
                 continue;
             }
 
             // 只有 MAP_SHARED file mapping
             // 才需要把修改同步回文件
-            if area.metadata().shared()
-                && area.metadata().file_backed()
-            {
+            if area.metadata().shared() && area.metadata().file_backed() {
                 targets.push(MsyncTarget {
                     backend: area.backend().clone(),
-                    range: VirtAddrRange::new(
-                        range_start,
-                        range_end,
-                    ),
+                    range: VirtAddrRange::new(range_start, range_end),
                 });
             }
 
@@ -1000,12 +982,10 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
     if flags & MS_INVALIDATE != 0 {
         return Err(AxError::OperationNotPermitted);
     }
- 
+
     if flags & MS_SYNC != 0 {
         for target in &targets {
-            target
-                .backend
-                .sync_file_range(target.range)?;
+            target.backend.sync_file_range(target.range)?;
         }
     }
 
@@ -1015,9 +995,7 @@ pub fn sys_msync(addr: usize, length: usize, flags: u32) -> AxResult<isize> {
     if has_hole {
         return Err(AxError::NoMemory);
     }
-    debug!(
-        "msync range: {addr:#x}..{end_addr:#x}"
-    );
+    debug!("msync range: {addr:#x}..{end_addr:#x}");
 
     Ok(0)
 }

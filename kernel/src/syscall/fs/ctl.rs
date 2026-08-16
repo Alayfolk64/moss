@@ -17,8 +17,8 @@ use axtask::current;
 use linux_raw_sys::{
     general::*,
     ioctl::{
-        FIOASYNC, FIONBIO, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS, TCGETA, TCGETS, TCGETS2, TIOCGPGRP,
-        TIOCGPTPEER, TIOCGWINSZ,
+        FICLONE, FICLONERANGE, FIOASYNC, FIONBIO, FS_IOC_FIEMAP, FS_IOC_GETFLAGS, FS_IOC_SETFLAGS,
+        TCGETA, TCGETS, TCGETS2, TIOCGPGRP, TIOCGPTPEER, TIOCGWINSZ,
     },
 };
 use starry_vm::{VmMutPtr, VmPtr, vm_write_slice};
@@ -106,7 +106,15 @@ pub fn sys_ioctl(fd: i32, cmd: u32, arg: usize) -> AxResult<isize> {
                 // ioctls. Returning ENOTTY is correct; keep the log quiet.
                 if matches!(
                     cmd,
-                    TCGETS | TCGETA | TCGETS2 | TIOCGPGRP | TIOCGWINSZ | TIOCGPTPEER
+                    TCGETS
+                        | TCGETA
+                        | TCGETS2
+                        | TIOCGPGRP
+                        | TIOCGWINSZ
+                        | TIOCGPTPEER
+                        | FICLONE
+                        | FICLONERANGE
+                        | FS_IOC_FIEMAP
                 ) || cmd == 9_999_999
                 {
                     return;
