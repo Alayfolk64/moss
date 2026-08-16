@@ -36,7 +36,7 @@ static SESSION_TABLE: RwLock<WeakMap<Pid, Weak<Session>>> = RwLock::new(WeakMap:
 ///
 /// This function is intended to be used during memory leak analysis to remove
 /// possible noise caused by expired entries in the [`WeakMap`].
-pub fn cleanup_task_tables(thr: &Thread) {
+pub fn cleanup_task_tables() {
     TASK_TABLE.write().cleanup();
     PROCESS_TABLE.write().cleanup();
     PROCESS_GROUP_TABLE.write().cleanup();
@@ -354,10 +354,12 @@ pub fn do_exit(exit_code: i32, group_exit: bool) {
 
     info!("{} exit with code: {}", curr.id_name(), exit_code);
 
-    cleanup_task_tables(thr);
+    // pthread_join(3) relies on CLONE_CHILD_CLEARTID being cleared and its
+    // futex being woken before the exiting thread becomes unreachable.
+    cleanup_thread_futex_state(thr);
+    cleanup_task_tables();
 
     let tid = curr.id().as_u64() as Pid;
-    thr.signal.detach_from_process();
     let (utime, stime) = cleanup_thread_runtime_state(thr);
 
     let process = &thr.proc_data.proc;
