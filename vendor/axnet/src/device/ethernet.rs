@@ -2,6 +2,7 @@ use alloc::{string::String, vec};
 use core::task::Waker;
 
 use axdriver::prelude::*;
+use axpoll::PollSet;
 use axtask::future::register_irq_waker;
 use hashbrown::HashMap;
 use smoltcp::{
@@ -30,6 +31,7 @@ pub struct EthernetDevice {
     inner: AxNetDevice,
     neighbors: HashMap<IpAddress, Option<Neighbor>>,
     ip: Ipv4Cidr,
+    rx_wakers: PollSet,
 
     pending_packets: PacketBuffer<'static, IpAddress>,
 }
@@ -50,6 +52,7 @@ impl EthernetDevice {
             inner,
             neighbors: HashMap::new(),
             ip,
+            rx_wakers: PollSet::new(),
 
             pending_packets,
         }
@@ -263,6 +266,10 @@ impl Device for EthernetDevice {
         &self.name
     }
 
+    fn notify_rx_ready(&self) {
+        self.rx_wakers.wake();
+    }
+
     fn recv(&mut self, buffer: &mut PacketBuffer<()>, timestamp: Instant) -> bool {
         loop {
             let rx_buf = match self.inner.receive() {
@@ -283,6 +290,7 @@ impl Device for EthernetDevice {
             let result = self.handle_frame(rx_buf.packet(), buffer, timestamp);
             self.inner.recycle_rx_buffer(rx_buf).unwrap();
             if result {
+                self.notify_rx_ready();
                 return true;
             }
         }
@@ -353,6 +361,7 @@ impl Device for EthernetDevice {
     }
 
     fn register_waker(&self, waker: &Waker) {
+        self.rx_wakers.register(waker);
         if let Some(irq) = self.inner.irq_num() {
             if self.inner.irq_handler_registered() {
                 axtask::future::register_driver_irq_waker(irq, waker);

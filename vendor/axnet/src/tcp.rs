@@ -568,6 +568,7 @@ impl SocketOps for TcpSocket {
                 };
 
                 self.local.bind(endpoint)?;
+                let device_mask = SERVICE.lock().device_mask_for(&endpoint);
                 let handle = self.ensure_smol_socket();
                 let smol_result =
                     SOCKET_SET.with_socket_mut::<smol::Socket, _, _>(handle, |socket| {
@@ -575,14 +576,13 @@ impl SocketOps for TcpSocket {
                             return Err(AxError::InvalidInput);
                         }
                         socket.set_bound_endpoint(endpoint);
-                        self.general
-                            .set_device_mask(SERVICE.lock().device_mask_for(&endpoint));
                         Ok::<_, AxError>(())
                     });
                 if let Err(err) = smol_result {
                     self.local.reset_bound_if(endpoint);
                     return Err(err);
                 }
+                self.general.set_device_mask(device_mask);
                 debug!(
                     "TCP socket {:?}: binding to {}",
                     self.smol_handle(),
@@ -652,20 +652,17 @@ impl SocketOps for TcpSocket {
                 }
 
                 let handle = self.ensure_smol_socket();
+                let device_mask = SERVICE.lock().device_mask_for(&bound_endpoint);
                 SOCKET_SET.with_socket_mut::<smol::Socket, _, _>(handle, |socket| {
                     socket.set_bound_endpoint(bound_endpoint);
-                    self.general
-                        .set_device_mask(SERVICE.lock().device_mask_for(&bound_endpoint));
                     Ok::<_, AxError>(())
                 })?;
+                self.general.set_device_mask(device_mask);
                 self.apply_configured_buffers()?;
+                let mut service = SERVICE.lock();
                 self.with_smol_socket(|socket| {
                     socket
-                        .connect(
-                            crate::SERVICE.lock().iface.context(),
-                            remote_endpoint,
-                            bound_endpoint,
-                        )
+                        .connect(service.iface.context(), remote_endpoint, bound_endpoint)
                         .map_err(|e| match e {
                             smol::ConnectError::InvalidState => {
                                 ax_err_type!(AlreadyConnected)
@@ -676,6 +673,7 @@ impl SocketOps for TcpSocket {
                         })?;
                     Ok::<_, AxError>(())
                 })?;
+                drop(service);
                 Ok(false)
             })?;
 
