@@ -524,8 +524,8 @@ const LDPTRD_OP: u32 = 0x26;
 const STPTRW_OP: u32 = 0x25;
 const STPTRD_OP: u32 = 0x27;
 
-const LDXH_OP: u32 = 0x7048;
-const LDXHU_OP: u32 = 0x7008;
+const LDXH_OP: u32 = 0x7008;
+const LDXHU_OP: u32 = 0x7048;
 const LDXW_OP: u32 = 0x7010;
 const LDXWU_OP: u32 = 0x7050;
 const LDXD_OP: u32 = 0x7018;
@@ -607,5 +607,23 @@ impl TrapFrame {
         self.era += 4;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LDXH_OP, LDXHU_OP};
+
+    #[test]
+    fn indexed_halfword_load_opcodes_preserve_signedness() {
+        // These encodings differ only in the signed/unsigned opcode field.
+        // The signed form is emitted by Node.js when reading its stack-frame
+        // dispatch table, so decoding it as LDX.HU turns negative offsets
+        // into large positive addresses.
+        const LDX_H: u32 = 0x3804_29aa;
+        const LDX_HU: u32 = 0x3824_29aa;
+
+        assert_eq!(LDX_H >> 15, LDXH_OP);
+        assert_eq!(LDX_HU >> 15, LDXHU_OP);
     }
 }
