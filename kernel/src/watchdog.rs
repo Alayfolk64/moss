@@ -1,4 +1,6 @@
-//! Sliding forward-progress lease for the LS2K1000 hardware watchdog.
+//! Bounded forward-progress lease for the LS2K1000 hardware watchdog.
+
+mod policy;
 
 use alloc::string::String;
 use core::{
@@ -7,13 +9,24 @@ use core::{
 };
 
 use crate::task::AsThread;
+use policy::{ForwardProgressLease, StopReason};
 
 const CHECK_INTERVAL: Duration = Duration::from_secs(1);
 const RUNTIME_TIMEOUT_SECS: u32 = 30;
 const PROGRESS_LEASE_SECS: u64 = 20 * 60;
+const CPU_ONLY_CAP_SECS: u64 = 30 * 60;
 const CPU_PROGRESS_PERMILLE_ONE_CORE: u64 = 100;
+const TEST_DEADLINE_PROPERTY: &str = "moss,watchdog-hard-deadline-secs";
+const NANOS_PER_SEC: u64 = 1_000_000_000;
 
 static LAST_EXPLICIT_PROGRESS_NS: AtomicU64 = AtomicU64::new(0);
+
+fn hard_deadline_secs() -> Option<u64> {
+    let raw = axhal::dtb::get_chosen_property(TEST_DEADLINE_PROPERTY)?;
+    let bytes: [u8; 4] = raw.try_into().ok()?;
+    let seconds = u32::from_be_bytes(bytes) as u64;
+    (60..=3600).contains(&seconds).then_some(seconds)
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct UserTaskSet {
@@ -61,7 +74,6 @@ fn sample_user_cpu_work(
 #[inline]
 pub(crate) fn note_progress() {
     LAST_EXPLICIT_PROGRESS_NS.store(axhal::time::monotonic_time_nanos(), Ordering::Release);
-    axhal::watchdog::ping();
 }
 
 pub(crate) fn spawn_monitor() {
@@ -78,18 +90,19 @@ pub(crate) fn spawn_monitor() {
 
 fn monitor() {
     let started_ns = axhal::time::monotonic_time_nanos();
-    let mut last_progress_ns = LAST_EXPLICIT_PROGRESS_NS
-        .load(Ordering::Acquire)
-        .max(started_ns);
+    let mut lease = ForwardProgressLease::new(started_ns);
+    lease.note_credible_progress(LAST_EXPLICIT_PROGRESS_NS.load(Ordering::Acquire));
     let mut tasks = user_task_set();
     let mut sample_ns = started_ns;
     let mut user_ns =
         core::array::from_fn(|cpu_id| axtask::cpu_user_task_time_nanos(cpu_id).unwrap_or(0));
     let mut expired = false;
+    let hard_deadline_secs = hard_deadline_secs();
+    let hard_deadline_ns = hard_deadline_secs.map(|seconds| seconds * NANOS_PER_SEC);
 
     info!(
-        "LS2K1000 watchdog active: hardware={} s, no-progress lease={} s",
-        RUNTIME_TIMEOUT_SECS, PROGRESS_LEASE_SECS
+        "LS2K1000 watchdog active: hardware={} s, no-progress lease={} s, CPU-only cap={} s",
+        RUNTIME_TIMEOUT_SECS, PROGRESS_LEASE_SECS, CPU_ONLY_CAP_SECS
     );
 
     loop {
@@ -97,32 +110,61 @@ fn monitor() {
         let now_ns = axhal::time::monotonic_time_nanos();
 
         let explicit_ns = LAST_EXPLICIT_PROGRESS_NS.load(Ordering::Acquire);
-        if explicit_ns > last_progress_ns {
-            last_progress_ns = explicit_ns;
+        if explicit_ns > lease.last_credible_ns() {
+            lease.note_credible_progress(explicit_ns);
         }
 
         let current_tasks = user_task_set();
         if current_tasks != tasks {
             tasks = current_tasks;
-            last_progress_ns = now_ns;
+            lease.note_credible_progress(now_ns);
         }
 
-        if sample_user_cpu_work(now_ns, &mut sample_ns, &mut user_ns)
-            >= CPU_PROGRESS_PERMILLE_ONE_CORE
-        {
-            last_progress_ns = now_ns;
-        }
+        // CPU time by itself is not credible forward progress: a spinning
+        // userspace task or syscall livelock also raises this counter. It may
+        // select the longer CPU-bound grace period, but can never renew it.
+        let cpu_active = sample_user_cpu_work(now_ns, &mut sample_ns, &mut user_ns)
+            >= CPU_PROGRESS_PERMILLE_ONE_CORE;
 
-        let idle_ns = now_ns.saturating_sub(last_progress_ns);
-        if expired || idle_ns >= PROGRESS_LEASE_SECS * 1_000_000_000 {
-            if !expired {
-                expired = true;
-                warn!(
-                    "LS2K1000 watchdog lease expired after {} s without user progress; reset \
-                     follows within {} s",
-                    idle_ns / 1_000_000_000,
-                    RUNTIME_TIMEOUT_SECS
-                );
+        let idle_ns = now_ns.saturating_sub(lease.last_credible_ns());
+        let runtime_ns = now_ns.saturating_sub(started_ns);
+        let reason = lease.stop_reason(
+            now_ns,
+            cpu_active,
+            PROGRESS_LEASE_SECS * NANOS_PER_SEC,
+            CPU_ONLY_CAP_SECS * NANOS_PER_SEC,
+            hard_deadline_ns,
+        );
+        if expired {
+            continue;
+        }
+        if let Some(reason) = reason {
+            expired = true;
+            match reason {
+                StopReason::HardDeadline => {
+                    warn!(
+                        "LS2K1000 watchdog hard test deadline expired after {} s; reset follows \
+                         within {} s",
+                        runtime_ns / NANOS_PER_SEC,
+                        RUNTIME_TIMEOUT_SECS
+                    );
+                }
+                StopReason::IdleLease => {
+                    warn!(
+                        "LS2K1000 watchdog lease expired after {} s without semantic progress; \
+                         reset follows within {} s",
+                        idle_ns / NANOS_PER_SEC,
+                        RUNTIME_TIMEOUT_SECS
+                    );
+                }
+                StopReason::CpuOnlyCap => {
+                    warn!(
+                        "LS2K1000 watchdog CPU-only cap expired after {} s without semantic \
+                         progress (possible livelock); reset follows within {} s",
+                        idle_ns / NANOS_PER_SEC,
+                        RUNTIME_TIMEOUT_SECS
+                    );
+                }
             }
             continue;
         }
