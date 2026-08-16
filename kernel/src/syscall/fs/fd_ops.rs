@@ -27,6 +27,7 @@ use spin::RwLock;
 use starry_signal::Signo;
 
 use super::{
+    at_path::effective_dirfd,
     fanotify::{
         check_fanotify_open_permission, notify_fanotify_close, notify_fanotify_create,
         notify_fanotify_fd_close, notify_fanotify_open,
@@ -557,6 +558,11 @@ pub fn sys_openat(
         return Err(AxError::NotFound);
     }
     debug!("sys_openat <= {dirfd} {path:?} {flags:#o} {mode:#o}");
+
+    // Linux ignores dirfd for an absolute pathname, even when dirfd is not a
+    // valid descriptor. Normalize before every permission/creation helper:
+    // some of those helpers call with_fs() directly rather than resolve_at().
+    let dirfd = effective_dirfd(dirfd, path.starts_with('/'), AT_FDCWD);
 
     let flags_u32 = flags as u32;
     if flags_u32 & __O_TMPFILE != 0 {

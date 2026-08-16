@@ -1,4 +1,5 @@
 mod aio;
+mod at_path;
 mod ctl;
 mod event;
 mod fanotify;
