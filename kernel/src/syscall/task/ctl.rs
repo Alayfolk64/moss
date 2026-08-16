@@ -407,6 +407,20 @@ pub fn sys_prctl(
             // not implemented; but avoid annoying warnings
             return Err(AxError::InvalidInput);
         }
+        PR_SET_THP_DISABLE => {
+            // MOSS only creates huge mappings for an explicit MAP_HUGETLB
+            // request, so transparent huge pages are effectively always
+            // disabled.  Validate Linux's arguments and report success.
+            if arg2 > 1 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+        }
+        PR_GET_THP_DISABLE => {
+            if arg2 != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+            return Ok(1);
+        }
         _ => {
             warn!("sys_prctl: unsupported option {option}");
             return Err(AxError::InvalidInput);
