@@ -350,16 +350,25 @@ fn zero_existing_file_range(file: &FileBackend, start: u64, end: u64) -> AxResul
 
 pub fn sys_fsync(fd: c_int) -> AxResult<isize> {
     debug!("sys_fsync <= {fd}");
-    let f = File::from_fd(fd)?;
-    f.inner().sync(false)?;
+    sync_fd(fd, false)?;
     Ok(0)
 }
 
 pub fn sys_fdatasync(fd: c_int) -> AxResult<isize> {
     debug!("sys_fdatasync <= {fd}");
-    let f = File::from_fd(fd)?;
-    f.inner().sync(true)?;
+    sync_fd(fd, true)?;
     Ok(0)
+}
+
+fn sync_fd(fd: c_int, data_only: bool) -> AxResult {
+    let file_like = get_file_like(fd)?;
+    if let Ok(file) = file_like.clone().downcast_arc::<File>() {
+        return file.inner().sync(data_only);
+    }
+    if let Ok(directory) = file_like.downcast_arc::<Directory>() {
+        return directory.inner().sync(data_only);
+    }
+    Err(AxError::InvalidInput)
 }
 
 pub fn sys_sync_file_range(
