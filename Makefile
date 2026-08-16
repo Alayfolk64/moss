@@ -154,7 +154,7 @@ kernel-la-2k1000: toolchain
 		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000.toml \
 		APP_FEATURES="ls2k1000 $(if $(filter y,$(SITE_INIT)),site-init,)" \
-		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
+		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=2G \
 		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
 		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
 		CPU_CAPACITY=2 SMP=2 defconfig build
@@ -169,7 +169,7 @@ kernel-la-2k1000-shell: toolchain
 		PLAT_CONFIG=$(A)/vendor/axplat-loongarch64-ls2k1000/axconfig.toml \
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000-shell.toml \
 		APP_FEATURES="ls2k1000 shell-init ls2k1000-shell-mode" \
-		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=1G \
+		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=2G \
 		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
 		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
 		CPU_CAPACITY=2 SMP=2 defconfig build
