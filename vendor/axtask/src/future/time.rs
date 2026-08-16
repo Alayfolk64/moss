@@ -9,6 +9,7 @@ use core::{
 use axerrno::AxError;
 use axhal::time::{TimeValue, wall_time};
 use futures_util::{FutureExt, select_biased};
+use kspin::SpinNoIrq;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct TimerKey {
@@ -77,20 +78,20 @@ impl TimerRuntime {
     }
 }
 
-percpu_static! {
-    TIMER_RUNTIME: TimerRuntime = TimerRuntime::new(),
-}
+// Futures may resume on a different CPU after they block. Keeping their timer
+// entries in a per-CPU wheel therefore lets a migrated future poll or cancel
+// the wrong wheel, which can turn a real deadline into an immediate timeout
+// and leave the original entry behind. A shared wheel keeps the TimerKey valid
+// for the whole future lifetime regardless of scheduler migration.
+static TIMER_RUNTIME: SpinNoIrq<TimerRuntime> = SpinNoIrq::new(TimerRuntime::new());
 
 #[allow(dead_code)]
 pub(crate) fn check_timer_events() {
-    // SAFETY: only called in timer::check_events
-    unsafe { TIMER_RUNTIME.current_ref_mut_raw() }.wake();
+    TIMER_RUNTIME.lock().wake();
 }
 
 fn with_current<R>(f: impl FnOnce(&mut TimerRuntime) -> R) -> R {
-    // FIXME: optimize `percpu` crate! should disable irq and provide more apis
-    let _g = kernel_guard::NoPreemptIrqSave::new();
-    f(unsafe { TIMER_RUNTIME.current_ref_mut_raw() })
+    f(&mut TIMER_RUNTIME.lock())
 }
 
 /// Future returned by `sleep` and `sleep_until`.

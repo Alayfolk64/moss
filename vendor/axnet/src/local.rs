@@ -364,6 +364,34 @@ struct LocalTcpListener {
 }
 
 impl LocalTcpListener {
+    fn new(
+        endpoint: IpListenEndpoint,
+        family: IpFamily,
+        ipv6_only: bool,
+        poll_state: Arc<PollSet>,
+        rx_buf_len: usize,
+        tx_buf_len: usize,
+    ) -> Arc<Self> {
+        let mut storage = Arc::<Self>::new_uninit();
+        let dst = Arc::get_mut(&mut storage)
+            .expect("new local TCP listener allocation must be unique")
+            .as_mut_ptr();
+
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).endpoint).write(endpoint);
+            core::ptr::addr_of_mut!((*dst).family).write(family);
+            core::ptr::addr_of_mut!((*dst).ipv6_only).write(ipv6_only);
+            axsync::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).queue),
+                VecDeque::with_capacity(LISTEN_QUEUE_SIZE),
+            );
+            core::ptr::addr_of_mut!((*dst).poll_state).write(poll_state);
+            core::ptr::addr_of_mut!((*dst).rx_buf_len).write(rx_buf_len);
+            core::ptr::addr_of_mut!((*dst).tx_buf_len).write(tx_buf_len);
+            storage.assume_init()
+        }
+    }
+
     fn accepts(&self, dst: IpEndpoint) -> bool {
         endpoint_accepts(self.endpoint, self.family, self.ipv6_only, dst)
     }
@@ -413,10 +441,7 @@ impl LocalTcpSocket {
         unsafe {
             core::ptr::addr_of_mut!((*dst).family).write(family);
             axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).bound), bound);
-            axsync::write_unpublished_in_place(
-                core::ptr::addr_of_mut!((*dst).listener),
-                None,
-            );
+            axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).listener), None);
             axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).stream), stream);
             core::ptr::addr_of_mut!((*dst).poll_state).write(PollSet::new_shared());
         }
@@ -678,10 +703,7 @@ impl StreamBuffer {
     }
 
     fn write_from(&mut self, src: &mut (impl Read + IoBuf)) -> AxResult<usize> {
-        let len = min(
-            src.remaining(),
-            self.capacity.saturating_sub(self.len),
-        );
+        let len = min(src.remaining(), self.capacity.saturating_sub(self.len));
         if len == 0 {
             return Ok(0);
         }
@@ -738,6 +760,35 @@ pub(crate) struct LocalTcpStream {
 }
 
 impl LocalTcpStream {
+    /// Creates a local TCP endpoint directly in its final `Arc` allocation.
+    ///
+    /// The pinned LoongArch toolchain has corrupted fresh mutex and atomic
+    /// fields while moving large aggregates into heap allocations.  A local
+    /// TCP endpoint contains both kinds of state and is immediately shared
+    /// with its peer, so initialize every field after the allocation has
+    /// reached its stable address.
+    fn new(local: IpEndpoint, remote: IpEndpoint, rx_capacity: usize) -> Arc<Self> {
+        let mut storage = Arc::<Self>::new_uninit();
+        let dst = Arc::get_mut(&mut storage)
+            .expect("new local TCP stream allocation must be unique")
+            .as_mut_ptr();
+
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).local).write(local);
+            core::ptr::addr_of_mut!((*dst).remote).write(remote);
+            axsync::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).rx),
+                StreamBuffer::new(rx_capacity),
+            );
+            axsync::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).peer), Weak::new());
+            core::ptr::addr_of_mut!((*dst).rx_closed).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).tx_closed).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).peer_tx_closed).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).poll_state).write(PollSet::new_shared());
+            storage.assume_init()
+        }
+    }
+
     fn pair(
         client: IpEndpoint,
         server: IpEndpoint,
@@ -749,26 +800,9 @@ impl LocalTcpStream {
         let client_rx_capacity = min(server_tx_len, client_rx_len).max(1);
         let server_rx_capacity = min(client_tx_len, server_rx_len).max(1);
 
-        let client_stream = Arc::new(Self {
-            local: client,
-            remote: server,
-            rx: Mutex::new(StreamBuffer::new(client_rx_capacity)),
-            peer: Mutex::new(Weak::new()),
-            rx_closed: AtomicBool::new(false),
-            tx_closed: AtomicBool::new(false),
-            peer_tx_closed: AtomicBool::new(false),
-            poll_state: Arc::new(PollSet::new()),
-        });
-        let server_stream = Arc::new(Self {
-            local: server,
-            remote: client,
-            rx: Mutex::new(StreamBuffer::new(server_rx_capacity)),
-            peer: Mutex::new(Arc::downgrade(&client_stream)),
-            rx_closed: AtomicBool::new(false),
-            tx_closed: AtomicBool::new(false),
-            peer_tx_closed: AtomicBool::new(false),
-            poll_state: Arc::new(PollSet::new()),
-        });
+        let client_stream = Self::new(client, server, client_rx_capacity);
+        let server_stream = Self::new(server, client, server_rx_capacity);
+        *server_stream.peer.lock() = Arc::downgrade(&client_stream);
         *client_stream.peer.lock() = Arc::downgrade(&server_stream);
         (client_stream, server_stream)
     }
@@ -1002,15 +1036,9 @@ impl LocalTransport {
         {
             return Err(AxError::AddrInUse);
         }
-        let listener = Arc::new(LocalTcpListener {
-            endpoint,
-            family,
-            ipv6_only,
-            queue: Mutex::new(VecDeque::with_capacity(LISTEN_QUEUE_SIZE)),
-            poll_state,
-            rx_buf_len,
-            tx_buf_len,
-        });
+        let listener = LocalTcpListener::new(
+            endpoint, family, ipv6_only, poll_state, rx_buf_len, tx_buf_len,
+        );
         tcp.insert(key, listener.clone());
         Ok(listener)
     }

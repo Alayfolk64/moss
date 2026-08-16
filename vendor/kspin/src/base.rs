@@ -5,13 +5,14 @@
 //!
 //! Based on [`spin::Mutex`](https://docs.rs/spin/latest/src/spin/mutex/spin.rs.html).
 
-use core::cell::UnsafeCell;
-use core::fmt;
-use core::marker::PhantomData;
-use core::ops::{Deref, DerefMut};
-
 #[cfg(feature = "smp")]
 use core::sync::atomic::{AtomicBool, Ordering};
+use core::{
+    cell::UnsafeCell,
+    fmt,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use kernel_guard::BaseGuard;
 
@@ -55,6 +56,23 @@ impl<G: BaseGuard, T> BaseSpinLock<G, T> {
             data: UnsafeCell::new(data),
             #[cfg(feature = "smp")]
             lock: AtomicBool::new(false),
+        }
+    }
+
+    /// Initializes a spin lock directly in unpublished storage.
+    ///
+    /// # Safety
+    ///
+    /// `dst` must point to valid, aligned, uninitialized storage for one
+    /// `BaseSpinLock`. The lock must not be published until initialization is
+    /// complete.
+    #[inline(always)]
+    pub unsafe fn write_unpublished_in_place(dst: *mut Self, data: T) {
+        unsafe {
+            core::ptr::addr_of_mut!((*dst)._phantom).write(PhantomData);
+            #[cfg(feature = "smp")]
+            core::ptr::addr_of_mut!((*dst).lock).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).data).write(UnsafeCell::new(data));
         }
     }
 
@@ -229,11 +247,16 @@ impl<G: BaseGuard, T: ?Sized> Drop for BaseSpinLockGuard<'_, G, T> {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+            mpsc::channel,
+        },
+        thread,
+    };
+
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::thread;
 
     struct TestGuardIrq;
 
@@ -265,6 +288,16 @@ mod tests {
         let m = SpinMutex::<_>::new(());
         drop(m.lock());
         drop(m.lock());
+    }
+
+    #[test]
+    fn initializes_unpublished_lock_in_place() {
+        let mut storage = core::mem::MaybeUninit::<SpinMutex<usize>>::uninit();
+        let mutex = unsafe {
+            SpinMutex::write_unpublished_in_place(storage.as_mut_ptr(), 42);
+            storage.assume_init()
+        };
+        assert_eq!(*mutex.lock(), 42);
     }
 
     #[test]

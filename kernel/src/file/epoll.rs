@@ -142,12 +142,20 @@ struct EpollInterest {
 }
 
 impl EpollInterest {
-    fn new(key: EntryKey, event: EpollEvent, flags: EpollFlags) -> Self {
-        Self {
-            key,
-            event,
-            mode: SpinNoPreempt::new(TriggerMode::from_flags(flags)),
-            in_ready_queue: AtomicBool::new(false),
+    fn new_shared(key: EntryKey, event: EpollEvent, flags: EpollFlags) -> Arc<Self> {
+        let mut storage = Arc::<Self>::new_uninit();
+        let dst = Arc::get_mut(&mut storage)
+            .expect("new epoll interest allocation must be unique")
+            .as_mut_ptr();
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).key).write(key);
+            core::ptr::addr_of_mut!((*dst).event).write(event);
+            SpinNoPreempt::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).mode),
+                TriggerMode::from_flags(flags),
+            );
+            core::ptr::addr_of_mut!((*dst).in_ready_queue).write(AtomicBool::new(false));
+            storage.assume_init()
         }
     }
 
@@ -157,8 +165,8 @@ impl EpollInterest {
     }
 
     #[inline]
-    fn is_in_queue(&self) -> bool {
-        self.in_ready_queue.load(Ordering::Acquire)
+    fn is_level_triggered(&self) -> bool {
+        matches!(*self.mode.lock(), TriggerMode::Level)
     }
 
     #[inline]
@@ -173,9 +181,21 @@ impl EpollInterest {
         self.in_ready_queue.store(false, Ordering::Release);
     }
 
+    #[inline]
+    fn monitored_events(&self) -> IoEvents {
+        // EPOLLERR and EPOLLHUP are always monitored and reported by Linux,
+        // even when user space did not include them in epoll_event.events.
+        // Runtimes such as libuv rely on the implicit HUP to observe pipe EOF.
+        self.event.events | IoEvents::ALWAYS_POLL
+    }
+
+    #[inline]
+    fn ready_events(&self, file: &dyn FileLike) -> IoEvents {
+        file.poll() & self.monitored_events()
+    }
+
     fn consume(&self, file: &dyn FileLike) -> ConsumeResult {
-        let current_events = file.poll();
-        let matched = current_events & self.event.events;
+        let matched = self.ready_events(file);
 
         // not ready
         if matched.is_empty() {
@@ -247,19 +267,37 @@ struct EpollInner {
     poll_ready: PollSet,
 }
 
-impl Default for EpollInner {
-    fn default() -> Self {
-        Self {
-            interests: SpinNoPreempt::new(HashMap::new()),
-            ready_queue: SpinNoPreempt::new(VecDeque::new()),
-            poll_ready: PollSet::new(),
+impl EpollInner {
+    fn new_shared() -> Arc<Self> {
+        let mut storage = Arc::<Self>::new_uninit();
+        let dst = Arc::get_mut(&mut storage)
+            .expect("new epoll allocation must be unique")
+            .as_mut_ptr();
+        unsafe {
+            SpinNoPreempt::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).interests),
+                HashMap::new(),
+            );
+            SpinNoPreempt::write_unpublished_in_place(
+                core::ptr::addr_of_mut!((*dst).ready_queue),
+                VecDeque::new(),
+            );
+            PollSet::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).poll_ready));
+            storage.assume_init()
         }
     }
 }
 
-#[derive(Default)]
 pub struct Epoll {
     inner: Arc<EpollInner>,
+}
+
+impl Default for Epoll {
+    fn default() -> Self {
+        Self {
+            inner: EpollInner::new_shared(),
+        }
+    }
 }
 
 impl Epoll {
@@ -283,7 +321,7 @@ impl Epoll {
         }));
 
         let mut context = Context::from_waker(&waker);
-        file.register(&mut context, interest.event.events);
+        file.register(&mut context, interest.monitored_events());
     }
 
     // for add/modify
@@ -301,15 +339,15 @@ impl Epoll {
             interest: Arc::downgrade(interest),
         }));
 
-        let current = file.poll() & interest.event.events;
+        let current = interest.ready_events(file.as_ref());
 
         if !current.is_empty() {
             waker.wake_by_ref();
         } else {
             let mut context = Context::from_waker(&waker);
-            file.register(&mut context, interest.event.events);
+            file.register(&mut context, interest.monitored_events());
 
-            let current = file.poll() & interest.event.events;
+            let current = interest.ready_events(file.as_ref());
             if !current.is_empty() {
                 waker.wake_by_ref();
             }
@@ -377,7 +415,7 @@ impl Epoll {
             }
         }
 
-        let interest = Arc::new(EpollInterest::new(key.clone(), event, flags));
+        let interest = EpollInterest::new_shared(key.clone(), event, flags);
         let mut guard = self.inner.interests.lock();
         if guard.contains_key(&key) {
             return Err(AxError::AlreadyExists);
@@ -391,15 +429,16 @@ impl Epoll {
 
     pub fn modify(&self, fd: i32, event: EpollEvent, flags: EpollFlags) -> AxResult<()> {
         let key = EntryKey::new(fd)?;
-        let interest = Arc::new(EpollInterest::new(key.clone(), event, flags));
+        let interest = EpollInterest::new_shared(key.clone(), event, flags);
 
         let mut guard = self.inner.interests.lock();
         let old = guard.get_mut(&key).ok_or(AxError::NotFound)?;
 
-        // update new interest if old already in ready queue
-        if old.is_in_queue() {
-            interest.in_ready_queue.store(true, Ordering::Release);
-        }
+        // The ready queue stores a Weak pointer to the old interest. Its
+        // queued state cannot be transferred to this replacement: doing so
+        // leaves the new interest marked as queued even though no queue entry
+        // can upgrade to it, and all later wakeups are then lost. The stale
+        // weak entry is harmless; check/register the replacement below.
         *old = Arc::clone(&interest);
         drop(guard);
         trace!(
@@ -423,11 +462,43 @@ impl Epoll {
     }
 
     pub fn has_ready_events(&self) -> bool {
+        self.refresh_level_ready_interests();
         !self.inner.ready_queue.lock().is_empty()
+    }
+
+    /// Recovers level-triggered readiness even if an earlier registered waker
+    /// became stale during `EPOLL_CTL_MOD` or was otherwise consumed before it
+    /// could enqueue the current interest. Linux level-triggered epoll must
+    /// continue reporting a file while its condition remains true; it cannot
+    /// rely on receiving a second readiness edge.
+    fn refresh_level_ready_interests(&self) {
+        let interests = self
+            .inner
+            .interests
+            .lock()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for interest in interests {
+            if !interest.is_enabled() || !interest.is_level_triggered() {
+                continue;
+            }
+            let Some(file) = interest.key.get_file() else {
+                continue;
+            };
+            if !interest.ready_events(file.as_ref()).is_empty() && interest.try_mark_in_queue() {
+                self.inner
+                    .ready_queue
+                    .lock()
+                    .push_back(Arc::downgrade(&interest));
+            }
+        }
     }
 
     pub fn poll_events(&self, out: &mut [epoll_event]) -> AxResult<usize> {
         trace!("Epoll: poll_events called, out.len()={}", out.len());
+        self.refresh_level_ready_interests();
         let mut count = 0;
         let mut requeue = Vec::new();
         loop {

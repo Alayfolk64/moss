@@ -132,7 +132,7 @@ fn do_epoll_wait(
 
     let events = events.get_as_mut_slice(maxevents as usize)?;
 
-    with_blocked_signals(sigmask, || {
+    let result = with_blocked_signals(sigmask, || {
         if timeout == Some(Duration::ZERO) {
             return poll_epoll_events(&epoll, events);
         }
@@ -144,10 +144,22 @@ fn do_epoll_wait(
                 epoll.poll_events(events)
             }),
         )) {
+            // epoll wait timeouts are reported as a zero event count, never
+            // as ETIMEDOUT. Preserve that ABI even if a nested poll future
+            // surfaces its own elapsed deadline.
+            Ok(Err(AxError::TimedOut)) => Ok(0),
             Ok(r) => r.map(|n| n as _),
             Err(_) => Ok(0),
         }
-    })
+    });
+
+    // Keep the Linux ABI at the syscall boundary as well as at the nested
+    // timeout boundary above. A poll implementation may surface ETIMEDOUT
+    // directly while unwinding its registered wait state.
+    match result {
+        Err(AxError::TimedOut) => Ok(0),
+        result => result,
+    }
 }
 
 pub fn sys_epoll_pwait(
