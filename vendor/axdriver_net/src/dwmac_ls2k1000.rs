@@ -253,6 +253,8 @@ pub struct DwmacLs2k1000<H: DwmacHal> {
     lifecycle: DmaLifecycle,
     link_state: LinkState,
     next_phy_poll_ms: u64,
+    next_start_retry_ms: u64,
+    start_attempts: u32,
     phy_read_failed: bool,
     phy_unavailable_reported: bool,
     net_pool: Arc<NetBufPool>,
@@ -290,6 +292,8 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             lifecycle: DmaLifecycle::new(),
             link_state: LinkState::Down,
             next_phy_poll_ms: 0,
+            next_start_retry_ms: 0,
+            start_attempts: 0,
             phy_read_failed: false,
             phy_unavailable_reported: false,
             net_pool: NetBufPool::new(NET_BUFFER_COUNT, NET_BUFFER_LEN)?,
@@ -355,11 +359,19 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
         if self.lifecycle.started() {
             return Ok(());
         }
+        let now_ms = H::current_ms();
+        if now_ms < self.next_start_retry_ms {
+            return Err(DevError::Again);
+        }
+        self.start_attempts = self.start_attempts.saturating_add(1);
 
         // Linux stmmac performs these operations from stmmac_open via
         // stmmac_hw_setup, not from platform probe.
         self.stop_tx_rx();
-        self.reset_dma()?;
+        if self.reset_dma().is_err() {
+            self.next_start_retry_ms = H::current_ms().saturating_add(1_000);
+            return Err(DevError::Again);
+        }
         self.rx_index = 0;
         self.tx_ring = TxRingState::new(RING_SIZE);
         self.initialize_descriptors()?;
@@ -368,9 +380,15 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
             self.enable_hardware_interrupts();
         }
         self.refresh_phy_link(true, true);
-        info!(
-            "LS2K1000 GMAC0 DMA queues started on first network use; link={:?}",
-            self.link_state
+        warn!(
+            "MOSS_NET GMAC_READY attempts={} link={:?} bus_mode={:#010x} dma_control={:#010x} \
+             dma_status={:#010x} rgmii={:#010x}",
+            self.start_attempts,
+            self.link_state,
+            self.read_reg(DMA_BUS_MODE),
+            self.read_reg(DMA_CONTROL),
+            self.read_reg(DMA_STATUS),
+            self.read_reg(GMAC_RGSMII_STATUS),
         );
         Ok(())
     }
@@ -543,11 +561,39 @@ impl<H: DwmacHal> DwmacLs2k1000<H> {
     }
 
     fn reset_dma(&self) -> DevResult {
+        self.write_reg(DMA_INTERRUPT_ENABLE, 0);
+        self.write_reg(DMA_STATUS, DMA_STATUS_HANDLED);
+        H::dma_barrier();
+
+        // U-Boot used this same MAC for TFTP immediately before `go`. Give a
+        // just-stopped descriptor engine time to reach its stopped state before
+        // asserting SWR, matching the quiescent hand-off Linux normally gets
+        // from bootm's device cleanup.
+        let settle_deadline = H::current_ms().saturating_add(1);
+        while H::current_ms() < settle_deadline {
+            core::hint::spin_loop();
+        }
+
+        let before_bus_mode = self.read_reg(DMA_BUS_MODE);
+        let before_dma_control = self.read_reg(DMA_CONTROL);
+        let before_dma_status = self.read_reg(DMA_STATUS);
         self.write_reg(DMA_BUS_MODE, DMA_BUS_MODE_RESET);
-        let deadline = H::current_ms().saturating_add(100);
+        H::dma_barrier();
+        let deadline = H::current_ms().saturating_add(250);
         while self.read_reg(DMA_BUS_MODE) & DMA_BUS_MODE_RESET != 0 {
             if H::current_ms() >= deadline {
-                warn!("LS2K1000 GMAC0 DMA reset timed out");
+                warn!(
+                    "MOSS_NET GMAC_RESET_TIMEOUT bus_mode={before_bus_mode:#010x}->{:#010x} \
+                     dma_control={before_dma_control:#010x}->{:#010x} \
+                     dma_status={before_dma_status:#010x}->{:#010x} version={:#010x} \
+                     mii_addr={:#010x} rgmii={:#010x}",
+                    self.read_reg(DMA_BUS_MODE),
+                    self.read_reg(DMA_CONTROL),
+                    self.read_reg(DMA_STATUS),
+                    self.read_reg(GMAC_VERSION),
+                    self.read_reg(GMAC_MII_ADDR),
+                    self.read_reg(GMAC_RGSMII_STATUS),
+                );
                 return Err(DevError::BadState);
             }
             core::hint::spin_loop();

@@ -1,16 +1,19 @@
 //! Time management module.
 
-use alloc::{borrow::ToOwned, collections::BTreeMap, sync::Arc};
-use core::time::Duration;
+use alloc::{borrow::ToOwned, sync::Arc, vec::Vec};
+use core::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 use axhal::time::{NANOS_PER_SEC, TimeValue, monotonic_time, monotonic_time_nanos, wall_time};
+use axsync::spin::SpinNoIrq;
 use axtask::{
     AxTaskRef, WeakAxTaskRef, current,
     future::{block_on, timeout_at},
 };
 use event_listener::{Event, listener};
 use lazy_static::lazy_static;
-use spin::Mutex;
 use starry_signal::Signo;
 use strum::FromRepr;
 
@@ -35,35 +38,54 @@ struct Entry {
 }
 
 struct AlarmRuntime {
-    next_seq: u64,
-    timers: BTreeMap<TimerKey, Entry>,
+    timers: Vec<(TimerKey, Entry)>,
 }
 
 impl AlarmRuntime {
     const fn new() -> Self {
-        Self {
-            next_seq: 0,
-            timers: BTreeMap::new(),
-        }
+        Self { timers: Vec::new() }
     }
 
     fn insert(&mut self, deadline: Duration, task: WeakAxTaskRef, ty: ITimerType) -> TimerKey {
         let key = TimerKey {
             deadline,
-            seq: self.next_seq,
+            seq: NEXT_ALARM_SEQ.fetch_add(1, Ordering::Relaxed),
         };
-        self.next_seq = self.next_seq.wrapping_add(1);
-        self.timers.insert(key, Entry { task, ty });
+        // The number of process interval timers is small. A linear queue avoids
+        // relying on alloc::collections::BTreeMap on this LoongArch target; the
+        // latter repeatedly ended up with a low root pointer under timer churn.
+        self.timers.push((key, Entry { task, ty }));
         key
     }
 
-    fn remove(&mut self, key: TimerKey) {
-        self.timers.remove(&key);
+    fn remove(&mut self, key: TimerKey) -> Option<Entry> {
+        let index = self
+            .timers
+            .iter()
+            .position(|(candidate, _)| *candidate == key)?;
+        Some(self.timers.swap_remove(index).1)
+    }
+
+    fn first(&self) -> Option<(TimerKey, Entry)> {
+        self.timers
+            .iter()
+            .min_by_key(|(key, _)| *key)
+            .map(|(key, entry)| (*key, entry.clone()))
+    }
+
+    fn first_key(&self) -> Option<TimerKey> {
+        self.timers.iter().map(|(key, _)| *key).min()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.timers.is_empty()
     }
 }
 
+static NEXT_ALARM_SEQ: AtomicU64 = AtomicU64::new(0);
+
 lazy_static! {
-    static ref ALARM_RUNTIME: Mutex<AlarmRuntime> = Mutex::new(AlarmRuntime::new());
+    static ref ALARM_RUNTIME: SpinNoIrq<AlarmRuntime> = SpinNoIrq::new(AlarmRuntime::new());
     static ref EVENT_NEW_TIMER: Event = Event::new();
 }
 
@@ -278,7 +300,7 @@ fn entry_is_current_for_task(task: &AxTaskRef, key: TimerKey, entry: &Entry) -> 
     let Some(thr) = task.try_as_thread() else {
         return false;
     };
-    let Ok(time) = thr.time.try_borrow() else {
+    let Some(time) = thr.time.try_lock() else {
         return true;
     };
     time.entry_is_current(key, entry)
@@ -287,16 +309,11 @@ fn entry_is_current_for_task(task: &AxTaskRef, key: TimerKey, entry: &Entry) -> 
 async fn alarm_task() {
     loop {
         let mut guard = ALARM_RUNTIME.lock();
-        let Some((key, entry)) = guard
-            .timers
-            .iter()
-            .next()
-            .map(|(key, entry)| (*key, entry.clone()))
-        else {
+        let Some((key, entry)) = guard.first() else {
             drop(guard);
             listener!(EVENT_NEW_TIMER => listener);
 
-            if !ALARM_RUNTIME.lock().timers.is_empty() {
+            if !ALARM_RUNTIME.lock().is_empty() {
                 continue;
             }
             listener.await;
@@ -315,7 +332,7 @@ async fn alarm_task() {
 
         let now = monotonic_time();
         if key.deadline <= now {
-            let Some(entry) = guard.timers.remove(&key) else {
+            let Some(entry) = guard.remove(key) else {
                 continue;
             };
             drop(guard);
@@ -331,12 +348,7 @@ async fn alarm_task() {
                 .unwrap_or(TimeValue::MAX);
             drop(guard);
             listener!(EVENT_NEW_TIMER => listener);
-            if ALARM_RUNTIME
-                .lock()
-                .timers
-                .first_key_value()
-                .is_none_or(|(it, _)| *it != key)
-            {
+            if ALARM_RUNTIME.lock().first_key().is_none_or(|it| it != key) {
                 continue;
             }
             let _ = timeout_at(Some(timeout_deadline), listener).await;

@@ -126,6 +126,7 @@ macro_rules! call_dispatch {
             (PROTO_TCP, TCP_MAXSEG) => MaxSegment as Int<usize>,
 
             (PROTO_IP, IP_TTL) => Ttl as Int<u8>,
+            (PROTO_IP, IP_TOS) => TypeOfService as Int<u8>,
             (PROTO_IP, IP_RECVERR) => ReceiveError as IntBool,
             (PROTO_IPV6, IPV6_V6ONLY) => Ipv6Only as IntBool,
             (PROTO_IPV6, IPV6_RECVERR) => ReceiveError as IntBool,

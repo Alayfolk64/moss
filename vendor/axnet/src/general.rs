@@ -1,10 +1,10 @@
 use core::{
-    sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering},
     task::Waker,
     time::Duration,
 };
 
-use axerrno::{AxError, AxResult};
+use axerrno::{AxError, AxResult, LinuxError};
 use axpoll::{IoEvents, Pollable};
 use axtask::future::{block_on, poll_io, timeout};
 
@@ -29,6 +29,10 @@ pub(crate) struct GeneralOptions {
     dont_route: AtomicBool,
     /// Whether asynchronous network errors should be reported.
     recv_error: AtomicBool,
+    /// IPv4 type-of-service byte used by OpenSSH's IPQoS setting.
+    ip_tos: AtomicU32,
+    /// Pending asynchronous socket error, consumed by SO_ERROR.
+    pending_error: AtomicI32,
     /// SO_LINGER enabled flag.
     linger_enabled: AtomicBool,
     /// SO_LINGER timeout in seconds.
@@ -54,6 +58,8 @@ impl GeneralOptions {
             ipv6_only: AtomicBool::new(false),
             dont_route: AtomicBool::new(false),
             recv_error: AtomicBool::new(false),
+            ip_tos: AtomicU32::new(0),
+            pending_error: AtomicI32::new(0),
             linger_enabled: AtomicBool::new(false),
             linger_timeout_secs: AtomicU32::new(0),
 
@@ -79,6 +85,8 @@ impl GeneralOptions {
             core::ptr::addr_of_mut!((*dst).ipv6_only).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).dont_route).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).recv_error).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).ip_tos).write(AtomicU32::new(0));
+            core::ptr::addr_of_mut!((*dst).pending_error).write(AtomicI32::new(0));
             core::ptr::addr_of_mut!((*dst).linger_enabled).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).linger_timeout_secs).write(AtomicU32::new(0));
             core::ptr::addr_of_mut!((*dst).send_timeout_nanos).write(AtomicU64::new(0));
@@ -107,6 +115,14 @@ impl GeneralOptions {
 
     pub fn recv_error(&self) -> bool {
         self.recv_error.load(Ordering::Relaxed)
+    }
+
+    pub fn record_error(&self, error: LinuxError) {
+        self.pending_error.store(error.code(), Ordering::Release);
+    }
+
+    pub fn clear_error(&self) {
+        self.pending_error.store(0, Ordering::Release);
     }
 
     pub fn linger(&self) -> Linger {
@@ -245,8 +261,7 @@ impl Configurable for GeneralOptions {
         use GetSocketOption as O;
         match option {
             O::Error(error) => {
-                // TODO(mivik): actual logic
-                **error = 0;
+                **error = self.pending_error.swap(0, Ordering::AcqRel);
             }
             O::NonBlocking(nonblock) => {
                 **nonblock = self.nonblocking();
@@ -265,6 +280,9 @@ impl Configurable for GeneralOptions {
             }
             O::ReceiveError(recv_error) => {
                 **recv_error = self.recv_error();
+            }
+            O::TypeOfService(tos) => {
+                **tos = self.ip_tos.load(Ordering::Relaxed) as u8;
             }
             O::Linger(linger) => {
                 **linger = self.linger();
@@ -297,6 +315,9 @@ impl Configurable for GeneralOptions {
             }
             O::ReceiveError(recv_error) => {
                 self.recv_error.store(*recv_error, Ordering::Relaxed);
+            }
+            O::TypeOfService(tos) => {
+                self.ip_tos.store(u32::from(*tos), Ordering::Relaxed);
             }
             O::SendBuffer(size) | O::SendBufferForce(size) => {
                 self.set_send_buffer(*size);

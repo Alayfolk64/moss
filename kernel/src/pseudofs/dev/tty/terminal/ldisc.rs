@@ -2,7 +2,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::{
     future::poll_fn,
     ops::Range,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     task::{Poll, Waker},
     time::Duration,
 };
@@ -110,7 +110,7 @@ fn buffer_echo_char(term: &Termios2, ch: u8, output: &mut EchoBuffer) {
     match ch {
         b'\n' => output.extend(b"\n"),
         b'\r' => output.extend(b"\r\n"),
-        ch if ch == term.special_char(VERASE) => output.extend(b"\x08 \x08"),
+        ch if is_erase_char(term, ch) => output.extend(b"\x08 \x08"),
         ch if ch == b' ' || ch.is_ascii_graphic() => output.extend(&[ch]),
         ch if ch.is_ascii_control() && term.has_lflag(ECHOCTL) => {
             output.extend(&[b'^', (ch + 0x40)]);
@@ -119,6 +119,11 @@ fn buffer_echo_char(term: &Termios2, ch: u8, output: &mut EchoBuffer) {
             warn!("Ignored echo char: {other:#x}");
         }
     }
+}
+
+fn is_erase_char(term: &Termios2, ch: u8) -> bool {
+    let erase = term.special_char(VERASE);
+    ch == erase || (erase == b'\x7f' && ch == b'\x08')
 }
 
 struct InputReader<R, W> {
@@ -135,6 +140,7 @@ struct InputReader<R, W> {
     line_read: Option<usize>,
     clear_line_buf: Arc<AtomicBool>,
     flush_input: Arc<AtomicBool>,
+    pending_eof: Arc<AtomicUsize>,
 }
 impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
     pub fn poll(&mut self) -> bool {
@@ -184,7 +190,9 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 // ISIG characters are terminal controls, not input bytes.
                 continue;
             }
-            if term.echo() {
+            // VEOF is a line delimiter, not input data.  Linux does not echo
+            // it as "^D", even when ECHOCTL is enabled.
+            if term.echo() && ch != term.special_char(VEOF) {
                 buffer_echo_char(&term, ch, &mut echo);
             }
             if !term.canonical() {
@@ -198,7 +206,7 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 self.line_buf.clear();
                 continue;
             }
-            if ch == term.special_char(VERASE) {
+            if is_erase_char(&term, ch) {
                 self.line_buf.pop();
                 continue;
             }
@@ -209,6 +217,12 @@ impl<R: TtyRead, W: TtyWrite> InputReader<R, W> {
                 }
                 if !self.line_buf.is_empty() {
                     self.line_read = Some(0);
+                } else if ch == term.special_char(VEOF) {
+                    // A VEOF at the start of a canonical line makes the next
+                    // read return zero.  Keep it out of the byte ring because
+                    // the control character itself must never reach userspace.
+                    self.pending_eof.fetch_add(1, Ordering::Release);
+                    sent += 1;
                 }
                 continue;
             }
@@ -262,25 +276,46 @@ struct SimpleReader<R> {
 
 #[cfg(test)]
 mod tests {
-    use alloc::{vec, vec::Vec};
+    use alloc::{collections::VecDeque, sync::Arc, vec, vec::Vec};
 
     use kspin::SpinNoIrq;
     use linux_raw_sys::general::{VERASE, VINTR};
 
-    use super::{EchoBuffer, TtyWrite, buffer_echo_char};
-    use crate::pseudofs::dev::tty::terminal::termios::Termios2;
+    use super::{
+        EchoBuffer, LineDiscipline, ProcessMode, TtyConfig, TtyRead, TtyWrite, buffer_echo_char,
+    };
+    use crate::pseudofs::dev::tty::terminal::{Terminal, termios::Termios2};
 
-    struct RecordingWriter(SpinNoIrq<Vec<Vec<u8>>>);
+    #[derive(Clone)]
+    struct RecordingWriter(Arc<SpinNoIrq<Vec<Vec<u8>>>>);
 
     impl Default for RecordingWriter {
         fn default() -> Self {
-            Self(SpinNoIrq::new(Vec::new()))
+            Self(Arc::new(SpinNoIrq::new(Vec::new())))
         }
     }
 
     impl TtyWrite for RecordingWriter {
         fn write(&self, buf: &[u8]) {
             self.0.lock().push(buf.to_vec());
+        }
+    }
+
+    struct ByteReader(VecDeque<u8>);
+
+    impl ByteReader {
+        fn new(bytes: &[u8]) -> Self {
+            Self(bytes.iter().copied().collect())
+        }
+    }
+
+    impl TtyRead for ByteReader {
+        fn read(&mut self, buf: &mut [u8]) -> usize {
+            let count = buf.len().min(self.0.len());
+            for byte in &mut buf[..count] {
+                *byte = self.0.pop_front().unwrap();
+            }
+            count
         }
     }
 
@@ -314,6 +349,44 @@ mod tests {
         assert_eq!(writes.len(), 1);
         assert_eq!(writes[0].len(), super::ECHO_BUF_SIZE);
     }
+
+    #[test]
+    fn canonical_empty_eof_makes_read_return_zero_without_echo() {
+        let terminal = Arc::new(Terminal::default());
+        let writer = RecordingWriter::default();
+        let mut ldisc = LineDiscipline::new(
+            terminal,
+            TtyConfig {
+                reader: ByteReader::new(b"Hello Moss!\x04\x04"),
+                writer: writer.clone(),
+                process_mode: ProcessMode::Manual,
+            },
+        );
+        let mut buf = [0; 32];
+
+        let read = ldisc.read(&mut buf).unwrap();
+        assert_eq!(&buf[..read], b"Hello Moss!");
+        assert_eq!(ldisc.read(&mut buf), Ok(0));
+        assert_eq!(*writer.0.lock(), vec![b"Hello Moss!".to_vec()]);
+    }
+
+    #[test]
+    fn canonical_backspace_accepts_serial_bs_when_verase_is_del() {
+        let terminal = Arc::new(Terminal::default());
+        let writer = RecordingWriter::default();
+        let mut ldisc = LineDiscipline::new(
+            terminal,
+            TtyConfig {
+                reader: ByteReader::new(b"ab\x08c\n"),
+                writer,
+                process_mode: ProcessMode::Manual,
+            },
+        );
+        let mut buf = [0; 32];
+
+        let read = ldisc.read(&mut buf).unwrap();
+        assert_eq!(&buf[..read], b"ac\n");
+    }
 }
 impl<R: TtyRead> SimpleReader<R> {
     pub fn poll(&mut self) {
@@ -339,6 +412,7 @@ pub struct LineDiscipline<R, W> {
     poll_tx: Arc<PollSet>,
     clear_line_buf: Arc<AtomicBool>,
     flush_input: Arc<AtomicBool>,
+    pending_eof: Arc<AtomicUsize>,
     processor: Processor<R, W>,
 }
 
@@ -348,6 +422,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
 
         let clear_line_buf = Arc::new(AtomicBool::new(false));
         let flush_input = Arc::new(AtomicBool::new(false));
+        let pending_eof = Arc::new(AtomicUsize::new(0));
         let mut reader = InputReader {
             terminal: terminal.clone(),
 
@@ -362,6 +437,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
             line_read: None,
             clear_line_buf: clear_line_buf.clone(),
             flush_input: flush_input.clone(),
+            pending_eof: pending_eof.clone(),
         };
 
         let poll_tx = Arc::new(PollSet::new());
@@ -425,6 +501,7 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
             poll_tx,
             clear_line_buf,
             flush_input,
+            pending_eof,
             processor,
         }
     }
@@ -432,12 +509,14 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
     fn apply_signal_flush(&mut self) {
         if self.flush_input.swap(false, Ordering::Acquire) {
             self.buf_rx.clear();
+            self.pending_eof.store(0, Ordering::Release);
             self.poll_tx.wake();
         }
     }
 
     pub fn drain_input(&mut self) {
         self.buf_rx.clear();
+        self.pending_eof.store(0, Ordering::Release);
         self.clear_line_buf.store(true, Ordering::Relaxed);
     }
 
@@ -451,6 +530,8 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
             _ => {}
         }
         !self.buf_rx.is_empty()
+            || (self.terminal.load_termios().canonical()
+                && self.pending_eof.load(Ordering::Acquire) != 0)
     }
 
     pub fn register_rx_waker(&self, waker: &Waker) {
@@ -492,6 +573,17 @@ impl<R: TtyRead, W: TtyWrite> LineDiscipline<R, W> {
         let required = vmin.min(buf.len());
         if let Processor::Manual(reader) = &mut self.processor {
             reader.poll();
+        }
+        if term.canonical()
+            && self.buf_rx.is_empty()
+            && self
+                .pending_eof
+                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |pending| {
+                    pending.checked_sub(1)
+                })
+                .is_ok()
+        {
+            return Ok(0);
         }
         if self.buf_rx.occupied_len() < required {
             return Err(AxError::WouldBlock);

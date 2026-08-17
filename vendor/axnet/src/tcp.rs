@@ -403,6 +403,7 @@ impl TcpSocket {
                     true
                 }
                 _ => {
+                    self.general.record_error(LinuxError::ECONNREFUSED);
                     self.state.set(State::Closed); // connection failed
                     true
                 }
@@ -627,6 +628,7 @@ impl SocketOps for TcpSocket {
                 }
             })?
             .transit(State::Connecting, || {
+                self.general.clear_error();
                 // TODO: check remote addr unreachable
                 // let (bound_endpoint, remote_endpoint) = self.get_endpoint_pair(remote_addr)?;
                 let mut bound_endpoint = self

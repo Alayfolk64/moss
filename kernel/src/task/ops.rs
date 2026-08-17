@@ -177,8 +177,8 @@ pub fn poll_timer(task: &AxTaskRef) {
     let Some(thr) = task.try_as_thread() else {
         return;
     };
-    let Ok(mut time) = thr.time.try_borrow_mut() else {
-        // reentrant borrow, likely IRQ
+    let Some(mut time) = thr.time.try_lock() else {
+        // Another CPU or a reentrant timer path is already updating it.
         return;
     };
     time.poll(task, |signo| {
@@ -191,8 +191,8 @@ pub fn set_timer_state(task: &AxTaskRef, state: TimerState) {
     let Some(thr) = task.try_as_thread() else {
         return;
     };
-    let Ok(mut time) = thr.time.try_borrow_mut() else {
-        // reentrant borrow, likely IRQ
+    let Some(mut time) = thr.time.try_lock() else {
+        // Another CPU or a reentrant timer path is already updating it.
         return;
     };
     time.poll(task, |signo| {
@@ -285,7 +285,7 @@ fn cleanup_thread_futex_state(thr: &Thread) {
 fn cleanup_thread_runtime_state(thr: &Thread) -> (TimeValue, TimeValue) {
     thr.signal.detach_from_process();
 
-    let mut time = thr.time.borrow_mut();
+    let mut time = thr.time.lock();
     let cpu_time = time.output();
 
     time.cancel_all();

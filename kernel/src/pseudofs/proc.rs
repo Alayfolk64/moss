@@ -78,6 +78,51 @@ fn proc_uptime() -> String {
     )
 }
 
+#[cfg(feature = "net")]
+fn proc_net_dev() -> String {
+    let mut output =
+        String::from(
+            "Inter-|   Receive                                                |  Transmit\nface \
+             |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs \
+             drop fifo colls carrier compressed\nlo:       0       0    0    0    0     0          \
+             0         0        0       0    0    0    0     0       0          0\n",
+        );
+    if axnet::static_ipv4_config().is_some() {
+        output.push_str(
+            "  eth0:       0       0    0    0    0     0          0         0        0       0    \
+             0    0    0     0       0          0\n",
+        );
+    }
+    output
+}
+
+#[cfg(feature = "net")]
+fn proc_net_route() -> String {
+    let mut output = String::from(
+        "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n",
+    );
+    let Some(config) = axnet::static_ipv4_config() else {
+        return output;
+    };
+    let mask = if config.prefix_len == 0 {
+        0
+    } else {
+        u32::MAX << (32 - u32::from(config.prefix_len))
+    };
+    let network = u32::from(config.address) & mask;
+    let route_hex = |value: u32| u32::from_le_bytes(value.to_be_bytes());
+    output.push_str(&format!(
+        "eth0\t{:08X}\t00000000\t0001\t0\t0\t0\t{:08X}\t0\t0\t0\n",
+        route_hex(network),
+        route_hex(mask),
+    ));
+    output.push_str(&format!(
+        "eth0\t00000000\t{:08X}\t0003\t0\t0\t0\t00000000\t0\t0\t0\n",
+        u32::from_le_bytes(config.gateway.octets()),
+    ));
+    output
+}
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -1136,6 +1181,19 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
         "uptime",
         SimpleFile::new_regular(fs.clone(), || Ok(proc_uptime())),
     );
+    #[cfg(feature = "net")]
+    root.add("net", {
+        let mut net = DirMapping::new();
+        net.add(
+            "dev",
+            SimpleFile::new_regular(fs.clone(), || Ok(proc_net_dev())),
+        );
+        net.add(
+            "route",
+            SimpleFile::new_regular(fs.clone(), || Ok(proc_net_route())),
+        );
+        SimpleDir::new_maker(fs.clone(), Arc::new(net))
+    });
     root.add(
         "meminfo2",
         SimpleFile::new_regular(fs.clone(), || {

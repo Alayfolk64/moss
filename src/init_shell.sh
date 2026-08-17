@@ -48,16 +48,19 @@ if [ ! -s /etc/resolv.conf ]; then
     printf 'nameserver 223.5.5.5\nnameserver 1.1.1.1\n' >/etc/resolv.conf
 fi
 
-if command -v ntpd >/dev/null 2>&1; then
-    # Network bring-up must never gate the recovery shell. In particular,
-    # BusyBox ntpd uses SIGALRM while waiting for a reply, so a disconnected
-    # board used to remain in this retry loop instead of presenting a prompt.
+if [ "${MOSS_NTP_SYNC:-0}" = 1 ] && command -v ntpd >/dev/null 2>&1; then
+    # The RTC supplies boot time. NTP is opt-in because BusyBox ntpd exercises
+    # SIGALRM heavily and network availability must not affect the shell.
+    # Set MOSS_NTP_SYNC=1 before running this script to request a one-shot sync.
+    mkdir -p /var/log 2>/dev/null || true
+    echo "Synchronizing system time with NTP in background (log: /var/log/moss-ntp.log)..."
     (
-        echo "Synchronizing system time with NTP in background..."
         NTP_OK=0
         NTP_ATTEMPT=1
         while [ "$NTP_ATTEMPT" -le 3 ]; do
-            if ntpd -nq -p 203.107.6.88 || ntpd -nq -p 192.168.1.2; then
+            if ntpd -nq -p 203.107.6.88 \
+                || ntpd -nq -p 192.168.88.1 \
+                || ntpd -nq -p 192.168.1.2; then
                 NTP_OK=1
                 break
             fi
@@ -67,7 +70,7 @@ if command -v ntpd >/dev/null 2>&1; then
         if [ "$NTP_OK" -ne 1 ]; then
             echo "Warning: NTP time synchronization failed"
         fi
-    ) &
+    ) >/var/log/moss-ntp.log 2>&1 &
 fi
 
 echo "Entering interactive shell..."

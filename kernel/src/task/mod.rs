@@ -10,11 +10,7 @@ mod timer;
 mod user;
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
-use core::{
-    cell::RefCell,
-    ops::Deref,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicUsize, Ordering},
-};
+use core::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 use axpoll::PollSet;
 use axsync::{Mutex, spin::SpinNoIrq};
@@ -110,20 +106,6 @@ impl ProcessNamespaces {
     }
 }
 
-///  A wrapper type that assumes the inner type is `Sync`.
-#[repr(transparent)]
-pub struct AssumeSync<T>(pub T);
-
-unsafe impl<T> Sync for AssumeSync<T> {}
-
-impl<T> Deref for AssumeSync<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 /// The inner data of a thread.
 pub struct Thread {
     /// The process data shared by all threads in the process.
@@ -150,9 +132,9 @@ pub struct Thread {
 
     /// Time manager
     ///
-    /// This is assumed to be `Sync` because it's only borrowed mutably during
-    /// context switches, which is exclusive to the current thread.
-    pub time: AssumeSync<RefCell<TimeManager>>,
+    /// Timer callbacks can inspect or update this state from another CPU, so
+    /// it must be protected by a real SMP- and IRQ-safe lock.
+    pub time: SpinNoIrq<TimeManager>,
 
     /// The OOM score adjustment value.
     oom_score_adj: AtomicI32,
@@ -188,7 +170,7 @@ impl Thread {
             clear_child_tid: AtomicUsize::new(0),
             robust_list_head: AtomicUsize::new(0),
             pdeath_signal: AtomicU32::new(0),
-            time: AssumeSync(RefCell::new(TimeManager::new())),
+            time: SpinNoIrq::new(TimeManager::new()),
             exit: Arc::new(AtomicBool::new(false)),
             exec_exit: AtomicBool::new(false),
             oom_score_adj: AtomicI32::new(200),

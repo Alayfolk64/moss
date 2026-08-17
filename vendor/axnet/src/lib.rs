@@ -40,6 +40,7 @@ mod wrapper;
 
 use alloc::{borrow::ToOwned, boxed::Box};
 use core::{
+    net::Ipv4Addr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
@@ -77,6 +78,25 @@ pub(crate) fn eth0_mac() -> Option<[u8; 6]> {
     (encoded != 0).then(|| {
         let bytes = encoded.to_be_bytes();
         [bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
+    })
+}
+
+/// The statically configured IPv4 state exposed to Linux compatibility APIs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StaticIpv4Config {
+    pub address: Ipv4Addr,
+    pub prefix_len: u8,
+    pub gateway: Ipv4Addr,
+    pub mac: [u8; 6],
+}
+
+/// Returns the configured `eth0` state once a physical NIC was registered.
+pub fn static_ipv4_config() -> Option<StaticIpv4Config> {
+    Some(StaticIpv4Config {
+        address: IP.parse().ok()?,
+        prefix_len: IP_PREFIX,
+        gateway: GATEWAY.parse().ok()?,
+        mac: eth0_mac()?,
     })
 }
 

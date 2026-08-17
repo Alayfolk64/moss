@@ -73,12 +73,33 @@ fi
 [[ $(fdtget -t s "$dtb" /poweroff compatible) == syscon-poweroff ]]
 
 echo "[2/7] run host-side state-machine tests"
+
+rg -q 'pub time: SpinNoIrq<TimeManager>' "$repo_root/kernel/src/task/mod.rs"
+rg -q 'static ref ALARM_RUNTIME: SpinNoIrq<AlarmRuntime>' \
+    "$repo_root/kernel/src/task/timer.rs"
+rg -q 'timers: Vec<(TimerKey, Entry)>' "$repo_root/kernel/src/task/timer.rs"
+if rg -q 'BTreeMap<TimerKey, Entry>' "$repo_root/kernel/src/task/timer.rs"; then
+    echo "LS2K1000 alarm queue must not use the repeatedly corrupted BTreeMap path" >&2
+    exit 1
+fi
+rg -q 'MOSS_NTP_SYNC:-0' "$repo_root/src/init_shell.sh"
+rg -q 'const SIOCGIFCONF: u32 = 0x8912' "$repo_root/kernel/src/file/net.rs"
+rg -q 'root.add("net"' "$repo_root/kernel/src/pseudofs/proc.rs"
+rg -q 'MOSS_NET GMAC_RESET_TIMEOUT' \
+    "$repo_root/vendor/axdriver_net/src/dwmac_ls2k1000.rs"
+rg -q 'MOSS_NET GMAC_READY' "$repo_root/vendor/axdriver_net/src/dwmac_ls2k1000.rs"
+if rg -q 'AssumeSync<RefCell<TimeManager>>' "$repo_root/kernel/src/task/mod.rs"; then
+    echo "thread timer state must not use an unsynchronized RefCell on SMP" >&2
+    exit 1
+fi
+
 test_bin_dir="$repo_root/target/driver-tests"
 mkdir -p "$test_bin_dir"
 state_tests=(
     "vendor/axplat/src/console_rx.rs:console-rx-buffer-tests"
     "vendor/axplat-loongarch64-ls2k1000/src/boot_arg.rs:ls2k1000-boot-arg-tests"
     "vendor/axplat-loongarch64-ls2k1000/src/node_clock_state.rs:ls2k1000-node-clock-tests"
+    "vendor/axplat-loongarch64-ls2k1000/src/rtc_state.rs:ls2k1000-rtc-state-tests"
     "vendor/fdt-parser/src/lib.rs:fdt-parser-tests"
     "vendor/axhal/src/ram_source.rs:ram-source-tests"
     "vendor/axplat-loongarch64-ls2k1000/src/mem_layout.rs:ls2k1000-memory-layout-tests"

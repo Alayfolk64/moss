@@ -73,7 +73,9 @@ impl EthernetDevice {
         F: FnOnce(&mut [u8]),
     {
         if let Err(err) = inner.recycle_tx_buffers() {
-            warn!("recycle_tx_buffers failed: {:?}", err);
+            if !matches!(err, DevError::Again) {
+                warn!("recycle_tx_buffers failed: {:?}", err);
+            }
             return;
         }
 
@@ -360,7 +362,9 @@ impl Device for EthernetDevice {
 
     fn poll_complete(&mut self) -> bool {
         if let Err(err) = self.inner.recycle_tx_buffers() {
-            warn!("recycle_tx_buffers failed: {:?}", err);
+            if !matches!(err, DevError::Again) {
+                warn!("recycle_tx_buffers failed: {:?}", err);
+            }
         }
         self.inner.poll_complete()
     }

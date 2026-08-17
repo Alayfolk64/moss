@@ -31,5 +31,6 @@ mod mp;
 mod node_clock;
 mod node_clock_state;
 mod power;
+mod rtc_state;
 mod time;
 mod watchdog;

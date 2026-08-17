@@ -60,7 +60,7 @@ struct Rusage {
 
 impl Rusage {
     fn from_thread(thread: &Thread) -> Self {
-        if let Ok(time) = thread.time.try_borrow() {
+        if let Some(time) = thread.time.try_lock() {
             let (utime, stime) = time.output();
             thread
                 .proc_data

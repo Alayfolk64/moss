@@ -104,12 +104,12 @@ impl TaskStat {
         let ppid = proc.parent().map_or(0, |p| p.pid());
         let pgrp = proc.group().pgid();
         let session = proc.group().session().sid();
-        let (utime_micros, stime_micros) = match thread.time.try_borrow() {
-            Ok(time) => {
+        let (utime_micros, stime_micros) = match thread.time.try_lock() {
+            Some(time) => {
                 let (utime, stime) = time.output();
                 (utime.as_micros(), stime.as_micros())
             }
-            Err(_) => (0, 0),
+            None => (0, 0),
         };
         // /proc/[pid]/stat reports utime/stime in USER_HZ ticks (usually 100).
         // Use ceil conversion to avoid reporting 0 for a long time in syscall-heavy

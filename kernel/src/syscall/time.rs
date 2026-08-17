@@ -9,7 +9,7 @@ use axhal::time::{
     TimeValue, monotonic_time, monotonic_time_nanos, nanos_to_ticks, realtime_time,
     set_realtime_offset_nanos, set_rtc_time, wall_time,
 };
-use axtask::{WaitQueue, current, yield_now};
+use axtask::{WaitQueue, current};
 use lazy_static::lazy_static;
 use linux_raw_sys::general::{
     __kernel_clockid_t, CLOCK_BOOTTIME, CLOCK_BOOTTIME_ALARM, CLOCK_MONOTONIC,
@@ -176,7 +176,7 @@ pub fn sys_clock_gettime(clock_id: __kernel_clockid_t, ts: *mut timespec) -> AxR
             process_cpu_time(current().as_thread().proc_data.proc.pid()).unwrap_or(TimeValue::ZERO)
         }
         CLOCK_THREAD_CPUTIME_ID => {
-            let (utime, stime) = current().as_thread().time.borrow().output();
+            let (utime, stime) = current().as_thread().time.lock().output();
             time_value_add(utime, stime)
         }
         _ => unreachable!("clock id was validated above"),
@@ -230,15 +230,15 @@ pub(crate) fn set_child_timens_offset(clock_id: u32, secs: i64, nsecs: i64) -> A
     Ok(())
 }
 
-pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> AxResult<isize> {
-    if clock_id as u32 != CLOCK_REALTIME {
-        return Err(AxError::InvalidInput);
-    }
-
-    let target = unsafe { ts.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
+fn ensure_time_set_permitted() -> AxResult<()> {
     if current().as_thread().proc_data.euid() != 0 || !current_has_cap(CAP_SYS_TIME) {
         return Err(AxError::OperationNotPermitted);
     }
+    Ok(())
+}
+
+fn set_realtime_clock(target: TimeValue) -> AxResult<()> {
+    ensure_time_set_permitted()?;
 
     let target_nanos: i128 = target
         .as_nanos()
@@ -254,6 +254,29 @@ pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> A
     set_realtime_offset_nanos(offset);
     let _ = set_rtc_time(target.as_secs());
     wake_posix_timer_workers();
+    Ok(())
+}
+
+pub fn sys_clock_settime(clock_id: __kernel_clockid_t, ts: *const timespec) -> AxResult<isize> {
+    if clock_id as u32 != CLOCK_REALTIME {
+        return Err(AxError::InvalidInput);
+    }
+
+    let target = unsafe { ts.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
+    set_realtime_clock(target)?;
+    Ok(0)
+}
+
+pub fn sys_settimeofday(tv: *const timeval, _tz: *const timezone) -> AxResult<isize> {
+    let Some(tv) = tv.nullable() else {
+        // MOSS keeps the kernel timezone fixed at UTC.  Linux permits a null
+        // timeval for the obsolete timezone-only operation; accepting it is
+        // sufficient because no per-kernel timezone state is maintained.
+        ensure_time_set_permitted()?;
+        return Ok(0);
+    };
+    let target = unsafe { tv.vm_read_uninit()?.assume_init() }.try_into_time_value()?;
+    set_realtime_clock(target)?;
     Ok(0)
 }
 
@@ -316,7 +339,7 @@ pub struct Tms {
 
 pub fn sys_times(tms: *mut Tms) -> AxResult<isize> {
     let curr = current();
-    let (utime, stime) = curr.as_thread().time.borrow().output();
+    let (utime, stime) = curr.as_thread().time.lock().output();
     let utime = to_user_hz_ticks(utime.as_micros()) as usize;
     let stime = to_user_hz_ticks(stime.as_micros()) as usize;
     let child_time = curr.as_thread().proc_data.child_cpu_time.lock();
@@ -340,7 +363,7 @@ fn to_user_hz_ticks(micros: u128) -> u64 {
 
 pub fn sys_getitimer(which: i32, value: *mut itimerval) -> AxResult<isize> {
     let ty = ITimerType::from_repr(which).ok_or(AxError::InvalidInput)?;
-    let (it_interval, it_value) = current().as_thread().time.borrow().get_itimer(ty);
+    let (it_interval, it_value) = current().as_thread().time.lock().get_itimer(ty);
 
     value.vm_write(itimerval {
         it_interval: timeval::from_time_value(it_interval),
@@ -371,12 +394,11 @@ pub fn sys_setitimer(
 
     debug!("sys_setitimer <= type: {ty:?}, interval: {interval:?}, remained: {remained:?}");
 
-    let old = loop {
-        if let Ok(mut time) = curr.as_thread().time.try_borrow_mut() {
-            break time.set_itimer(ty, interval, remained);
-        }
-        yield_now();
-    };
+    let old = curr
+        .as_thread()
+        .time
+        .lock()
+        .set_itimer(ty, interval, remained);
 
     if let Some(old_value) = old_value.nullable() {
         old_value.vm_write(itimerval {
@@ -897,7 +919,7 @@ fn task_cpu_time(task: &axtask::AxTaskRef) -> TimeValue {
     let Some(thread) = task.try_as_thread() else {
         return TimeValue::ZERO;
     };
-    let (utime, stime) = thread.time.borrow().output();
+    let (utime, stime) = thread.time.lock().output();
     time_value_add(utime, stime)
 }
 
