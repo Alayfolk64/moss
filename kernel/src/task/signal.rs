@@ -71,23 +71,10 @@ pub fn check_signals_result(
         return SignalCheckResult::None;
     }
 
-    crate::syscall::ptrace_wait_if_stopped(thr);
+    crate::syscall::ptrace_wait_if_stopped(thr, uctx);
 
     if thr.pending_exit() || thr.exec_exit_requested() {
         return SignalCheckResult::None;
-    }
-
-    let pid = thr.proc_data.proc.pid();
-    if crate::syscall::ptrace_is_traced(pid) {
-        let mask = !thr.signal.blocked();
-        if let Some(sig) = thr.signal.dequeue_signal(&mask) {
-            let signo = sig.signo();
-            if crate::syscall::ptrace_intercept_signal(thr, signo) {
-                return SignalCheckResult::Other;
-            }
-            do_exit(signo as i32, true);
-            return SignalCheckResult::Other;
-        }
     }
 
     let Some((sig, os_action)) = thr.signal.check_signals(uctx, restore_blocked) else {
@@ -95,6 +82,9 @@ pub fn check_signals_result(
     };
 
     let signo = sig.signo();
+    if crate::syscall::ptrace_intercept_signal(thr, signo, uctx) {
+        return SignalCheckResult::Other;
+    }
     match os_action {
         SignalOSAction::Terminate => {
             do_exit(signo as i32, true);
@@ -173,6 +163,7 @@ pub fn send_signal_to_thread(tgid: Option<Pid>, tid: Pid, sig: Option<SignalInfo
             thread.proc_data.stop_event.wake();
             wake_waiting_parent(&thread.proc_data);
         } else if signo == Signo::SIGKILL {
+            crate::syscall::ptrace_force_kill_wake(pid);
             thread.proc_data.stop_event.wake();
         }
         if thread.signal.process().signal_ignored(signo)
@@ -198,6 +189,7 @@ pub fn send_signal_to_process(pid: Pid, sig: Option<SignalInfo>) -> AxResult<()>
             proc_data.stop_event.wake();
             wake_waiting_parent(&proc_data);
         } else if signo == Signo::SIGKILL {
+            crate::syscall::ptrace_force_kill_wake(proc_data.proc.pid());
             proc_data.stop_event.wake();
         }
         if proc_data.signal.signal_ignored(signo)

@@ -35,7 +35,7 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
 
             let thr = curr.as_thread();
             while !thr.pending_exit() {
-                ptrace_wait_if_stopped(thr);
+                ptrace_wait_if_stopped(thr, &mut uctx);
                 if exit_if_requested_by_exec(thr) {
                     break;
                 }
@@ -120,7 +120,13 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                                 }
                                 Signo::SIGBUS
                             }
-                            ExceptionKind::Breakpoint => Signo::SIGTRAP,
+                            ExceptionKind::Breakpoint => {
+                                crate::syscall::ptrace_complete_singlestep_breakpoint(
+                                    thr.proc_data.proc.pid(),
+                                    &mut uctx,
+                                );
+                                Signo::SIGTRAP
+                            }
                             ExceptionKind::IllegalInstruction => Signo::SIGILL,
                             _ => Signo::SIGTRAP,
                         };
