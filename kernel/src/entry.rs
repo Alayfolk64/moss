@@ -142,7 +142,7 @@ pub fn init(args: &[String], envs: &[String]) {
         .expect("Failed to create user address space");
     boot_progress("user-address-space-ready");
 
-    let (entry_vaddr, ustack_top) = load_user_app(&mut uspace, None, &args, envs)
+    let (entry_vaddr, ustack_top, auxv) = load_user_app(&mut uspace, None, &args, envs)
         .unwrap_or_else(|e| panic!("Failed to load user app: {}", e));
     boot_progress("user-image-loaded");
 
@@ -160,6 +160,7 @@ pub fn init(args: &[String], envs: &[String]) {
         proc,
         path,
         Arc::new(args),
+        auxv,
         Arc::new(AddrSpaceLock::new(uspace)),
         Arc::default(),
         None,

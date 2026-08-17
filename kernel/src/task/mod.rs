@@ -20,6 +20,7 @@ use axpoll::PollSet;
 use axsync::{Mutex, spin::SpinNoIrq};
 use axtask::{TaskExt, TaskInner, WaitQueue};
 use extern_trait::extern_trait;
+use kernel_elf_parser::AuxEntry;
 use scope_local::{ActiveScope, Scope};
 use spin::RwLock;
 use starry_process::Process;
@@ -322,6 +323,8 @@ pub struct ProcessData {
     pub exe_path: RwLock<String>,
     /// The command line arguments
     pub cmdline: RwLock<Arc<Vec<String>>>,
+    /// ELF auxiliary-vector entries exported through `/proc/[pid]/auxv`.
+    pub auxv: RwLock<Vec<AuxEntry>>,
     /// The virtual memory address space.
     // TODO: scopify
     aspace: RwLock<Arc<AddrSpaceLock>>,
@@ -390,6 +393,7 @@ impl ProcessData {
         proc: Arc<Process>,
         exe_path: String,
         cmdline: Arc<Vec<String>>,
+        auxv: Vec<AuxEntry>,
         aspace: Arc<AddrSpaceLock>,
         signal_actions: Arc<SpinNoIrq<SignalActions>>,
         exit_signal: Option<Signo>,
@@ -398,6 +402,7 @@ impl ProcessData {
             proc,
             exe_path: RwLock::new(exe_path),
             cmdline: RwLock::new(cmdline),
+            auxv: RwLock::new(auxv),
             aspace: RwLock::new(aspace),
             vfork_completion: SpinNoIrq::new(None),
             exec_lock: Mutex::new(()),

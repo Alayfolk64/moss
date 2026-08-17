@@ -272,7 +272,7 @@ fn execve_common(
 
     let mut new_aspace = new_user_aspace_empty()?;
     copy_from_kernel(&mut new_aspace)?;
-    let (entry_point, user_stack_base) = if let Some(load_loc) = load_loc {
+    let (entry_point, user_stack_base, auxv) = if let Some(load_loc) = load_loc {
         load_user_app_from_location(&mut new_aspace, load_loc, path.as_str(), &args, &envs)?
     } else {
         load_user_app(&mut new_aspace, Some(path.as_str()), &args, &envs)?
@@ -325,6 +325,7 @@ fn execve_common(
     notify_fanotify_open_exec_path(&exec_path);
     *proc_data.exe_path.write() = exec_path;
     *proc_data.cmdline.write() = Arc::new(args);
+    *proc_data.auxv.write() = auxv;
 
     proc_data.set_heap_top(USER_HEAP_BASE);
 

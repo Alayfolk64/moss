@@ -364,7 +364,7 @@ pub fn load_user_app(
     path: Option<&str>,
     args: &[String],
     envs: &[String],
-) -> AxResult<(VirtAddr, VirtAddr)> {
+) -> AxResult<(VirtAddr, VirtAddr, Vec<kernel_elf_parser::AuxEntry>)> {
     load_user_app_from_source(uspace, path, None, args, envs)
 }
 
@@ -374,7 +374,7 @@ pub fn load_user_app_from_location(
     path: &str,
     args: &[String],
     envs: &[String],
-) -> AxResult<(VirtAddr, VirtAddr)> {
+) -> AxResult<(VirtAddr, VirtAddr, Vec<kernel_elf_parser::AuxEntry>)> {
     load_user_app_from_source(uspace, Some(path), Some(loc), args, envs)
 }
 
@@ -384,7 +384,7 @@ fn load_user_app_from_source(
     loc: Option<Location>,
     args: &[String],
     envs: &[String],
-) -> AxResult<(VirtAddr, VirtAddr)> {
+) -> AxResult<(VirtAddr, VirtAddr, Vec<kernel_elf_parser::AuxEntry>)> {
     let path = path
         .or_else(|| args.first().map(String::as_str))
         .ok_or(AxError::InvalidInput)?;
@@ -449,5 +449,5 @@ fn load_user_app_from_source(
         Backend::new_alloc(heap_start, PageSize::Size4K),
     )?;
 
-    Ok((entry, user_sp))
+    Ok((entry, user_sp, auxv))
 }

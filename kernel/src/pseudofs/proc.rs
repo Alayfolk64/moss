@@ -11,6 +11,7 @@ use core::{
     any::Any,
     ffi::CStr,
     iter,
+    mem::size_of,
     sync::atomic::{AtomicUsize, Ordering},
     task::Context,
 };
@@ -20,6 +21,7 @@ use axfs_ng_vfs::{
     DeviceId, FileNodeOps, Filesystem, FilesystemOps, Metadata, MetadataUpdate, NodeFlags, NodeOps,
     NodePermission, NodeType, VfsError, VfsResult,
 };
+use axhal::paging::MappingFlags;
 use axpoll::{IoEvents, Pollable};
 use axsync::Mutex;
 use axtask::{AxTaskRef, WeakAxTaskRef, current};
@@ -28,6 +30,7 @@ use linux_raw_sys::{
     general::{CLOCK_BOOTTIME, CLOCK_MONOTONIC, CLONE_NEWPID, CLONE_NEWUSER, CLONE_NEWUTS},
     ioctl::{NS_GET_NSTYPE, NS_GET_OWNER_UID, NS_GET_PARENT, NS_GET_USERNS},
 };
+use memory_addr::{MemoryAddr, VirtAddr};
 use starry_process::{Process, init_proc};
 use starry_vm::VmMutPtr;
 
@@ -35,7 +38,7 @@ use crate::{
     file::{FD_TABLE, FileLike, Kstat, add_file_like, pipe_max_size, set_pipe_max_size},
     pseudofs::{
         DirMaker, DirMapping, NodeOpsMux, RwFile, SimpleDir, SimpleDirOps, SimpleFile,
-        SimpleFileOperation, SimpleFs, StaticFile,
+        SimpleFileOperation, SimpleFs, SimpleFsNode, StaticFile,
     },
     task::{AsThread, NamespaceState, TaskStat, get_task, tasks},
 };
@@ -128,6 +131,7 @@ fn task_status(task: &AxTaskRef) -> String {
     format!(
         "Tgid:\t{}\n\
         Pid:\t{}\n\
+        TracerPid:\t{}\n\
         Uid:\t0 0 0 0\n\
         Gid:\t0 0 0 0\n\
         VmHWM:\t{} kB\n\
@@ -140,6 +144,7 @@ fn task_status(task: &AxTaskRef) -> String {
         Mems_allowed_list:\t0",
         proc_data.proc.pid(),
         task.id().as_u64(),
+        crate::syscall::ptrace_tracer_pid(proc_data.proc.pid()).unwrap_or(0),
         hwm_kb,
         rss_kb,
         crate::syscall::mmap_locked_kb(),
@@ -151,6 +156,7 @@ fn process_status(process: &Process) -> String {
     format!(
         "Tgid:\t{}\n\
         Pid:\t{}\n\
+        TracerPid:\t0\n\
         Uid:\t0 0 0 0\n\
         Gid:\t0 0 0 0\n\
         VmHWM:\t{} kB\n\
@@ -198,6 +204,123 @@ fn proc_pagemap(fs: Arc<SimpleFs>) -> Arc<SimpleFile> {
         }
         Ok(data)
     })
+}
+
+struct ProcMemFile {
+    node: SimpleFsNode,
+    task: WeakAxTaskRef,
+}
+
+impl ProcMemFile {
+    fn new(fs: Arc<SimpleFs>, task: WeakAxTaskRef) -> Arc<Self> {
+        Arc::new(Self {
+            node: SimpleFsNode::new(
+                fs,
+                NodeType::RegularFile,
+                NodePermission::from_bits_truncate(0o600),
+            ),
+            task,
+        })
+    }
+
+    fn target(&self) -> VfsResult<AxTaskRef> {
+        let target = self.task.upgrade().ok_or(VfsError::NotFound)?;
+        let caller = current().as_thread().proc_data.proc.pid();
+        let target_pid = target.as_thread().proc_data.proc.pid();
+        if caller != target_pid && !crate::syscall::ptrace_stopped_by(target_pid, caller) {
+            return Err(VfsError::PermissionDenied);
+        }
+        Ok(target)
+    }
+}
+
+#[inherit_methods_macro::inherit_methods(from = "self.node")]
+impl NodeOps for ProcMemFile {
+    fn inode(&self) -> u64;
+    fn metadata(&self) -> VfsResult<Metadata>;
+    fn update_metadata(&self, update: MetadataUpdate) -> VfsResult<()>;
+    fn filesystem(&self) -> &dyn FilesystemOps;
+    fn sync(&self, data_only: bool) -> VfsResult<()>;
+
+    fn into_any(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
+        self
+    }
+
+    fn len(&self) -> VfsResult<u64> {
+        Ok(0)
+    }
+
+    fn flags(&self) -> NodeFlags {
+        NodeFlags::NON_CACHEABLE
+    }
+}
+
+impl FileNodeOps for ProcMemFile {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> VfsResult<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let address = usize::try_from(offset).map_err(|_| VfsError::BadAddress)?;
+        let target = self.target()?;
+        let aspace = target.as_thread().proc_data.aspace();
+        let mut aspace = aspace.lock();
+        // `/proc/pid/mem` follows `pread(2)` partial-I/O semantics: a request
+        // that begins in a VMA may return the prefix up to that VMA's end.
+        // GDB deliberately reads chunks which can cross an ELF segment gap.
+        // Requiring the whole buffer to be mapped makes native GDB lose the
+        // dynamic link map (notably for LoongArch PIE executables).
+        let start = VirtAddr::from_usize(address);
+        let area = aspace.find_area(start).ok_or(VfsError::BadAddress)?;
+        let len = buf.len().min(area.end() - start);
+        let end = address.checked_add(len).ok_or(VfsError::BadAddress)?;
+        let start_page = VirtAddr::from_usize(address).align_down_4k();
+        let end_page = VirtAddr::from_usize(end).align_up_4k();
+        aspace.populate_area(start_page, end_page - start_page, MappingFlags::READ)?;
+        aspace.read(start, &mut buf[..len])?;
+        Ok(len)
+    }
+
+    fn write_at(&self, buf: &[u8], offset: u64) -> VfsResult<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let address = usize::try_from(offset).map_err(|_| VfsError::BadAddress)?;
+        let target = self.target()?;
+        let target_pid = target.as_thread().proc_data.proc.pid();
+        let aspace = target.as_thread().proc_data.aspace();
+        let mut aspace = aspace.lock();
+        let start = VirtAddr::from_usize(address);
+        let area = aspace.find_area(start).ok_or(VfsError::BadAddress)?;
+        let len = buf.len().min(area.end() - start);
+        let end = address.checked_add(len).ok_or(VfsError::BadAddress)?;
+        let start_page = VirtAddr::from_usize(address).align_down_4k();
+        let end_page = VirtAddr::from_usize(end).align_up_4k();
+        aspace.populate_area(start_page, end_page - start_page, MappingFlags::READ)?;
+        aspace.write(start, &buf[..len])?;
+        drop(aspace);
+        crate::syscall::ptrace_note_text_modified(target_pid);
+        Ok(len)
+    }
+
+    fn append(&self, _buf: &[u8]) -> VfsResult<(usize, u64)> {
+        Err(VfsError::InvalidInput)
+    }
+
+    fn set_len(&self, _len: u64) -> VfsResult<()> {
+        Err(VfsError::InvalidInput)
+    }
+
+    fn set_symlink(&self, _target: &str) -> VfsResult<()> {
+        Err(VfsError::InvalidInput)
+    }
+}
+
+impl Pollable for ProcMemFile {
+    fn poll(&self) -> IoEvents {
+        IoEvents::IN | IoEvents::OUT
+    }
+
+    fn register(&self, _context: &mut Context<'_>, _events: IoEvents) {}
 }
 
 fn proc_rw_file(fs: Arc<SimpleFs>, initial: impl Into<Vec<u8>>) -> Arc<SimpleFile> {
@@ -727,9 +850,11 @@ impl SimpleDirOps for ThreadDir {
                 "oom_score_adj",
                 "task",
                 "maps",
+                "mem",
                 "pagemap",
                 "mounts",
                 "cmdline",
+                "auxv",
                 "comm",
                 "exe",
                 "fd",
@@ -788,6 +913,7 @@ impl SimpleDirOps for ThreadDir {
                 Ok(crate::syscall::mmap_proc_maps(pid, &aspace))
             })
             .into(),
+            "mem" => ProcMemFile::new(fs, Arc::downgrade(&task)).into(),
             "pagemap" => proc_pagemap(fs).into(),
             "mounts" => {
                 SimpleFile::new_regular(fs, move || Ok(crate::syscall::proc_mounts())).into()
@@ -800,6 +926,18 @@ impl SimpleDirOps for ThreadDir {
                     buf.push(0);
                 }
                 Ok(buf)
+            })
+            .into(),
+            "auxv" => SimpleFile::new_regular(fs, move || {
+                let auxv = task.as_thread().proc_data.auxv.read();
+                let mut bytes = Vec::with_capacity((auxv.len() + 1) * 2 * size_of::<usize>());
+                for entry in auxv.iter() {
+                    bytes.extend_from_slice(&(entry.get_type() as usize).to_ne_bytes());
+                    bytes.extend_from_slice(&entry.value().to_ne_bytes());
+                }
+                bytes.extend_from_slice(&0usize.to_ne_bytes());
+                bytes.extend_from_slice(&0usize.to_ne_bytes());
+                Ok(bytes)
             })
             .into(),
             "comm" => SimpleFile::new_regular(
