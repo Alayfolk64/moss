@@ -648,6 +648,32 @@ impl SendFile {
             }
         }
     }
+
+    /// Roll back bytes that were read but could not be written.
+    ///
+    /// `sendfile` and the file-backed forms of `splice`/`copy_file_range`
+    /// advance their input position only by the number of bytes actually
+    /// written.  Reads from a pipe or socket cannot be rewound here; those
+    /// endpoints keep their existing best-effort behavior.
+    fn rewind_read(&mut self, bytes: usize) -> AxResult {
+        if bytes == 0 {
+            return Ok(());
+        }
+
+        match self {
+            SendFile::Direct(file) => {
+                if let Some(file) = file.downcast_ref::<File>() {
+                    file.inner().seek(SeekFrom::Current(-(bytes as i64)))?;
+                }
+            }
+            SendFile::Offset(_, offset) => {
+                let off = offset.vm_read()?;
+                let off = off.checked_sub(bytes as u64).ok_or(AxError::InvalidInput)?;
+                offset.vm_write(off)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 fn do_send(mut src: SendFile, mut dst: SendFile, len: usize) -> AxResult<usize> {
@@ -669,13 +695,29 @@ fn do_send(mut src: SendFile, mut dst: SendFile, len: usize) -> AxResult<usize> 
             break;
         }
 
-        let bytes_written = dst.write(&buf[..bytes_read])?;
-        if bytes_written < bytes_read {
-            break;
-        }
+        let bytes_written = match dst.write(&buf[..bytes_read]) {
+            Ok(n) if n <= bytes_read => n,
+            Ok(_) => return Err(AxError::InvalidInput),
+            Err(err) => {
+                // The input read already advanced its position.  Restore it
+                // before returning EAGAIN (or another output error), otherwise
+                // the next call silently skips a block of the input file.
+                src.rewind_read(bytes_read)?;
+                if total_written > 0 {
+                    break;
+                }
+                return Err(err);
+            }
+        };
 
         total_written += bytes_written;
         remaining -= bytes_written;
+        if bytes_written < bytes_read {
+            // A short socket write is a successful partial send.  Account for
+            // those bytes and leave the unwritten suffix for the next syscall.
+            src.rewind_read(bytes_read - bytes_written)?;
+            break;
+        }
     }
 
     Ok(total_written)
