@@ -26,6 +26,11 @@ if $pc == $moss_before_pc
   quit 1
 end
 printf "GDB_NATIVE_STEPI_DONE before=%p after=%p\n", $moss_before_pc, $pc
+tbreak gdb-native-demo.c:24
+continue
+echo GDB_NATIVE_SOURCE_STEP_BEGIN\n
+step
+echo GDB_NATIVE_SOURCE_STEP_DONE\n
 continue
 echo GDB_NATIVE_SMOKE_DONE\n
 quit 0

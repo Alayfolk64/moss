@@ -8,7 +8,7 @@
 
 | 平台 | 架构 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| QEMU virt | RISC-V 64 | 通过 | GDB 15.2 完成断点、运行、回溯、寄存器、内存、单步和继续；退出正常；只读 fsck 通过 |
+| QEMU virt | RISC-V 64 | 通过 | GDB 15.2 完成断点、运行、回溯、寄存器、内存、指令单步、跨 `printf` 源码单步和继续；退出正常；只读 fsck 通过 |
 | QEMU virt | LoongArch64 | 通过 | 同一合同通过；只读 fsck 通过 |
 | VisionFive 2 | RISC-V 64 | 尚未执行实体验收 | 当前主机没有 VF2 串口设备；runner 在构建、TFTP 和分区操作前以 rc=2 停止 |
 | LS2K1000LA | LoongArch64 | 尚未执行实体验收 | 当前主机没有龙芯板串口设备；runner 在构建、TFTP 和分区操作前以 rc=2 停止 |
@@ -67,6 +67,15 @@ LoongArch64 计算普通顺序执行、条件分支、`b/bl`、`jirl` 的下一 
 `ebreak`/`break`，继续 tracee；陷阱到达后恢复原指令、刷新 I-cache，再把 tracee以 `SIGTRAP`
 停住。这个过程保证 `stepi` 只执行一条指令，而不是直接把 PC 改到下一地址从而跳过副作用。
 
+调试器修改只读可执行 VMA 时有一个额外约束：可以以内核权限写入，但必须先让私有映射完成
+COW。原实现只以 `READ` 物化页，随后 `AddrSpace::write` 直接写物理页；当 GDB 的源码级 `step`
+把临时断点放进 musl/`printf` 时，这会污染其他进程共享的 ELF 文件缓存页，未被跟踪的 GDB 或
+shell 也可能执行到该 `break`，最终出现 `Trace/breakpoint trap (core dumped)`。
+
+修复后，`PTRACE_POKETEXT/POKEDATA`、两种架构的软件单步写指令和 `/proc/[pid]/mem` 写路径都先以
+`WRITE` 访问物化页。`CowBackend` 因此为 tracee 分配私有页，同时保持用户可见的 RX 权限不变；
+临时断点的写入和恢复都不再泄漏到共享代码页。
+
 ### 3.3 GDB 依赖的 procfs
 
 本次同时补齐：
@@ -122,6 +131,10 @@ info registers
 x/4gx $sp
 stepi
 continue
+tbreak gdb-native-demo.c:24
+continue
+step
+continue
 ```
 
 判定通过不是只搜索最后一行。`scripts/gdb_native_workload.py` 同时要求：
@@ -129,10 +142,10 @@ continue
 - breakpoint 已设置且命中 `native_marker`；
 - backtrace 同时出现 `native_marker`、`demo_worker`、`demo_entry`、`main`；
 - proc mappings、ELF files、auxv、`TracerPid`、寄存器和栈内存都有输出；
-- `stepi` 前后 PC 都能解析且不相等；
+- `stepi` 前后 PC 都能解析且不相等；源码级 `step` 能从 `main` 的 `printf` 行进入并返回到下一行；
 - demo 打印 `value=42`，GDB 报告 inferior 正常退出；
 - 输出中不得出现 `Cannot access memory`、`Couldn't get registers`、ptrace ENOSYS、程序未运行等
-  失败文本。
+  失败文本，也不得出现 `Trace/breakpoint trap` 或 `core dumped`。
 
 当前使用非 PIE `ET_EXEC` 是明确的兼容边界，不是关闭调试功能。LoongArch Alpine GDB 15.2 的
 native PIE 启动路径在第一个用户断点前没有把主程序符号地址加上映射基址，曾尝试访问 `0x7e88` 并在
@@ -143,7 +156,7 @@ musl、回溯、寄存器、内存和单步全部工作。PIE 支持不能依据
 
 ### 5.1 RISC-V 64
 
-完整日志：`tmp/qemu-rv-gdb-native-20260817-174414.log`。该轮先用
+完整日志：`tmp/qemu-rv-gdb-native-20260817-211249.log`。该轮先用
 `apk --no-network add --allow-untrusted /var/cache/moss-gdb-native/*.apk`完成严格离线安装，再冷启动验收。
 关键原文为：
 
@@ -167,19 +180,24 @@ GDB_NATIVE_REGS_DONE
 0x3fffffd00:  0x0000000000000008  0x0000002900000008
 GDB_NATIVE_MEMORY_DONE
 GDB_NATIVE_STEPI_DONE before=0x10608 after=0x1060c
+Temporary breakpoint 2, main () at gdb-native-demo.c:24
+24        printf("gdb-native-demo value=%d\n", value);
+GDB_NATIVE_SOURCE_STEP_BEGIN
 gdb-native-demo value=42
-[Inferior 1 (process 60) exited normally]
+25        return value == 42 ? 0 : 1;
+GDB_NATIVE_SOURCE_STEP_DONE
+[Inferior 1 (process 63) exited normally]
 GDB_NATIVE_SMOKE_DONE
 [gdb-native] ALL NATIVE GDB BREAKPOINT/BACKTRACE/REGISTERS/MEMORY/STEPI/CONTINUE TESTS PASSED
 [qemu-gdb] PASS working image e2fsck read-only check
 ```
 
 该轮内核 SHA-256 是
-`efa6091b0c47ca1fda979fd41bdba0727dc7b28ecefbdf7fbb025532c31baaa4`。
+`5755bf96637adc6a67008ee1e9044ae5676190ed2027624737f353da44ae514b`。
 
 ### 5.2 LoongArch64
 
-完整日志：`tmp/qemu-la-gdb-native-20260817-174223.log`。该轮同样使用 `apk --no-network`
+完整日志：`tmp/qemu-la-gdb-native-20260817-211149.log`。该轮同样使用 `apk --no-network`
 完成离线安装和冷启动验收。关键原文为：
 
 ```text
@@ -203,7 +221,12 @@ GDB_NATIVE_REGS_DONE
 0x3fffffd00:  0x0000000000000008  0x0000002900000008
 GDB_NATIVE_MEMORY_DONE
 GDB_NATIVE_STEPI_DONE before=0x120000718 after=0x12000071c
+Temporary breakpoint 2, main () at gdb-native-demo.c:24
+24        printf("gdb-native-demo value=%d\n", value);
+GDB_NATIVE_SOURCE_STEP_BEGIN
 gdb-native-demo value=42
+25        return value == 42 ? 0 : 1;
+GDB_NATIVE_SOURCE_STEP_DONE
 [Inferior 1 (process 64) exited normally]
 GDB_NATIVE_SMOKE_DONE
 [gdb-native] ALL NATIVE GDB BREAKPOINT/BACKTRACE/REGISTERS/MEMORY/STEPI/CONTINUE TESTS PASSED
@@ -211,7 +234,24 @@ GDB_NATIVE_SMOKE_DONE
 ```
 
 该轮内核 SHA-256 是
-`f38afece63ed137b8b21edd9dee4e9f5ccf24b0a786913ac485ac516e505ae00`。
+`ed0e08970b6791f2e6810f54e2623dde89febbbd5b37903af558a87f99759893`。
+
+针对本次用户观察到的精确边界，另外在两种架构上从 `native_marker` 连续执行六次普通 `step`，
+跨过 `demo_worker`、`demo_entry`、`main` 和 `printf`。两轮都得到以下原文，且没有 trap/core 文本：
+
+```text
+main () at gdb-native-demo.c:24
+24        printf("gdb-native-demo value=%d\n", value);
+gdb-native-demo value=42
+25        return value == 42 ? 0 : 1;
+GDB_SIX_SOURCE_STEPS_DONE
+[Inferior 1 (process 31) exited normally]
+GDB_SIX_SOURCE_STEPS_EXITED
+SIX_STEP_RC=0
+```
+
+RISC-V 原始串口日志是 `tmp/gdb-six-source-steps-rv64-jrhap_1l/serial.log`，LoongArch64 是
+`tmp/gdb-six-source-steps-la64-szdmzi9u/serial.log`。这两轮使用独立的一次性 qcow2 overlay，没有改动基础镜像。
 
 日志中还出现 GDB 启动时调用尚未实现的 `setfsuid/setfsgid` 告警，但 GDB 没有依赖其结果完成本合同，
 所有强制标记和目标进程退出码仍通过。它们不应被描述成已经实现。

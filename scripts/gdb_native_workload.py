@@ -25,6 +25,8 @@ REQUIRED_MARKERS = (
     b"GDB_NATIVE_REGS_DONE",
     b"GDB_NATIVE_MEMORY_DONE",
     b"GDB_NATIVE_STEPI_DONE",
+    b"GDB_NATIVE_SOURCE_STEP_BEGIN",
+    b"GDB_NATIVE_SOURCE_STEP_DONE",
     b"gdb-native-demo value=42",
     b"exited normally",
     b"GDB_NATIVE_SMOKE_DONE",
@@ -39,6 +41,8 @@ REQUIRED_BACKTRACE = (
 
 FORBIDDEN_OUTPUT = (
     b"GDB_NATIVE_STEPI_FAILED",
+    b"Trace/breakpoint trap",
+    b"core dumped",
     b"Cannot access memory",
     b"Couldn't get registers",
     b"ptrace: Function not implemented",

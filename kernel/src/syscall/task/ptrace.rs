@@ -964,9 +964,10 @@ fn ptrace_write_word(tracee: &ProcessData, addr: usize, data: usize) -> AxResult
     let aspace = tracee.aspace();
     let mut aspace = aspace.lock();
     // Linux permits ptrace to modify a read-only executable VMA. Populating it
-    // for read materializes the page; the kernel then writes through its
-    // physical mapping without changing user-visible VMA permissions.
-    ptrace_populate_remote_range(&mut aspace, addr, size_of::<usize>(), MappingFlags::READ)?;
+    // for write forces a private COW copy while retaining the user-visible VMA
+    // permissions. Writing a shared file-cache page directly would expose the
+    // debugger's software breakpoint to every process mapping that ELF page.
+    ptrace_populate_remote_range(&mut aspace, addr, size_of::<usize>(), MappingFlags::WRITE)?;
     aspace.write(VirtAddr::from_usize(addr), &data.to_ne_bytes())
 }
 
@@ -995,13 +996,13 @@ fn read_u32(aspace: &mut AddrSpace, addr: usize) -> AxResult<u32> {
 
 #[cfg(target_arch = "riscv64")]
 fn write_u16(aspace: &mut AddrSpace, addr: usize, value: u16) -> AxResult<()> {
-    ptrace_populate_remote_range(aspace, addr, size_of::<u16>(), MappingFlags::READ)?;
+    ptrace_populate_remote_range(aspace, addr, size_of::<u16>(), MappingFlags::WRITE)?;
     aspace.write(VirtAddr::from_usize(addr), &value.to_ne_bytes())
 }
 
 #[cfg(target_arch = "loongarch64")]
 fn write_u32(aspace: &mut AddrSpace, addr: usize, value: u32) -> AxResult<()> {
-    ptrace_populate_remote_range(aspace, addr, size_of::<u32>(), MappingFlags::READ)?;
+    ptrace_populate_remote_range(aspace, addr, size_of::<u32>(), MappingFlags::WRITE)?;
     aspace.write(VirtAddr::from_usize(addr), &value.to_ne_bytes())
 }
 

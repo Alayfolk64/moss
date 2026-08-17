@@ -340,7 +340,10 @@ impl FileNodeOps for ProcMemFile {
         let end = address.checked_add(len).ok_or(VfsError::BadAddress)?;
         let start_page = VirtAddr::from_usize(address).align_down_4k();
         let end_page = VirtAddr::from_usize(end).align_up_4k();
-        aspace.populate_area(start_page, end_page - start_page, MappingFlags::READ)?;
+        // A debugger may write a read-only executable VMA, but the write must
+        // first detach a private COW page. Otherwise a software breakpoint in
+        // libc would corrupt the shared file-cache page used by the debugger.
+        aspace.populate_area(start_page, end_page - start_page, MappingFlags::WRITE)?;
         aspace.write(start, &buf[..len])?;
         drop(aspace);
         crate::syscall::ptrace_note_text_modified(target_pid);
