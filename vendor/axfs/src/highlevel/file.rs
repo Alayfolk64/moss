@@ -4,11 +4,9 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
-#[cfg(feature = "times")]
-use core::sync::atomic::AtomicU8;
 use core::{
     ops::Range,
-    sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering},
     task::Context,
     time::Duration,
 };
@@ -16,7 +14,8 @@ use core::{
 use axalloc::{UsageKind, global_allocator};
 use axfs_ng_vfs::{
     FileNode, Location, Metadata, MetadataUpdate, NodeFlags, NodePermission, NodeType, VfsError,
-    VfsResult, flush_inode_metadata_caches, path::Path,
+    VfsResult, dirty_inode_metadata_cache_count, flush_dirty_inode_metadata_caches,
+    path::Path,
 };
 use axhal::mem::{PhysAddr, VirtAddr, virt_to_phys};
 use axio::{SeekFrom, prelude::*};
@@ -331,10 +330,34 @@ const MAX_FOLIO_PAGES: usize = 1 << MAX_FOLIO_ORDER;
 const LOCAL_LARGE_FOLIO_CACHE_CAPACITY: usize = 8;
 const LOCAL_PAGE_FRAME_CACHE_SHARDS: usize = 64;
 const LARGE_FOLIO_RETRY_NANOS: u64 = 30 * 1_000_000_000;
+const WRITEBACK_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+const DIRTY_EXPIRE_NANOS: u64 = 5 * 1_000_000_000;
+const DIRTY_BACKGROUND_MIN_BYTES: usize = 16 * 1024 * 1024;
+const DIRTY_BACKGROUND_MAX_BYTES: usize = 64 * 1024 * 1024;
+const DIRTY_HARD_MIN_BYTES: usize = 32 * 1024 * 1024;
+const DIRTY_HARD_MAX_BYTES: usize = 128 * 1024 * 1024;
+const WRITEBACK_BATCH_RECORDS: usize = 512;
+const WRITEBACK_BATCH_PAGES: usize = 1024;
+const WRITEBACK_BATCH_METADATA: usize = 512;
+const WRITEBACK_YIELD_RECORDS: usize = 32;
+const DIRTY_THROTTLE_INTERVAL_PAGES: usize = 32;
+const DIRTY_THROTTLE_SLICE: Duration = Duration::from_millis(100);
+const DIRTY_THROTTLE_MAX_SLICES: usize = 10;
+const FILE_CACHE_RECORD_HIGH: usize = 8192;
+const FILE_CACHE_RECORD_TARGET: usize = 4096;
+const FILE_CACHE_REAP_BATCH: usize = 512;
+const RECORD_CLEAN: u8 = 0;
+const RECORD_QUEUED: u8 = 1;
+const RECORD_IN_FLIGHT: u8 = 2;
 static ZERO_PAGE: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
 static FILE_CACHE_CLOCK: AtomicU64 = AtomicU64::new(1);
 static LARGE_FOLIO_RETRY_AFTER_NS: [AtomicU64; MAX_FOLIO_ORDER as usize] =
     [const { AtomicU64::new(0) }; MAX_FOLIO_ORDER as usize];
+static WRITEBACK_WORK: WaitQueue = WaitQueue::new();
+static WRITEBACK_PROGRESS: WaitQueue = WaitQueue::new();
+static WRITEBACK_WORKER_STARTED: AtomicBool = AtomicBool::new(false);
+static WRITEBACK_WORKER_STOP: AtomicBool = AtomicBool::new(false);
+static WRITEBACK_WORKER_RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Default)]
 struct SleepRwState {
@@ -611,6 +634,7 @@ pub struct Folio {
     index: u32,
     order: u8,
     frame: FolioFrame,
+    owner: Weak<CachedFileRecord>,
     self_ref: Weak<Folio>,
     state: Mutex<FolioState>,
     page_locks: [Mutex<()>; MAX_FOLIO_PAGES],
@@ -619,7 +643,11 @@ pub struct Folio {
 }
 
 impl Folio {
-    fn new_loading(index: u32, order: u8) -> VfsResult<Arc<Self>> {
+    fn new_loading(
+        index: u32,
+        order: u8,
+        owner: Weak<CachedFileRecord>,
+    ) -> VfsResult<Arc<Self>> {
         debug_assert!(order <= MAX_FOLIO_ORDER);
         debug_assert_eq!(index & ((1u32 << order) - 1), 0);
         let frame = alloc_folio_frame(order)?;
@@ -627,6 +655,7 @@ impl Folio {
             index,
             order,
             frame,
+            owner,
             self_ref: this.clone(),
             state: Mutex::new(FolioState {
                 loading: true,
@@ -664,6 +693,67 @@ impl Folio {
     fn page_offset(&self, pn: u32) -> usize {
         debug_assert!(self.contains(pn));
         (pn - self.index) as usize
+    }
+
+    fn account_new_dirty(&self, pages: usize) {
+        if pages == 0 {
+            return;
+        }
+        if let Some(owner) = self.owner.upgrade() {
+            owner.pages_became_dirty(pages);
+        }
+    }
+
+    fn account_dirty_removed(&self, pages: usize) {
+        if pages == 0 {
+            return;
+        }
+        if let Some(owner) = self.owner.upgrade() {
+            atomic_saturating_sub(&owner.dirty_pages, pages);
+            atomic_saturating_sub(&owner.domain.dirty_pages, pages);
+            WRITEBACK_PROGRESS.notify_all(false);
+        }
+    }
+
+    fn account_writeback_started(&self, pages: usize) {
+        if pages == 0 {
+            return;
+        }
+        if let Some(owner) = self.owner.upgrade() {
+            atomic_saturating_sub(&owner.dirty_pages, pages);
+            owner.writeback_pages.fetch_add(pages, Ordering::AcqRel);
+            atomic_saturating_sub(&owner.domain.dirty_pages, pages);
+            owner.domain.writeback_pages.fetch_add(pages, Ordering::AcqRel);
+            WRITEBACK_PROGRESS.notify_all(false);
+        }
+    }
+
+    fn account_writeback_finished(&self, pages: usize, redirtied: usize) {
+        if let Some(owner) = self.owner.upgrade() {
+            atomic_saturating_sub(&owner.writeback_pages, pages);
+            atomic_saturating_sub(&owner.domain.writeback_pages, pages);
+            if redirtied != 0 {
+                owner.pages_became_dirty(redirtied);
+            } else {
+                WRITEBACK_PROGRESS.notify_all(false);
+            }
+        }
+    }
+
+    fn mark_page_dirty(&self, page: usize) {
+        let bit = 1u16 << page;
+        let newly_dirty = {
+            let mut state = self.state.lock();
+            if state.dirty & bit != 0 {
+                false
+            } else {
+                state.dirty |= bit;
+                true
+            }
+        };
+        if newly_dirty {
+            self.account_new_dirty(1);
+        }
     }
 
     fn paddr_at(&self, page: usize) -> PhysAddr {
@@ -769,7 +859,7 @@ impl FolioPage<'_> {
     }
 
     pub fn mark_dirty(&mut self) {
-        self.folio.state.lock().dirty |= 1 << self.page;
+        self.folio.mark_page_dirty(self.page);
     }
 
     pub fn data(&mut self) -> &mut [u8] {
@@ -842,6 +932,12 @@ struct CachedFileRecord {
     /// make their contents persistent again.
     retired: AtomicBool,
     last_used: AtomicU64,
+    queue_state: AtomicU8,
+    first_dirty_ns: AtomicU64,
+    dirty_pages: AtomicUsize,
+    writeback_pages: AtomicUsize,
+    writeback_lock: Mutex<()>,
+    domain: Arc<FileWritebackDomain>,
 }
 
 impl CachedFileRecord {
@@ -851,6 +947,118 @@ impl CachedFileRecord {
             Ordering::Relaxed,
         );
     }
+
+    fn has_dirty_pages(&self) -> bool {
+        self.dirty_pages.load(Ordering::Acquire) != 0
+            || self.writeback_pages.load(Ordering::Acquire) != 0
+    }
+
+    fn pages_became_dirty(self: &Arc<Self>, pages: usize) {
+        self.dirty_pages.fetch_add(pages, Ordering::AcqRel);
+        self.domain.dirty_pages.fetch_add(pages, Ordering::AcqRel);
+        let now = axhal::time::monotonic_time_nanos();
+        let _ = self.first_dirty_ns.compare_exchange(
+            0,
+            now.max(1),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+        self.queue_for_writeback();
+        WRITEBACK_WORK.notify_one(false);
+    }
+
+    fn queue_for_writeback(self: &Arc<Self>) {
+        if self
+            .queue_state
+            .compare_exchange(
+                RECORD_CLEAN,
+                RECORD_QUEUED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_err()
+        {
+            return;
+        }
+        self.domain
+            .state
+            .lock()
+            .pending
+            .insert(self.key, self.clone());
+    }
+
+    /// Reconcile an explicit fsync/msync writeback with a possibly stale
+    /// pending entry.  A record owned by the background worker remains in its
+    /// in-flight set and will be reconciled there.
+    fn reconcile_explicit_writeback(self: &Arc<Self>) {
+        let mut domain = self.domain.state.lock();
+        if self.queue_state.load(Ordering::Acquire) != RECORD_QUEUED {
+            return;
+        }
+        // Publish CLEAN before checking folios. A racing dirtier either ran
+        // before this store and is observed below, or changes CLEAN to QUEUED
+        // and waits for this short domain critical section before inserting.
+        self.queue_state.store(RECORD_CLEAN, Ordering::Release);
+        if self.has_dirty_pages() {
+            self.queue_state.store(RECORD_QUEUED, Ordering::Release);
+            domain.pending.insert(self.key, self.clone());
+        } else {
+            domain.pending.remove(&self.key);
+            self.first_dirty_ns.store(0, Ordering::Release);
+            CLEAN_FILE_CACHE_CANDIDATES
+                .lock()
+                .insert(self.key, Arc::downgrade(self));
+        }
+    }
+}
+
+#[derive(Default)]
+struct FileWritebackState {
+    pending: BTreeMap<FileCacheKey, Arc<CachedFileRecord>>,
+    in_flight: BTreeMap<FileCacheKey, Arc<CachedFileRecord>>,
+}
+
+struct FileWritebackDomain {
+    flush_location: Location,
+    state: SpinNoIrq<FileWritebackState>,
+    dirty_pages: AtomicUsize,
+    writeback_pages: AtomicUsize,
+    last_error_report_ns: AtomicU64,
+}
+
+impl FileWritebackDomain {
+    fn new(location: Location) -> Self {
+        Self {
+            flush_location: location,
+            state: SpinNoIrq::new(FileWritebackState::default()),
+            dirty_pages: AtomicUsize::new(0),
+            writeback_pages: AtomicUsize::new(0),
+            last_error_report_ns: AtomicU64::new(0),
+        }
+    }
+}
+
+fn atomic_saturating_sub(value: &AtomicUsize, amount: usize) {
+    let _ = value.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+        Some(current.saturating_sub(amount))
+    });
+}
+
+fn filesystem_identity(location: &Location) -> usize {
+    let filesystem: *const dyn axfs_ng_vfs::FilesystemOps = location.filesystem();
+    filesystem as *const () as usize
+}
+
+fn writeback_domain(location: &Location) -> Arc<FileWritebackDomain> {
+    let key = filesystem_identity(location);
+    if let Some(domain) = WRITEBACK_DOMAINS.read().get(&key).cloned() {
+        return domain;
+    }
+    WRITEBACK_DOMAINS
+        .write()
+        .entry(key)
+        .or_insert_with(|| Arc::new(FileWritebackDomain::new(location.clone())))
+        .clone()
 }
 
 impl Drop for CachedFileRecord {
@@ -877,6 +1085,8 @@ impl Drop for CachedFileRecord {
         }
         for folio in folios {
             let mut state = folio.state.lock();
+            let dirty_pages = state.dirty.count_ones() as usize;
+            let writeback_pages = state.writeback.count_ones() as usize;
             state.loading = false;
             state.uptodate = false;
             state.error = Some(VfsError::Io);
@@ -884,6 +1094,10 @@ impl Drop for CachedFileRecord {
             state.writeback = 0;
             state.truncated = true;
             drop(state);
+            atomic_saturating_sub(&self.domain.dirty_pages, dirty_pages);
+            atomic_saturating_sub(&self.domain.writeback_pages, writeback_pages);
+            atomic_saturating_sub(&self.dirty_pages, dirty_pages);
+            atomic_saturating_sub(&self.writeback_pages, writeback_pages);
             folio.wait.notify_all(false);
         }
         drop(invalidate);
@@ -896,6 +1110,11 @@ impl Drop for CachedFileRecord {
 
 static FILE_CACHES: [RwLock<BTreeMap<FileCacheKey, Arc<CachedFileRecord>>>; FILE_CACHE_SHARDS] =
     [const { RwLock::new(BTreeMap::new()) }; FILE_CACHE_SHARDS];
+static WRITEBACK_DOMAINS: RwLock<BTreeMap<usize, Arc<FileWritebackDomain>>> =
+    RwLock::new(BTreeMap::new());
+static CLEAN_FILE_CACHE_CANDIDATES: SpinNoIrq<
+    BTreeMap<FileCacheKey, Weak<CachedFileRecord>>,
+> = SpinNoIrq::new(BTreeMap::new());
 static PAGE_CACHE_RECLAIM_LOCK: Mutex<()> = Mutex::new(());
 const PRESSURE_RECLAIM_RETRY_PAGES: usize = 1024;
 static NEXT_PRESSURE_RECLAIM_AT_PAGES: AtomicUsize = AtomicUsize::new(usize::MAX);
@@ -954,6 +1173,17 @@ impl FileUserData {
     }
 }
 
+fn remove_file_user_data_if_matches(location: &Location, record: &Arc<CachedFileRecord>) {
+    let mut user_data = location.user_data();
+    let matches = user_data
+        .get::<FileUserData>()
+        .and_then(|cached| cached.get())
+        .is_some_and(|cached| Arc::ptr_eq(&cached, record));
+    if matches {
+        user_data.remove::<FileUserData>();
+    }
+}
+
 impl CachedFile {
     fn file_cache_key(location: &Location) -> FileCacheKey {
         let fs_ptr: *const dyn axfs_ng_vfs::FilesystemOps = location.filesystem();
@@ -979,6 +1209,7 @@ impl CachedFile {
 
     fn record_from_global_cache(location: &Location, in_memory: bool) -> Arc<CachedFileRecord> {
         let key = Self::file_cache_key(location);
+        let domain = writeback_domain(location);
         let mut caches = Self::cache_for_key(key).write();
         caches
             .entry(key)
@@ -995,6 +1226,12 @@ impl CachedFile {
                     in_memory,
                     retired: AtomicBool::new(false),
                     last_used: AtomicU64::new(FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed)),
+                    queue_state: AtomicU8::new(RECORD_CLEAN),
+                    first_dirty_ns: AtomicU64::new(0),
+                    dirty_pages: AtomicUsize::new(0),
+                    writeback_pages: AtomicUsize::new(0),
+                    writeback_lock: Mutex::new(()),
+                    domain: domain.clone(),
                 })
             })
             .clone()
@@ -1031,7 +1268,11 @@ impl CachedFile {
         }
 
         let mut guard = location.user_data();
-        let record = if let Some(record) = guard.get::<FileUserData>().and_then(|it| it.get()) {
+        let record = if let Some(record) = guard
+            .get::<FileUserData>()
+            .and_then(|it| it.get())
+            .filter(|record| !record.retired.load(Ordering::Acquire))
+        {
             record
         } else {
             let record = Self::record_from_global_cache(&location, in_memory);
@@ -1158,7 +1399,7 @@ impl CachedFile {
         loop {
             let pages = 1u32 << order;
             let index = pn & !(pages - 1);
-            let folio = match Folio::new_loading(index, order) {
+            let folio = match Folio::new_loading(index, order, Arc::downgrade(&self.record)) {
                 Ok(folio) => folio,
                 Err(VfsError::NoMemory) if order > 0 => {
                     order -= 1;
@@ -1440,10 +1681,21 @@ impl CachedFile {
         if state.loading || !state.uptodate || state.truncated {
             return None;
         }
-        if mark_dirty && !self.in_memory() {
-            state.dirty |= 1 << page.page;
-        }
+        let newly_dirty = if mark_dirty && !self.in_memory() {
+            let bit = 1u16 << page.page;
+            if state.dirty & bit == 0 {
+                state.dirty |= bit;
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
         drop(state);
+        if newly_dirty {
+            cached.account_new_dirty(1);
+        }
         Some(commit())
     }
 
@@ -1757,6 +2009,7 @@ impl CachedFile {
         let end_page = end.div_ceil(PAGE_SIZE as u64) as u32;
         let mut page_offset = (offset % PAGE_SIZE as u64) as usize;
         let mut written = 0;
+        let mut pages_since_balance = 0;
 
         for pn in start_page..end_page {
             let page_start = pn as u64 * PAGE_SIZE as u64;
@@ -1772,6 +2025,15 @@ impl CachedFile {
             })?;
             written += len;
             page_offset = 0;
+            pages_since_balance += 1;
+            if pages_since_balance >= DIRTY_THROTTLE_INTERVAL_PAGES {
+                balance_dirty_pages(&self.record.domain);
+                pages_since_balance = 0;
+            }
+        }
+
+        if pages_since_balance != 0 {
+            balance_dirty_pages(&self.record.domain);
         }
 
         Ok(written)
@@ -1830,6 +2092,7 @@ impl CachedFile {
 
     pub fn set_len(&self, len: u64) -> VfsResult<()> {
         let _append = self.shared().append_lock.write();
+        let _writeback = self.record.writeback_lock.lock();
         let old_len = self.len()?;
         if old_len == len {
             return Ok(());
@@ -1872,11 +2135,13 @@ impl CachedFile {
                 if start >= len {
                     if self.remove_folio(&folio) {
                         let mut state = folio.state.lock();
+                        let discarded_dirty = state.dirty.count_ones() as usize;
                         state.truncated = true;
                         state.uptodate = false;
                         state.dirty = 0;
                         state.error = Some(VfsError::Io);
                         drop(state);
+                        folio.account_dirty_removed(discarded_dirty);
                         removed.push(folio);
                         continue;
                     }
@@ -1890,7 +2155,10 @@ impl CachedFile {
                     } else {
                         (1u16 << valid_pages) - 1
                     };
+                    let discarded_dirty = (state.dirty & !valid_mask).count_ones() as usize;
                     state.dirty &= valid_mask;
+                    drop(state);
+                    folio.account_dirty_removed(discarded_dirty);
                 }
                 for pn in
                     first_invalid_page.max(folio.index)..folio.index + folio.page_count() as u32
@@ -1910,6 +2178,7 @@ impl CachedFile {
         for folio in removed {
             self.notify_folio_evict(&folio);
         }
+        self.record.reconcile_explicit_writeback();
         Ok(())
     }
 
@@ -1938,7 +2207,7 @@ impl CachedFile {
         file: &FileNode,
         file_len: u64,
         folio: &Arc<Folio>,
-    ) -> VfsResult<bool> {
+    ) -> VfsResult<usize> {
         folio.wait_uptodate()?;
         folio.wait.wait_until(|| folio.state.lock().writeback == 0);
 
@@ -1948,14 +2217,10 @@ impl CachedFile {
             .min(folio.byte_len() as u64) as usize;
         let index_refs = folio.page_count() + 2;
         let externally_pinned = Arc::strong_count(folio) > index_refs;
-        let dirty = {
+        let (dirty, discarded_dirty) = {
             let mut state = folio.state.lock();
             if state.truncated {
-                return Ok(false);
-            }
-            if valid_bytes == 0 {
-                state.dirty = 0;
-                return Ok(false);
+                return Ok(0);
             }
             let valid_pages = valid_bytes.div_ceil(PAGE_SIZE);
             let valid_mask = if valid_pages >= u16::BITS as usize {
@@ -1963,15 +2228,21 @@ impl CachedFile {
             } else {
                 (1u16 << valid_pages) - 1
             };
+            let discarded = state.dirty & !valid_mask;
             state.dirty &= valid_mask;
             let dirty = state.dirty;
-            if dirty == 0 {
-                return Ok(false);
+            if dirty != 0 {
+                state.dirty &= !dirty;
+                state.writeback |= dirty;
             }
-            state.dirty &= !dirty;
-            state.writeback |= dirty;
-            dirty
+            (dirty, discarded.count_ones() as usize)
         };
+        folio.account_dirty_removed(discarded_dirty);
+        if dirty == 0 {
+            return Ok(0);
+        }
+        let writeback_pages = dirty.count_ones() as usize;
+        folio.account_writeback_started(writeback_pages);
         let mut data = Vec::new();
         data.resize(valid_bytes, 0);
         for page in 0..folio.page_count() {
@@ -2015,6 +2286,7 @@ impl CachedFile {
 
         let mut state = folio.state.lock();
         state.writeback &= !dirty;
+        let dirty_before_completion = state.dirty;
         if result.is_err() || externally_pinned || Arc::strong_count(folio) > index_refs {
             // A writable mmap can modify the frame after the bounce copy was
             // taken without taking FolioState. Keep pinned pages dirty until
@@ -2022,34 +2294,48 @@ impl CachedFile {
             // being mistaken for already-written data.
             state.dirty |= dirty;
         }
+        let redirtied = (state.dirty & !dirty_before_completion).count_ones() as usize;
         drop(state);
+        folio.account_writeback_finished(writeback_pages, redirtied);
         folio.wait.notify_all(false);
-        result.map(|_| true)
+        result.map(|_| writeback_pages)
     }
 
-    fn writeback_folios_in_range(&self, range: Range<u64>) -> VfsResult<()> {
+    fn writeback_folios_in_range_with_budget(
+        &self,
+        range: Range<u64>,
+        max_pages: usize,
+    ) -> VfsResult<usize> {
         if self.in_memory() || range.start >= range.end {
-            return Ok(());
+            return Ok(0);
         }
 
         let file = self.inner().entry().as_file()?;
         let file_len = self.len()?;
         let folios = self.folios_snapshot();
-        let mut wrote = false;
+        let mut wrote_pages = 0;
         for folio in folios {
+            if wrote_pages >= max_pages {
+                break;
+            }
             if Self::folio_overlaps(&folio, &range) {
                 // A speculative folio may still be owned by a readahead
                 // worker. Wait before entering the invalidation gate so a
                 // queued truncate cannot block that worker behind us.
                 folio.wait_uptodate()?;
                 let _invalidate = self.shared().invalidate_lock.read();
-                wrote |= self.writeback_folio(file, file_len, &folio)?;
+                wrote_pages += self.writeback_folio(file, file_len, &folio)?;
             }
         }
-        if wrote {
+        if wrote_pages != 0 {
             self.commit_len()?;
         }
-        Ok(())
+        Ok(wrote_pages)
+    }
+
+    fn writeback_folios_in_range(&self, range: Range<u64>) -> VfsResult<()> {
+        self.writeback_folios_in_range_with_budget(range, usize::MAX)
+            .map(|_| ())
     }
 
     fn writeback_dirty_pages_in_range(&self, range: Range<u64>) -> VfsResult<()> {
@@ -2182,26 +2468,42 @@ impl CachedFile {
         self.writeback_folios_in_range(0..u64::MAX)
     }
 
+    fn writeback_dirty_pages_in_cache_budget(&self, max_pages: usize) -> VfsResult<usize> {
+        if self.in_memory() || max_pages == 0 {
+            return Ok(0);
+        }
+        self.writeback_folios_in_range_with_budget(0..u64::MAX, max_pages)
+    }
+
     fn drop_cached_pages(&self) -> VfsResult<()> {
         if self.in_memory() {
             return Ok(());
         }
-        self.writeback_dirty_pages_in_cache()?;
-        self.invalidate_clean_pages_in_range(0..u64::MAX);
-        self.commit_atime()
+        let _writeback = self.record.writeback_lock.lock();
+        let result = (|| {
+            self.writeback_dirty_pages_in_cache()?;
+            self.invalidate_clean_pages_in_range(0..u64::MAX);
+            self.commit_atime()
+        })();
+        self.record.reconcile_explicit_writeback();
+        result
     }
 
     pub fn sync(&self, data_only: bool) -> VfsResult<()> {
         if self.in_memory() {
             return Ok(());
         }
-        self.writeback_dirty_pages_in_cache()?;
-        if !data_only {
-            self.commit_atime()?;
-        }
-        let file = self.inner().entry().as_file()?;
-        file.sync(data_only)?;
-        Ok(())
+        let _writeback = self.record.writeback_lock.lock();
+        let result = (|| {
+            self.writeback_dirty_pages_in_cache()?;
+            if !data_only {
+                self.commit_atime()?;
+            }
+            let file = self.inner().entry().as_file()?;
+            file.sync(data_only)
+        })();
+        self.record.reconcile_explicit_writeback();
+        result
     }
 
     pub fn location(&self) -> &Location {
@@ -2216,12 +2518,14 @@ impl CachedFile {
             return Ok(());
         }
 
-        self.writeback_folios_in_range(range)?;
-        let file = 
-            self.inner().entry().as_file()?;
-
-        file.sync(true)?;
-        Ok(())
+        let _writeback = self.record.writeback_lock.lock();
+        let result = (|| {
+            self.writeback_folios_in_range(range)?;
+            let file = self.inner().entry().as_file()?;
+            file.sync(true)
+        })();
+        self.record.reconcile_explicit_writeback();
+        result
     }
 }
 
@@ -2231,6 +2535,13 @@ impl Drop for CachedFile {
             return;
         }
         self.record.touch();
+        if self.record.queue_state.load(Ordering::Acquire) == RECORD_CLEAN
+            && !self.record.has_dirty_pages()
+        {
+            CLEAN_FILE_CACHE_CANDIDATES
+                .lock()
+                .insert(self.record.key, Arc::downgrade(&self.record));
+        }
         Self::reclaim_page_cache_if_needed(self.record.key);
     }
 }
@@ -2274,33 +2585,311 @@ pub fn reclaim_global_file_cache_for_memory_pressure() {
     NEXT_PRESSURE_RECLAIM_AT_PAGES.store(next, Ordering::Release);
 }
 
-pub fn sync_global_file_caches() -> VfsResult<()> {
-    let records = CachedFile::all_records();
-    for record in &records {
-        if record.in_memory {
-            continue;
-        }
-        let cached = CachedFile::from_record(record);
-        cached.writeback_dirty_pages_in_cache()?;
-        cached.commit_atime()?;
-    }
-    flush_inode_metadata_caches(false)?;
+fn dirty_page_limits() -> (usize, usize) {
+    let allocator = global_allocator();
+    let total_bytes = (allocator.used_pages() + allocator.available_pages()) * PAGE_SIZE;
+    let background_bytes = (total_bytes / 32)
+        .clamp(DIRTY_BACKGROUND_MIN_BYTES, DIRTY_BACKGROUND_MAX_BYTES)
+        .min(total_bytes);
+    let hard_bytes = (total_bytes / 16)
+        .clamp(DIRTY_HARD_MIN_BYTES, DIRTY_HARD_MAX_BYTES)
+        .min(total_bytes)
+        .max(background_bytes);
+    (background_bytes / PAGE_SIZE, hard_bytes / PAGE_SIZE)
+}
 
-    // An inode sync in ext4 flushes the whole shared filesystem. Running it
-    // once per cached file turns a single sync(2) into thousands of identical
-    // full-cache flushes after a build, so deduplicate by filesystem identity.
-    let mut flushed = BTreeSet::new();
+fn outstanding_pages(domain: &FileWritebackDomain) -> usize {
+    domain.dirty_pages.load(Ordering::Acquire)
+        + domain.writeback_pages.load(Ordering::Acquire)
+}
+
+fn balance_dirty_pages(domain: &Arc<FileWritebackDomain>) {
+    let (background, hard) = dirty_page_limits();
+    if outstanding_pages(domain) <= hard {
+        return;
+    }
+    WRITEBACK_WORK.notify_one(false);
+    for _ in 0..DIRTY_THROTTLE_MAX_SLICES {
+        if outstanding_pages(domain) <= background {
+            break;
+        }
+        let _ = WRITEBACK_PROGRESS.wait_timeout(DIRTY_THROTTLE_SLICE);
+        WRITEBACK_WORK.notify_one(false);
+    }
+}
+
+fn dirty_record_snapshot() -> Vec<Arc<CachedFileRecord>> {
+    let domains = WRITEBACK_DOMAINS
+        .read()
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut records = BTreeMap::new();
+    for domain in domains {
+        let state = domain.state.lock();
+        for (key, record) in state.pending.iter().chain(state.in_flight.iter()) {
+            records.entry(*key).or_insert_with(|| record.clone());
+        }
+    }
+    records.into_values().collect()
+}
+
+fn take_background_record(
+    domain: &Arc<FileWritebackDomain>,
+    attempted: &BTreeSet<FileCacheKey>,
+    force: bool,
+    now_ns: u64,
+) -> Option<Arc<CachedFileRecord>> {
+    let (background, _) = dirty_page_limits();
+    let pressured = outstanding_pages(domain) >= background;
+    let mut state = domain.state.lock();
+    let key = state.pending.iter().find_map(|(key, record)| {
+        if attempted.contains(key) {
+            return None;
+        }
+        let first_dirty = record.first_dirty_ns.load(Ordering::Acquire);
+        let expired = first_dirty != 0
+            && now_ns.saturating_sub(first_dirty) >= DIRTY_EXPIRE_NANOS;
+        (force || pressured || expired || !record.has_dirty_pages()).then_some(*key)
+    })?;
+    let record = state.pending.remove(&key)?;
+    record
+        .queue_state
+        .store(RECORD_IN_FLIGHT, Ordering::Release);
+    state.in_flight.insert(key, record.clone());
+    Some(record)
+}
+
+fn finish_background_record(record: &Arc<CachedFileRecord>) {
+    let mut state = record.domain.state.lock();
+    // See `reconcile_explicit_writeback`: publishing CLEAN before observing
+    // counters closes the redirty race without requiring dirtying paths to
+    // take a sleeping writeback lock.
+    record.queue_state.store(RECORD_CLEAN, Ordering::Release);
+    let still_dirty = record.has_dirty_pages();
+    state.in_flight.remove(&record.key);
+    if still_dirty {
+        record
+            .first_dirty_ns
+            .store(axhal::time::monotonic_time_nanos().max(1), Ordering::Release);
+        record.queue_state.store(RECORD_QUEUED, Ordering::Release);
+        state.pending.insert(record.key, record.clone());
+    } else {
+        record.first_dirty_ns.store(0, Ordering::Release);
+        CLEAN_FILE_CACHE_CANDIDATES
+            .lock()
+            .insert(record.key, Arc::downgrade(record));
+    }
+    WRITEBACK_PROGRESS.notify_all(false);
+}
+
+fn report_background_writeback_error(domain: &FileWritebackDomain, err: VfsError) {
+    let now = axhal::time::monotonic_time_nanos();
+    let last = domain.last_error_report_ns.load(Ordering::Acquire);
+    if now.saturating_sub(last) < 5_000_000_000 {
+        return;
+    }
+    if domain
+        .last_error_report_ns
+        .compare_exchange(last, now, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        warn!("background file writeback failed: {err:?}");
+    }
+}
+
+fn file_cache_record_count() -> usize {
+    FILE_CACHES.iter().map(|cache| cache.read().len()).sum()
+}
+
+fn reap_clean_file_cache_records() {
+    let allocator = global_allocator();
+    let (low, _) = CachedFile::memory_watermarks();
+    let mut count = file_cache_record_count();
+    if count <= FILE_CACHE_RECORD_HIGH && allocator.available_pages() >= low {
+        return;
+    }
+
+    for _ in 0..FILE_CACHE_REAP_BATCH {
+        if count <= FILE_CACHE_RECORD_TARGET && allocator.available_pages() >= low {
+            break;
+        }
+        let Some(record) = CLEAN_FILE_CACHE_CANDIDATES
+            .lock()
+            .pop_first()
+            .and_then(|(_, record)| record.upgrade())
+        else {
+            break;
+        };
+        if record.in_memory
+            || record.retired.load(Ordering::Acquire)
+            || record.queue_state.load(Ordering::Acquire) != RECORD_CLEAN
+            || record.has_dirty_pages()
+            || Arc::strong_count(&record) != 2
+        {
+            continue;
+        }
+        let cache = CachedFile::cache_for_key(record.key);
+        let removed = {
+            let mut records = cache.write();
+            if records
+                .get(&record.key)
+                .is_some_and(|current| Arc::ptr_eq(current, &record))
+                && Arc::strong_count(&record) == 2
+            {
+                record.retired.store(true, Ordering::Release);
+                records.remove(&record.key);
+                true
+            } else {
+                false
+            }
+        };
+        if removed {
+            remove_file_user_data_if_matches(&record.location, &record);
+            count = count.saturating_sub(1);
+        }
+    }
+}
+
+fn background_writeback_pass(force: bool) -> bool {
+    let domains = WRITEBACK_DOMAINS
+        .read()
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    let now_ns = axhal::time::monotonic_time_nanos();
+    let mut attempted = BTreeSet::new();
+    let mut processed = 0;
+    let mut written_pages = 0;
+    let mut failed = false;
+
+    while processed < WRITEBACK_BATCH_RECORDS && written_pages < WRITEBACK_BATCH_PAGES {
+        let mut record = None;
+        for domain in &domains {
+            if let Some(next) = take_background_record(domain, &attempted, force, now_ns) {
+                record = Some(next);
+                break;
+            }
+        }
+        let Some(record) = record else {
+            break;
+        };
+        attempted.insert(record.key);
+        {
+            let _writeback = record.writeback_lock.lock();
+            let cached = CachedFile::from_record(&record);
+            match cached.writeback_dirty_pages_in_cache_budget(
+                WRITEBACK_BATCH_PAGES - written_pages,
+            ) {
+                Ok(pages) => written_pages += pages,
+                Err(err) => {
+                    failed = true;
+                    report_background_writeback_error(&record.domain, err);
+                }
+            }
+            finish_background_record(&record);
+        }
+        processed += 1;
+        if processed % WRITEBACK_YIELD_RECORDS == 0 {
+            axtask::yield_now();
+        }
+    }
+
+    if dirty_inode_metadata_cache_count() != 0
+        && let Err(err) = flush_dirty_inode_metadata_caches(false, WRITEBACK_BATCH_METADATA)
+    {
+        failed = true;
+        warn!("background inode metadata writeback failed: {err:?}");
+    }
+    reap_clean_file_cache_records();
+    failed
+}
+
+fn background_writeback_has_pressure() -> bool {
+    let (background, _) = dirty_page_limits();
+    WRITEBACK_DOMAINS
+        .read()
+        .values()
+        .any(|domain| outstanding_pages(domain) >= background)
+        || dirty_inode_metadata_cache_count() > WRITEBACK_BATCH_METADATA
+}
+
+fn background_writeback_worker() {
+    while !WRITEBACK_WORKER_STOP.load(Ordering::Acquire) {
+        let failed = background_writeback_pass(false);
+        if !failed && background_writeback_has_pressure() {
+            axtask::yield_now();
+            continue;
+        }
+        let wait = if failed {
+            Duration::from_secs(5)
+        } else {
+            WRITEBACK_CHECK_INTERVAL
+        };
+        let _ = WRITEBACK_WORK.wait_timeout(wait);
+    }
+    WRITEBACK_WORKER_RUNNING.store(false, Ordering::Release);
+    WRITEBACK_PROGRESS.notify_all(false);
+}
+
+pub fn start_background_writeback() {
+    if WRITEBACK_WORKER_STARTED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    WRITEBACK_WORKER_STOP.store(false, Ordering::Release);
+    WRITEBACK_WORKER_RUNNING.store(true, Ordering::Release);
+    axtask::spawn(|| background_writeback_worker());
+}
+
+pub fn shutdown_background_writeback() -> VfsResult<()> {
+    if WRITEBACK_WORKER_STARTED.load(Ordering::Acquire) {
+        WRITEBACK_WORKER_STOP.store(true, Ordering::Release);
+        WRITEBACK_WORK.notify_all(false);
+        WRITEBACK_PROGRESS.wait_until(|| !WRITEBACK_WORKER_RUNNING.load(Ordering::Acquire));
+    }
+    sync_global_file_caches()
+}
+
+pub fn sync_global_file_caches() -> VfsResult<()> {
+    let records = dirty_record_snapshot();
+    let mut first_error = None;
     for record in &records {
         if record.in_memory {
             continue;
         }
-        let filesystem = record.location.filesystem();
-        let pointer = filesystem as *const dyn axfs_ng_vfs::FilesystemOps as *const () as usize;
-        if flushed.insert(pointer) {
-            filesystem.flush()?;
+        let _writeback = record.writeback_lock.lock();
+        let cached = CachedFile::from_record(record);
+        let result = cached
+            .writeback_dirty_pages_in_cache()
+            .and_then(|_| cached.commit_atime());
+        record.reconcile_explicit_writeback();
+        if let Err(err) = result
+            && first_error.is_none()
+        {
+            first_error = Some(err);
         }
     }
-    Ok(())
+    if let Err(err) = flush_dirty_inode_metadata_caches(false, usize::MAX)
+        && first_error.is_none()
+    {
+        first_error = Some(err);
+    }
+
+    // Each domain owns one stable location for its filesystem, so sync no
+    // longer needs to rediscover mounts by walking every cached inode.
+    let domains = WRITEBACK_DOMAINS
+        .read()
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    for domain in domains {
+        if let Err(err) = domain.flush_location.filesystem().flush()
+            && first_error.is_none()
+        {
+            first_error = Some(err);
+        }
+    }
+    first_error.map_or(Ok(()), Err)
 }
 
 pub fn drop_global_file_caches() -> VfsResult<()> {
@@ -2477,8 +3066,11 @@ impl FileBackend {
                 if len > 0
                     && let Some(cached) = CachedFile::get_existing(loc)
                 {
-                    cached
-                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
+                    let _writeback = cached.record.writeback_lock.lock();
+                    let result = cached
+                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64));
+                    cached.record.reconcile_explicit_writeback();
+                    result?;
                 }
                 let mut total = 0;
                 while dst.remaining_mut() > 0 {
@@ -2505,11 +3097,16 @@ impl FileBackend {
                 let start = offset;
                 let len = src.remaining();
                 let cached = CachedFile::get_existing(loc);
+                let _writeback = cached
+                    .as_ref()
+                    .map(|cached| cached.record.writeback_lock.lock());
                 if len > 0
                     && let Some(cached) = cached.as_ref()
                 {
-                    cached
-                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64))?;
+                    let result = cached
+                        .writeback_dirty_pages_in_range(start..start.saturating_add(len as u64));
+                    cached.record.reconcile_explicit_writeback();
+                    result?;
                 }
                 let mut total = 0;
                 let result = loop {
@@ -2532,8 +3129,9 @@ impl FileBackend {
                 };
                 if offset > start {
                     loc.grow_cached_len_if_present(offset);
-                    if let Some(cached) = cached {
+                    if let Some(cached) = cached.as_ref() {
                         cached.invalidate_clean_pages_in_range(start..offset);
+                        cached.record.reconcile_explicit_writeback();
                     }
                 }
                 let written = result?;
