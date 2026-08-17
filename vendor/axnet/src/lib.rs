@@ -38,7 +38,7 @@ pub mod unix;
 pub mod vsock;
 mod wrapper;
 
-use alloc::{borrow::ToOwned, boxed::Box};
+use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::{
     net::Ipv4Addr,
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -49,11 +49,13 @@ use axdriver::{AxDeviceContainer, prelude::*};
 use axsync::Mutex;
 pub use family::IpFamily;
 use lazyinit::LazyInit;
-use smoltcp::wire::{EthernetAddress, Ipv4Address, Ipv4Cidr, Ipv6Address, Ipv6Cidr};
+use smoltcp::wire::{
+    EthernetAddress, IpAddress, IpCidr, Ipv4Address, Ipv4Cidr, Ipv6Address, Ipv6Cidr,
+};
 pub use socket::*;
 
 use crate::{
-    consts::{GATEWAY, IP, IP_PREFIX},
+    consts::{IPV4_ADDRESS, IPV4_GATEWAY, IPV4_PREFIX, IPV6_ADDRESS, IPV6_GATEWAY, IPV6_PREFIX},
     device::{EthernetDevice, LoopbackDevice},
     listen_table::ListenTable,
     router::{Router, Rule},
@@ -81,21 +83,137 @@ pub(crate) fn eth0_mac() -> Option<[u8; 6]> {
     })
 }
 
-/// The statically configured IPv4 state exposed to Linux compatibility APIs.
+fn parse_prefix(value: &str, default: u8, maximum: u8, name: &str) -> u8 {
+    let prefix = if value.is_empty() {
+        default
+    } else {
+        value
+            .parse::<u8>()
+            .unwrap_or_else(|_| panic!("Invalid {name}: {value}"))
+    };
+    assert!(prefix <= maximum, "Invalid {name}: {prefix} > {maximum}");
+    prefix
+}
+
+fn ipv6_link_local(mac: EthernetAddress) -> Ipv6Address {
+    let mut interface = [0; 8];
+    interface[0] = mac.0[0] ^ 0x02;
+    interface[1] = mac.0[1];
+    interface[2] = mac.0[2];
+    interface[3] = 0xff;
+    interface[4] = 0xfe;
+    interface[5] = mac.0[3];
+    interface[6] = mac.0[4];
+    interface[7] = mac.0[5];
+    Ipv6Address::from([
+        0xfe,
+        0x80,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        interface[0],
+        interface[1],
+        interface[2],
+        interface[3],
+        interface[4],
+        interface[5],
+        interface[6],
+        interface[7],
+    ])
+}
+
+fn configured_addresses(mac: EthernetAddress) -> Vec<IpCidr> {
+    let mut addresses: Vec<IpCidr> = Vec::new();
+    if !IPV4_ADDRESS.is_empty() {
+        let address: Ipv4Address = IPV4_ADDRESS
+            .parse()
+            .unwrap_or_else(|_| panic!("Invalid IPv4 address: {IPV4_ADDRESS}"));
+        addresses
+            .push(Ipv4Cidr::new(address, parse_prefix(IPV4_PREFIX, 24, 32, "IPv4 prefix")).into());
+    }
+
+    addresses.push(Ipv6Cidr::new(ipv6_link_local(mac), 64).into());
+    if !IPV6_ADDRESS.is_empty() {
+        let address: Ipv6Address = IPV6_ADDRESS
+            .parse()
+            .unwrap_or_else(|_| panic!("Invalid IPv6 address: {IPV6_ADDRESS}"));
+        let cidr = Ipv6Cidr::new(address, parse_prefix(IPV6_PREFIX, 64, 128, "IPv6 prefix"));
+        if !addresses
+            .iter()
+            .any(|configured| configured.address() == IpAddress::Ipv6(address))
+        {
+            addresses.push(cidr.into());
+        }
+    }
+    addresses
+}
+
+fn configured_ipv4_gateway(addresses: &[IpCidr]) -> Option<Ipv4Address> {
+    if IPV4_GATEWAY.is_empty() {
+        return None;
+    }
+    let gateway: Ipv4Address = IPV4_GATEWAY
+        .parse()
+        .unwrap_or_else(|_| panic!("Invalid IPv4 gateway: {IPV4_GATEWAY}"));
+    assert!(
+        addresses
+            .iter()
+            .any(|address| matches!(address, IpCidr::Ipv4(cidr) if cidr.contains_addr(&gateway))),
+        "IPv4 gateway {gateway} is outside the configured IPv4 subnet"
+    );
+    Some(gateway)
+}
+
+fn configured_ipv6_gateway(addresses: &[IpCidr]) -> Option<Ipv6Address> {
+    if IPV6_GATEWAY.is_empty() {
+        return None;
+    }
+    let gateway: Ipv6Address = IPV6_GATEWAY
+        .parse()
+        .unwrap_or_else(|_| panic!("Invalid IPv6 gateway: {IPV6_GATEWAY}"));
+    assert!(
+        addresses
+            .iter()
+            .any(|address| matches!(address, IpCidr::Ipv6(cidr) if cidr.contains_addr(&gateway))),
+        "IPv6 gateway {gateway} is outside the configured IPv6 subnet"
+    );
+    Some(gateway)
+}
+
+/// The current primary IPv4 state exposed to Linux compatibility APIs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct StaticIpv4Config {
+pub struct Ipv4Config {
     pub address: Ipv4Addr,
     pub prefix_len: u8,
-    pub gateway: Ipv4Addr,
+    pub gateway: Option<Ipv4Addr>,
     pub mac: [u8; 6],
 }
 
-/// Returns the configured `eth0` state once a physical NIC was registered.
-pub fn static_ipv4_config() -> Option<StaticIpv4Config> {
-    Some(StaticIpv4Config {
-        address: IP.parse().ok()?,
-        prefix_len: IP_PREFIX,
-        gateway: GATEWAY.parse().ok()?,
+pub fn eth0_exists() -> bool {
+    eth0_mac().is_some()
+}
+
+pub fn eth0_mac_address() -> Option<[u8; 6]> {
+    eth0_mac()
+}
+
+/// Returns the current primary IPv4 configuration, if `eth0` has one.
+pub fn ipv4_config() -> Option<Ipv4Config> {
+    let snapshot = SERVICE.get()?.lock().network_snapshot();
+    let address = snapshot
+        .addresses
+        .iter()
+        .find_map(|address| match address {
+            IpCidr::Ipv4(address) => Some(*address),
+            _ => None,
+        })?;
+    Some(Ipv4Config {
+        address: address.address(),
+        prefix_len: address.prefix_len(),
+        gateway: snapshot.ipv4_gateway,
         mac: eth0_mac()?,
     })
 }
@@ -122,7 +240,10 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
         lo_ip6.address().into(),
     ));
 
-    let eth0_ip = if let Some(dev) = net_devs.take_one() {
+    let mut eth0_addrs = Vec::new();
+    let mut ipv4_gateway = None;
+    let mut ipv6_gateway = None;
+    let eth0_dev = if let Some(dev) = net_devs.take_one() {
         info!("  use NIC 0: {:?}", dev.device_name());
 
         let eth0_address = EthernetAddress(dev.mac_address().0);
@@ -139,47 +260,57 @@ pub fn init_network(mut net_devs: AxDeviceContainer<AxNetDevice>) {
             ]),
             Ordering::Release,
         );
-        let eth0_ip = Ipv4Cidr::new(IP.parse().expect("Invalid IPv4 address"), IP_PREFIX);
+        eth0_addrs = configured_addresses(eth0_address);
+        ipv4_gateway = configured_ipv4_gateway(&eth0_addrs);
+        ipv6_gateway = configured_ipv6_gateway(&eth0_addrs);
 
         let eth0_dev = router.add_device(Box::new(EthernetDevice::new(
             "eth0".to_owned(),
             dev,
-            eth0_ip,
+            &eth0_addrs,
         )));
-
-        router.add_rule(Rule::new(
-            Ipv4Cidr::new(Ipv4Address::UNSPECIFIED, 0).into(),
-            Some(GATEWAY.parse().expect("Invalid gateway address")),
-            eth0_dev,
-            eth0_ip.address().into(),
-        ));
 
         info!("eth0:");
         info!("  mac:  {}", eth0_address);
-        info!("  ip:   {}", eth0_ip);
+        for address in &eth0_addrs {
+            info!("  ip:   {}", address);
+        }
 
-        Some(eth0_ip)
+        Some(eth0_dev)
     } else {
         warn!("  No network device found!");
         None
     };
-    let has_physical_nic = eth0_ip.is_some();
+    let has_physical_nic = eth0_dev.is_some();
 
     for dev in &router.devices {
         info!("Device: {}", dev.name());
     }
 
-    let mut service = Service::new(router);
-    service.iface.update_ip_addrs(|ip_addrs| {
-        ip_addrs.push(lo_ip.into()).unwrap();
-        ip_addrs.push(lo_ip6.into()).unwrap();
-        if let Some(eth0_ip) = eth0_ip {
-            ip_addrs.push(eth0_ip.into()).unwrap();
-        }
-    });
+    SOCKET_SET.init_once(SocketSetWrapper::new());
+    let dhcp_handle = if has_physical_nic
+        && !eth0_addrs
+            .iter()
+            .any(|address| matches!(address, IpCidr::Ipv4(_)))
+    {
+        let mut socket = smoltcp::socket::dhcpv4::Socket::new();
+        socket.set_client_hardware_address(EthernetAddress(eth0_mac().unwrap()));
+        Some(SOCKET_SET.add(socket))
+    } else {
+        None
+    };
+    let service = Service::new(
+        router,
+        eth0_dev,
+        eth0_addrs,
+        ipv4_gateway,
+        ipv6_gateway,
+        dhcp_handle,
+        IPV6_ADDRESS.is_empty(),
+        IPV6_GATEWAY.is_empty(),
+    );
     SERVICE.init_once(Mutex::new(service));
 
-    SOCKET_SET.init_once(SocketSetWrapper::new());
     LISTEN_TABLE.init_once(ListenTable::new());
     local::init();
     if has_physical_nic {
@@ -219,8 +350,6 @@ pub fn poll_interfaces() {
         }
     }
     if !POLL_BUDGET_WARNING_REPORTED.swap(true, Ordering::AcqRel) {
-        warn!(
-            "network poll budget exhausted; yielding with deferred work still pending"
-        );
+        warn!("network poll budget exhausted; yielding with deferred work still pending");
     }
 }

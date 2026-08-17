@@ -155,8 +155,10 @@ kernel-la-2k1000: toolchain
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000.toml \
 		APP_FEATURES="ls2k1000 $(if $(filter y,$(SITE_INIT)),site-init,)" \
 		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=2G \
-		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
-		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
+		IP=$(IP) \
+		IP_PREFIX=$(if $(strip $(IP_PREFIX)),$(IP_PREFIX),24) \
+		GW=$(GW) \
+		IP6=$(IP6) IP6_PREFIX=$(if $(strip $(IP6_PREFIX)),$(IP6_PREFIX),64) GW6=$(GW6) \
 		CPU_CAPACITY=2 SMP=2 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la.bin
 	@printf "    \033[36mLS2K1000LA image\033[0m: moss-2k1000la.bin\n"
@@ -170,8 +172,10 @@ kernel-la-2k1000-shell: toolchain
 		OUT_CONFIG=$(A)/.axconfig.ls2k1000-shell.toml \
 		APP_FEATURES="ls2k1000 shell-init ls2k1000-shell-mode" \
 		LOG=warn BUS=mmio BLK=n NET=n VSOCK=n MEM=2G \
-		IP=$(if $(strip $(IP)),$(IP),192.168.88.2) \
-		GW=$(if $(strip $(GW)),$(GW),192.168.88.1) \
+		IP=$(IP) \
+		IP_PREFIX=$(if $(strip $(IP_PREFIX)),$(IP_PREFIX),24) \
+		GW=$(GW) \
+		IP6=$(IP6) IP6_PREFIX=$(if $(strip $(IP6_PREFIX)),$(IP6_PREFIX),64) GW6=$(GW6) \
 		CPU_CAPACITY=2 SMP=2 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_loongarch64-ls2k1000.bin $(A)/moss-2k1000la-shell.bin
 	@printf "    \033[36mLS2K1000LA interactive image\033[0m: moss-2k1000la-shell.bin\n"
@@ -185,8 +189,10 @@ kernel-vf2: toolchain
 		OUT_CONFIG=$(A)/.axconfig.vf2.toml \
 		APP_FEATURES="vf2 $(if $(filter y,$(APPS_INIT)),apps-init vf2-watchdog,$(if $(filter y,$(SITE_INIT)),site-init vf2-watchdog,shell-init))" \
 		LOG=$(if $(strip $(LOG)),$(LOG),warn) BUS=mmio BLK=n NET=n VSOCK=n MEM=4G \
-		IP=$(if $(strip $(IP)),$(IP),192.168.1.10) \
-		GW=$(if $(strip $(GW)),$(GW),192.168.1.2) \
+		IP=$(IP) \
+		IP_PREFIX=$(if $(strip $(IP_PREFIX)),$(IP_PREFIX),24) \
+		GW=$(GW) \
+		IP6=$(IP6) IP6_PREFIX=$(if $(strip $(IP6_PREFIX)),$(IP6_PREFIX),64) GW6=$(GW6) \
 		CPU_CAPACITY=4 SMP=4 defconfig build
 	cp -f $(A)/$(KERNEL_NAME)_visionfive2.bin $(A)/moss-vf2.bin
 	@printf "    \033[36mVisionFive 2 image\033[0m: moss-vf2.bin\n"

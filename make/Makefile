@@ -33,8 +33,12 @@
 #     - `VFIO_PCI`: PCI device address in the format "bus:dev.func" to passthrough
 #     - `VHOST`: Enable vhost-net for tap backend (only for `NET_DEV=tap`)
 # * Network options:
-#     - `IP`: ArceOS IPv4 address (default is 10.0.2.15 for QEMU user netdev)
-#     - `GW`: Gateway IPv4 address (default is 10.0.2.2 for QEMU user netdev)
+#     - `IP`: IPv4 address (default is 10.0.2.15 for QEMU user netdev)
+#     - `IP_PREFIX`: IPv4 prefix length (default is 24)
+#     - `GW`: IPv4 default gateway (default is 10.0.2.2 for QEMU user netdev)
+#     - `IP6`: Optional static IPv6 address
+#     - `IP6_PREFIX`: IPv6 prefix length (default is 64)
+#     - `GW6`: Optional IPv6 default gateway
 
 # General options
 ARCH ?= x86_64
@@ -85,7 +89,11 @@ VHOST ?= n
 
 # Network options
 IP ?= 10.0.2.15
+IP_PREFIX ?= 24
 GW ?= 10.0.2.2
+IP6 ?=
+IP6_PREFIX ?= 64
+GW6 ?=
 
 # App type
 ifeq ($(wildcard $(APP)),)
@@ -132,7 +140,11 @@ export AX_MODE=$(MODE)
 export AX_LOG=$(LOG)
 export AX_TARGET=$(TARGET)
 export AX_IP=$(IP)
+export AX_IP_PREFIX=$(IP_PREFIX)
 export AX_GW=$(GW)
+export AX_IP6=$(IP6)
+export AX_IP6_PREFIX=$(IP6_PREFIX)
+export AX_GW6=$(GW6)
 export RUSTUP_TOOLCHAIN
 
 ifneq ($(filter $(MAKECMDGOALS),unittest unittest_no_fail_fast clippy doc doc_check_missing),)

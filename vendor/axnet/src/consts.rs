@@ -7,9 +7,12 @@ macro_rules! env_or_default {
     };
 }
 
-pub const IP: &str = env_or_default!("AX_IP");
-pub const GATEWAY: &str = env_or_default!("AX_GW");
-pub const IP_PREFIX: u8 = 24;
+pub const IPV4_ADDRESS: &str = env_or_default!("AX_IP");
+pub const IPV4_PREFIX: &str = env_or_default!("AX_IP_PREFIX");
+pub const IPV4_GATEWAY: &str = env_or_default!("AX_GW");
+pub const IPV6_ADDRESS: &str = env_or_default!("AX_IP6");
+pub const IPV6_PREFIX: &str = env_or_default!("AX_IP6_PREFIX");
+pub const IPV6_GATEWAY: &str = env_or_default!("AX_GW6");
 
 pub const STANDARD_MTU: usize = 1500;
 pub const LOOPBACK_MTU: usize = 65_535;

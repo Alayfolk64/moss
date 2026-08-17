@@ -1,6 +1,11 @@
+use alloc::vec::Vec;
 use core::task::Waker;
 
-use smoltcp::{storage::PacketBuffer, time::Instant, wire::IpAddress};
+use smoltcp::{
+    storage::PacketBuffer,
+    time::Instant,
+    wire::{IpAddress, IpCidr, Ipv6Address, Ipv6Cidr},
+};
 
 mod ethernet;
 mod loopback;
@@ -12,6 +17,27 @@ pub use loopback::*;
 #[cfg(feature = "vsock")]
 pub use vsock::*;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum NeighborState {
+    Incomplete,
+    Reachable,
+    Stale,
+    Permanent,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct NeighborEntry {
+    pub address: IpAddress,
+    pub hardware_address: Option<[u8; 6]>,
+    pub state: NeighborState,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Ipv6AutoconfigEvent {
+    pub address: Option<Ipv6Cidr>,
+    pub router: Option<Ipv6Address>,
+}
+
 pub trait Device: Send + Sync {
     fn name(&self) -> &str;
 
@@ -20,6 +46,22 @@ pub trait Device: Send + Sync {
     }
 
     fn notify_rx_ready(&self) {}
+
+    fn update_ip_addrs(&mut self, _addrs: &[IpCidr]) {}
+
+    fn neighbor_entries(&self, _timestamp: Instant, _entries: &mut Vec<NeighborEntry>) {}
+
+    fn remove_neighbor(&mut self, _address: IpAddress) -> bool {
+        false
+    }
+
+    fn set_neighbor(&mut self, _address: IpAddress, _hardware_address: [u8; 6]) -> bool {
+        false
+    }
+
+    fn take_ipv6_autoconfig_event(&mut self) -> Option<Ipv6AutoconfigEvent> {
+        None
+    }
 
     fn recv(&mut self, buffer: &mut PacketBuffer<()>, timestamp: Instant) -> bool;
     /// Sends a packet to the next hop.

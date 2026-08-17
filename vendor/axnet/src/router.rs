@@ -14,7 +14,7 @@ use crate::{
     device::Device,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Rule {
     pub filter: IpCidr,
     pub via: Option<IpAddress>,
@@ -47,9 +47,18 @@ impl RouteTable {
     pub fn add_rule(&mut self, rule: Rule) {
         let idx = self
             .rules
-            .binary_search_by(|it| rule.filter.prefix_len().cmp(&it.filter.prefix_len()))
+            .binary_search_by(|it| {
+                it.filter
+                    .prefix_len()
+                    .cmp(&rule.filter.prefix_len())
+                    .reverse()
+            })
             .unwrap_or_else(|idx| idx);
         self.rules.insert(idx, rule);
+    }
+
+    pub fn remove_device_rules(&mut self, dev: usize) {
+        self.rules.retain(|rule| rule.dev != dev);
     }
 
     pub fn lookup(&self, dst: &IpAddress) -> Option<&Rule> {
@@ -135,8 +144,8 @@ impl Router {
     fn packet_route(table: &RouteTable, packet: &[u8]) -> PacketRoute {
         match IpVersion::of_packet(packet).expect("got invalid IP packet") {
             IpVersion::Ipv4 => {
-                let packet =
-                    smoltcp::wire::Ipv4Packet::new_checked(packet).expect("got invalid IPv4 packet");
+                let packet = smoltcp::wire::Ipv4Packet::new_checked(packet)
+                    .expect("got invalid IPv4 packet");
                 let dst_addr = IpAddress::Ipv4(packet.dst_addr());
                 if packet.dst_addr().is_broadcast() {
                     PacketRoute::Broadcast(dst_addr)
@@ -146,7 +155,11 @@ impl Router {
                         return PacketRoute::Drop;
                     };
                     if rule.src != IpAddress::Ipv4(packet.src_addr()) {
-                        warn!("Invalid source address {} for route to {}", packet.src_addr(), dst_addr);
+                        warn!(
+                            "Invalid source address {} for route to {}",
+                            packet.src_addr(),
+                            dst_addr
+                        );
                         return PacketRoute::Drop;
                     }
                     PacketRoute::Unicast {
@@ -156,8 +169,8 @@ impl Router {
                 }
             }
             IpVersion::Ipv6 => {
-                let packet =
-                    smoltcp::wire::Ipv6Packet::new_checked(packet).expect("got invalid IPv6 packet");
+                let packet = smoltcp::wire::Ipv6Packet::new_checked(packet)
+                    .expect("got invalid IPv6 packet");
                 let dst_addr = IpAddress::Ipv6(packet.dst_addr());
                 if packet.dst_addr().is_multicast() {
                     PacketRoute::Multicast(dst_addr)
@@ -167,7 +180,11 @@ impl Router {
                         return PacketRoute::Drop;
                     };
                     if rule.src != IpAddress::Ipv6(packet.src_addr()) {
-                        warn!("Invalid source address {} for route to {}", packet.src_addr(), dst_addr);
+                        warn!(
+                            "Invalid source address {} for route to {}",
+                            packet.src_addr(),
+                            dst_addr
+                        );
                         return PacketRoute::Drop;
                     }
                     PacketRoute::Unicast {
@@ -194,9 +211,9 @@ impl Router {
                 }
                 poll_next
             }
-            PacketRoute::Unicast {
-                next_hop, dev, ..
-            } => Self::send_via_rule(devices, rx_buffer, next_hop, dev, packet, timestamp),
+            PacketRoute::Unicast { next_hop, dev, .. } => {
+                Self::send_via_rule(devices, rx_buffer, next_hop, dev, packet, timestamp)
+            }
             PacketRoute::Drop => false,
         }
     }
@@ -222,10 +239,7 @@ impl Router {
 enum PacketRoute {
     Broadcast(IpAddress),
     Multicast(IpAddress),
-    Unicast {
-        next_hop: IpAddress,
-        dev: usize,
-    },
+    Unicast { next_hop: IpAddress, dev: usize },
     Drop,
 }
 
@@ -322,12 +336,7 @@ impl smoltcp::phy::TxToken for TxToken<'_> {
                 if let Some(dev) = Self::loopback_route_dev(devices, table, dst_addr) {
                     let mut emit = Some(f);
                     if let Some(result) = Self::try_direct_loopback_consume(
-                        rx_buffer,
-                        poll_next,
-                        devices,
-                        dev,
-                        len,
-                        &mut emit,
+                        rx_buffer, poll_next, devices, dev, len, &mut emit,
                     ) {
                         return result;
                     }

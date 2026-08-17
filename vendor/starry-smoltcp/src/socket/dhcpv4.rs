@@ -9,7 +9,7 @@ use crate::wire::{
     Ipv4Cidr, Ipv4Repr, UdpRepr, DHCP_CLIENT_PORT, DHCP_MAX_DNS_SERVER_COUNT, DHCP_SERVER_PORT,
     UDP_HEADER_LEN,
 };
-use crate::wire::{DhcpOption, HardwareAddress};
+use crate::wire::{DhcpOption, EthernetAddress, HardwareAddress};
 use heapless::Vec;
 
 #[cfg(feature = "async")]
@@ -159,6 +159,9 @@ pub struct Socket<'a> {
     /// xid of the last sent message.
     transaction_id: u32,
 
+    /// Ethernet address used when the surrounding interface has an IP medium.
+    client_hardware_address: Option<EthernetAddress>,
+
     /// Max lease duration. If set, it sets a maximum cap to the server-provided lease duration.
     /// Useful to react faster to IP configuration changes and to test whether renews work correctly.
     max_lease_duration: Option<Duration>,
@@ -203,6 +206,7 @@ impl<'a> Socket<'a> {
             }),
             config_changed: true,
             transaction_id: 1,
+            client_hardware_address: None,
             max_lease_duration: None,
             retry_config: RetryConfig::default(),
             ignore_naks: false,
@@ -214,6 +218,22 @@ impl<'a> Socket<'a> {
             server_port: DHCP_SERVER_PORT,
             client_port: DHCP_CLIENT_PORT,
         }
+    }
+
+    /// Set the Ethernet address carried in DHCP messages.
+    ///
+    /// This is required when Ethernet framing is supplied below an IP-medium
+    /// smoltcp interface.
+    pub fn set_client_hardware_address(&mut self, address: EthernetAddress) {
+        self.client_hardware_address = Some(address);
+    }
+
+    fn ethernet_address(&self, cx: &Context) -> Option<EthernetAddress> {
+        self.client_hardware_address
+            .or_else(|| match cx.hardware_addr() {
+                HardwareAddress::Ethernet(address) => Some(address),
+                _ => None,
+            })
     }
 
     /// Set the retry/timeouts configuration.
@@ -329,8 +349,9 @@ impl<'a> Socket<'a> {
             }
         };
 
-        let HardwareAddress::Ethernet(ethernet_addr) = cx.hardware_addr() else {
-            panic!("using DHCPv4 socket with a non-ethernet hardware address.");
+        let Some(ethernet_addr) = self.ethernet_address(cx) else {
+            net_debug!("DHCPv4 socket has no Ethernet client address");
+            return;
         };
 
         if dhcp_repr.client_hardware_address != ethernet_addr {
@@ -564,10 +585,9 @@ impl<'a> Socket<'a> {
     where
         F: FnOnce(&mut Context, (Ipv4Repr, UdpRepr, DhcpRepr)) -> Result<(), E>,
     {
-        // note: Dhcpv4Socket is only usable in ethernet mediums, so the
-        // unwrap can never fail.
-        let HardwareAddress::Ethernet(ethernet_addr) = cx.hardware_addr() else {
-            panic!("using DHCPv4 socket with a non-ethernet hardware address.");
+        let Some(ethernet_addr) = self.ethernet_address(cx) else {
+            net_debug!("DHCPv4 socket has no Ethernet client address");
+            return Ok(());
         };
 
         // Worst case biggest IPv4 header length.
