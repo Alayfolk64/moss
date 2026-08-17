@@ -87,6 +87,14 @@ impl ProcessSignalManager {
         }
     }
 
+    /// Returns whether the signal currently has a userspace handler.
+    pub fn has_user_handler(&self, signo: Signo) -> bool {
+        matches!(
+            &self.actions.lock()[signo].disposition,
+            SignalDisposition::Handler(_)
+        )
+    }
+
     /// Checks if syscalls interrupted by the given signal can be restarted.
     pub fn can_restart(&self, signo: Signo) -> bool {
         self.actions.lock()[signo]
