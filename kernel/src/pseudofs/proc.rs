@@ -898,6 +898,8 @@ impl SimpleDirOps for ThreadDir {
                 "stat",
                 "status",
                 "oom_score_adj",
+                "loginuid",
+                "sessionid",
                 "task",
                 "maps",
                 "mem",
@@ -947,6 +949,34 @@ impl SimpleDirOps for ThreadDir {
                     }
                 }),
             )
+            .into(),
+            "loginuid" => SimpleFile::new_regular(
+                fs,
+                RwFile::new(move |req| match req {
+                    SimpleFileOperation::Read => Ok(Some(
+                        format!("{}\n", task.as_thread().proc_data.loginuid()).into_bytes(),
+                    )),
+                    SimpleFileOperation::Write(data) => {
+                        if current().as_thread().proc_data.euid() != 0 {
+                            return Err(VfsError::PermissionDenied);
+                        }
+                        let input = str::from_utf8(data)
+                            .map_err(|_| VfsError::InvalidInput)?
+                            .trim();
+                        let loginuid = if input == "-1" {
+                            u32::MAX
+                        } else {
+                            input.parse::<u32>().map_err(|_| VfsError::InvalidInput)?
+                        };
+                        task.as_thread().proc_data.set_loginuid(loginuid);
+                        Ok(None)
+                    }
+                }),
+            )
+            .into(),
+            "sessionid" => SimpleFile::new_regular(fs, move || {
+                Ok(format!("{}\n", task.as_thread().proc_data.audit_session_id()).into_bytes())
+            })
             .into(),
             "task" => SimpleDir::new_maker(
                 fs.clone(),

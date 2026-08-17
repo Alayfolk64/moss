@@ -172,6 +172,13 @@ impl FileNodeOps for SimpleFile {
     }
 
     fn set_len(&self, len: u64) -> VfsResult<()> {
+        // procfs/sysfs-style control files are not storage objects.  Shell
+        // redirection opens them with O_TRUNC before issuing the real write;
+        // treating that truncate as an empty control command makes ordinary
+        // `echo value > file` fail before `value` reaches the handler.
+        if len == 0 {
+            return Ok(());
+        }
         let data = self.ops.read_all()?;
         match len.cmp(&(data.len() as u64)) {
             Ordering::Less => self.ops.write_all(&data[..len as usize]),
