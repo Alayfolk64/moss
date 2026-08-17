@@ -835,6 +835,12 @@ struct CachedFileRecord {
     location: Location,
     shared: Arc<FileAddressSpace>,
     in_memory: bool,
+    /// The inode has been unlinked or superseded and is no longer reachable
+    /// through the global `(filesystem, inode)` index. Its pages must remain
+    /// alive while an open file or mmap owns this record, but they can be
+    /// discarded when the final owner leaves because no directory entry can
+    /// make their contents persistent again.
+    retired: AtomicBool,
     last_used: AtomicU64,
 }
 
@@ -844,6 +850,47 @@ impl CachedFileRecord {
             FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed),
             Ordering::Relaxed,
         );
+    }
+}
+
+impl Drop for CachedFileRecord {
+    fn drop(&mut self) {
+        if !self.retired.load(Ordering::Acquire) {
+            return;
+        }
+
+        // Record destruction is the ownership barrier: the global index,
+        // namespace user-data slot, every open file, every mmap backend and
+        // every in-flight cache operation have released this inode
+        // generation. A detached FolioPageRef may still pin a frame briefly
+        // (for example a stale private-COW fault plan), so clear its state
+        // before FileAddressSpace releases the index-owned references.
+        let invalidate = self.shared.invalidate_lock.write();
+        let folios = {
+            let mut heads = self.shared.folio_heads.lock();
+            core::mem::take(&mut *heads)
+                .into_values()
+                .collect::<Vec<_>>()
+        };
+        for shard in &self.shared.folio_index {
+            shard.write().clear();
+        }
+        for folio in folios {
+            let mut state = folio.state.lock();
+            state.loading = false;
+            state.uptodate = false;
+            state.error = Some(VfsError::Io);
+            state.dirty = 0;
+            state.writeback = 0;
+            state.truncated = true;
+            drop(state);
+            folio.wait.notify_all(false);
+        }
+        drop(invalidate);
+
+        // A live mmap listener owns a CachedFile and therefore prevents this
+        // record from reaching Drop. Keep that ownership rule executable.
+        debug_assert!(self.shared.evict_listeners.lock().is_empty());
     }
 }
 
@@ -946,6 +993,7 @@ impl CachedFile {
                     location: location.clone(),
                     shared,
                     in_memory,
+                    retired: AtomicBool::new(false),
                     last_used: AtomicU64::new(FILE_CACHE_CLOCK.fetch_add(1, Ordering::Relaxed)),
                 })
             })
@@ -963,7 +1011,10 @@ impl CachedFile {
         let stale = {
             let mut records = cache.write();
             match records.get(&key) {
-                Some(record) if !record.location.ptr_eq(location) => records.remove(&key),
+                Some(record) if !record.location.ptr_eq(location) => {
+                    record.retired.store(true, Ordering::Release);
+                    records.remove(&key)
+                }
                 _ => None,
             }
         };
@@ -2029,31 +2080,6 @@ impl CachedFile {
         }
     }
 
-    fn discard_cached_pages(&self) {
-        let invalidate = self.shared().invalidate_lock.write();
-        let mut removed = Vec::new();
-        for folio in self.folios_snapshot() {
-            if self.remove_folio(&folio) {
-                {
-                    let mut state = folio.state.lock();
-                    state.loading = false;
-                    state.uptodate = false;
-                    state.error = Some(VfsError::Io);
-                    state.dirty = 0;
-                    state.writeback = 0;
-                    state.truncated = true;
-                }
-                folio.wait.notify_all(false);
-                removed.push(folio);
-            }
-        }
-        drop(invalidate);
-
-        for folio in removed {
-            self.notify_folio_evict(&folio);
-        }
-    }
-
     fn memory_watermarks() -> (usize, usize) {
         let allocator = global_allocator();
         let total = allocator.used_pages() + allocator.available_pages();
@@ -2343,6 +2369,13 @@ pub fn invalidate_file_cache(location: &Location) -> VfsResult<()> {
 pub struct RemovedFileCache(Option<Arc<CachedFileRecord>>);
 
 pub fn invalidate_removed_file_cache(location: &Location) -> VfsResult<RemovedFileCache> {
+    // Retiring a cache is valid only when this namespace operation removes
+    // the final link. Keep this check here as well as at syscall/VFS callers:
+    // discarding a still-linked inode would lose writes made through another
+    // hard-link alias.
+    if location.metadata()?.nlink > 1 {
+        return Err(VfsError::InvalidInput);
+    }
     let key = CachedFile::file_cache_key(location);
     let cache = CachedFile::cache_for_key(key);
     let Some(record) = cache.read().get(&key).cloned() else {
@@ -2366,6 +2399,7 @@ pub fn finalize_removed_file_cache(removed: RemovedFileCache) {
     };
     let key = record.key;
     let cache = CachedFile::cache_for_key(key);
+    record.retired.store(true, Ordering::Release);
     {
         let mut records = cache.write();
         if records
@@ -2376,11 +2410,9 @@ pub fn finalize_removed_file_cache(removed: RemovedFileCache) {
         }
     }
 
-    // tmpfs 的页就是文件内容；只有没有打开文件或 mmap 持有记录时才能丢弃。
-    if record.in_memory && Arc::strong_count(&record) == 1 {
-        CachedFile::from_record(&record).discard_cached_pages();
-    }
     record.location.user_data().remove::<FileUserData>();
+    // Open files and mmap backends keep the retired record alive. Once every
+    // owner releases it, CachedFileRecord::drop clears the orphaned folios.
 }
 
 pub fn cached_file_len(location: &Location) -> Option<u64> {
