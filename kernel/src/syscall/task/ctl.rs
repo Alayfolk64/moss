@@ -19,6 +19,8 @@ const CAPABILITY_VERSION_2: u32 = 0x20071026;
 const CAPABILITY_VERSION_3: u32 = 0x20080522;
 const CAP_SETPCAP: u32 = 8;
 const CAP_MASK: u64 = (1u64 << (CAP_LAST_CAP + 1)) - 1;
+const SECUREBITS_VALID_MASK: u32 = 0xff;
+const SECBIT_NO_CAP_AMBIENT_RAISE: u32 = 1 << 6;
 
 #[derive(Clone, Copy, Debug)]
 struct CapState {
@@ -26,6 +28,8 @@ struct CapState {
     permitted: u64,
     inheritable: u64,
     bounding: u64,
+    ambient: u64,
+    securebits: u32,
 }
 
 impl Default for CapState {
@@ -35,6 +39,8 @@ impl Default for CapState {
             permitted: u32::MAX as u64,
             inheritable: 0,
             bounding: CAP_MASK,
+            ambient: 0,
+            securebits: 0,
         }
     }
 }
@@ -67,6 +73,11 @@ fn set_state(pid: u32, state: CapState) {
 
 pub fn release_process_cap_state(pid: u32) {
     CAP_STATE.lock().remove(&pid);
+}
+
+pub fn inherit_process_cap_state(parent_pid: u32, child_pid: u32) {
+    let parent = get_state(parent_pid);
+    set_state(child_pid, parent);
 }
 
 fn read_caps(version: u32, data: *mut __user_cap_data_struct) -> AxResult<(u64, u64, u64)> {
@@ -182,6 +193,8 @@ pub fn sys_capset(
             permitted: new_p,
             inheritable: new_i,
             bounding: old.bounding,
+            ambient: old.ambient & new_p & new_i,
+            securebits: old.securebits,
         },
     );
 
@@ -316,6 +329,36 @@ pub fn sys_setresgid(rgid: u32, egid: u32, _sgid: u32) -> AxResult<isize> {
     Ok(0)
 }
 
+pub fn sys_setfsuid(uid: u32) -> AxResult<isize> {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let old = proc_data.fsuid();
+    if uid != UID_GID_NO_CHANGE
+        && (proc_data.euid() == 0
+            || [proc_data.uid(), proc_data.euid(), proc_data.suid(), old].contains(&uid))
+    {
+        proc_data.set_fsuid(uid);
+    }
+    // Linux reports the previous fsuid even when the requested change is not
+    // permitted; callers query success by issuing a second setfsuid(-1).
+    Ok(old as isize)
+}
+
+pub fn sys_setfsgid(gid: u32) -> AxResult<isize> {
+    let curr = current();
+    let proc_data = &curr.as_thread().proc_data;
+    let old = proc_data.fsgid();
+    let in_groups = proc_data.supplementary_groups().contains(&gid);
+    if gid != UID_GID_NO_CHANGE
+        && (proc_data.euid() == 0
+            || in_groups
+            || [proc_data.gid(), proc_data.egid(), proc_data.sgid(), old].contains(&gid))
+    {
+        proc_data.set_fsgid(gid);
+    }
+    Ok(old as isize)
+}
+
 pub fn sys_get_mempolicy(
     _policy: *mut i32,
     _nodemask: *mut usize,
@@ -359,13 +402,16 @@ pub fn sys_prctl(
             vm_write_slice(arg2 as _, &buf)?;
         }
         PR_SET_DUMPABLE => {
-            // MOSS does not generate process core dumps yet.  Accept Linux's
-            // disabled/user-dump modes so daemons such as nginx can complete their
-            // worker initialization without changing an unsupported dump
-            // backend.
-            if !matches!(arg2, 0 | 1) || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+            if !matches!(arg2, 0 | 1) {
                 return Err(AxError::InvalidInput);
             }
+            // The unused variadic arguments are deliberately ignored.  Many C
+            // callers pass only option and value, so those registers are not a
+            // valid part of PR_SET_DUMPABLE's ABI.
+            current().as_thread().proc_data.set_dumpable(arg2 != 0);
+        }
+        PR_GET_DUMPABLE => {
+            return Ok(current().as_thread().proc_data.dumpable() as isize);
         }
         PR_SET_NO_NEW_PRIVS => {
             if arg2 != 1 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
@@ -392,6 +438,75 @@ pub fn sys_prctl(
                 Signo::from_repr(signo).ok_or(AxError::InvalidInput)?;
             }
             current().as_thread().set_pdeath_signal(arg2 as u32);
+        }
+        PR_GET_SECUREBITS => {
+            if arg2 != 0 || arg3 != 0 || arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+            return Ok(get_state(current_pid()).securebits as isize);
+        }
+        PR_SET_SECUREBITS => {
+            if arg3 != 0 || arg4 != 0 || arg5 != 0 || arg2 & !(SECUREBITS_VALID_MASK as usize) != 0
+            {
+                return Err(AxError::InvalidInput);
+            }
+            if !current_has_cap(CAP_SETPCAP) {
+                return Err(eperm());
+            }
+
+            let pid = current_pid();
+            let mut state = get_state(pid);
+            let new_securebits = arg2 as u32;
+            for value_bit in [0u32, 2, 4, 6] {
+                let pair_mask = 3u32 << value_bit;
+                let lock_bit = 1u32 << (value_bit + 1);
+                if state.securebits & lock_bit != 0
+                    && (state.securebits ^ new_securebits) & pair_mask != 0
+                {
+                    return Err(eperm());
+                }
+            }
+            state.securebits = new_securebits;
+            set_state(pid, state);
+        }
+        PR_CAP_AMBIENT => {
+            if arg4 != 0 || arg5 != 0 {
+                return Err(AxError::InvalidInput);
+            }
+
+            let pid = current_pid();
+            let mut state = get_state(pid);
+            match arg2 as u32 {
+                PR_CAP_AMBIENT_IS_SET | PR_CAP_AMBIENT_RAISE | PR_CAP_AMBIENT_LOWER => {
+                    let cap = u32::try_from(arg3).map_err(|_| AxError::InvalidInput)?;
+                    if cap > CAP_LAST_CAP {
+                        return Err(AxError::InvalidInput);
+                    }
+                    let bit = 1u64 << cap;
+                    match arg2 as u32 {
+                        PR_CAP_AMBIENT_IS_SET => return Ok((state.ambient & bit != 0) as isize),
+                        PR_CAP_AMBIENT_RAISE => {
+                            if state.permitted & bit == 0
+                                || state.inheritable & bit == 0
+                                || state.securebits & SECBIT_NO_CAP_AMBIENT_RAISE != 0
+                            {
+                                return Err(eperm());
+                            }
+                            state.ambient |= bit;
+                        }
+                        PR_CAP_AMBIENT_LOWER => state.ambient &= !bit,
+                        _ => unreachable!(),
+                    }
+                }
+                PR_CAP_AMBIENT_CLEAR_ALL => {
+                    if arg3 != 0 {
+                        return Err(AxError::InvalidInput);
+                    }
+                    state.ambient = 0;
+                }
+                _ => return Err(AxError::InvalidInput),
+            }
+            set_state(pid, state);
         }
         PR_CAPBSET_READ => {
             let cap = arg2 as u32;

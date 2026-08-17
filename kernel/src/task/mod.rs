@@ -63,6 +63,7 @@ const INIT_PID_NS_INODE: u64 = 0x0f00_0001;
 const INIT_UTS_NS_INODE: u64 = 0x0f00_0002;
 const INIT_USER_NS_INODE: u64 = 0x0f00_0003;
 static NEXT_NAMESPACE_INODE: AtomicU64 = AtomicU64::new(0x0f00_0100);
+static NEXT_AUDIT_SESSION_ID: AtomicU32 = AtomicU32::new(1);
 
 #[derive(Debug, Clone, Copy)]
 pub struct NamespaceState {
@@ -355,6 +356,8 @@ pub struct ProcessData {
     rseq_abort_generation: AtomicU64,
     sched_policy: AtomicU32,
     sched_priority: AtomicI32,
+    nice: AtomicI32,
+    dumpable: AtomicBool,
     no_new_privs: AtomicBool,
 
     /// The default mask for file permissions.
@@ -363,10 +366,14 @@ pub struct ProcessData {
     uid: AtomicU32,
     euid: AtomicU32,
     suid: AtomicU32,
+    fsuid: AtomicU32,
     gid: AtomicU32,
     egid: AtomicU32,
     sgid: AtomicU32,
+    fsgid: AtomicU32,
     supplementary_groups: SpinNoIrq<Vec<u32>>,
+    loginuid: AtomicU32,
+    audit_session_id: AtomicU32,
 }
 
 impl ProcessData {
@@ -414,6 +421,8 @@ impl ProcessData {
             rseq_abort_generation: AtomicU64::new(0),
             sched_policy: AtomicU32::new(0),
             sched_priority: AtomicI32::new(0),
+            nice: AtomicI32::new(0),
+            dumpable: AtomicBool::new(true),
             no_new_privs: AtomicBool::new(false),
 
             umask: AtomicU32::new(0o022),
@@ -421,10 +430,14 @@ impl ProcessData {
             uid: AtomicU32::new(0),
             euid: AtomicU32::new(0),
             suid: AtomicU32::new(0),
+            fsuid: AtomicU32::new(0),
             gid: AtomicU32::new(0),
             egid: AtomicU32::new(0),
             sgid: AtomicU32::new(0),
+            fsgid: AtomicU32::new(0),
             supplementary_groups: SpinNoIrq::new(vec![0]),
+            loginuid: AtomicU32::new(u32::MAX),
+            audit_session_id: AtomicU32::new(u32::MAX),
         })
     }
 
@@ -569,6 +582,48 @@ impl ProcessData {
         self.sched_priority.store(priority, Ordering::SeqCst);
     }
 
+    pub fn nice(&self) -> i32 {
+        self.nice.load(Ordering::SeqCst)
+    }
+
+    pub fn set_nice(&self, nice: i32) {
+        self.nice.store(nice, Ordering::SeqCst);
+    }
+
+    pub fn dumpable(&self) -> bool {
+        self.dumpable.load(Ordering::Acquire)
+    }
+
+    pub fn set_dumpable(&self, dumpable: bool) {
+        self.dumpable.store(dumpable, Ordering::Release);
+    }
+
+    pub fn loginuid(&self) -> u32 {
+        self.loginuid.load(Ordering::Acquire)
+    }
+
+    pub fn audit_session_id(&self) -> u32 {
+        self.audit_session_id.load(Ordering::Acquire)
+    }
+
+    pub fn set_loginuid(&self, uid: u32) {
+        self.loginuid.store(uid, Ordering::Release);
+        if uid == u32::MAX {
+            self.audit_session_id.store(u32::MAX, Ordering::Release);
+        } else if self.audit_session_id.load(Ordering::Acquire) == u32::MAX {
+            self.audit_session_id.store(
+                NEXT_AUDIT_SESSION_ID.fetch_add(1, Ordering::Relaxed),
+                Ordering::Release,
+            );
+        }
+    }
+
+    pub fn inherit_audit_identity(&self, parent: &ProcessData) {
+        self.loginuid.store(parent.loginuid(), Ordering::Release);
+        self.audit_session_id
+            .store(parent.audit_session_id(), Ordering::Release);
+    }
+
     pub fn no_new_privs(&self) -> bool {
         self.no_new_privs.load(Ordering::Acquire)
     }
@@ -589,6 +644,10 @@ impl ProcessData {
         self.suid.load(Ordering::SeqCst)
     }
 
+    pub fn fsuid(&self) -> u32 {
+        self.fsuid.load(Ordering::SeqCst)
+    }
+
     pub fn gid(&self) -> u32 {
         self.gid.load(Ordering::SeqCst)
     }
@@ -601,10 +660,15 @@ impl ProcessData {
         self.sgid.load(Ordering::SeqCst)
     }
 
+    pub fn fsgid(&self) -> u32 {
+        self.fsgid.load(Ordering::SeqCst)
+    }
+
     pub fn set_uid(&self, uid: u32) {
         self.uid.store(uid, Ordering::SeqCst);
         self.euid.store(uid, Ordering::SeqCst);
         self.suid.store(uid, Ordering::SeqCst);
+        self.fsuid.store(uid, Ordering::SeqCst);
     }
 
     pub fn set_real_uid(&self, uid: u32) {
@@ -613,16 +677,22 @@ impl ProcessData {
 
     pub fn set_euid(&self, euid: u32) {
         self.euid.store(euid, Ordering::SeqCst);
+        self.fsuid.store(euid, Ordering::SeqCst);
     }
 
     pub fn set_suid(&self, suid: u32) {
         self.suid.store(suid, Ordering::SeqCst);
     }
 
+    pub fn set_fsuid(&self, fsuid: u32) {
+        self.fsuid.store(fsuid, Ordering::SeqCst);
+    }
+
     pub fn set_gid(&self, gid: u32) {
         self.gid.store(gid, Ordering::SeqCst);
         self.egid.store(gid, Ordering::SeqCst);
         self.sgid.store(gid, Ordering::SeqCst);
+        self.fsgid.store(gid, Ordering::SeqCst);
     }
 
     pub fn set_real_gid(&self, gid: u32) {
@@ -631,10 +701,15 @@ impl ProcessData {
 
     pub fn set_egid(&self, egid: u32) {
         self.egid.store(egid, Ordering::SeqCst);
+        self.fsgid.store(egid, Ordering::SeqCst);
     }
 
     pub fn set_sgid(&self, sgid: u32) {
         self.sgid.store(sgid, Ordering::SeqCst);
+    }
+
+    pub fn set_fsgid(&self, fsgid: u32) {
+        self.fsgid.store(fsgid, Ordering::SeqCst);
     }
 
     pub fn supplementary_groups(&self) -> Vec<u32> {

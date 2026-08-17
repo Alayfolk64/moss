@@ -273,17 +273,26 @@ impl CloneArgs {
                 proc_data
                     .set_sched_state(old_proc_data.sched_policy(), old_proc_data.sched_priority());
             }
+            proc_data.set_nice(old_proc_data.nice());
+            proc_data.set_dumpable(old_proc_data.dumpable());
+            proc_data.inherit_audit_identity(old_proc_data);
             proc_data.set_uid(old_proc_data.uid());
             proc_data.set_euid(old_proc_data.euid());
             proc_data.set_suid(old_proc_data.suid());
+            proc_data.set_fsuid(old_proc_data.fsuid());
             proc_data.set_gid(old_proc_data.gid());
             proc_data.set_egid(old_proc_data.egid());
             proc_data.set_sgid(old_proc_data.sgid());
+            proc_data.set_fsgid(old_proc_data.fsgid());
             if old_proc_data.no_new_privs() {
                 proc_data.set_no_new_privs();
             }
             proc_data.set_supplementary_groups(old_proc_data.supplementary_groups());
             crate::syscall::inherit_child_timens_offsets(
+                old_proc_data.proc.pid(),
+                proc_data.proc.pid(),
+            );
+            crate::syscall::inherit_process_cap_state(
                 old_proc_data.proc.pid(),
                 proc_data.proc.pid(),
             );

@@ -12,8 +12,9 @@ use linux_raw_sys::general::{
 use starry_process::Pid;
 use starry_vm::{VmMutPtr, VmPtr, vm_load, vm_write_slice};
 
+use super::current_has_cap;
 use crate::{
-    task::{AsThread, ProcessData, get_process_data, get_process_group, get_task},
+    task::{AsThread, ProcessData, get_process_data, get_process_group, get_task, processes},
     time::TimeValueLike,
 };
 
@@ -275,28 +276,90 @@ pub fn sys_sched_getparam(pid: i32, param: *mut ()) -> AxResult<isize> {
 pub fn sys_getpriority(which: u32, who: u32) -> AxResult<isize> {
     debug!("sys_getpriority <= which: {which}, who: {who}");
 
+    let targets = priority_targets(which, who)?;
+    let nice = targets
+        .iter()
+        .map(|proc_data| proc_data.nice())
+        .min()
+        .ok_or(AxError::NoSuchProcess)?;
+    Ok((20 - nice) as isize)
+}
+
+fn priority_targets(
+    which: u32,
+    who: u32,
+) -> AxResult<alloc::vec::Vec<alloc::sync::Arc<ProcessData>>> {
+    let curr = current();
+    let curr_proc = &curr.as_thread().proc_data;
     match which {
-        PRIO_PROCESS => {
-            if who != 0 {
-                let _proc = get_process_data(who)?;
-            }
-            Ok(20)
-        }
+        PRIO_PROCESS => Ok(alloc::vec![if who == 0 {
+            curr_proc.clone()
+        } else {
+            get_process_data(who)?
+        }]),
         PRIO_PGRP => {
-            if who != 0 {
-                let _pg = get_process_group(who)?;
+            let group = if who == 0 {
+                curr_proc.proc.group()
+            } else {
+                get_process_group(who)?
+            };
+            let targets = group
+                .processes()
+                .into_iter()
+                .filter_map(|proc| get_process_data(proc.pid()).ok())
+                .collect::<alloc::vec::Vec<_>>();
+            if targets.is_empty() {
+                Err(AxError::NoSuchProcess)
+            } else {
+                Ok(targets)
             }
-            Ok(20)
         }
         PRIO_USER => {
-            if who == 0 {
-                Ok(20)
-            } else {
+            let uid = if who == 0 { curr_proc.uid() } else { who };
+            let targets = processes()
+                .into_iter()
+                .filter(|proc_data| proc_data.uid() == uid)
+                .collect::<alloc::vec::Vec<_>>();
+            if targets.is_empty() {
                 Err(AxError::NoSuchProcess)
+            } else {
+                Ok(targets)
             }
         }
         _ => Err(AxError::InvalidInput),
     }
+}
+
+pub fn sys_setpriority(which: u32, who: u32, nice: i32) -> AxResult<isize> {
+    debug!("sys_setpriority <= which: {which}, who: {who}, nice: {nice}");
+
+    let nice = nice.clamp(-20, 19);
+    let targets = priority_targets(which, who)?;
+    let curr = current();
+    let curr_proc = &curr.as_thread().proc_data;
+    let has_sys_nice =
+        curr_proc.euid() == 0 || current_has_cap(linux_raw_sys::general::CAP_SYS_NICE);
+
+    for target in &targets {
+        let owns_target = curr_proc.euid() == target.uid() || curr_proc.euid() == target.euid();
+        if !owns_target && !has_sys_nice {
+            return Err(AxError::from(LinuxError::EPERM));
+        }
+        if nice < target.nice() && !has_sys_nice {
+            return Err(AxError::from(LinuxError::EACCES));
+        }
+    }
+
+    for target in targets {
+        target.set_nice(nice);
+        if target.proc.pid() == curr_proc.proc.pid() {
+            // CFS applies the weight immediately.  FIFO/RR schedulers do not
+            // have a nice-weight concept, but Linux-visible nice state still
+            // has to be set, inherited, and reported successfully.
+            let _ = axtask::set_priority(nice as isize);
+        }
+    }
+    Ok(0)
 }
 
 const IOPRIO_WHO_PROCESS: u32 = 1;

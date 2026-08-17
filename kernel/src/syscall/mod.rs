@@ -494,6 +494,7 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::sched_setparam => sys_sched_setparam(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::sched_getparam => sys_sched_getparam(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::getpriority => sys_getpriority(uctx.arg0() as _, uctx.arg1() as _),
+        Sysno::setpriority => sys_setpriority(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::ioprio_get => sys_ioprio_get(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::ioprio_set => sys_ioprio_set(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
 
@@ -551,6 +552,8 @@ pub fn handle_syscall(uctx: &mut UserContext) {
         Sysno::setreuid => sys_setreuid(uctx.arg0() as _, uctx.arg1() as _),
         Sysno::setresuid => sys_setresuid(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
         Sysno::setresgid => sys_setresgid(uctx.arg0() as _, uctx.arg1() as _, uctx.arg2() as _),
+        Sysno::setfsuid => sys_setfsuid(uctx.arg0() as _),
+        Sysno::setfsgid => sys_setfsgid(uctx.arg0() as _),
         Sysno::get_mempolicy => sys_get_mempolicy(
             uctx.arg0() as _,
             uctx.arg1() as _,
