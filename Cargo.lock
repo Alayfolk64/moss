@@ -722,6 +722,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36b92f85c6903350f5146216ccb7d7a7e7b4dbd6f5927a1279db03ba52a53ae7"
 dependencies = [
  "bitflags 2.11.0",
+ "kernel_guard",
  "linux-raw-sys 0.12.1",
  "spin 0.10.0",
 ]

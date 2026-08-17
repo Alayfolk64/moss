@@ -13,6 +13,7 @@ use core::{
 };
 
 use bitflags::bitflags;
+use kernel_guard::NoPreemptIrqSave;
 use linux_raw_sys::general::*;
 use spin::{Lazy, Mutex};
 
@@ -87,7 +88,7 @@ impl Inner {
         self.cursor == 0
     }
 
-    fn register(&mut self, waker: &Waker) {
+    fn register(&mut self, waker: &Waker) -> Option<Waker> {
         // Re-registering the same logical waiter is idempotent.  Keeping
         // duplicate clones wastes the bounded table and amplifies a single
         // source transition into many wakeups.
@@ -97,20 +98,20 @@ impl Inner {
             .take(self.len())
             .any(|entry| unsafe { entry.assume_init_ref() }.will_wake(waker))
         {
-            return;
+            return None;
         }
 
         let slot = self.cursor % POLL_SET_CAPACITY;
-        if self.cursor >= POLL_SET_CAPACITY {
+        let evicted = if self.cursor >= POLL_SET_CAPACITY {
             let old = unsafe { self.entries[slot].assume_init_read() };
-            if !old.will_wake(waker) {
-                old.wake();
-            }
             self.cursor = ((slot + 1) % POLL_SET_CAPACITY) + POLL_SET_CAPACITY;
+            (!old.will_wake(waker)).then_some(old)
         } else {
             self.cursor += 1;
-        }
+            None
+        };
         self.entries[slot].write(waker.clone());
+        evicted
     }
 
     fn take_wakers(&mut self) -> ([MaybeUninit<Waker>; POLL_SET_CAPACITY], usize) {
@@ -180,9 +181,21 @@ impl PollSet {
 
     /// Registers a waker.
     pub fn register(&self, waker: &Waker) {
-        let mut inner = self.inner.lock();
-        self.has_waiters.store(true, Ordering::Release);
-        inner.register(waker);
+        let evicted = {
+            // Poll sources can register from task context while another CPU
+            // wakes the same set from a timer or device interrupt. Keep the
+            // lock owner runnable and prevent same-CPU interrupt re-entry.
+            let _irq_guard = NoPreemptIrqSave::new();
+            let mut inner = self.inner.lock();
+            self.has_waiters.store(true, Ordering::Release);
+            inner.register(waker)
+        };
+
+        // Wakers are arbitrary callbacks and may re-enter this PollSet. Never
+        // invoke one while the set lock or the IRQ/preemption guard is held.
+        if let Some(waker) = evicted {
+            waker.wake();
+        }
     }
 
     /// Wakes up all registered wakers.
@@ -191,14 +204,20 @@ impl PollSet {
             return 0;
         }
 
-        let mut guard = self.inner.lock();
-        if guard.is_empty() {
+        let (wakers, len) = {
+            // A wake may originate in interrupt context. The plain spin mutex
+            // still provides host-side synchronization, while this guard
+            // supplies the kernel IRQ/preemption semantics it lacks.
+            let _irq_guard = NoPreemptIrqSave::new();
+            let mut guard = self.inner.lock();
+            if guard.is_empty() {
+                self.has_waiters.store(false, Ordering::Release);
+                return 0;
+            }
+            let wakers = guard.take_wakers();
             self.has_waiters.store(false, Ordering::Release);
-            return 0;
-        }
-        let (wakers, len) = guard.take_wakers();
-        self.has_waiters.store(false, Ordering::Release);
-        drop(guard);
+            wakers
+        };
         for waker in wakers.iter().take(len) {
             unsafe { waker.assume_init_read() }.wake();
         }

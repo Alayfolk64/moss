@@ -57,6 +57,9 @@ features = [
 ]
 default-features = false
 
+[dependencies.kernel_guard]
+version = "0.1"
+
 [dependencies.spin]
 version = "0.10"
 features = [
