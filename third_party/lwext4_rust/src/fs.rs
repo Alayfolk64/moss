@@ -303,6 +303,10 @@ impl<Hal: SystemHal, Dev: BlockDevice> Ext4Filesystem<Hal, Dev> {
         unsafe {
             ext4_fs_fini(self.inner.as_mut()).context("ext4_fs_fini")?;
         }
+        // ext4_fs_fini() writes the final free-space counters and clean
+        // state through lwext4's block cache.  Flush once more so those
+        // superblock updates reach the device before the outer driver flush.
+        self.flush()?;
         self.finalized = true;
         Ok(())
     }
