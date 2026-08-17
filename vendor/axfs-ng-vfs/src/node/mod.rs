@@ -3,7 +3,7 @@ mod file;
 
 use alloc::{
     borrow::ToOwned,
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     string::String,
     sync::{Arc, Weak},
     vec,
@@ -222,6 +222,11 @@ struct InodeMetadataCache {
     metadata: Metadata,
     dirty_size: bool,
     dirty_update: MetadataUpdate,
+    /// A strong reference for this cache is already present in
+    /// `DIRTY_INODE_METADATA_CACHES`.  Keeping the flag with the cached state
+    /// makes the clean-to-dirty transition atomic from the mutator's point of
+    /// view and prevents one queue entry per timestamp update.
+    dirty_queued: bool,
     /// Serializes storage writeback for this inode only. Cache hits and
     /// in-memory metadata updates never take this sleeping lock.
     flush_lock: Arc<SleepMutex<()>>,
@@ -237,6 +242,36 @@ static INODE_METADATA_CACHES: [
 ] = [const { RwLock::new(BTreeMap::new()) }; INODE_METADATA_CACHE_SHARDS];
 static INODE_METADATA_LOAD_LOCKS: [SleepMutex<()>; INODE_METADATA_CACHE_SHARDS] =
     [const { SleepMutex::new(()) }; INODE_METADATA_CACHE_SHARDS];
+static DIRTY_INODE_METADATA_CACHES: Mutex<VecDeque<SharedInodeMetadataCache>> =
+    Mutex::new(VecDeque::new());
+
+fn metadata_cache_is_dirty(cache: &InodeMetadataCache) -> bool {
+    cache.dirty_size || !metadata_update_is_empty(&cache.dirty_update)
+}
+
+/// Queue a metadata cache after its mutation lock has been released.
+///
+/// The recheck is required because an explicit fsync may have made the cache
+/// clean between the mutation and this call.  Conversely, a concurrent queue
+/// drain clears `dirty_queued` before taking the flush snapshot, so a mutation
+/// that races with writeback either joins that snapshot or installs a new
+/// queue entry.
+fn queue_dirty_metadata_cache(shared: &SharedInodeMetadataCache) {
+    let should_queue = {
+        let mut cache = shared.write();
+        if !metadata_cache_is_dirty(&cache) || cache.dirty_queued {
+            false
+        } else {
+            cache.dirty_queued = true;
+            true
+        }
+    };
+    if should_queue {
+        DIRTY_INODE_METADATA_CACHES
+            .lock()
+            .push_back(shared.clone());
+    }
+}
 
 fn inode_metadata_cache_key(filesystem: &dyn FilesystemOps, inode: u64) -> InodeMetadataCacheKey {
     let fs_ptr: *const dyn FilesystemOps = filesystem;
@@ -272,7 +307,14 @@ pub(super) fn invalidate_inode_metadata_cache(filesystem: &dyn FilesystemOps, in
 fn discard_inode_metadata_cache(filesystem: &dyn FilesystemOps, inode: u64) {
     let key = inode_metadata_cache_key(filesystem, inode);
     let _load = inode_metadata_load_lock(key).lock();
-    inode_metadata_cache_shard(key).write().remove(&key);
+    if let Some(shared) = inode_metadata_cache_shard(key).write().remove(&key) {
+        // A stale queue entry may still hold the cache alive. Make that entry
+        // an explicit no-op: discard is used only when the namespace operation
+        // has made the cached metadata irrelevant and must not write it later.
+        let mut cache = shared.write();
+        cache.dirty_size = false;
+        cache.dirty_update = MetadataUpdate::default();
+    }
 }
 
 fn metadata_update_is_empty(update: &MetadataUpdate) -> bool {
@@ -335,11 +377,14 @@ fn restore_metadata_dirty(
     size: Option<u64>,
     update: &MetadataUpdate,
 ) {
-    let mut cache = shared.write();
-    if size.is_some() {
-        cache.dirty_size = true;
+    {
+        let mut cache = shared.write();
+        if size.is_some() {
+            cache.dirty_size = true;
+        }
+        merge_metadata_update(&mut cache.dirty_update, update);
     }
-    merge_metadata_update(&mut cache.dirty_update, update);
+    queue_dirty_metadata_cache(shared);
 }
 
 fn flush_metadata_cache_shared(
@@ -399,6 +444,46 @@ pub fn flush_inode_metadata_caches(data_only: bool) -> VfsResult<()> {
         flush_metadata_cache_shared(&cache, data_only)?;
     }
     Ok(())
+}
+
+/// Flush a bounded snapshot of metadata caches which actually became dirty.
+/// New mutations and failed writeback are left queued for the next pass.
+pub fn flush_dirty_inode_metadata_caches(data_only: bool, limit: usize) -> VfsResult<usize> {
+    if limit == 0 {
+        return Ok(0);
+    }
+    let available = DIRTY_INODE_METADATA_CACHES.lock().len().min(limit);
+    let mut flushed = 0;
+    let mut first_error = None;
+    for _ in 0..available {
+        let Some(shared) = DIRTY_INODE_METADATA_CACHES.lock().pop_front() else {
+            break;
+        };
+        // Do not hold the queue lock while acquiring an inode lock or doing
+        // storage I/O.  A racing mutation after this transition creates the
+        // next queue entry; an earlier mutation is included by the flush.
+        shared.write().dirty_queued = false;
+        match flush_metadata_cache_shared(&shared, data_only) {
+            Ok(()) => {
+                // `data_only` deliberately leaves timestamps and ownership
+                // updates dirty. A mutation may also have raced with the
+                // snapshot taken by the flush, so recheck after every pass.
+                queue_dirty_metadata_cache(&shared);
+                flushed += 1;
+            }
+            Err(err) => {
+                queue_dirty_metadata_cache(&shared);
+                if first_error.is_none() {
+                    first_error = Some(err);
+                }
+            }
+        }
+    }
+    first_error.map_or(Ok(flushed), Err)
+}
+
+pub fn dirty_inode_metadata_cache_count() -> usize {
+    DIRTY_INODE_METADATA_CACHES.lock().len()
 }
 
 struct Inner {
@@ -549,6 +634,7 @@ impl DirEntry {
                     metadata,
                     dirty_size: false,
                     dirty_update: MetadataUpdate::default(),
+                    dirty_queued: false,
                     flush_lock: Arc::new(SleepMutex::new(())),
                 }))
             })
@@ -588,9 +674,12 @@ impl DirEntry {
         }
 
         let shared = self.ensure_metadata_cache()?;
-        let mut cache = shared.write();
-        apply_metadata_update(&mut cache.metadata, &update);
-        merge_metadata_update(&mut cache.dirty_update, &update);
+        {
+            let mut cache = shared.write();
+            apply_metadata_update(&mut cache.metadata, &update);
+            merge_metadata_update(&mut cache.dirty_update, &update);
+        }
+        queue_dirty_metadata_cache(&shared);
         Ok(())
     }
 
@@ -613,6 +702,10 @@ impl DirEntry {
             cache.metadata.size = len;
             cache.dirty_size |= dirty;
         }
+        drop(cache);
+        if dirty && len > old_len {
+            queue_dirty_metadata_cache(&shared);
+        }
         Ok(old_len)
     }
 
@@ -621,9 +714,14 @@ impl DirEntry {
             return Ok(());
         }
         let shared = self.ensure_metadata_cache()?;
-        let mut cache = shared.write();
-        cache.metadata.size = len;
-        cache.dirty_size = dirty;
+        {
+            let mut cache = shared.write();
+            cache.metadata.size = len;
+            cache.dirty_size = dirty;
+        }
+        if dirty {
+            queue_dirty_metadata_cache(&shared);
+        }
         Ok(())
     }
 
@@ -663,6 +761,11 @@ impl DirEntry {
             cache.metadata.atime = atime;
             cache.dirty_update.atime = Some(atime);
         }
+        let dirty = cache.dirty_update.atime.is_some();
+        drop(cache);
+        if dirty {
+            queue_dirty_metadata_cache(&shared);
+        }
         Ok(true)
     }
 
@@ -671,11 +774,14 @@ impl DirEntry {
             return Ok(false);
         }
         let shared = self.ensure_metadata_cache()?;
-        let mut cache = shared.write();
-        cache.metadata.mtime = mtime;
-        cache.metadata.ctime = mtime;
-        cache.dirty_update.mtime = Some(mtime);
-        cache.dirty_update.ctime = Some(mtime);
+        {
+            let mut cache = shared.write();
+            cache.metadata.mtime = mtime;
+            cache.metadata.ctime = mtime;
+            cache.dirty_update.mtime = Some(mtime);
+            cache.dirty_update.ctime = Some(mtime);
+        }
+        queue_dirty_metadata_cache(&shared);
         Ok(true)
     }
 
