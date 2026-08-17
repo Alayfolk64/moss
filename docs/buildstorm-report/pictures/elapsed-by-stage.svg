@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="610" viewBox="0 0 1160 610">
+<style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#263238}.title{font-size:24px;font-weight:700}.axis{font-size:13px;fill:#546e7a}.label{font-size:14px}.value{font-size:13px;font-weight:600}.grid{stroke:#dfe7ed;stroke-width:1}.axisline{stroke:#78909c;stroke-width:1.2}</style>
+<rect width="100%" height="100%" rx="12" fill="#fbfdff"/>
+<text class="title" x="580.0" y="35" text-anchor="middle">BuildStorm 有效编译时长（三次运行取中位数）</text>
+<line class="grid" x1="85" y1="515.0" x2="1125" y2="515.0"/>
+<text class="axis" x="75" y="520.0" text-anchor="end">0s</text>
+<line class="grid" x1="85" y1="427.0" x2="1125" y2="427.0"/>
+<text class="axis" x="75" y="432.0" text-anchor="end">223s</text>
+<line class="grid" x1="85" y1="339.0" x2="1125" y2="339.0"/>
+<text class="axis" x="75" y="344.0" text-anchor="end">447s</text>
+<line class="grid" x1="85" y1="251.0" x2="1125" y2="251.0"/>
+<text class="axis" x="75" y="256.0" text-anchor="end">670s</text>
+<line class="grid" x1="85" y1="163.0" x2="1125" y2="163.0"/>
+<text class="axis" x="75" y="168.0" text-anchor="end">894s</text>
+<line class="grid" x1="85" y1="75.0" x2="1125" y2="75.0"/>
+<text class="axis" x="75" y="80.0" text-anchor="end">1117s</text>
+<rect x="104.85454545454546" y="352.2016826943736" width="54.836363636363636" height="162.79831730562643" rx="5" fill="#607d8b" opacity="0.9"/>
+<line x1="132.27272727272728" y1="344.44994456905664" x2="132.27272727272728" y2="361.4462606314258" stroke="#172b4d" stroke-width="2"/>
+<line x1="125.27272727272728" y1="344.44994456905664" x2="139.27272727272728" y2="344.44994456905664" stroke="#172b4d" stroke-width="2"/>
+<line x1="125.27272727272728" y1="361.4462606314258" x2="139.27272727272728" y2="361.4462606314258" stroke="#172b4d" stroke-width="2"/>
+<circle cx="132.27272727272728" cy="361.4462606314258" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="132.27272727272728" cy="352.2016826943736" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="132.27272727272728" cy="344.44994456905664" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="132.27272727272728" y="342.2016826943736" text-anchor="middle">413.31</text>
+<text class="label" x="132.27272727272728" y="542" text-anchor="middle">linux</text>
+<rect x="199.4" y="123.8365804121083" width="54.836363636363636" height="391.16341958789167" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="226.8181818181818" y1="122.14285714285717" x2="226.8181818181818" y2="135.13332072888113" stroke="#172b4d" stroke-width="2"/>
+<line x1="219.8181818181818" y1="122.14285714285717" x2="233.8181818181818" y2="122.14285714285717" stroke="#172b4d" stroke-width="2"/>
+<line x1="219.8181818181818" y1="135.13332072888113" x2="233.8181818181818" y2="135.13332072888113" stroke="#172b4d" stroke-width="2"/>
+<circle cx="226.8181818181818" cy="135.13332072888113" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="226.8181818181818" cy="123.8365804121083" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="226.8181818181818" cy="122.14285714285717" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="226.8181818181818" y="113.8365804121083" text-anchor="middle">993.08</text>
+<text class="label" x="226.8181818181818" y="542" text-anchor="middle">S00</text>
+<rect x="293.9454545454546" y="347.6207520847477" width="54.836363636363636" height="167.37924791525228" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="321.36363636363643" y1="339.5499637621998" x2="321.36363636363643" y2="348.36520254495355" stroke="#172b4d" stroke-width="2"/>
+<line x1="314.36363636363643" y1="339.5499637621998" x2="328.36363636363643" y2="339.5499637621998" stroke="#172b4d" stroke-width="2"/>
+<line x1="314.36363636363643" y1="348.36520254495355" x2="328.36363636363643" y2="348.36520254495355" stroke="#172b4d" stroke-width="2"/>
+<circle cx="321.36363636363643" cy="348.36520254495355" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="321.36363636363643" cy="347.6207520847477" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="321.36363636363643" cy="339.5499637621998" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="321.36363636363643" y="337.6207520847477" text-anchor="middle">424.94</text>
+<text class="label" x="321.36363636363643" y="542" text-anchor="middle">S01</text>
+<rect x="388.4909090909091" y="340.42833652741615" width="54.836363636363636" height="174.57166347258385" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="415.90909090909093" y1="340.0305085037083" x2="415.90909090909093" y2="349.2593308754652" stroke="#172b4d" stroke-width="2"/>
+<line x1="408.90909090909093" y1="340.0305085037083" x2="422.90909090909093" y2="340.0305085037083" stroke="#172b4d" stroke-width="2"/>
+<line x1="408.90909090909093" y1="349.2593308754652" x2="422.90909090909093" y2="349.2593308754652" stroke="#172b4d" stroke-width="2"/>
+<circle cx="415.90909090909093" cy="349.2593308754652" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="415.90909090909093" cy="340.42833652741615" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="415.90909090909093" cy="340.0305085037083" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="415.90909090909093" y="330.42833652741615" text-anchor="middle">443.20</text>
+<text class="label" x="415.90909090909093" y="542" text-anchor="middle">S02</text>
+<rect x="483.03636363636366" y="346.86054605924664" width="54.836363636363636" height="168.13945394075336" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="510.4545454545455" y1="346.4272680136243" x2="510.4545454545455" y2="354.1632505736458" stroke="#172b4d" stroke-width="2"/>
+<line x1="503.4545454545455" y1="346.4272680136243" x2="517.4545454545455" y2="346.4272680136243" stroke="#172b4d" stroke-width="2"/>
+<line x1="503.4545454545455" y1="354.1632505736458" x2="517.4545454545455" y2="354.1632505736458" stroke="#172b4d" stroke-width="2"/>
+<circle cx="510.4545454545455" cy="354.1632505736458" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="510.4545454545455" cy="346.86054605924664" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="510.4545454545455" cy="346.4272680136243" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="510.4545454545455" y="336.86054605924664" text-anchor="middle">426.87</text>
+<text class="label" x="510.4545454545455" y="542" text-anchor="middle">S03</text>
+<rect x="577.5818181818182" y="358.15728637601944" width="54.836363636363636" height="156.84271362398056" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="605.0" y1="348.55820821982167" x2="605.0" y2="360.654543475334" stroke="#172b4d" stroke-width="2"/>
+<line x1="598.0" y1="348.55820821982167" x2="612.0" y2="348.55820821982167" stroke="#172b4d" stroke-width="2"/>
+<line x1="598.0" y1="360.654543475334" x2="612.0" y2="360.654543475334" stroke="#172b4d" stroke-width="2"/>
+<circle cx="605.0" cy="360.654543475334" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="605.0" cy="358.15728637601944" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="605.0" cy="348.55820821982167" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="605.0" y="348.15728637601944" text-anchor="middle">398.19</text>
+<text class="label" x="605.0" y="542" text-anchor="middle">S04</text>
+<rect x="672.1272727272727" y="358.45270322530746" width="54.836363636363636" height="156.54729677469254" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="699.5454545454545" y1="353.2336722212196" x2="699.5454545454545" y2="367.0276696373069" stroke="#172b4d" stroke-width="2"/>
+<line x1="692.5454545454545" y1="353.2336722212196" x2="706.5454545454545" y2="353.2336722212196" stroke="#172b4d" stroke-width="2"/>
+<line x1="692.5454545454545" y1="367.0276696373069" x2="706.5454545454545" y2="367.0276696373069" stroke="#172b4d" stroke-width="2"/>
+<circle cx="699.5454545454545" cy="367.0276696373069" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="699.5454545454545" cy="358.45270322530746" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="699.5454545454545" cy="353.2336722212196" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="699.5454545454545" y="348.45270322530746" text-anchor="middle">397.44</text>
+<text class="label" x="699.5454545454545" y="542" text-anchor="middle">S05</text>
+<rect x="766.6727272727273" y="358.0115473970374" width="54.836363636363636" height="156.98845260296258" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="794.0909090909091" y1="353.94267265951083" x2="794.0909090909091" y2="363.8962510348542" stroke="#172b4d" stroke-width="2"/>
+<line x1="787.0909090909091" y1="353.94267265951083" x2="801.0909090909091" y2="353.94267265951083" stroke="#172b4d" stroke-width="2"/>
+<line x1="787.0909090909091" y1="363.8962510348542" x2="801.0909090909091" y2="363.8962510348542" stroke="#172b4d" stroke-width="2"/>
+<circle cx="794.0909090909091" cy="363.8962510348542" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="794.0909090909091" cy="358.0115473970374" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="794.0909090909091" cy="353.94267265951083" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="794.0909090909091" y="348.0115473970374" text-anchor="middle">398.56</text>
+<text class="label" x="794.0909090909091" y="542" text-anchor="middle">S06</text>
+<rect x="861.2181818181818" y="361.58018293643636" width="54.836363636363636" height="153.41981706356364" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="888.6363636363636" y1="361.2296216086146" x2="888.6363636363636" y2="363.2345172924491" stroke="#172b4d" stroke-width="2"/>
+<line x1="881.6363636363636" y1="361.2296216086146" x2="895.6363636363636" y2="361.2296216086146" stroke="#172b4d" stroke-width="2"/>
+<line x1="881.6363636363636" y1="363.2345172924491" x2="895.6363636363636" y2="363.2345172924491" stroke="#172b4d" stroke-width="2"/>
+<circle cx="888.6363636363636" cy="363.2345172924491" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="888.6363636363636" cy="361.58018293643636" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="888.6363636363636" cy="361.2296216086146" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="888.6363636363636" y="351.58018293643636" text-anchor="middle">389.50</text>
+<text class="label" x="888.6363636363636" y="542" text-anchor="middle">S07</text>
+<rect x="955.7636363636364" y="368.35507601344096" width="54.836363636363636" height="146.64492398655904" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="983.1818181818181" y1="366.44865261270246" x2="983.1818181818181" y2="368.7095762325865" stroke="#172b4d" stroke-width="2"/>
+<line x1="976.1818181818181" y1="366.44865261270246" x2="990.1818181818181" y2="366.44865261270246" stroke="#172b4d" stroke-width="2"/>
+<line x1="976.1818181818181" y1="368.7095762325865" x2="990.1818181818181" y2="368.7095762325865" stroke="#172b4d" stroke-width="2"/>
+<circle cx="983.1818181818181" cy="368.7095762325865" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="983.1818181818181" cy="368.35507601344096" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="983.1818181818181" cy="366.44865261270246" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="983.1818181818181" y="358.35507601344096" text-anchor="middle">372.30</text>
+<text class="label" x="983.1818181818181" y="542" text-anchor="middle">S08</text>
+<rect x="1050.3090909090909" y="375.4568970703243" width="54.836363636363636" height="139.54310292967568" rx="5" fill="#3f7cac" opacity="0.9"/>
+<line x1="1077.7272727272727" y1="367.7209145103027" x2="1077.7272727272727" y2="376.0201585296334" stroke="#172b4d" stroke-width="2"/>
+<line x1="1070.7272727272727" y1="367.7209145103027" x2="1084.7272727272727" y2="367.7209145103027" stroke="#172b4d" stroke-width="2"/>
+<line x1="1070.7272727272727" y1="376.0201585296334" x2="1084.7272727272727" y2="376.0201585296334" stroke="#172b4d" stroke-width="2"/>
+<circle cx="1077.7272727272727" cy="376.0201585296334" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="1077.7272727272727" cy="375.4568970703243" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<circle cx="1077.7272727272727" cy="367.7209145103027" r="3.5" fill="#ffca28" stroke="#37474f"/>
+<text class="value" x="1077.7272727272727" y="365.4568970703243" text-anchor="middle">354.27</text>
+<text class="label" x="1077.7272727272727" y="542" text-anchor="middle">S09</text>
+<line class="axisline" x1="85" y1="515" x2="1125" y2="515"/>
+<text class="axis" x="580.0" y="590" text-anchor="middle">误差线为三次运行范围；圆点展示三个样本（中间点为中位数）</text>
+</svg>

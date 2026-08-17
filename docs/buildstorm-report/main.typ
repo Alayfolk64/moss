@@ -180,7 +180,7 @@
 // ============================================================
 = 概述
 
-BuildStorm 题目要求内核在 QEMU 模拟的 RISC-V64 与 LoongArch64 平台（`-smp 8 -m 8G`）上离线从源码全量编译 `arceos-helloworld`，这是一次数百 crate 的真实 Rust 编译，伴随重度文件读写、多线程与大量 `mmap`/`mprotect` 系统调用。评分上，编译成功为门槛，加速分按编译耗时与同一评测机 Linux 基线 `B` 的关系计算，因此能否完整跑通并显著快于两倍 Linux 基线直接决定本题得分。
+BuildStorm 题目要求内核在 QEMU 模拟的 RISC-V64 与 LoongArch64 平台上离线从源码全量编译 `arceos-helloworld`，这是一次数百 crate 的真实 Rust 编译，伴随重度文件读写、多线程与大量 `mmap`/`mprotect` 系统调用。评分上，编译成功为门槛，加速分按编译耗时与同一评测机 Linux 基线 `B` 的关系计算，因此能否完整跑通并显著快于两倍 Linux 基线直接决定本题得分。
 
 针对这一目标，我们首先在带 guest profiler 的内核上完整运行 BuildStorm，通过火焰图与路径探针定位问题与根因。结果显示瓶颈集中在文件缺页、页缓存与文件系统 I/O 链路，主要问题包括：
 
@@ -191,23 +191,23 @@ BuildStorm 题目要求内核在 QEMU 模拟的 RISC-V64 与 LoongArch64 平台�
 - ext4 全局锁内等待块设备；
 - `mprotect` 反复扫描全局映射记录。
 
-这些全局锁、逐页处理和重复工作使 8 个 vCPU 的并行能力无法发挥（优化前 6～8 核时间占比仅 6.23\%）。围绕上述根因，我们完成了以下关键优化：
+这些全局锁、逐页处理和重复工作使 8 个 vCPU 的并行能力无法发挥。本次 LoongArch 三次重测中，优化前基线的 6～8 核时间占比仅 0.20%。围绕上述根因，我们完成了以下关键优化：
 
 - per-CPU 物理页缓存（PCP），缓解全局分配器竞争；
+- per-VMA `mprotect`，只更新目标区间；
 - AddrSpace 三段式缺页（prepare / execute / commit），慢操作移出地址空间锁；
 - folio 页缓存，合并相邻页的加载与 I/O；
 - 只读文件页直接映射，真正写入时才 COW；
 - ext4 数据 I/O 移出全局锁，配合异步 VirtIO 多在途请求；
-- per-VMA `mprotect`，只更新目标区间；
 - 后续补充：VFS 目录与 inode 元数据并发、缺页提交微路径、异步地址空间回收与 TLB 合并刷新、精确 TLB shootdown。
 
-实验数据均为本地测试所得（采用QEMU `virt`、8 vCPU、8 GiB、同一磁盘镜像、关闭 guest profiler），受本地电脑配置限制，实验数据会与测评机实际配置存在偏差，本地数据主要用于横向比较各优化阶段的效果。在此口径下，优化前 BuildStorm 正式编译耗时为1524.50 秒；六项核心优化完成后降至 628.53 秒（-58.77\%，约 2.43 倍加速）；继续完成后续优化后进一步降至 460.76 秒（累计 -69.78\%）。平均有效核数由 3.252 核提高到4.410 核，6～8 核时间占比由 6.23\% 提高到 42.93\%。
+实验数据均为本地 LoongArch64 重测所得（QEMU 10.0.2 `virt`、8 vCPU、8 GiB、同一磁盘镜像、关闭 profiler）。Linux 基线和 Moss 十个阶段均串行运行三次，以评分脚本输出的有效编译时长中位数作为报告值。在此口径下，Moss 从 993.08 秒降至 354.27 秒，减少 64.33%，加速 2.80 倍。最终平均有效核数由 3.077 核提高到 3.769 核，6～8 核时间占比由 0.20% 提高到 35.98%。
 
 目前，Moss 内核已在评测机上完成 BuildStorm 测例的正式测评，RISC-V64 与LoongArch64 两侧得分均为 *180 分*。排行榜截图如下：
 
 #figure(
-  image("pictures/buildstorm-rank.png", width: 100%),
-  caption: [BuildStorm 测评成绩截图（截至2026.8.5）],
+  image("pictures/rank-812.png", width: 100%),
+  caption: [BuildStorm 测评成绩截图（截至2026.8.12）],
 )
 
 // ============================================================
@@ -217,9 +217,9 @@ BuildStorm 题目要求内核在 QEMU 模拟的 RISC-V64 与 LoongArch64 平台�
 
 == 负载特征
 
-BuildStorm 的正式编译任务由构建助手 `tg-xtask` 驱动，先进行 446 个 crate 的预构建，再执行正式目标构建。从内核视角看，这一负载有以下特征：
+BuildStorm 在计时前进行工具链与 minibuild 校验，预编译部分不计入成绩；正式计时窗口仅包含 `cargo xtask arceos build -p arceos-helloworld`。该命令内部仍需从源码编译目标及其依赖。从内核视角看，这一负载有以下特征：
 
-- *小文件密集*：数百个 crate 源码、`.rlib`、增量产物和临时文件，大量文件以`MAP_PRIVATE` 方式映射并顺序读取，单文件多为 4 KiB 页的整数倍；
+- *文件访问密集*：正式编译会读取大量 crate 源码和依赖元数据，并生成 `.rlib`、对象文件及临时产物；rustc/LLVM 会通过 `mmap(MAP_PRIVATE)` 访问其中大量文件，从而产生密集的文件缺页和页缓存访问；
 - *多线程高并发*：cargo/rustc 并行调度，8 个 vCPU 上同时存在多个编译任务与页缺失；
 - *进程生命周期短*：rustc、链接器、构建脚本频繁 fork/exec/exit，地址空间反复建立与销毁，`exec` 需要整体切换地址空间；
 - *内存映射系统调用频繁*：`mmap`/`munmap`/`mprotect` 被大量调用，其中 `mprotect`尤其密集；
@@ -229,47 +229,44 @@ BuildStorm 的正式编译任务由构建助手 `tg-xtask` 驱动，先进行 44
 
 == 火焰图定位问题
 
-我们在带 guest profiler 的内核上完整运行 BuildStorm，对每个 vCPU 以 10 Hz 采样内核/用户栈，并对 mutex 等待、ext4 全局锁等待、页缓存与同步块 I/O 等事件挂接探针，生成 CPU 火焰图与等待类火焰图，分别反映时间的消耗热点与线程的阻塞热点。
+火焰图与正式计时分开采集，避免探针扰动混入性能结果。2026-08-13 在与正式实验相同的 LoongArch64 环境中补跑了两类 profiling：CPU 图通过 QEMU gdbstub 每 2 秒暂停一次并采集 8 个 vCPU 的调用栈；等待图只覆盖赛题正式计时窗口，阻塞式 mutex 的每次实际睡眠等待都记录调用栈和持续时间，`mprotect` 因调用频繁而每 32 次采样一次并按采样率折算累计时间。环境统一为 QEMU 10.0.2、8 vCPU、8 GiB 和同一镜像。等待插桩阶段分别为基线 `stage-00`、优化前的 `stage-03`、合入 `mprotect` 优化的 `stage-04` 和最终版本 `stage-09`；所有 profiling 均为独立运行，不计入第 4 章正式耗时。
 
-需要说明的是，这一火焰图方法并非仅在优化前运行一次：每完成一轮关键优化后，我们均使用相同的 profiler 配置重新采集火焰图，通过前后对比来判断优化是否命中了目标热点、瓶颈是否发生了迁移。报告中引用的数值如无特别说明，均来自优化前基线（`riscv-buildstorm-guest-20260721`）；优化后的对比数据来自 2026-07-24 整包优化后的复测（`riscv-buildstorm-guest-20260724`），两份报告的实验配置与采样口径完全一致，具备同口径可比性。
-
-赛题只计时 `cargo xtask arceos build -p arceos-helloworld`（即实验中的 timed 阶段，`elapsed_s`），因此分析聚焦 timed 阶段。下图是优化前基线的 timed 阶段的 CPU 火焰图：
+赛题只计时 `cargo xtask arceos build -p arceos-helloworld`（即实验中的 timed 阶段，`elapsed_s`），因此等待探针只在该窗口开启。下图是优化前基线独立采集的 CPU 火焰图：
 
 #figure(
-  image("pictures/00-baseline-cpu-timed.svg", width: 100%),
-  caption: [优化前 timed 阶段 CPU 火焰图],
+  image("pictures/profile-stage-00-cpu-all.svg", width: 100%),
+  caption: [优化前 LoongArch CPU 火焰图（4112 个 vCPU 样本）],
 )
 
-从 CPU 火焰图可以发现以下主要问题：
+本轮共取得 4112 个 vCPU 样本，其中 3171 个解析为内核符号。图中最突出的现象不是某个计算函数耗时很长，而是 ext4 buffer-cache 清理形成了高度集中的热塔：`ext4_bcache_drop_buf` 覆盖 80.48\% 的已解析内核样本，`ext4_bcache_remove_dirty_node` 作为叶节点占全部样本的 60.92\%。这说明大量 CPU 时间消耗在文件系统缓冲区维护，而没有直接推进编译；其余热点明显更分散。
 
-- *并行度低*：`task:idle` 占全部采样的 75.9\%，非 idle 仅 24.1\%；
-- *内核时间集中在缺页路径*：最宽的塔是 `BackendOps::populate ->CowBackend::alloc_new_at -> alloc_new_frame -> alloc_frame`，其上方还挂着`with_page_or_insert_impl`、`page_or_insert`、`PageCache::new` 等页缓存函数；
-- *锁/关中断/清零开销明显*：叶函数热点见下表。
+CPU 图中的 gdb 栈不能可靠识别 guest 用户态与 idle，因此不从这张图计算并行度；并行度使用第 2.3 节宿主机逐秒采样。主要叶节点列于下表：
 
 #tbl(
-  caption: [表 2-1　优化前 timed 阶段主要 CPU 热点（叶函数，占非 idle 样本）],
+  caption: [表 2-1　优化前 LoongArch CPU 叶节点热点（占全部 4112 个 vCPU 样本）],
   ("热点", "样本数", "占比"),
   (
-    ("NoPreemptIrqSave::release", "10252", "41.19%"),
-    ("lwext4 memset", "4748", "19.07%"),
-    ("virtio VirtQueue::can_pop", "1137", "4.57%"),
-    ("core::ptr::read", "749", "3.01%"),
-    ("BTreeMap navigate", "500", "2.01%"),
-    ("disable_preempt", "450", "1.81%"),
-    ("MemorySet::protect", "230", "0.92%"),
+    ("ext4_bcache_remove_dirty_node", "2505", "60.92%"),
+    ("guest user / 未解析", "941", "22.88%"),
+    ("LruCache<PageCache>::put", "68", "1.65%"),
+    ("ext4_bcache_init_dynamic", "55", "1.34%"),
+    ("FsContext::lookup", "54", "1.31%"),
+    ("BTreeMap VMA unmap", "54", "1.31%"),
+    ("alloc::alloc::dealloc", "39", "0.95%"),
+    ("atomic_or<u8>", "35", "0.85%"),
   ),
 )
 
 
 
-mutex 等待火焰图如下，最宽的塔是 `task:rustc -> new_user_task -> BackendOps::populate -> CowBackend::alloc_new_at`：rustc、lto、opt 等编译任务经这条 COW/文件缺页路径的等待合计约 89\%。也就是说，缺页线程在持有进程 `AddrSpace` mutex 时进入文件读取，再被页缓存与 ext4 的 mutex 挡住，层层排队。
+LoongArch 基线的 mutex 等待火焰图如下。该轮完整记录了 111602 次实际睡眠等待，累计 2401.96 秒；其中 `BackendOps::populate -> CowBackend::alloc_new_at` 文件缺页路径占 84.92\%，形成图中最宽的塔。由于多个任务的等待可以同时发生，累计等待会大于 1045.06 秒的插桩运行墙钟时间。结果说明大量编译任务并不是没有被调度，而是在同一条 COW/文件缺页链上层层排队。
 
 #figure(
   image("pictures/00-baseline-mutex-wait.svg", width: 100%),
   caption: [优化前 timed 阶段 mutex 等待火焰图],
 )
 
-页缓存与文件系统的时间去向由事件探针给出：
+开发阶段更细的 RISC-V 路径探针还给出了页缓存与文件系统内部的时间去向；它与本次 LoongArch mutex 图用于不同层次的证据，数值不作跨架构直接比较：
 
 #tbl(
   caption: [表 2-2　优化前 timed 阶段路径累计值（跨任务累计，可大于墙钟）],
@@ -287,27 +284,27 @@ mutex 等待火焰图如下，最宽的塔是 `task:rustc -> new_user_task -> Ba
 
 
 
-其中 `page-cache inclusive` 占据主导（单个 rustc 缺页栈占 70.82\%，各任务合计约 84\%），最宽路径仍是缺页；ext4 全局锁等待 103.89 s 中最大的单一路径同样是缺页读取（79.16\%）。CPU、mutex 等待与页缓存/ext4 三组数据交叉指向同一条热点链：”缺页 → `AddrSpace` 大锁 → 页缓存 → ext4 → 块设备”，具体性能热点在下一节逐项展开。
+其中 `page-cache inclusive` 占据主导（单个 rustc 缺页栈占 70.82\%，各任务合计约 84\%），最宽路径仍是缺页；ext4 全局锁等待 103.89 s 中最大的单一路径同样是缺页读取（79.16\%）。开发阶段的 CPU/路径探针与本次 LoongArch mutex 图独立指向同一条热点链：”缺页 → `AddrSpace` 大锁 → 页缓存 → ext4 → 块设备”，具体性能热点在下一节逐项展开。
 
 == 与 Linux 基线的同口径对比
 
-为了更清晰直观的看原来的 Moss OS 的性能缺陷，我们以相同事件模型对 Linux guest 重新采样，得到了当时的对照：
+为避免把旧架构、旧计时边界的探针结果与当前实验混在一起，这里只使用 2026-08-13 的 LoongArch 正式三次中位数。Linux 与 Moss 使用同一 QEMU 10.0.2、8 vCPU、8 GiB 和磁盘镜像；两者都关闭 profiler，并以 `BUILDSTORM_COMPILE` 的有效窗口计时。
 
 #tbl(
   caption: [表 2-3　Moss（优化前）与 Linux 的 BuildStorm 同口径对比],
-  ("指标", "Linux", "Moss（优化前）", "差距"),
+  ("指标", "Linux", "Moss（优化前）", "Moss / Linux"),
   (
-    ("正式阶段", "454.22 s", "2524.89 s", "约 5.56 倍"),
-    ("锁等待（预构建/正式）", "1.503 / 1.251 s", "11166.94 / 8172.23 s", "约 6500～7400 倍"),
-    ("page-cache inclusive（预构建/正式）", "53.57 / 22.00 s", "15042.35 / 9343.23 s", "约 280～425 倍"),
-    ("前台同步 I/O（预构建/正式）", "6.386 / 2.673 s", "456.66 / 187.39 s", "约 70 倍"),
-    ("ext4 read/write（预构建/正式）", "70.05 / 22.49 s", "2222.89 / 682.54 s", "约 30 倍"),
+    ("有效编译时长", "413.31 s", "993.08 s", "2.40 倍"),
+    ("平均有效核数", "4.432", "3.077", "0.69 倍"),
+    ("6～8 核时间占比", "46.79%", "0.20%", "约 1 / 233"),
+    ("累计 CPU 时间", "1842 CPU·s", "3069 CPU·s", "1.67 倍"),
+    ("平均 RSS", "2332 MiB", "1864 MiB", "0.80 倍"),
   ),
 )
 
 
 
-Linux 的活跃核等价值为 6.20 / 5.48 核，而优化前 Moss 只有 3.68 / 2.36 核。通过对比可以说明 Moss 与 Linux 的差距主要集中在文件缺页链路（锁等待、page-cache、同步 I/O、ext4）而非编译器本身的执行效率，首要修复方向是拆除“AddrSpace → CowBackend → page-cache → ext4 → block”的跨层大临界区。
+优化前 Moss 的有效编译时长是 Linux 的 2.40 倍，平均有效核数反而只有 Linux 的 69%，6～8 核区间几乎没有出现；与此同时，Moss 累计消耗了更多 CPU 时间。这说明差距既不是“给虚拟机更多内存”能够解决的，也不是单纯少做了并行调度，而是大量 CPU 工作和等待没有转化为编译进度。结合前一节 LoongArch mutex 图中 84.92% 的等待集中在 COW 文件缺页路径，首要修复方向就是拆除“AddrSpace → CowBackend → page-cache → ext4 → block”的跨层大临界区。
 
 == 根因分析
 
@@ -325,7 +322,7 @@ Linux 的活跃核等价值为 6.20 / 5.48 核，而优化前 Moss 只有 3.68 /
 
 另一方面是“锁粒度太大”：同一把锁将快操作和慢操作捆在一起——ext4 锁内既做微秒级的 extent映射查询，也做毫秒级的同步磁盘等待；AddrSpace 锁内既有轻量的 VMA 查找，也有重量级的物理页分配和文件数据复制。一些不需要锁内进行的重任务也被纳入了锁内。
 
-并且两类问题会互相放大：内层锁做着毫秒级的慢活，外层锁只能被动等待，而 BuildStorm 会同时运行成百上千个 rustc/cc1 进程、每个都在反复缺页读文件，8 个 vCPU 的并行能力被层层锁链压缩为实测仅 2.36 核的有效并行度，导致多核被串行化，难以发挥多核的效率。优化前 mutex 累计等待高达 8172.23 s（跨任务累计），其中约 74\% 经过图中所绘的这条缺页锁链。
+并且两类问题会互相放大：内层锁做着毫秒级的慢活，外层锁只能被动等待，而 BuildStorm 会同时运行成百上千个 rustc/cc1 进程、每个都在反复缺页读文件。2026-08-13 的 LoongArch 补测中，基线 mutex 累计等待为 2401.96 秒，其中 84.92\% 经过图中所绘的 COW 文件缺页路径；正式三次样本的平均有效核数只有 3.077 核，说明 8 个 vCPU 被这条锁链显著串行化。
 
 因此，后面将介绍的六项核心优化的本质方向是一致的：缩短持锁时间（三段式、ext4 锁外 I/O）、降低进锁频率（PCP、folio 合并）、缩小锁的管辖范围（per-VMA mprotect），每一项都在拆除这条锁链中的一环。
 
@@ -333,33 +330,40 @@ Linux 的活跃核等价值为 6.20 / 5.48 核，而优化前 Moss 只有 3.68 /
 
 === 根因一：缺页处理持有整个地址空间的独占锁等待慢操作
 
-在旧链路中，一次文件缺页会独占当前进程的 `AddrSpace`，在锁内完成 VMA 查找、物理页分配、页缓存 miss、ext4 块映射查询、磁盘 I/O 等待、数据复制与 PTE 安装。磁盘 I/O 的等待时间远大于 VMA 查询本身；一个线程等盘时，其他线程即使缺的是完全不同的文件或地址，也只能排队。BuildStorm 线程多、文件多，把这种串行等待放大是最主要的性能瓶颈。优化前火焰图中，约 74\% 的 mutex 累计等待（8172.23 s，timed 阶段）会经过`BackendOps::populate → CowBackend::alloc_new_at` 这条 COW 文件缺页路径。
+在旧链路中，一次文件缺页会独占当前进程的 `AddrSpace`，在锁内完成 VMA 查找、物理页分配、页缓存 miss、ext4 块映射查询、磁盘 I/O 等待、数据复制与 PTE 安装。磁盘 I/O 的等待时间远大于 VMA 查询本身；一个线程等盘时，其他线程即使缺的是完全不同的文件或地址，也只能排队。BuildStorm 线程多、文件多，把这种串行等待放大是最主要的性能瓶颈。LoongArch 基线火焰图中，`BackendOps::populate → CowBackend::alloc_new_at` 这条 COW 文件缺页路径占 mutex 累计等待的 84.92\%（2039.81 / 2401.96 秒）。
 
 === 根因二：物理页分配与释放集中在全局分配器
 
-缺页分配私有页、页缓存分配页、COW 分配页以及进程退出时释放页，都会进入全局物理页分配器并竞争同一把锁。8 个 vCPU 同时缺页时，所有 CPU 的分配和释放都被串行化。优化前 CPU 火焰图中 `NoPreemptIrqSave::release` 约占非 idle 样本的四成以上，是排名第一的叶函数热点。
+缺页分配私有页、页缓存分配页、COW 分配页以及进程退出时释放页，都会进入全局物理页分配器并竞争同一把锁。8 个 vCPU 同时缺页时，所有 CPU 的分配和释放都被串行化。本次 LoongArch CPU 图的最宽热点被 ext4 buffer-cache 清理占据，无法从中单独量化分配器竞争；全局分配器的代码路径以及合入 PCP 后 `stage-02 → stage-03` 的正式耗时从 443.20 秒降至 426.87 秒，为这一判断提供了相互补充的证据。
 
 === 根因三：MAP_PRIVATE 只读缺页多一次私有页分配与复制
 
-对于只读使用的 `MAP_PRIVATE` 文件映射，旧实现即使只是读取，也会”先分配页缓存页、读盘、再为进程分配一张私有物理页、从页缓存复制 4 KiB、安装私有页 PTE”。大量只读文件页永远不会被写，私有页分配和 4 KiB 复制完全浪费，且每个进程映射同一文件都会各复制一份，加剧内存压力与缺页成本。这一问题主要来自代码逻辑分析——火焰图中 `CowBackend::alloc_new_at` 是最宽的缺页塔，而其中的 memcpy 和私有页分配正是该塔的组成部分，但火焰图本身无法直接区分”必要的复制”与”浪费的复制”。
+对于只读使用的 `MAP_PRIVATE` 文件映射，旧实现即使只是读取，也会”先分配页缓存页、读盘、再为进程分配一张私有物理页、从页缓存复制 4 KiB、安装私有页 PTE”。大量只读文件页永远不会被写，私有页分配和 4 KiB 复制完全浪费，且每个进程映射同一文件都会各复制一份，加剧内存压力与缺页成本。这一问题主要来自代码逻辑分析——LoongArch mutex 图中 `CowBackend::alloc_new_at` 是最宽的等待塔，而其中的 memcpy 和私有页分配正是该路径的组成部分，但等待图本身无法直接区分”必要的复制”与”浪费的复制”。
 
 === 根因四：页缓存粒度小，逐页查找、重复 I/O 与重复等待
 
-旧实现页缓存按单页组织：一次 miss 只加载一张 4 KiB 页，相邻页需要再次进入页缓存查询并可能再次读盘；多个线程同时缺同一页时还可能重复发起 I/O。优化前探针显示 page-cache inclusive 累计 9343.23 s（timed 阶段），是量级最大的嵌套路径，火焰图中占据约 91.5\% 的图宽，其中 71.85\% 经过 `with_page_or_insert_impl`。
+旧实现页缓存按单页组织：一次 miss 只加载一张 4 KiB 页，相邻页需要再次进入页缓存查询并可能再次读盘；多个线程同时缺同一页时还可能重复发起 I/O。开发阶段的 RISC-V 路径探针中，page-cache inclusive 累计 9343.23 秒，是量级最大的嵌套路径，火焰图中占据约 91.5\% 的图宽，其中 71.85\% 经过 `with_page_or_insert_impl`。这组旧数据只用于说明定位过程，不与本次 LoongArch 结果作数值比较。
 
 === 根因五：ext4 全局锁内等待块设备
 
-Moss 用一把全局锁保护 `LwExt4Filesystem` 元数据。旧实现中一次文件读取在锁内完成块映射查询后继续等待磁盘 I/O 完成才释放锁，导致不同文件的数据读取被全局串行化。优化前探针显示 ext4 全局锁等待累计 218.92 s（timed 阶段），同步块读取 175.67 s；ext4 锁等待火焰图中最大的单一调用栈同样是 rustc 文件映射缺页（占 64.80\%）。
+Moss 用一把全局锁保护 `LwExt4Filesystem` 元数据。旧实现中一次文件读取在锁内完成块映射查询后继续等待磁盘 I/O 完成才释放锁，导致不同文件的数据读取被全局串行化。开发阶段的 RISC-V 探针中，ext4 全局锁等待累计 218.92 秒、同步块读取 175.67 秒，最大的单一调用栈同样是 rustc 文件映射缺页（占 64.80\%）。本次 LoongArch CPU 图又显示 `ext4_bcache_drop_buf` 覆盖 80.48\% 的已解析内核样本，说明文件系统内部串行与缓冲区维护仍是基线的核心问题。
 
 === 根因六：mprotect 扫描全局映射记录与无关 VMA
 
-旧实现维护所有进程共享的 `MMAP_RECORDS` 全局数组。一次 `mprotect` 需要扫描全局记录检查 seal/最大权限、修改页表后再次锁全局记录并重建数组；`MemorySet::protect` 则从地址空间头部遍历所有 VMA，而调用实际只覆盖一小段地址。旧插桩显示平均一次调用扫描约 3.16 万条全局记录，预构建阶段累计扫描约 897 亿条。
+`mprotect` 并不是一开始最显眼的瓶颈。最初采集火焰图时，文件缺页、页缓存和 ext4 I/O 形成的宽大热塔占据了绝大部分采样，`mprotect` 这种调用频繁但单次耗时相对较短的路径被压在下面，很难单独看出来。随着前几项优化逐步拆开缺页锁链、缩短页缓存和文件系统路径，原来的主热点明显收窄；再次观察火焰图时，性能瓶颈已经发生转移，`mprotect` 开始成为不可忽略的高频热点。
 
-需要指出的是，在优化前火焰图中 mprotect 并非可见的主热点——此时缺页锁链造成的阻塞量级远大于全局记录扫描（`mprotect` 相关 mutex 等待仅占 1.18\%），将其完全掩盖。这一问题由代码插桩而非火焰图发现。下图是缺页链路优化后重新采集的 mutex 等待火焰图，可以看到 mprotect 已成为压倒性的第一热点——占 mutex 累计等待的 95.16\%、非 idle CPU 样本的 56.82\%，是典型的"被更大瓶颈掩盖的独立串行化源"。
+沿着这条新出现的热点继续检查，可以看到旧实现维护了一个由所有进程共享的 `MMAP_RECORDS` 数组。每次 `mprotect` 都要先锁住这个全局数组，遍历其中的映射记录以检查 seal 和最大权限；修改页表后，还要再次获取同一把锁并重建记录数组。与此同时，`MemorySet::protect` 会从地址空间头部遍历 VMA，即使调用实际只覆盖很小的一段地址，也会检查大量无关映射。随着并发进程和映射数量增加，这些全局扫描、重复加锁和逐页 TLB 刷新不断累积，原本很短的一次权限修改就被放大成新的串行开销。
+
+路径采样进一步印证了这一判断：优化前约 6720 次 `mprotect` 调用的折算累计延迟为 1.907 秒，单个采样区间最大达到 9.74 毫秒。优化后调用数量基本没有变化，累计延迟却降至 0.468 秒，下降 75.45\%，最大采样延迟也降至 0.96 毫秒。这说明性能改善并不是因为编译器减少了 `mprotect` 调用，而是按 VMA 定位、局部更新权限和批量刷新 TLB 真正缩短了每次调用的内核路径。
 
 #figure(
-  image("pictures/post-faultfix-mutex-wait.svg", width: 100%),
-  caption: [缺页链路优化后 timed 阶段 mutex 等待火焰图],
+  grid(
+    columns: (1fr, 1fr),
+    gutter: 8pt,
+    image("pictures/03-mprotect-latency.svg", width: 100%),
+    image("pictures/04-mprotect-latency.svg", width: 100%),
+  ),
+  caption: [`mprotect` 延迟火焰图对比（左：优化前；右：优化后）],
 )
 
 // ============================================================
@@ -373,9 +377,9 @@ Moss 用一把全局锁保护 `LwExt4Filesystem` 元数据。旧实现中一次�
 
 === 设计思路
 
-如 2.4 根因所述，所有 order-0（4 KiB）物理页的分配与释放都集中在全局分配器，8 个 vCPU 并发缺页时全局锁成为热点（火焰图中 `NoPreemptIrqSave::release` 占非 idle 采样的 41.19%）。
+如 2.4 根因所述，所有 order-0（4 KiB）物理页的分配与释放都集中在全局分配器，8 个 vCPU 并发缺页时会竞争同一把全局锁。本次 LoongArch CPU 图主要被 ext4 buffer-cache 热点覆盖，因此不再沿用旧 RISC-V 火焰图对分配器热点的占比；PCP 的效果改由相邻阶段正式耗时与实现路径共同判断。
 
-为此在每个 CPU 身边维护一小撮空闲 4 KiB 物理页（PCP, Per CPU Pagecache），分配和释放优先命中本地缓存，仅在本地未命中或缓存空/满时才批量访问全局分配器。进行物理页分配时，若 PCP 缓存中没有，则批量从全局分配器补充，放入 PCP；释放物理页时，先放回 PCP，缓存过多时再批量归还全局分配器。
+为此在每个 CPU 身边维护一小撮空闲 4 KiB 物理页（PCP, Per CPU Pagecache），分配和释放优先命中本地缓存，仅在本地未命中或缓存空/满时才批量访问全局分配器。进行物理页分配时，若 PCP 缓存中没有，则批量从全局分配器补充，放入 PCP；释放物理页时，先放回 PCP，缓存过多时再批量归还全局分配器。这样可以把原本逐页发生的全局访问合并为少量批量操作，显著减少访问全局分配器锁的次数，直接缓解多核并发下的锁竞争，因此能够有效提升 BuildStorm 的性能。
 
 #figure(
   image("pictures/pcp-flow.svg", width: 100%),
@@ -432,11 +436,76 @@ pub fn dealloc_page_cached(&self, cpu_id: usize, cpu_count: usize,
 
 全局分配失败（如剩余内存不足或高阶连续页无法满足）时，慢路径会先调用 `drain_page_caches()` 把所有 CPU 的 PCP 缓存全部退回全局分配器再重试一次，既防止空闲页被藏在 PCP 中造成的“假 OOM”，也为高阶连续页合并创造了机会。
 
-== 优化二：AddrSpace 三段式 ——“prepare/execute/commit”
+== 优化二：mprotect 按 VMA 定位并批量修改权限
+
+`mprotect(addr, len, prot)` 的作用是修改当前进程 `[addr, addr+len)` 这段虚拟地址的访问权限，例如将一段内存从可读写改为只读。BuildStorm 中 rustc/LLVM 会频繁调用 `mprotect` 来翻转代码段和数据段的权限，调用量极大（预构建约 147 万次、正式阶段约 65 万次）。
+
+旧实现维护了一个全局的 `MMAP_RECORDS` 数组，混合保存所有进程的映射记录。一次 `mprotect` 需要锁住该全局数组，扫描全部记录以检查 seal 和最大权限，修改页表后再次锁住并重建整个数组。平均一次调用扫描约 3.16 万条记录，与当前进程实际涉及的区间大小完全无关。新旧链路对比如下：
+
+#figure(
+  image("pictures/mprotect-per-vma.svg", width: 100%),
+  caption: [mprotect 按 VMA 定位：旧全局扫描 vs 新局部区间],
+)
+
+优化的核心思路是删除全局 `MMAP_RECORDS`，把权限元数据直接嵌入每个 VMA。每个 `MemoryArea` 携带一个 `VmaMetadata`，其中 `may_flags` 记录了该 VMA 允许的最高权限——`mprotect` 只需检查目标区间的几个 VMA 是否在 `may_flags` 允许范围内即可，不用再扫描全局记录。
+
+```rust
+/// 嵌入每个 VMA 的权限元数据，替代全局 MMAP_RECORDS
+pub struct VmaMetadata {
+    user_flags: MappingFlags,  // 用户当前看到的权限
+    may_flags: MappingFlags,   // 允许提升到的最大权限（seal / 只读文件限制）
+    shared: bool,
+    file_backed: bool,
+    anonymous: bool,
+    locked: bool,
+}
+```
+
+`mprotect` 必须保证“要么全部成功，要么全部失败”，因此采用两遍式。第一遍只校验不修改：cursor 沿 `[addr, addr+len)` 前进，每次用 `range(..=cursor).next_back()` 定位覆盖 cursor 的最后一个 VMA，检查 `may_flags` 是否允许目标权限；若目标权限与当前一致则标记 no-op。复杂度 `O(log N + K)`，仅访问实际覆盖的 K 个 VMA。
+
+第二遍才实际修改：对每个受影响的 VMA，调用 `protect_subrange` 更新相交区间的 PTE 权限（仅修改实际需要变化的子范围），必要时按左右边界分裂 VMA，更新目标段 flags/元数据后，将兼容的相邻 VMA 合并，避免了地址空间碎片化。
+
+```rust
+// MemorySet::protect —— 两遍式 VMA 区间修改
+fn protect(&mut self, start, size, update_flags, can_merge, pt) -> Result {
+    // 第一遍：纯校验，不改任何数据
+    let mut cursor = start;
+    while cursor < end {
+        let area = self.find(cursor)?;         // O(log N) 定位
+        if update_flags(area)?.is_some() { needs_update = true; }
+        cursor = area.end().min(end);
+    }
+    if !needs_update { return Ok(no_op); }     // 权限已一致，直接返回
+
+    // 第二遍：修改 PTE → 分裂 VMA → 更新元数据 → 合并相邻 VMA
+    cursor = start;
+    while cursor < end {
+        let area = self.find_mut(cursor)?;
+        area.protect_subrange(cursor, len, new_flags, pt)?;  // 只改 PTE 子范围
+        if area.start() < cursor { split_left(); }           // 按左边界分裂
+        if area.end() > end { split_right(); }               // 按右边界分裂
+        area.update_flags_and_meta(new_flags);
+        merge_if_compatible(&mut self.areas);                // 合并相邻兼容 VMA
+    }
+}
+```
+
+但是还可能出现一种问题：当 mprotect 收紧权限（如可写改成只读）时，修改 PTE 只是第一步，但是其他 CPU 的 TLB 中仍缓存着旧的可写映射，如果此时就释放物理页，远端 CPU 就还可能通过旧 TLB 写入已被回收的页面。
+所以多核 TLB 同步方面要遵守一定的释放顺序：
+
+```text
+先修改 PTE
+        -> 向所有相关 CPU 发送 TLB shootdown（RISC-V 通过 SBI RFENCE），确保旧映射在全部核心上失效
+        -> 最后才能释放 frame/folio 引用
+```
+
+全程持有 `AddrSpace` 写锁，保证 VMA 树与页表不被并发的结构性修改打断。
+
+== 优化三：AddrSpace 三段式 ——“prepare/execute/commit”
 
 === 设计思路
 
-如 2.4 根因所述，缺页在持有整个进程 `AddrSpace` 独占锁期间执行分配、页缓存、ext4与磁盘 I/O，一个线程等盘时其他缺页、`mmap`、`munmap`、`mprotect` 全部排队（mutex等待累计 3369.74 s，约 89% 经缺页路径）。因此我们把缺页处理拆成 prepare / execute / commit 三个阶段，将慢操作全部移到 `AddrSpace` 锁外：
+如 2.4 根因所述，缺页在持有整个进程 `AddrSpace` 独占锁期间执行分配、页缓存、ext4与磁盘 I/O，一个线程等盘时其他缺页、`mmap`、`munmap`、`mprotect` 全部排队（LoongArch 基线 mutex 累计等待 2401.96 秒，其中 84.92% 经 COW 文件缺页路径）。因此我们把缺页处理拆成 prepare / execute / commit 三个阶段，将慢操作全部移到 `AddrSpace` 锁外：
 
 #figure(
   image("pictures/three-phase-fault.svg", width: 100%),
@@ -506,7 +575,7 @@ fn handle_page_fault_concurrent_inner(aspace, vaddr, access_flags, ...) -> bool 
 
 prepare 和 commit 都使用读锁而非写锁，原因是 VMA 树的结构性修改（`mmap`/`munmap`/改变 VMA 的 `mprotect`）仍走写侧，而缺页线程只读 VMA、不改变树结构，PTE 的并发安装由更细粒度的原子 CAS 协调。
 
-== 优化三：Folio 系列：folio 页缓存与只读文件页直接映射
+== 优化四：Folio 系列：folio 页缓存与只读文件页直接映射
 
 Folio 系列同时解决两个根因：页缓存粒度小导致的逐页查找与重复 I/O（根因四），以及只读 `MAP_PRIVATE` 缺页多一次私有页分配与复制（根因三）。
 
@@ -650,7 +719,7 @@ let validated = file.with_valid_folio_ref(&validation_page, || {
 
 回退到旧慢路径的条件：写缺页、非 4 KiB 对齐、EOF 不完整尾页、页缓存无法返回稳定引用、commit 时 folio 已失效（truncated 或被替换）。
 
-== 优化四：ext4 锁外数据读写 + VirtIO 多在途请求
+== 优化五：ext4 锁外数据读写 + VirtIO 多在途请求
 
 如 2.4 根因所述，一次普通文件读取在 ext4 全局锁内要完成块映射查询并等待磁盘，跨文件I/O 会被全局串行化。所以本优化分两层来解除串行：extent cache 与锁外数据 I/O（上层），异步 VirtIO 多在途请求（底层）。
 
@@ -772,71 +841,6 @@ unsafe fn submit(&self, write: bool, block_id, buffer) -> DevResult {
 
 `flush` 会先等待全部在途请求排空后再独占执行，可以保证文件系统一致性。
 
-== 优化五：mprotect 按 VMA 定位并批量修改权限
-
-`mprotect(addr, len, prot)` 的作用是修改当前进程 `[addr, addr+len)` 这段虚拟地址的访问权限，例如将一段内存从可读写改为只读。BuildStorm 中 rustc/LLVM 会频繁调用 `mprotect` 来翻转代码段和数据段的权限，调用量极大（预构建约 147 万次、正式阶段约 65 万次）。
-
-旧实现维护了一个全局的 `MMAP_RECORDS` 数组，混合保存所有进程的映射记录。一次 `mprotect` 需要锁住该全局数组，扫描全部记录以检查 seal 和最大权限，修改页表后再次锁住并重建整个数组。平均一次调用扫描约 3.16 万条记录，与当前进程实际涉及的区间大小完全无关。新旧链路对比如下：
-
-#figure(
-  image("pictures/mprotect-per-vma.svg", width: 100%),
-  caption: [mprotect 按 VMA 定位：旧全局扫描 vs 新局部区间],
-)
-
-优化的核心思路是删除全局 `MMAP_RECORDS`，把权限元数据直接嵌入每个 VMA。每个 `MemoryArea` 携带一个 `VmaMetadata`，其中 `may_flags` 记录了该 VMA 允许的最高权限——`mprotect` 只需检查目标区间的几个 VMA 是否在 `may_flags` 允许范围内即可，不用再扫描全局记录。
-
-```rust
-/// 嵌入每个 VMA 的权限元数据，替代全局 MMAP_RECORDS
-pub struct VmaMetadata {
-    user_flags: MappingFlags,  // 用户当前看到的权限
-    may_flags: MappingFlags,   // 允许提升到的最大权限（seal / 只读文件限制）
-    shared: bool,
-    file_backed: bool,
-    anonymous: bool,
-    locked: bool,
-}
-```
-
-`mprotect` 必须保证“要么全部成功，要么全部失败”，因此采用两遍式。第一遍只校验不修改：cursor 沿 `[addr, addr+len)` 前进，每次用 `range(..=cursor).next_back()` 定位覆盖 cursor 的最后一个 VMA，检查 `may_flags` 是否允许目标权限；若目标权限与当前一致则标记 no-op。复杂度 `O(log N + K)`，仅访问实际覆盖的 K 个 VMA。
-
-第二遍才实际修改：对每个受影响的 VMA，调用 `protect_subrange` 更新相交区间的 PTE 权限（仅修改实际需要变化的子范围），必要时按左右边界分裂 VMA，更新目标段 flags/元数据后，将兼容的相邻 VMA 合并，避免了地址空间碎片化。
-
-```rust
-// MemorySet::protect —— 两遍式 VMA 区间修改
-fn protect(&mut self, start, size, update_flags, can_merge, pt) -> Result {
-    // 第一遍：纯校验，不改任何数据
-    let mut cursor = start;
-    while cursor < end {
-        let area = self.find(cursor)?;         // O(log N) 定位
-        if update_flags(area)?.is_some() { needs_update = true; }
-        cursor = area.end().min(end);
-    }
-    if !needs_update { return Ok(no_op); }     // 权限已一致，直接返回
-
-    // 第二遍：修改 PTE → 分裂 VMA → 更新元数据 → 合并相邻 VMA
-    cursor = start;
-    while cursor < end {
-        let area = self.find_mut(cursor)?;
-        area.protect_subrange(cursor, len, new_flags, pt)?;  // 只改 PTE 子范围
-        if area.start() < cursor { split_left(); }           // 按左边界分裂
-        if area.end() > end { split_right(); }               // 按右边界分裂
-        area.update_flags_and_meta(new_flags);
-        merge_if_compatible(&mut self.areas);                // 合并相邻兼容 VMA
-    }
-}
-```
-
-但是还可能出现一种问题：当 mprotect 收紧权限（如可写改成只读）时，修改 PTE 只是第一步，但是其他 CPU 的 TLB 中仍缓存着旧的可写映射，如果此时就释放物理页，远端 CPU 就还可能通过旧 TLB 写入已被回收的页面。
-所以多核 TLB 同步方面要遵守一定的释放顺序：
-
-```text
-先修改 PTE
-        -> 向所有相关 CPU 发送 TLB shootdown（RISC-V 通过 SBI RFENCE），确保旧映射在全部核心上失效
-        -> 最后才能释放 frame/folio 引用
-```
-
-全程持有 `AddrSpace` 写锁，保证 VMA 树与页表不被并发的结构性修改打断。
-
 == 优化六：地址空间回收与 TLB 刷新
 
 前五项核心优化把文件缺页与内存管理主链路缩短后，进程退出和 `exec` 的地址空间清理与 TLB 同步成为新的可见热点。BuildStorm 上百个 rustc/cc1 进程频繁 fork/exec/exit，每次退出都要销毁一个包含大量映射的地址空间——旧实现中这个销毁过程既慢又阻塞前台线程，且每释放一页就触发一次全核 TLB shootdown。
@@ -946,171 +950,252 @@ inode 元数据缓存方面，旧实现用一把全局缓存锁保护所有 inod
 
 == 实验环境与方法
 
-实验均在本地机器上完成，RISC-V 64 架构，QEMU `virt` 平台、8 vCPU、8 GiB 内存，磁盘为仓库 `sdcard-rv.img` 配合 `-snapshot` 保证每次从相同状态启动。宿主机配置与测评机不同，因此本地数据主要用于横向比较各优化阶段的效果，绝对值可能与测评结果有偏差。宿主机配置：（待补充）。
+本章数据在同一台 Ubuntu x86_64 主机上采集。宿主机为 Intel Core i9-14900HX（32 个逻辑 CPU）；被测环境统一为 LoongArch64 `virt` 平台、QEMU 10.0.2、8 vCPU、8 GiB 内存，磁盘使用 `sdcard-la-pub.img.gz` 解压得到的 `sdcard-la.img`，并通过 `-snapshot` 保证每轮从相同状态启动。宿主机与正式测评机硬件不同，因此实验数据会与测评机有所差异，但阶段间横向比较使用完全相同的 QEMU、镜像和参数。
 
-从优化前基线开始，每完成一轮关键优化后均使用相同 profiler 配置重新采集火焰图，通过前后对比判断优化是否命中目标热点、瓶颈是否发生了迁移。正式性能数据使用关闭 guest profiler 的内核（`make kernel-rv`），配合宿主机每秒 `pidstat`/`mpstat`/`iostat` 采样。每个阶段只有一次正式样本，宿主机未做 CPU 隔离，阶段差值表述为"单次观测"。
+Linux 基线与 Moss 十个阶段均串行执行三次，避免并发实验互相抢占宿主机资源；报告采用赛题输出 `BUILDSTORM_COMPILE` 中有效编译时长的中位数。每轮同时以 1 秒间隔采集 QEMU 进程 CPU、RSS 和进程 I/O 计数；异常退出、panic 或长时间无进展的运行不进入正式样本并单独留档。正式测量内核关闭 profiler；CPU 火焰图以及 `stage-00/03/04/09` 的 mutex、`mprotect` 等待图均来自独立插桩运行，完全不计入耗时统计。
 
 == 性能数据展示
 
 为方便展示，以下各表中阶段编号与优化措施的对应关系为：
 
 ```text
-00-U 为优化前基线；
-01 为 per-CPU 物理页缓存（PCP）；
-02 为 AddrSpace 三段式缺页；
-03 为 folio 页缓存；
-04 为只读文件页直接映射；
-05 为 ext4 锁外数据 I/O 与异步 VirtIO；
-06 为 per-VMA mprotect；
-07-10 为其他优化（VFS 并发缓存、异步地址空间回收、active-root TLB、缺页提交微路径）的合并终点。
+00 为正确性基线；
+01 为 folio 与只读文件页直接映射；
+02 为多核 futex、管道与退出路径稳定化；
+03 为 per-CPU 物理页缓存（PCP）；
+04 为 mprotect 与批量 TLB 刷新；
+05 为 negative dentry 与 inode 分片；
+06 为异步 VirtIO、extent cache 与锁外 I/O；
+07 为 fault-around、COW 微路径与 active-root 修复；
+08 为文件系统、COW、页分配与锁竞争综合优化；
+09 为 main 分支最终稳定版本。
 ```
 
 === 编译耗时
 
-优化前基线正式 BuildStorm 编译耗时 1524.50 秒。六项核心优化完成后降至 628.53 秒，累计下降 58.77%，约 2.43 倍加速。后续其他优化完成后终点耗时 460.76 秒，相对基线累计下降 69.78%。
+优化前基线中位数为 993.08 秒，最终版本降至 354.27 秒，累计下降 64.33%，约 2.80 倍加速。相同条件下 Linux 基线中位数为 413.31 秒，最终 Moss 比本机 Linux 基线快 14.28%。阶段 02 和阶段 06 出现小幅回退，说明单项提交效果会受到阶段组合与宿主机噪声影响；三次测量的范围和原始数据均完整保留。
 
 #tbl(
   caption: [表 4-1　各阶段 BuildStorm 编译耗时],
   ("阶段", "累积优化", "耗时 (s)", "相邻变化", "相对基线"),
   (
-    ("00-U", "baseline", "1524.50", "—", "—"),
-    ("01", "+ PCP", "1058.68", "-30.56%", "-30.56%"),
-    ("02", "+ AddrSpace 三段式", "1197.38", "+13.10%", "-21.46%"),
-    ("03", "+ folio 页缓存", "879.17", "-26.58%", "-42.33%"),
-    ("04", "+ 只读文件直接映射", "772.47", "-12.14%", "-49.33%"),
-    ("05", "+ ext4 锁外 I/O + 异步 VirtIO", "765.18", "-0.94%", "-49.81%"),
-    ("06", "+ per-VMA mprotect", "628.53", "-17.86%", "-58.77%"),
-    ("07-10", "+ 其他优化", "460.76", "-26.69%", "-69.78%"),
+    ("Linux", "Ubuntu 基线", "413.31", "—", "—"),
+    ("00", "正确性基线", "993.08", "—", "—"),
+    ("01", "folio + 只读直映", "424.94", "-57.21%", "-57.21%"),
+    ("02", "多核稳定化", "443.20", "+4.30%", "-55.37%"),
+    ("03", "PCP", "426.87", "-3.68%", "-57.02%"),
+    ("04", "mprotect + TLB", "398.19", "-6.72%", "-59.90%"),
+    ("05", "VFS 并发缓存", "397.44", "-0.19%", "-59.98%"),
+    ("06", "异步 I/O", "398.56", "+0.28%", "-59.87%"),
+    ("07", "fault/COW/TLB", "389.50", "-2.27%", "-60.78%"),
+    ("08", "综合锁竞争优化", "372.30", "-4.42%", "-62.51%"),
+    ("09", "最终版本", "354.27", "-4.84%", "-64.33%"),
   ),
 )
 
 #figure(
-  image("pictures/exp-build-time.svg", width: 100%),
-  caption: [各阶段 BuildStorm 编译耗时与相对基线变化],
+  image("pictures/elapsed-by-stage.svg", width: 100%),
+  caption: [三次串行测量的 BuildStorm 有效编译时长；柱为中位数，误差线为最小值至最大值],
 )
 
 === CPU 并行度
 
-把 QEMU 进程每秒 `%CPU / 100` 记为"有效核数"。核心趋势：平均有效核数从基线的 3.25 核逐步上升到 4.41 核，6～8 核高并行区间的时间占比从 6.23% 扩大到 42.93%，说明优化的主要效果不是让单核算得更快，而是让更多核能更长时间同时工作。阶段 07-10 为 dirty worktree 测量，未采集宿主 CPU 采样数据。
+把 QEMU 进程每秒 `%CPU / 100` 记为“有效核数”。Moss 基线平均使用 3.077 核，最终版本为 3.769 核；6～8 核区间占比从 0.20% 提高到 35.98%。Linux 基线的平均值与 6～8 核占比分别为 4.432 核和 46.79%。最终版本的平均核数并非所有阶段最高，但它以更少的累计 CPU 时间完成了工作，因此应同时结合墙钟时间和核数分布判断。
 
 #tbl(
   caption: [表 4-2　各阶段 CPU 并行度],
-  ("阶段", "平均有效核数", "中位数", "P95", "6～8 核占比"),
+  ("阶段", "平均有效核数", "中位数", "6～8 核占比"),
   (
-    ("00-U", "3.252", "3.480", "6.120", "6.23%"),
-    ("01", "3.536", "3.080", "7.341", "22.38%"),
-    ("02", "3.313", "2.985", "6.932", "17.70%"),
-    ("03", "3.598", "2.050", "7.770", "32.61%"),
-    ("04", "3.738", "3.120", "7.584", "32.21%"),
-    ("05", "3.725", "3.030", "7.605", "31.46%"),
-    ("06", "4.410", "3.760", "7.940", "42.93%"),
+    ("Linux", "4.432", "4.923", "46.79%"),
+    ("00", "3.077", "2.923", "0.20%"),
+    ("01", "3.971", "2.442", "37.97%"),
+    ("02", "3.954", "2.543", "37.92%"),
+    ("03", "3.957", "2.444", "37.01%"),
+    ("04", "3.798", "2.082", "34.60%"),
+    ("05", "3.845", "2.115", "35.26%"),
+    ("06", "3.849", "2.243", "36.68%"),
+    ("07", "3.808", "2.124", "36.76%"),
+    ("08", "3.678", "1.855", "34.22%"),
+    ("09", "3.769", "2.034", "35.98%"),
   ),
 )
 
+表 4-2 中最明显的变化不是平均核数增加了多少，而是优化后的内核终于能够进入 6～8 核的高并行状态。为了看清这种变化在整个编译过程中的占比，将每秒采样到的有效核数按区间统计如下。
+
 #figure(
-  image("pictures/exp-cpu-cores.svg", width: 90%),
-  caption: [各阶段 6～8 核高并行区间时间占比],
+  image("pictures/parallelism-distribution.svg", width: 100%),
+  caption: [各阶段有效核数区间占比],
 )
+
+优化前，73.62% 的时间只能使用 2～4 核，6～8 核占比仅为 0.20%，说明多个编译任务虽然已经启动，却大量阻塞在缺页、页缓存和文件系统路径上。从 `stage-01` 开始，6～8 核占比立即提升到 37.97%，后续各阶段也基本保持在 34%～38%。这与 folio、只读文件页直接映射以及后续锁粒度优化的目标一致：慢速 I/O 和页缓存操作不再长时间串行阻塞其他任务，多个 rustc 进程因而能够真正并行推进。最终版本的高并行占比为 35.98%，仍低于 Linux 的 46.79%，说明锁竞争得到显著缓解，但尚未完全消除。
+
+这种改善在时间轴上更加直观。下面选取首末版本中最接近各自三次中位数的一轮，对逐秒数据作 5 秒移动平均，观察高并行阶段何时出现、持续多久，以及整个编译过程何时结束。
+
+#figure(
+  image("pictures/cpu-cores-baseline-final.svg", width: 100%),
+  caption: [首末阶段单轮中位数样本的有效核数时间曲线；浅色区域为 6～8 核区间],
+)
+
+基线运行约 16 分钟，大部分时间只有 2～5 核在工作，始终没有形成持续的满核区间。最终版本在约第 3～5 分钟保持接近 8 核，并在约 6 分钟时完成编译。也就是说，优化不仅让更多任务可以同时运行，还缩短了每个任务在内核路径中等待和重复处理的时间。正因如此，最终平均有效核数只由 3.077 增加到 3.769，编译时间却由 993.08 秒降到 354.27 秒：这 2.80 倍加速同时来自并行度提升和内核额外工作的减少。
 
 === 内存与 I/O
 
-folio 阶段（03）用更多缓存与批量 I/O 换取性能，RSS 与读写量一度上升；只读直接映射（04）省掉私有页分配和复制后 RSS 明显回落；ext4 锁外路径（05）显著减少重复写入。最终版（06）相对基线：平均 RSS 基本持平（+0.51%），估算读取量 -14.61%，估算写入量 -36.87%。
+提升页缓存与 I/O 并行度会改变内存和磁盘访问方式，因此还要确认加速是否以过高的资源开销为代价。RSS（Resident Set Size，常驻内存集）表示 QEMU 进程实际驻留在宿主机物理内存中的大小，其中既包含客体已经触及的内存，也包含 QEMU 自身开销；它适合比较各阶段的整体内存压力，但不能直接等同于 Moss 内核自身的内存用量。这里的 I/O 同样来自宿主机对 QEMU 进程的计数，只用于同一环境下的阶段间比较，不能视为客体文件系统的精确磁盘流量。
 
 #tbl(
   caption: [表 4-3　各阶段内存与宿主机 I/O 估算（正式窗口）],
-  ("阶段", "平均 RSS (KiB)", "最大 RSS (KiB)", "估算读取 (KiB)", "估算写入 (KiB)"),
+  ("阶段", "平均 RSS (MiB)", "最大 RSS (MiB)", "估算读取 (GiB)", "估算写入 (GiB)"),
   (
-    ("00-U", "2551119", "2921592", "469282", "390434"),
-    ("01", "2594330", "3070044", "523044", "362744"),
-    ("02", "2597466", "3089976", "448212", "373526"),
-    ("03", "3171058", "3927916", "639157", "535631"),
-    ("04", "2582383", "3141188", "523871", "495356"),
-    ("05", "2595280", "3084728", "403419", "261508"),
-    ("06", "2564150", "3124756", "400715", "246463"),
+    ("Linux", "2331.6", "2751.1", "0.010", "0.306"),
+    ("00", "1864.1", "2148.1", "0.002", "0.397"),
+    ("01", "2138.3", "2499.4", "0.004", "0.303"),
+    ("02", "2132.5", "2543.7", "0.000", "0.304"),
+    ("03", "2259.3", "2851.7", "0.000", "0.301"),
+    ("04", "2247.0", "2778.4", "0.001", "0.305"),
+    ("05", "2286.8", "2884.4", "0.002", "0.299"),
+    ("06", "2330.5", "2925.1", "0.000", "0.300"),
+    ("07", "2330.2", "2866.6", "0.005", "0.298"),
+    ("08", "2336.0", "2846.7", "0.000", "0.079"),
+    ("09", "2337.7", "2888.2", "0.000", "0.079"),
   ),
 )
 
+从表 4-3 可以看出，性能提升确实伴随一定的常驻内存增长，但增长在早期优化后很快趋于稳定；与之相比，后期版本的宿主侧写入量出现了更明显的下降。各阶段的变化如下图所示。
+
 #figure(
-  image("pictures/exp-memory-io.svg", width: 100%),
+  image("pictures/memory-io.svg", width: 100%),
   caption: [各阶段内存占用与宿主机 I/O 估算（上：平均与峰值 RSS；下：估算读取与写入）],
 )
 
-上图反映的是各项优化对资源使用的影响，而非直接的墙钟收益。阶段 03 的 folio 页缓存通过扩大缓存粒度和批量 I/O 减少逐页缺页与等待，代价是 RSS 和读写量阶段性上升；阶段 04 的只读文件页直接映射省去了私有页分配与复制，使平均 RSS 相对前一阶段下降 18.56%，重新接近基线；阶段 05 将 ext4 数据 I/O 移出全局锁并引入异步 VirtIO 后，估算读取量和写入量相对前一阶段分别下降 22.99% 和 47.21%，说明重复 I/O 与串行等待得到缓解。到阶段 06，平均 RSS 相对基线仅增加 0.51%，峰值 RSS 增加约 6.95%，而估算读取量和写入量分别减少 14.61% 和 36.87%。
+`stage-01` 合入 folio 与只读文件页直接映射后，平均 RSS 由 1864 MiB 增至 2138 MiB，说明更积极的页缓存和批量处理确实需要保留更多常驻数据。此后即使继续加入 PCP、VFS 缓存和异步 I/O，平均 RSS 也只是缓慢上升并稳定在约 2.2～2.3 GiB，最终版本为 2338 MiB，没有随性能继续提升而持续膨胀。因此，这部分内存增长可以视为用有限缓存空间换取更少缺页、重复读取和锁内等待。
 
-因此，这组单次观测表明：相关优化在显著缩短编译耗时、提高并行度的同时，没有造成持续性的平均内存膨胀，并降低了宿主机 I/O 压力。
+宿主侧写入量从基线的 0.397 GiB 降到 `stage-01` 的约 0.303 GiB，`stage-08` 后又进一步降至约 0.079 GiB，最终较基线减少约 80.02%。这说明后期文件系统、COW 和页分配路径的综合优化不仅缩短了执行时间，也减少了宿主侧实际观察到的写入工作。读取量受宿主页缓存和 `-snapshot` 机制影响较大，不宜单独解读。总体来看，64.33% 的耗时下降只带来了有限且稳定的常驻内存增长，同时明显降低了写入压力。
 
-== 逐项分析
+== LoongArch 火焰图对比
 
-=== PCP
+首末阶段各单独运行一次带 QEMU gdbstub 的采样实验，每 2 秒暂停一次并采集 8 个 vCPU 的调用栈。该方法会扰动运行，只用于定位热点，不参与性能结果。为补足 CPU 图看不到的阻塞时间，又对 `stage-00/03/04/09` 各做一次独立的 LoongArch 等待插桩运行。探针只在 BuildStorm 正式窗口开启，mutex 记录实际进入睡眠的等待区间，`mprotect` 每 32 次采样一次并折算。四轮均为 `ok=true`、8 核、LoongArch，且 `dropped_table` 与 `dropped_pending` 都为 0。
 
-相邻单次 -30.56%（1524.50 → 1058.68 s），平均有效核数由 3.25 升至 3.54，6～8 核占比由 6.23% 升至 22.38%。是本轮最强的单项端到端证据之一。
+#figure(
+  image("pictures/profile-stage-00-cpu-all.svg", width: 100%),
+  caption: [优化前 LoongArch CPU 火焰图（4112 个 vCPU 样本）],
+)
 
-=== AddrSpace 三段式
+#figure(
+  image("pictures/profile-stage-09-cpu-all.svg", width: 100%),
+  caption: [最终版本 LoongArch CPU 火焰图（1464 个 vCPU 样本）],
+)
 
-相邻单次 +13.10%，该轮同时引入 COW commit 的远程 TLB flush 等新同步开销。三段式提供了后续并发框架，单轮数据不能证明独立收益。
+基线共取得 4112 个 vCPU 样本，其中 3171 个解析为内核符号；`ext4_bcache_drop_buf` 的包含占比约为 80.48%，`ext4_bcache_remove_dirty_node` 的包含占比约为 79.00%，后者作为叶节点约占全部样本的 60.92%，形成非常集中的 ext4 buffer-cache 热塔。最终版本取得 1464 个样本，其中 814 个解析为内核符号，基线中的 ext4 热塔消失，热点迁移到更分散的调度、事件与分配路径。两轮样本数因总运行时间不同而不同，因此这里只比较热点形态，不以火焰图宽度计算加速比。
 
-=== folio
+等待图给出了更直接的前后验证。优化前的基线中，mutex 睡眠等待累计达到 2401.96 秒，其中 COW 文件缺页路径占 84.92%；图中几乎贯穿全部宽度的 `CowBackend::alloc_new_at` 热塔表明，多核编译任务长期阻塞在同一条缺页大锁链上。
 
-相邻单次 -26.58%，平均有效核数 +8.61%，代价平均 RSS +22.08%。用更多缓存与批量 I/O 换取更少逐页缺页与等待。
+#figure(
+  image("pictures/profile-stage-00-mutex.svg", width: 100%),
+  caption: [优化前 stage-00 LoongArch mutex 等待火焰图],
+)
 
-=== 只读文件直接映射
+完成只读直映、folio 和 PCP 等前期优化后，`stage-03` 的 mutex 累计等待降至 3.15 秒，相比基线减少 99.87%。下图中原先占据主体的 COW 文件缺页热塔已经消失，剩余等待分散在 ext4、页缓存、管道和任务管理等路径。这说明优化不仅缩短了编译时间，也实际拆除了造成多核串行化的主要等待链。
 
-相邻单次 -12.14%，平均 RSS -18.56%，宿主机 minor faults -84.71%。代价是 system CPU time 上升约 4 倍，直接推动了后续 UnmapGather 和 active-root TLB 优化。
+#figure(
+  image("pictures/profile-stage-03-mutex.svg", width: 100%),
+  caption: [前期核心优化后 stage-03 LoongArch mutex 等待火焰图],
+)
 
-=== ext4 锁外 I/O 与异步 VirtIO
-
-相邻单次 -0.94%，端到端收益有限（宿主机 iowait 约 0.02%），但估算写入量 -47.21% 和读取量 -22.99% 表明 I/O 路径的串行化已被解除。
-
-=== per-VMA mprotect
-
-相邻单次 -17.86%，平均有效核数 +18.39%，6～8 核占比 +11.46 个百分点，总 CPU 时间仅降 2.58%——墙钟改善主要来自并行度提升。历史紧邻 A/B：旧全局 MMAP_RECORDS 路径 1243.89 s，per-VMA 实现 567.41 s（-54.38%）。
-
-=== 后续优化
-
-Stage 08（异步回收 + UnmapGather）-16.39%，system CPU -87.66%。Stage 09（active-root TLB）-14.02%。Stage 10（微路径）-1.17%，已进入平台区。当前分支最低单次 504.26 s。
+最终版本的累计 mutex 等待为 3.81 秒，虽然受剩余异步任务和运行波动影响略高于 `stage-03`，但依然没有重新出现单一缺页大锁主导的形态。`mprotect` 的折算累计延迟则在 `stage-03 → stage-04` 从 1.907 秒降至 0.468 秒（-75.45%），与第 3 章 per-VMA 和批量 TLB 设计的目标一致。
 
 == 小结
 
-同口径单次测量中，六项核心优化使 BuildStorm 从 1524.50 秒降至 628.53 秒（-58.77%），继续后续优化降至 460.76 秒（-69.78%）。平均有效核数从 3.25 升至 4.41，6～8 核占比从 6.23% 升至 42.93%。优化效果的核心体现不是单核更快，而是更多核能更长时间同时工作，与第 2 章定位的锁嵌套与锁粒度根因和第 3 章拆除锁链每一环的设计方向一致。
+三次串行测量的中位数显示，BuildStorm 从 993.08 秒降至 354.27 秒（-64.33%），6～8 核占比从 0.20% 升至 35.98%，累计 CPU 时间从约 3069 CPU·s 降至 1335 CPU·s；火焰图中原先集中的 ext4 buffer-cache 热点同时消失，COW 文件缺页造成的累计 mutex 等待也下降 99.87%。耗时、并行度与热点迁移三组证据共同支持第 2 章的根因判断和第 3 章的优化方向。
 
 = AI 使用说明与可复现步骤
 
 == AI 使用说明
 
-本项目的开发过程使用了大型语言模型作为辅助工具，主要用于以下场景：
+本项目由团队成员确定性能优化目标、技术路线和实验方案，并负责最终的结果复核与方案验收。在此基础上，开发过程中使用大型语言模型（gpt-5.6-sol）协助完成了以下工作：
 
-- *代码阅读与热点定位*：让 AI 阅读内核源码与 profiler 汇总（火焰图、路径探针），协助梳理调用链，定位锁竞争与热点函数；
-- *方案设计与代码生成*：在人工确定优化方向和约束后，由 AI 生成关键优化代码（如 PCP 页缓存、三段式缺页框架、folio 状态机、per-VMA `mprotect`、extent cache 等），团队成员逐行 review 后合入；
-- *正确性审查*：AI 辅助检查 Rust 所有权/生命周期、锁顺序、引用计数与 TLB 失效顺序等容易出错的地方；
-- *实验与数据处理*：AI 辅助编写/检查实验脚本，解析 `console.log` 与 `host-summary.json`，生成阶段对比表与报告；
-- *文档撰写*：本报告由 AI 辅助整理实验数据与设计说明，所有数字均来自仓库中实际保存的实验记录，未采用 AI 推测的性能数值。
+- *代码实现*：AI 根据团队确定的优化方案完成代码撰写，团队成员对并发安全、锁顺序、内存一致性和 TLB 刷新等关键逻辑进行审查，并决定代码的修改与合入；
+- *实验监测*：AI 持续监测 BuildStorm 实验过程，识别卡死、panic、异常退出和无效样本，并按照既定策略执行重试；实验记录及最终数据由人工复核；
+- *资料与版本分析*：AI 辅助搜集相关技术资料，对比不同提交和版本的代码变化，整理各阶段的优化内容及其依赖关系；
+- *文档整理*：AI 对文字材料进行整理和润色，并结合当前代码、提交记录与实验数据，排查文档中的事实偏差、过时数值和表述问题。
 
-使用原则：所有 AI 生成的代码必须通过人工审查、单元测试与完整 BuildStorm 回归后才合入；涉及性能的结论只使用实际测量数据；失败的尝试也保留记录，避免重复踩坑。
+AI 主要承担代码撰写、实验执行与资料整理等工作，优化目标、方案选择、结果判断以及最终提交仍由团队成员负责。文档中的性能数据全部来自实际运行结果，不使用 AI 推测的数据。
 
 == 可复现步骤
 
-=== 1. 环境准备
+=== 使用仓库脚本运行 BuildStorm
 
-- 主机：x86_64 Linux，至少 8 个物理核；
-- 工具链：Rust nightly-2025-05-20；`qemu-system-riscv64`；
-- 磁盘镜像：仓库 `sdcard-rv.img`（评测镜像），运行参数与 `scripts/run_rv.sh` 一致，并使用 `-snapshot` 保证每次从相同状态启动。
-
-=== 2. 构建与运行
+仓库已提供 LoongArch 和 RISC-V 本地运行脚本。运行前在 `src/init_final.sh` 中关闭 cagent、启用 BuildStorm：
 
 ```bash
-git switch experiment-data-organize
-make kernel-rv                                  # 正式性能测量
-make PROFILE=y kernel-rv                        # 热点定位
-./scripts/run_rv_stage_metrics.sh docs/experiment_data/<stage>
+# src/init_final.sh
+cagent=0
+buildstorm=1
 ```
 
-=== 3. 分阶段复现
+随后在仓库根目录选择需要测试的架构：
 
-从 baseline 按依赖顺序逐个应用提交并测量，每个阶段目录保存完整原始记录。阶段 07～10 的测量基点为 dirty worktree，实际代码差异保存在对应目录的 `source-worktree.patch` 中。
+```bash
+# LoongArch64
+./scripts/run_la.sh
 
-=== 4. 正确性判定
+# RISC-V64
+./scripts/run_rv.sh
+```
 
-每个阶段在统计性能前先确认：cagent 测试组与 minibuild 通过；`BUILDSTORM_COMPILE` 报告 `ok=true`；产物大小 1,681,000 字节；QEMU 正常退出且退出码为 0。
+脚本会先编译当前工作区，再以 `-snapshot` 启动相应镜像；串口输出分别保存在 `docs/output_la.txt` 和 `docs/output_rv.txt`。出现 `BUILDSTORM_COMPILE ... ok=true` 以及 BuildStorm 组结束标记，表示测试成功。这一入口用于日常正确性验证；第 4 章数据应使用后面的固定实验流程。
+
+=== 复现版本演进
+
+开发过程遵循“采集热点—检查代码—实现优化—运行 BuildStorm—比较结果”的闭环。`docs/buildstorm-report/experiments/la-20260813/stages.tsv` 保存了可完整运行的十个累积阶段，其演进关系如下：
+
+#text(size: 9.5pt)[#tbl(
+  caption: [表 5-1　BuildStorm 开发阶段与代码提交],
+  ("阶段", "Commit", "开发目标"),
+  (
+    ("00", "4cd3e021", "正确性基线"),
+    ("01", "c632ac33", "folio 与只读文件页直映"),
+    ("02", "a2f3320d", "多核运行稳定化"),
+    ("03", "56505b0d", "PCP 页缓存"),
+    ("04", "d84d85db", "mprotect 与批量 TLB"),
+    ("05", "7d3da780", "dentry 与 inode 并发"),
+    ("06", "3a7d6374", "异步 I/O 与 ext4 锁外 I/O"),
+    ("07", "8608d4e1", "fault-around 与 COW/TLB 修复"),
+    ("08", "7d4e6be8", "文件系统与锁竞争综合优化"),
+    ("09", "8fd4e55f", "main 最终稳定版本"),
+  ),
+)]
+
+审核者可以用 Git 逐步查看任一阶段的提交内容和相邻差异：
+
+```bash
+git show 56505b0d
+git diff 56505b0d..d84d85db
+```
+
+以 `mprotect` 为例：前序缺页优化后，路径采样显示热点转移到权限修改；比较上述提交可以看到 per-VMA 定位和批量 TLB 刷新实现。`profiles/stage-03/wait/mprotect.svg` 与 `stage-04` 对应图记录了累计延迟从 1.907 秒降至 0.468 秒。其他阶段也可按“第 2 章热点—相邻提交差异—第 4 章结果”复核。
+
+=== 复现正式实验与图表
+
+完整实验材料位于 `docs/buildstorm-report/experiments/la-20260813/`。运行需要 `sdcard-la.img`、仓库指定的 Rust/LoongArch 工具链和实验目录使用的 QEMU 10.0.2；具体路径与校验值见 `manifest.json`。在仓库根目录执行：
+
+```bash
+bash docs/buildstorm-report/experiments/la-20260813/scripts/build_kernels.sh
+python3 docs/buildstorm-report/experiments/la-20260813/scripts/run_all.py \
+  --repo "$(pwd)" --cooldown 30 --max-attempts 3
+python3 docs/buildstorm-report/experiments/la-20260813/scripts/summarize.py
+```
+
+构建脚本通过 `git archive` 生成各提交的干净快照并应用 BuildStorm-only 补丁。Linux 和十个 Moss 阶段各串行运行三次，失败自动留档并重试，中断后可继续。原始数据、汇总和图表分别位于 `stages/`、`runs.csv`、`stages.csv` 与 `charts/`。
+
+CPU 与等待火焰图必须独立采集，不能计入正式耗时。首末阶段 CPU 图可用 `scripts/run_profile.py` 采集；mutex 与 `mprotect` 图按以下命令复现：
+
+```bash
+bash docs/buildstorm-report/experiments/la-20260813/scripts/build_wait_profile_kernels.sh
+python3 docs/buildstorm-report/experiments/la-20260813/scripts/run_wait_profiles.py
+python3 docs/buildstorm-report/experiments/la-20260813/scripts/render_wait_profiles.py
+```
+
+正式样本只有在工具链与 minibuild 通过、`BUILDSTORM_COMPILE` 报告 `ok=true`/LoongArch/8 核、产物大小正确、无 panic 且正常结束时才进入统计。上述提交、原始日志、脚本与图表共同构成了从问题定位到最终验证的可追溯开发记录。
 
 // ============================================================
 // 第 6 章 总结与展望
@@ -1119,13 +1204,14 @@ make PROFILE=y kernel-rv                        # 热点定位
 
 本文档完整记录了 MossOS 针对 BuildStorm 测例的问题定位、优化设计与实验验证过程。核心结论如下：
 
-- *瓶颈定位明确*：火焰图与探针数据交叉指向同一条热点链——缺页持有 AddrSpace 大锁进入页缓存和 ext4 等待磁盘 I/O，锁嵌套与锁粒度大两个结构性问题互相放大，导致 8 核沦为 2.36 核；
+- *瓶颈定位明确*：LoongArch 基线火焰图中 ext4 buffer-cache 形成高度集中的热塔，三次正式样本平均仅使用 3.077 核，6～8 核区间占比只有 0.20%，与缺页、页缓存和 ext4 路径上的锁嵌套判断相互印证；
 - *优化方向正确*：六项核心优化按依赖顺序实施，逐一拆除"文件缺页 → 物理页分配 → 页缓存 → ext4 → 块设备 → mprotect"链路的锁嵌套和外层大临界区，后续优化继续缩短回收与 TLB 同步路径；
-- *端到端效果显著*：同口径单次测量中，BuildStorm 从 1524.50 秒降至 628.53 秒（六项核心优化，-58.77%），继续后续优化后降至 460.76 秒（累计 -69.78%）；平均有效核数从 3.25 升至 4.41，6～8 核占比从 6.23% 升至 42.93%；
-- *证据分级透明*：per-VMA `mprotect` 是证据最强的单项优化（紧邻 A/B -54.38%），folio、PCP、只读直接映射具备强单次正向证据；AddrSpace 三段式与 ext4 锁外 I/O 是架构必要机制，单轮端到端收益未充分证明。
+- *端到端效果显著*：LoongArch 同口径三次测量的中位数从 993.08 秒降至 354.27 秒（-64.33%，2.80 倍加速），比同机 Linux 基线的 413.31 秒快 14.28%；6～8 核占比从 0.20% 升至 35.98%；
+- *证据分级透明*：正式结果均保留三次样本和最小—最大范围，profiling 与计时严格分开；阶段 02 和阶段 06 的小幅回退同样如实呈现，不把累积阶段结果误写成单项优化的严格 A/B 因果证据。
 
 在性能优化层面，当前工作仍有若干值得继续深入的方面。
 
-现有优化主要围绕 BuildStorm 的读密集、顺序访问特征展开——folio 的 order 选择、fault-around 的窗口大小、PCP 的 batch 参数均基于该场景人工设定，缺乏对写密集或随机 I/O 负载的自适应能力。AddrSpace 三段式虽然提供了并发缺页的框架，但 COW commit 路径引入的远程 TLB flush 等新同步成本是否完全被 UnmapGather 和 active-root TLB 所抵消，尚未做严格定量拆解。部分微路径优化（PTE CAS 去重、frame 引用直查、COW 内联槽）能确认局部热点下降，但在 BuildStorm 端到端已进入平台区（约 504 秒）的背景下，更细粒度的改进需要更高分辨率的测量手段来验证。
-
-mprotect 优化解决了 VMA 扫描的效率问题，但 mprotect 仍持有 AddrSpace 写锁，与 mmap/munmap 之间仍然串行——当前只是把锁内的工作量从 O(N_global) 降到了 O(K_local)，而没有解除锁本身的竞争。ext4 元数据操作（create/unlink/rename）仍走全局 ext4 锁，在大规模并行构建的临时文件创建场景中可能成为新的瓶颈。此外，当前优化仅在 RISC-V 平台上验证，LoongArch 上的 TLB 刷新语义、指令同步开销和 VirtIO 设备行为均有差异，优化效果与跨架构一致性有待确认。
+- *参数自适应*：现有优化主要围绕 BuildStorm 的读密集、顺序访问特征展开，folio 的 order、fault-around 的窗口大小和 PCP 的 batch 参数均根据该场景人工设定。后续可以结合访问模式与内存压力动态调整这些参数，使其更好地适应写密集或随机 I/O 负载；
+- *同步开销拆解*：AddrSpace 三段式为并发缺页提供了基础框架，但 COW commit 引入的远程 TLB flush 等同步成本，是否已经被 UnmapGather 和 active-root TLB 的收益完全抵消，仍需进一步定量分析；
+- *mprotect 并发性*：当前优化将 `mprotect` 的处理范围从全局扫描缩小到目标 VMA，但它仍持有 AddrSpace 写锁，并与 `mmap`、`munmap` 串行。也就是说，锁内工作量已经从 `O(N_global)` 降至 `O(K_local)`，锁本身的竞争仍有继续优化的空间；
+- *ext4 元数据并发*：`create`、`unlink` 和 `rename` 等元数据操作仍可进一步细化锁粒度。在大规模并行构建产生大量临时文件时，这些路径可能成为新的瓶颈；

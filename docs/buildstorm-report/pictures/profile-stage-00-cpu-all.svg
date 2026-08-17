@@ -1,0 +1,2070 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1800" height="438" onload="init(evt)" viewBox="0 0 1800 438" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1800.0" height="438.0" fill="url(#background)"  />
+<text id="title" x="900.00" y="24" >Moss LoongArch BuildStorm stage-00 CPU - all vCPUs</text>
+<text id="details" x="10.00" y="421" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1690.00" y="24" >Search</text>
+<text id="ignorecase" x="1774.00" y="24" >ic</text>
+<text id="matched" x="1690.00" y="421" > </text>
+<g id="frames">
+<g >
+<title>log::{impl#48}::clone (4 vCPU samples, 0.10%)</title><rect x="573.2" y="277" width="1.7" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="576.18" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#30}::deref&lt;dyn axfs_ng_vfs::node::file::FileNodeOps, alloc::alloc::Global&gt; (9 vCPU samples, 0.22%)</title><rect x="567.1" y="293" width="3.9" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="570.12" y="303.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lba_RB_REMOVE_COLOR (13 vCPU samples, 0.32%)</title><rect x="1759.7" y="181" width="5.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1762.70" y="191.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::current_fd_table_shared_by_live_process (185 vCPU samples, 4.50%)</title><rect x="1709.5" y="325" width="80.1" height="15.0" fill="rgb(242,172,41)" rx="2" ry="2" />
+<text  x="1712.48" y="335.5" >starry_ke..</text>
+</g>
+<g >
+<title>ext4_fs_truncate_inode (22 vCPU samples, 0.54%)</title><rect x="459.8" y="309" width="9.5" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="462.76" y="319.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::name (1 vCPU samples, 0.02%)</title><rect x="592.2" y="277" width="0.5" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="595.22" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#38}::drop&lt;axfs_ng_vfs::node::Inner, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="543.3" y="133" width="0.4" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="546.31" y="143.5" ></text>
+</g>
+<g >
+<title>alloc::vec::spec_from_iter::{impl#0}::from_iter&lt;alloc::sync::Arc&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;, weak_map::map::Values&lt;u32, alloc::sync::Weak&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;&gt;&gt; (4 vCPU samples, 0.10%)</title><rect x="1787.4" y="261" width="1.7" height="15.0" fill="rgb(253,221,53)" rx="2" ry="2" />
+<text  x="1790.40" y="271.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::discard_cached_pages (1 vCPU samples, 0.02%)</title><rect x="599.1" y="229" width="0.5" height="15.0" fill="rgb(245,187,44)" rx="2" ry="2" />
+<text  x="602.15" y="239.5" ></text>
+</g>
+<g >
+<title>axnet::udp::{impl#2}::recv::{closure#0}::{closure#1}&lt;&amp;mut starry_kernel::mm::io::IoVectorBufIo&gt; (1 vCPU samples, 0.02%)</title><rect x="592.2" y="325" width="0.5" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="595.22" y="335.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTable&lt;(alloc::string::String, axfs_ng_vfs::node::DirEntry), allocator_api2::stable::alloc::global::Global&gt;::reserve_rehash&lt;(alloc::string::String, axfs_ng_vfs::node::DirEntry), allocator_api2::stable::alloc::global::Global, hashbrown::map::make_hasher::{closure_env#0}&lt;alloc::string::String, axfs_ng_vfs::node::DirEntry, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (4 vCPU samples, 0.10%)</title><rect x="425.6" y="309" width="1.7" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
+<text  x="428.56" y="319.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicU64::compare_exchange_weak (2 vCPU samples, 0.05%)</title><rect x="572.3" y="277" width="0.9" height="15.0" fill="rgb(228,110,26)" rx="2" ry="2" />
+<text  x="575.31" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::{impl#1}::deallocate (1 vCPU samples, 0.02%)</title><rect x="576.2" y="229" width="0.4" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="579.21" y="239.5" ></text>
+</g>
+<g >
+<title>log::max_level (8 vCPU samples, 0.19%)</title><rect x="430.8" y="261" width="3.4" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="433.76" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::current_memory&lt;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="503.5" y="293" width="0.4" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="506.48" y="303.5" ></text>
+</g>
+<g >
+<title>smoltcp::wire::icmpv6::Packet&lt;&amp;[u8]&gt;::payload&lt;[u8]&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.8" y="325" width="0.4" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="1710.75" y="335.5" ></text>
+</g>
+<g >
+<title>axdriver::init_drivers (19 vCPU samples, 0.46%)</title><rect x="504.3" y="341" width="8.3" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="507.35" y="351.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::inode (13 vCPU samples, 0.32%)</title><rect x="494.4" y="277" width="5.6" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="497.39" y="287.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::name (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="293" width="0.4" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="1717.68" y="303.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;event_listener::sys::ListGuard&lt;()&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="293" width="0.5" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="602.15" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::vec::Vec&lt;alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;::extend_desugared&lt;alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, alloc::alloc::Global, core::iter::adapters::cloned::Cloned&lt;alloc::collections::btree::map::Values&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="277" width="1.3" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="596.52" y="287.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="571.4" y="309" width="0.5" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="574.44" y="319.5" ></text>
+</g>
+<g >
+<title>log::__private_api::log_impl&lt;log::__private_api::GlobalLogger&gt; (4 vCPU samples, 0.10%)</title><rect x="573.2" y="309" width="1.7" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="576.18" y="319.5" ></text>
+</g>
+<g >
+<title>smoltcp::storage::ring_buffer::RingBuffer&lt;u8&gt;::is_empty&lt;u8&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="293" width="0.5" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="578.34" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::grow_amortized&lt;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="503.5" y="309" width="0.4" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="506.48" y="319.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::raw_vec::RawVec&lt;u8, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="277" width="0.4" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="600.85" y="287.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::vec::Vec&lt;u8, alloc::alloc::Global&gt;&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="165" width="2.6" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="551.93" y="175.5" ></text>
+</g>
+<g >
+<title>core::result::{impl#27}::branch&lt;axfs::highlevel::file::PageCache, axerrno::AxError&gt; (1 vCPU samples, 0.02%)</title><rect x="571.9" y="325" width="0.4" height="15.0" fill="rgb(233,133,31)" rx="2" ry="2" />
+<text  x="574.88" y="335.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::{impl#4}::read_dir (2 vCPU samples, 0.05%)</title><rect x="1758.8" y="213" width="0.9" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="1761.83" y="223.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="245" width="0.4" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="1709.89" y="255.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::load (1 vCPU samples, 0.02%)</title><rect x="598.7" y="261" width="0.4" height="15.0" fill="rgb(227,103,24)" rx="2" ry="2" />
+<text  x="601.72" y="271.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt;::lock&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt; (32 vCPU samples, 0.78%)</title><rect x="576.2" y="325" width="13.9" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="579.21" y="335.5" ></text>
+</g>
+<g >
+<title>smoltcp::iface::interface::InterfaceInner::icmpv4_reply (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="341" width="0.4" height="15.0" fill="rgb(253,221,52)" rx="2" ry="2" />
+<text  x="1709.89" y="351.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicU64::compare_exchange_weak (1 vCPU samples, 0.02%)</title><rect x="597.4" y="293" width="0.5" height="15.0" fill="rgb(228,110,26)" rx="2" ry="2" />
+<text  x="600.42" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Leaf&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_recursing&lt;usize, axpoll::PollSet, alloc::alloc::Global, alloc::collections::btree::map::entry::{impl#8}::insert_entry::{closure_env#0}&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt;&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="117" width="3.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="503.02" y="127.5" ></text>
+</g>
+<g >
+<title>starry_kernel::mm::aspace::AddrSpace::try_clone (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="341" width="1.3" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="1711.19" y="351.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::current_fd_table_shared_by_live_process::{closure#0} (6 vCPU samples, 0.15%)</title><rect x="1772.3" y="181" width="2.5" height="15.0" fill="rgb(213,37,9)" rx="2" ry="2" />
+<text  x="1775.25" y="191.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt;::lock&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt; (1 vCPU samples, 0.02%)</title><rect x="576.6" y="245" width="0.5" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="579.64" y="255.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTable&lt;((usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;), allocator_api2::stable::alloc::global::Global&gt;::reserve_rehash&lt;((usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;), allocator_api2::stable::alloc::global::Global, hashbrown::map::make_hasher::{closure_env#0}&lt;(usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="293" width="1.3" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="1711.19" y="303.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::current_fd_table_shared_by_live_process (10 vCPU samples, 0.24%)</title><rect x="1770.5" y="213" width="4.3" height="15.0" fill="rgb(242,172,41)" rx="2" ry="2" />
+<text  x="1773.52" y="223.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::reserve_rehash_inner&lt;allocator_api2::stable::alloc::global::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="574.9" y="309" width="0.4" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="577.91" y="319.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::fetch_or (124 vCPU samples, 3.02%)</title><rect x="512.6" y="245" width="53.6" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="515.57" y="255.5" >core:..</text>
+</g>
+<g >
+<title>ext4_bcache_drop_buf (2,505 vCPU samples, 60.92%)</title><rect x="606.5" y="309" width="1084.4" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="609.51" y="319.5" >ext4_bcache_drop_buf</text>
+</g>
+<g >
+<title>lwext4_rust::inode::{impl#2}::drop&lt;axfs::fs::ext4::util::AxHal&gt; (2 vCPU samples, 0.05%)</title><rect x="1758.8" y="165" width="0.9" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1761.83" y="175.5" ></text>
+</g>
+<g >
+<title>spin::rwlock::RwLock&lt;scope_local::scope::Scope, spin::relax::Spin&gt;::read&lt;scope_local::scope::Scope, spin::relax::Spin&gt; (3 vCPU samples, 0.07%)</title><rect x="1775.3" y="277" width="1.3" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="1778.28" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (16 vCPU samples, 0.39%)</title><rect x="599.6" y="229" width="6.9" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="602.58" y="239.5" ></text>
+</g>
+<g >
+<title>log::max_level (1 vCPU samples, 0.02%)</title><rect x="503.5" y="229" width="0.4" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="506.48" y="239.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::node::marker::LeafOrInternal&gt;, alloc::collections::btree::node::marker::KV&gt;::fix_left_border_of_left_edge&lt;axtask::future::time::TimerKey, core::task::wake::Waker, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="261" width="0.4" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="1792.57" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicU64::compare_exchange_weak (4 vCPU samples, 0.10%)</title><rect x="590.5" y="293" width="1.7" height="15.0" fill="rgb(228,110,26)" rx="2" ry="2" />
+<text  x="593.49" y="303.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (32 vCPU samples, 0.78%)</title><rect x="576.2" y="309" width="13.9" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="579.21" y="319.5" ></text>
+</g>
+<g >
+<title>smoltcp::iface::socket_set::SocketSet::get_mut&lt;smoltcp::socket::udp::Socket&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="181" width="0.4" height="15.0" fill="rgb(207,12,3)" rx="2" ry="2" />
+<text  x="595.66" y="191.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt;::lock&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="571.4" y="245" width="0.5" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="574.44" y="255.5" ></text>
+</g>
+<g >
+<title>core::result::{impl#27}::branch&lt;alloc::string::String, axerrno::AxError&gt; (34 vCPU samples, 0.83%)</title><rect x="551.5" y="197" width="14.7" height="15.0" fill="rgb(220,72,17)" rx="2" ry="2" />
+<text  x="554.53" y="207.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe (8 vCPU samples, 0.19%)</title><rect x="430.8" y="293" width="3.4" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="433.76" y="303.5" ></text>
+</g>
+<g >
+<title>smoltcp::socket::tcp::Socket::recv_impl&lt;smoltcp::socket::tcp::{impl#9}::recv::{closure_env#0}&lt;axnet::tcp::{impl#4}::recv::{closure#0}::{closure#0}::{closure_env#1}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt;, core::result::Result&lt;usize, axerrno::AxError&gt;&gt;, core::result::Result&lt;usize, axerrno::AxError&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="213" width="0.5" height="15.0" fill="rgb(206,8,1)" rx="2" ry="2" />
+<text  x="578.34" y="223.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;event_listener::InnerListener&lt;(), &amp;event_listener::Inner&lt;()&gt;&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="277" width="0.4" height="15.0" fill="rgb(236,146,34)" rx="2" ry="2" />
+<text  x="595.66" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Leaf&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_recursing&lt;usize, axpoll::PollSet, alloc::alloc::Global, alloc::collections::btree::map::entry::{impl#8}::insert_entry::{closure_env#0}&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt;&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="261" width="3.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="503.02" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::slice_remove&lt;core::ptr::non_null::NonNull&lt;alloc::collections::btree::node::LeafNode&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="469.3" y="293" width="1.3" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="472.29" y="303.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::set_cached_len (1 vCPU samples, 0.02%)</title><rect x="574.9" y="341" width="0.4" height="15.0" fill="rgb(232,124,29)" rx="2" ry="2" />
+<text  x="577.91" y="351.5" ></text>
+</g>
+<g >
+<title>core::iter::adapters::step_by::{impl#1}::next&lt;core::ops::range::Range&lt;usize&gt;&gt; (14 vCPU samples, 0.34%)</title><rect x="1776.6" y="245" width="6.0" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="1779.58" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#28}::clone&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt; (4 vCPU samples, 0.10%)</title><rect x="1770.5" y="197" width="1.8" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="1773.52" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::signal::sys_rt_sigsuspend::{closure#0} (1 vCPU samples, 0.02%)</title><rect x="598.7" y="293" width="0.4" height="15.0" fill="rgb(216,54,12)" rx="2" ry="2" />
+<text  x="601.72" y="303.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe_bus_devices (19 vCPU samples, 0.46%)</title><rect x="504.3" y="309" width="8.3" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="507.35" y="319.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::udp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::udp::{impl#2}::recv::{closure#0}::{closure_env#1}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt;&gt; (4 vCPU samples, 0.10%)</title><rect x="590.5" y="341" width="1.7" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="593.49" y="351.5" ></text>
+</g>
+<g >
+<title>smoltcp::iface::interface::InterfaceInner::process_ipv6 (1 vCPU samples, 0.02%)</title><rect x="1707.3" y="341" width="0.5" height="15.0" fill="rgb(220,72,17)" rx="2" ry="2" />
+<text  x="1710.32" y="351.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt;::lock&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="213" width="0.5" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="602.15" y="223.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;axfs_ng_vfs::node::DirEntry&gt; (1 vCPU samples, 0.02%)</title><rect x="546.3" y="181" width="0.5" height="15.0" fill="rgb(219,66,16)" rx="2" ry="2" />
+<text  x="549.34" y="191.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::navigate::LazyLeafRange&lt;alloc::collections::btree::node::marker::Immut, (3 vCPU samples, 0.07%)</title><rect x="593.5" y="213" width="1.3" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="596.52" y="223.5" ></text>
+</g>
+<g >
+<title>axdriver::init_drivers (1 vCPU samples, 0.02%)</title><rect x="503.9" y="309" width="0.4" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="506.92" y="319.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_fini_dynamic (4 vCPU samples, 0.10%)</title><rect x="1765.3" y="213" width="1.8" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="1768.33" y="223.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::raw_vec::RawVec&lt;u8, alloc::alloc::Global&gt;&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="149" width="2.6" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="551.93" y="159.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Weak&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1723.3" y="261" width="0.5" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="1726.34" y="271.5" ></text>
+</g>
+<g >
+<title>core::ptr::mut_ptr::{impl#0}::add&lt;axdriver_virtio::blk::VirtIoBlkDev&lt;axdriver::virtio::VirtIoHalImpl, virtio_drivers::transport::pci::PciTransport&gt;&gt; (22 vCPU samples, 0.54%)</title><rect x="1749.3" y="133" width="9.5" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="1752.31" y="143.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Arc&lt;axfs_ng_vfs::node::Inner, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="546.3" y="165" width="0.5" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="549.34" y="175.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::navigate::{impl#22}::next_unchecked::{closure#0}&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="165" width="1.3" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="596.52" y="175.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_compare_exchange_weak&lt;u64&gt; (4 vCPU samples, 0.10%)</title><rect x="590.5" y="277" width="1.7" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="593.49" y="287.5" ></text>
+</g>
+<g >
+<title>core::slice::iter::{impl#182}::any&lt;alloc::sync::Arc&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;, starry_kernel::syscall::fs::fd_ops::current_fd_table_shared_by_live_process::{closure_env#0}&gt; (6 vCPU samples, 0.15%)</title><rect x="1772.3" y="197" width="2.5" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="1775.25" y="207.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::tcp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::tcp::{impl#4}::send::{closure#0}::{closure_env#0}&lt;&amp;mut starry_kernel::mm::access::VmBytes&gt;&gt; (33 vCPU samples, 0.80%)</title><rect x="576.2" y="341" width="14.3" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="579.21" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::{impl#1}::deallocate (19 vCPU samples, 0.46%)</title><rect x="417.3" y="261" width="8.3" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="420.34" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#48}::drop&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt; (19 vCPU samples, 0.46%)</title><rect x="417.3" y="293" width="8.3" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="420.34" y="303.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_add&lt;usize&gt; (6 vCPU samples, 0.15%)</title><rect x="1772.3" y="133" width="2.5" height="15.0" fill="rgb(227,103,24)" rx="2" ry="2" />
+<text  x="1775.25" y="143.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange_weak (124 vCPU samples, 3.02%)</title><rect x="512.6" y="293" width="53.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="515.57" y="303.5" >core:..</text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::lock (124 vCPU samples, 3.02%)</title><rect x="512.6" y="325" width="53.6" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="515.57" y="335.5" >axfs:..</text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Leaf&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_recursing&lt;usize, axpoll::PollSet, alloc::alloc::Global, alloc::collections::btree::map::entry::{impl#8}::insert_entry::{closure_env#0}&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt;&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="309" width="3.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="503.02" y="319.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (3 vCPU samples, 0.07%)</title><rect x="596.6" y="309" width="1.3" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="599.55" y="319.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::string::String&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="181" width="2.6" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="551.93" y="191.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;core::option::Option&lt;axfs::highlevel::file::PageCache&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="571.9" y="293" width="0.4" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="574.88" y="303.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::invalidate_clean_pages_in_range (1 vCPU samples, 0.02%)</title><rect x="571.4" y="341" width="0.5" height="15.0" fill="rgb(224,91,21)" rx="2" ry="2" />
+<text  x="574.44" y="351.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe (1 vCPU samples, 0.02%)</title><rect x="503.9" y="293" width="0.4" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="506.92" y="303.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::set_cached_len (4 vCPU samples, 0.10%)</title><rect x="425.6" y="325" width="1.7" height="15.0" fill="rgb(232,124,29)" rx="2" ry="2" />
+<text  x="428.56" y="335.5" ></text>
+</g>
+<g >
+<title>state:active (4,112 vCPU samples, 100.00%)</title><rect x="10.0" y="357" width="1780.0" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="13.00" y="367.5" >state:active</text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_load&lt;usize&gt; (1 vCPU samples, 0.02%)</title><rect x="503.9" y="229" width="0.4" height="15.0" fill="rgb(208,17,4)" rx="2" ry="2" />
+<text  x="506.92" y="239.5" ></text>
+</g>
+<g >
+<title>foldhash::fast::{impl#1}::write (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="117" width="1.3" height="15.0" fill="rgb(221,75,18)" rx="2" ry="2" />
+<text  x="1711.19" y="127.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt;::drop_slow&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="325" width="0.4" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="1709.89" y="335.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lru_RB_REMOVE (2,521 vCPU samples, 61.31%)</title><rect x="599.6" y="325" width="1091.3" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="602.58" y="335.5" >ext4_buf_lru_RB_REMOVE</text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::invalidate_metadata_cache (13 vCPU samples, 0.32%)</title><rect x="494.4" y="293" width="5.6" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="497.39" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt;::drop_slow&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt; (19 vCPU samples, 0.46%)</title><rect x="417.3" y="325" width="8.3" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="420.34" y="335.5" ></text>
+</g>
+<g >
+<title>log::max_level (1 vCPU samples, 0.02%)</title><rect x="503.9" y="261" width="0.4" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="506.92" y="271.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::udp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::udp::{impl#2}::recv::{closure#0}::{closure_env#1}&lt;&amp;mut starry_kernel::mm::io::IoVectorBufIo&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="197" width="0.4" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="595.66" y="207.5" ></text>
+</g>
+<g >
+<title>core::future::poll_fn::{impl#2}::poll&lt;(), starry_kernel::syscall::signal::sys_rt_sigsuspend::{closure_env#0}&gt; (1 vCPU samples, 0.02%)</title><rect x="598.7" y="309" width="0.4" height="15.0" fill="rgb(214,42,10)" rx="2" ry="2" />
+<text  x="601.72" y="319.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::close_all_files_for_current_process (10 vCPU samples, 0.24%)</title><rect x="1770.5" y="229" width="4.3" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="1773.52" y="239.5" ></text>
+</g>
+<g >
+<title>lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;::put&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt; (37 vCPU samples, 0.90%)</title><rect x="1690.9" y="309" width="16.0" height="15.0" fill="rgb(218,62,14)" rx="2" ry="2" />
+<text  x="1693.87" y="319.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::file::{impl#0}::deref (9 vCPU samples, 0.22%)</title><rect x="567.1" y="309" width="3.9" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="570.12" y="319.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::len (1 vCPU samples, 0.02%)</title><rect x="571.0" y="261" width="0.4" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="574.01" y="271.5" ></text>
+</g>
+<g >
+<title>event_listener::_::{impl#2}::drop::__drop_inner&lt;(), &amp;event_listener::Inner&lt;()&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="325" width="0.5" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="602.15" y="335.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Owned, axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::node::marker::LeafOrInternal&gt;::fix_left_border&lt;axtask::future::time::TimerKey, core::task::wake::Waker, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="277" width="0.4" height="15.0" fill="rgb(208,14,3)" rx="2" ry="2" />
+<text  x="1792.57" y="287.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sys::write_acct_record (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="325" width="0.4" height="15.0" fill="rgb(245,188,44)" rx="2" ry="2" />
+<text  x="1792.57" y="335.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Arc&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="229" width="0.4" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="595.66" y="239.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="599.1" y="197" width="0.5" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="602.15" y="207.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lba_RB_REMOVE (8 vCPU samples, 0.19%)</title><rect x="500.0" y="37" width="3.5" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="503.02" y="47.5" ></text>
+</g>
+<g >
+<title>log::RecordBuilder::build (4 vCPU samples, 0.10%)</title><rect x="594.8" y="277" width="1.8" height="15.0" fill="rgb(209,22,5)" rx="2" ry="2" />
+<text  x="597.82" y="287.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Weak&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt;&gt; (19 vCPU samples, 0.46%)</title><rect x="417.3" y="309" width="8.3" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="420.34" y="319.5" ></text>
+</g>
+<g >
+<title>log::__private_api::log_impl&lt;log::__private_api::GlobalLogger&gt; (4 vCPU samples, 0.10%)</title><rect x="594.8" y="293" width="1.8" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="597.82" y="303.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::FileBackend::write_at&lt;&amp;[u8]&gt; (2 vCPU samples, 0.05%)</title><rect x="572.3" y="341" width="0.9" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="575.31" y="351.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::raw_vec::RawVec&lt;event_listener::Task, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="261" width="0.5" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="602.15" y="271.5" ></text>
+</g>
+<g >
+<title>foldhash::hash_bytes_short (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="101" width="1.3" height="15.0" fill="rgb(213,41,9)" rx="2" ry="2" />
+<text  x="1711.19" y="111.5" ></text>
+</g>
+<g >
+<title>core::iter::traits::iterator::Iterator::collect&lt;weak_map::map::Values&lt;u32, alloc::sync::Weak&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;&gt;, alloc::vec::Vec&lt;alloc::sync::Arc&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;&gt; (4 vCPU samples, 0.10%)</title><rect x="1787.4" y="293" width="1.7" height="15.0" fill="rgb(226,97,23)" rx="2" ry="2" />
+<text  x="1790.40" y="303.5" ></text>
+</g>
+<g >
+<title>core::slice::iter::{impl#182}::any&lt;alloc::sync::Arc&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;, starry_kernel::syscall::fs::fd_ops::current_fd_table_shared_by_live_process::{closure_env#0}&gt; (122 vCPU samples, 2.97%)</title><rect x="1723.8" y="309" width="52.8" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="1726.77" y="319.5" >core:..</text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt;::lock&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt; (3 vCPU samples, 0.07%)</title><rect x="596.6" y="325" width="1.3" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="599.55" y="335.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;lwext4_rust::inode::dir::DirReader&lt;axfs::fs::ext4::util::AxHal&gt;&gt; (2 vCPU samples, 0.05%)</title><rect x="1758.8" y="197" width="0.9" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1761.83" y="207.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::{impl#1}::deallocate (1 vCPU samples, 0.02%)</title><rect x="1723.3" y="213" width="0.5" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="1726.34" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::init_filesystems (4 vCPU samples, 0.10%)</title><rect x="573.2" y="341" width="1.7" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="576.18" y="351.5" ></text>
+</g>
+<g >
+<title>core::alloc::{impl#2}::deallocate&lt;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="277" width="0.4" height="15.0" fill="rgb(206,8,2)" rx="2" ry="2" />
+<text  x="1709.89" y="287.5" ></text>
+</g>
+<g >
+<title>core::slice::iter::{impl#182}::find_map&lt;smoltcp::wire::ip::Cidr, &amp;smoltcp::wire::ipv6::Cidr, smoltcp::iface::interface::ipv6::{impl#1}::get_source_address_ipv6::{closure_env#1}&gt; (37 vCPU samples, 0.90%)</title><rect x="1690.9" y="325" width="16.0" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="1693.87" y="335.5" ></text>
+</g>
+<g >
+<title>log::__private_api::log&lt;(), log::__private_api::GlobalLogger&gt; (4 vCPU samples, 0.10%)</title><rect x="594.8" y="309" width="1.8" height="15.0" fill="rgb(218,62,14)" rx="2" ry="2" />
+<text  x="597.82" y="319.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::lookup (55 vCPU samples, 1.34%)</title><rect x="519.9" y="213" width="23.8" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="522.93" y="223.5" >a..</text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange_weak (7 vCPU samples, 0.17%)</title><rect x="445.5" y="261" width="3.0" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="448.48" y="271.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_init_dynamic (89 vCPU samples, 2.16%)</title><rect x="430.8" y="325" width="38.5" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="433.76" y="335.5" >ext..</text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_fit&lt;usize, axpoll::PollSet&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="133" width="3.5" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="503.02" y="143.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Arc&lt;axfs_ng_vfs::node::Inner, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="543.3" y="149" width="0.4" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="546.31" y="159.5" ></text>
+</g>
+<g >
+<title>scope_local::item::{impl#4}::deref&lt;alloc::sync::Arc&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1774.8" y="277" width="0.5" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="1777.85" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::node::marker::LeafOrInternal&gt;::first_kv&lt;alloc::collections::btree::node::marker::Mut, axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::node::marker::LeafOrInternal&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="245" width="0.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1792.57" y="255.5" ></text>
+</g>
+<g >
+<title>event_listener::__private::StackSlot&lt;()&gt;::listen&lt;()&gt; (1 vCPU samples, 0.02%)</title><rect x="571.4" y="293" width="0.5" height="15.0" fill="rgb(251,213,50)" rx="2" ry="2" />
+<text  x="574.44" y="303.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::fetch_or (10 vCPU samples, 0.24%)</title><rect x="455.4" y="213" width="4.4" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="458.43" y="223.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt;::lock&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="566.7" y="325" width="0.4" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="569.68" y="335.5" ></text>
+</g>
+<g >
+<title>lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;::put&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt; (30 vCPU samples, 0.73%)</title><rect x="577.1" y="293" width="13.0" height="15.0" fill="rgb(218,62,14)" rx="2" ry="2" />
+<text  x="580.07" y="303.5" ></text>
+</g>
+<g >
+<title>core::fmt::num::{impl#80}::fmt (2 vCPU samples, 0.05%)</title><rect x="598.3" y="341" width="0.8" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="601.28" y="351.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt;::lock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt; (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="277" width="0.4" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="1717.68" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::{impl#3}::drop&lt;event_listener::Task, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="245" width="0.5" height="15.0" fill="rgb(224,87,20)" rx="2" ry="2" />
+<text  x="602.15" y="255.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt;::lock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt; (1 vCPU samples, 0.02%)</title><rect x="592.2" y="261" width="0.5" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="595.22" y="271.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt;::lock&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="325" width="0.4" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="595.66" y="335.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Weak&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt;&gt; (16 vCPU samples, 0.39%)</title><rect x="599.6" y="293" width="6.9" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="602.58" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="293" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="503.02" y="303.5" ></text>
+</g>
+<g >
+<title>log::__private_api::log&lt;(), log::__private_api::GlobalLogger&gt; (4 vCPU samples, 0.10%)</title><rect x="573.2" y="325" width="1.7" height="15.0" fill="rgb(218,62,14)" rx="2" ry="2" />
+<text  x="576.18" y="335.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, (1 vCPU samples, 0.02%)</title><rect x="571.4" y="325" width="0.5" height="15.0" fill="rgb(221,73,17)" rx="2" ry="2" />
+<text  x="574.44" y="335.5" ></text>
+</g>
+<g >
+<title>axerrno::AxError::new_ax (1 vCPU samples, 0.02%)</title><rect x="592.2" y="293" width="0.5" height="15.0" fill="rgb(245,187,44)" rx="2" ry="2" />
+<text  x="595.22" y="303.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_or&lt;u8&gt; (124 vCPU samples, 3.02%)</title><rect x="512.6" y="229" width="53.6" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="515.57" y="239.5" >core:..</text>
+</g>
+<g >
+<title>axtask::task::TaskInner::name (1 vCPU samples, 0.02%)</title><rect x="597.4" y="261" width="0.5" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="600.42" y="271.5" ></text>
+</g>
+<g >
+<title>core::alloc::{impl#2}::deallocate&lt;alloc::alloc::Global&gt; (16 vCPU samples, 0.39%)</title><rect x="599.6" y="261" width="6.9" height="15.0" fill="rgb(206,8,2)" rx="2" ry="2" />
+<text  x="602.58" y="271.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::Thread::exec_exit_requested (1 vCPU samples, 0.02%)</title><rect x="598.7" y="277" width="0.4" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="601.72" y="287.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicU64::compare_exchange_weak (1 vCPU samples, 0.02%)</title><rect x="576.6" y="293" width="0.5" height="15.0" fill="rgb(228,110,26)" rx="2" ry="2" />
+<text  x="579.64" y="303.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;event_listener::__private::StackSlot&lt;()&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="293" width="0.4" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="595.66" y="303.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange (7 vCPU samples, 0.17%)</title><rect x="445.5" y="245" width="3.0" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="448.48" y="255.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::sys::sys_acct (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="341" width="0.4" height="15.0" fill="rgb(205,1,0)" rx="2" ry="2" />
+<text  x="1792.57" y="351.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicU64::compare_exchange_weak (1 vCPU samples, 0.02%)</title><rect x="599.1" y="181" width="0.5" height="15.0" fill="rgb(228,110,26)" rx="2" ry="2" />
+<text  x="602.15" y="191.5" ></text>
+</g>
+<g >
+<title>core::array::equality::{impl#9}::spec_eq&lt;u8, u8, 16&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.3" y="277" width="0.5" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1710.32" y="287.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe (1 vCPU samples, 0.02%)</title><rect x="503.5" y="261" width="0.4" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="506.48" y="271.5" ></text>
+</g>
+<g >
+<title>smoltcp::iface::socket_set::SocketSet::get_mut&lt;smoltcp::socket::tcp::Socket&gt; (1 vCPU samples, 0.02%)</title><rect x="590.1" y="325" width="0.4" height="15.0" fill="rgb(220,72,17)" rx="2" ry="2" />
+<text  x="593.06" y="335.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_compare_exchange_weak&lt;u64&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="165" width="0.5" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="602.15" y="175.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lba_RB_REMOVE (13 vCPU samples, 0.32%)</title><rect x="1759.7" y="197" width="5.6" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="1762.70" y="207.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::grow_one&lt;alloc::alloc::Global&gt; (2 vCPU samples, 0.05%)</title><rect x="503.5" y="325" width="0.8" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="506.48" y="335.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe_bus_devices (8 vCPU samples, 0.19%)</title><rect x="430.8" y="277" width="3.4" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="433.76" y="287.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::add_device (22 vCPU samples, 0.54%)</title><rect x="1749.3" y="165" width="9.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1752.31" y="175.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::vec::Vec&lt;event_listener::Task, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="277" width="0.5" height="15.0" fill="rgb(234,137,32)" rx="2" ry="2" />
+<text  x="602.15" y="287.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;axfs_ng_vfs::mount::Location&gt; (1 vCPU samples, 0.02%)</title><rect x="546.3" y="197" width="0.5" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="549.34" y="207.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_load&lt;usize&gt; (1 vCPU samples, 0.02%)</title><rect x="503.5" y="197" width="0.4" height="15.0" fill="rgb(208,17,4)" rx="2" ry="2" />
+<text  x="506.48" y="207.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::current_fd_table_shared_by_live_process::{closure#0} (121 vCPU samples, 2.94%)</title><rect x="1724.2" y="293" width="52.4" height="15.0" fill="rgb(213,37,9)" rx="2" ry="2" />
+<text  x="1727.20" y="303.5" >starr..</text>
+</g>
+<g >
+<title>spin::lazy::Lazy&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, fn() -&gt; spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt;::force&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, fn() -&gt; spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt; (1 vCPU samples, 0.02%)</title><rect x="571.0" y="309" width="0.4" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="574.01" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#48}::drop&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt; (16 vCPU samples, 0.39%)</title><rect x="599.6" y="277" width="6.9" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="602.58" y="287.5" ></text>
+</g>
+<g >
+<title>core::hash::impls::{impl#2}::hash&lt;hashbrown::hasher::DefaultHasher&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="165" width="1.3" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="1711.19" y="175.5" ></text>
+</g>
+<g >
+<title>axdriver::structs::{impl#0}::device_type (19 vCPU samples, 0.46%)</title><rect x="504.3" y="293" width="8.3" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="507.35" y="303.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="576.6" y="229" width="0.5" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="579.64" y="239.5" ></text>
+</g>
+<g >
+<title>scope_local::item::{impl#3}::deref&lt;alloc::sync::Arc&lt;lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, axfs::highlevel::fs::FsContext&gt;, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="309" width="0.4" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="1792.57" y="319.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::{impl#4}::lookup (26 vCPU samples, 0.63%)</title><rect x="448.5" y="309" width="11.3" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="451.51" y="319.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::lock (10 vCPU samples, 0.24%)</title><rect x="455.4" y="293" width="4.4" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="458.43" y="303.5" ></text>
+</g>
+<g >
+<title>axtask::run_queue::AxRunQueueRef&lt;kernel_guard::NoPreemptIrqSave&gt;::add_task&lt;kernel_guard::NoPreemptIrqSave&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="341" width="0.4" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="600.85" y="351.5" ></text>
+</g>
+<g >
+<title>smoltcp::socket::tcp::{impl#9}::recv::{closure#0}&lt;axnet::tcp::{impl#4}::recv::{closure#0}::{closure#0}::{closure_env#1}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt;, core::result::Result&lt;usize, axerrno::AxError&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="197" width="0.5" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="578.34" y="207.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lba_RB_REMOVE (9 vCPU samples, 0.22%)</title><rect x="508.7" y="261" width="3.9" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="511.68" y="271.5" ></text>
+</g>
+<g >
+<title>lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;::put&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.3" y="261" width="0.5" height="15.0" fill="rgb(218,62,14)" rx="2" ry="2" />
+<text  x="1710.32" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicUsize::load (1 vCPU samples, 0.02%)</title><rect x="503.5" y="213" width="0.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="506.48" y="223.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64Mut&lt;page_table_multiarch::arch::loongarch64::LA64MetaData, page_table_entry::arch::loongarch64::LA64PTE, axhal::paging::PagingHandlerImpl&gt;::new&lt;page_table_multiarch::arch::loongarch64::LA64MetaData, page_table_entry::arch::loongarch64::LA64PTE, axhal::paging::PagingHandlerImpl&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="309" width="1.3" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="1711.19" y="319.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Weak&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="309" width="0.4" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="1709.89" y="319.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (2 vCPU samples, 0.05%)</title><rect x="572.3" y="293" width="0.9" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="575.31" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::grow_amortized&lt;alloc::alloc::Global&gt; (4 vCPU samples, 0.10%)</title><rect x="573.2" y="229" width="1.7" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="576.18" y="239.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Leaf&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_recursing&lt;usize, axpoll::PollSet, alloc::alloc::Global, alloc::collections::btree::map::entry::{impl#8}::insert_entry::{closure_env#0}&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt;&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="213" width="3.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="503.02" y="223.5" ></text>
+</g>
+<g >
+<title>core::array::equality::{impl#0}::eq&lt;u8, u8, 16&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.3" y="293" width="0.5" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="1710.32" y="303.5" ></text>
+</g>
+<g >
+<title>smoltcp::wire::ndisc::Repr::parse&lt;[u8]&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.8" y="341" width="0.4" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="1710.75" y="351.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="566.7" y="309" width="0.4" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="569.68" y="319.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_sub&lt;usize&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.1" y="245" width="0.5" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="1792.13" y="255.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, (1 vCPU samples, 0.02%)</title><rect x="566.2" y="325" width="0.5" height="15.0" fill="rgb(221,73,17)" rx="2" ry="2" />
+<text  x="569.25" y="335.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::{impl#1}::deallocate (1 vCPU samples, 0.02%)</title><rect x="597.9" y="229" width="0.4" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="600.85" y="239.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="571.4" y="229" width="0.5" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="574.44" y="239.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;core::option::Option&lt;event_listener::sys::Listener&lt;()&gt;&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="261" width="0.4" height="15.0" fill="rgb(224,87,21)" rx="2" ry="2" />
+<text  x="595.66" y="271.5" ></text>
+</g>
+<g >
+<title>core::hash::Hasher::write_str&lt;hashbrown::hasher::DefaultHasher&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="149" width="1.3" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="1711.19" y="159.5" ></text>
+</g>
+<g >
+<title>managed::slice::{impl#4}::deref_mut&lt;smoltcp::iface::socket_set::SocketStorage&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="165" width="0.4" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="595.66" y="175.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreempt, lwext4_rust::fs::Ext4Filesystem&lt;axfs::fs::ext4::util::AxHal, axfs::fs::ext4::Ext4Disk&gt;&gt;::lock&lt;kernel_guard::NoPreempt, lwext4_rust::fs::Ext4Filesystem&lt;axfs::fs::ext4::util::AxHal, axfs::fs::ext4::Ext4Disk&gt;&gt; (124 vCPU samples, 3.02%)</title><rect x="512.6" y="309" width="53.6" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="515.57" y="319.5" >kspin..</text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="101" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="503.02" y="111.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::BalancingContext&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;::do_merge&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, alloc::collections::btree::node::{impl#64}::merge_tracking_child::{closure_env#0}&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, (3 vCPU samples, 0.07%)</title><rect x="469.3" y="341" width="1.3" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="472.29" y="351.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::reserve_rehash_inner&lt;allocator_api2::stable::alloc::global::Global&gt; (3 vCPU samples, 0.07%)</title><rect x="426.0" y="293" width="1.3" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="429.00" y="303.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicUsize::fetch_add (6 vCPU samples, 0.15%)</title><rect x="1772.3" y="149" width="2.5" height="15.0" fill="rgb(207,12,2)" rx="2" ry="2" />
+<text  x="1775.25" y="159.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_drop_buf (9 vCPU samples, 0.22%)</title><rect x="508.7" y="277" width="3.9" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="511.68" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::KV&gt;::remove_internal_kv&lt;memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::collections::btree::map::{impl#54}::next::{closure_env#0}&lt;memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::collections::btree::map::{impl#20}::retain::{closure_env#0}&lt;memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::alloc::Global, memory_set::set::{impl#0}::unmap::{closure_env#0}&lt;axmm::backend::Backend&gt;&gt;, alloc::alloc::Global&gt;, alloc::alloc::Global&gt; (67 vCPU samples, 1.63%)</title><rect x="471.0" y="325" width="29.0" height="15.0" fill="rgb(240,163,39)" rx="2" ry="2" />
+<text  x="474.02" y="335.5" >al..</text>
+</g>
+<g >
+<title>axfs::fs::ext4::fs::Ext4Filesystem::lock (7 vCPU samples, 0.17%)</title><rect x="445.5" y="293" width="3.0" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="448.48" y="303.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, starry_kernel::mm::aspace::AddrSpace&gt;::lock&lt;axsync::mutex::RawMutex, starry_kernel::mm::aspace::AddrSpace&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.8" y="277" width="0.4" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="1710.75" y="287.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::bucket_mask_to_capacity (3 vCPU samples, 0.07%)</title><rect x="426.0" y="261" width="1.3" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="429.00" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange (10 vCPU samples, 0.24%)</title><rect x="455.4" y="245" width="4.4" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="458.43" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Immut, (3 vCPU samples, 0.07%)</title><rect x="593.5" y="197" width="1.3" height="15.0" fill="rgb(210,25,5)" rx="2" ry="2" />
+<text  x="596.52" y="207.5" ></text>
+</g>
+<g >
+<title>core::hash::impls::{impl#23}::hash&lt;usize, alloc::string::String, hashbrown::hasher::DefaultHasher&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="197" width="1.3" height="15.0" fill="rgb(234,137,32)" rx="2" ry="2" />
+<text  x="1711.19" y="207.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange_weak (10 vCPU samples, 0.24%)</title><rect x="455.4" y="261" width="4.4" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="458.43" y="271.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;axfs_ng_vfs::node::DirEntry&gt; (1 vCPU samples, 0.02%)</title><rect x="543.3" y="165" width="0.4" height="15.0" fill="rgb(219,66,16)" rx="2" ry="2" />
+<text  x="546.31" y="175.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="245" width="0.4" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="1717.68" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="197" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="503.02" y="207.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;axfs::highlevel::file::PageCache&gt; (1 vCPU samples, 0.02%)</title><rect x="571.9" y="277" width="0.4" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="574.88" y="287.5" ></text>
+</g>
+<g >
+<title>axerrno::{impl#6}::from&lt;axerrno::AxErrorKind&gt; (1 vCPU samples, 0.02%)</title><rect x="592.2" y="309" width="0.5" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="595.22" y="319.5" ></text>
+</g>
+<g >
+<title>log::RecordBuilder::build (4 vCPU samples, 0.10%)</title><rect x="573.2" y="293" width="1.7" height="15.0" fill="rgb(209,22,5)" rx="2" ry="2" />
+<text  x="576.18" y="303.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::{impl#8}::reserve_rehash::{closure#0}&lt;((usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;), allocator_api2::stable::alloc::global::Global, hashbrown::map::make_hasher::{closure_env#0}&lt;(usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="245" width="1.3" height="15.0" fill="rgb(241,167,39)" rx="2" ry="2" />
+<text  x="1711.19" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt;::inner&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt; (117 vCPU samples, 2.85%)</title><rect x="1724.2" y="261" width="50.6" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="1727.20" y="271.5" >alloc..</text>
+</g>
+<g >
+<title>core::alloc::{impl#2}::deallocate&lt;alloc::alloc::Global&gt; (19 vCPU samples, 0.46%)</title><rect x="417.3" y="277" width="8.3" height="15.0" fill="rgb(206,8,2)" rx="2" ry="2" />
+<text  x="420.34" y="287.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::udp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::udp::{impl#2}::send::{closure#0}::{closure_env#0}&lt;&amp;mut dyn starry_kernel::file::ReadBuf&gt;&gt; (8 vCPU samples, 0.19%)</title><rect x="593.1" y="341" width="3.5" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="596.09" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::BalancingContext&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;::do_merge&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, alloc::collections::btree::node::{impl#64}::merge_tracking_child::{closure_env#0}&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, (3 vCPU samples, 0.07%)</title><rect x="469.3" y="309" width="1.3" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="472.29" y="319.5" ></text>
+</g>
+<g >
+<title>spin::lazy::{impl#4}::deref&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, fn() -&gt; spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt; (1 vCPU samples, 0.02%)</title><rect x="571.0" y="325" width="0.4" height="15.0" fill="rgb(209,22,5)" rx="2" ry="2" />
+<text  x="574.01" y="335.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="1707.8" y="261" width="0.4" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="1710.75" y="271.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt;::lock&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt; (4 vCPU samples, 0.10%)</title><rect x="590.5" y="325" width="1.7" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="593.49" y="335.5" ></text>
+</g>
+<g >
+<title>axnet::tcp::{impl#4}::recv::{closure#0}::{closure#0}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="245" width="0.5" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="578.34" y="255.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::new_common (8 vCPU samples, 0.19%)</title><rect x="427.3" y="309" width="3.5" height="15.0" fill="rgb(220,72,17)" rx="2" ry="2" />
+<text  x="430.30" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="245" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="503.02" y="255.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt;::lock&lt;axsync::mutex::RawMutex, lru::LruCache&lt;u32, axfs::highlevel::file::PageCache, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (2 vCPU samples, 0.05%)</title><rect x="572.3" y="309" width="0.9" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="575.31" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#28}::clone&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt; (117 vCPU samples, 2.85%)</title><rect x="1724.2" y="277" width="50.6" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="1727.20" y="287.5" >alloc..</text>
+</g>
+<g >
+<title>alloc::vec::spec_extend::{impl#0}::spec_extend&lt;alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, core::iter::adapters::cloned::Cloned&lt;alloc::collections::btree::map::Values&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;&gt;, alloc::alloc::Global&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="293" width="1.3" height="15.0" fill="rgb(229,111,26)" rx="2" ry="2" />
+<text  x="596.52" y="303.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::mm::mmap::sys_mmap (1 vCPU samples, 0.02%)</title><rect x="1707.8" y="293" width="0.4" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="1710.75" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#48}::drop&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="293" width="0.4" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="1709.89" y="303.5" ></text>
+</g>
+<g >
+<title>scope_local::boxed::Header::body (1 vCPU samples, 0.02%)</title><rect x="1774.8" y="245" width="0.5" height="15.0" fill="rgb(217,56,13)" rx="2" ry="2" />
+<text  x="1777.85" y="255.5" ></text>
+</g>
+<g >
+<title>spin::rwlock::{impl#28}::drop&lt;weak_map::map::WeakMap&lt;u32, alloc::sync::Weak&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.1" y="277" width="0.5" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="1792.13" y="287.5" ></text>
+</g>
+<g >
+<title>core::iter::adapters::step_by::{impl#20}::spec_next (14 vCPU samples, 0.34%)</title><rect x="1776.6" y="229" width="6.0" height="15.0" fill="rgb(229,114,27)" rx="2" ry="2" />
+<text  x="1779.58" y="239.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::mount::Location::invalidate_metadata_cache (13 vCPU samples, 0.32%)</title><rect x="494.4" y="309" width="5.6" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
+<text  x="497.39" y="319.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreempt, lwext4_rust::fs::Ext4Filesystem&lt;axfs::fs::ext4::util::AxHal, axfs::fs::ext4::Ext4Disk&gt;&gt;::lock&lt;kernel_guard::NoPreempt, lwext4_rust::fs::Ext4Filesystem&lt;axfs::fs::ext4::util::AxHal, axfs::fs::ext4::Ext4Disk&gt;&gt; (10 vCPU samples, 0.24%)</title><rect x="455.4" y="277" width="4.4" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="458.43" y="287.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicUsize::fetch_sub (1 vCPU samples, 0.02%)</title><rect x="1789.1" y="261" width="0.5" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="1792.13" y="271.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::set_cached_len (1 vCPU samples, 0.02%)</title><rect x="470.6" y="325" width="0.4" height="15.0" fill="rgb(232,124,29)" rx="2" ry="2" />
+<text  x="473.58" y="335.5" ></text>
+</g>
+<g >
+<title>smoltcp::storage::ring_buffer::RingBuffer&lt;u8&gt;::len&lt;u8&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="277" width="0.5" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="578.34" y="287.5" ></text>
+</g>
+<g >
+<title>page_table_multiarch::bits64::PageTable64&lt;page_table_multiarch::arch::loongarch64::LA64MetaData, page_table_entry::arch::loongarch64::LA64PTE, axhal::paging::PagingHandlerImpl&gt;::modify&lt;page_table_multiarch::arch::loongarch64::LA64MetaData, page_table_entry::arch::loongarch64::LA64PTE, axhal::paging::PagingHandlerImpl&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="325" width="1.3" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="1711.19" y="335.5" ></text>
+</g>
+<g >
+<title>axdriver::init_drivers (25 vCPU samples, 0.61%)</title><rect x="1748.0" y="213" width="10.8" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="1751.01" y="223.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_fit&lt;usize, axpoll::PollSet&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="277" width="3.5" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="503.02" y="287.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::new_init (28 vCPU samples, 0.68%)</title><rect x="1711.6" y="309" width="12.2" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="1714.65" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_fit&lt;usize, axpoll::PollSet&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="85" width="3.5" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="503.02" y="95.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_fit&lt;usize, axpoll::PollSet&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="229" width="3.5" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="503.02" y="239.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange (124 vCPU samples, 3.02%)</title><rect x="512.6" y="277" width="53.6" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="515.57" y="287.5" >core:..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::get_existing (1 vCPU samples, 0.02%)</title><rect x="571.0" y="341" width="0.4" height="15.0" fill="rgb(242,171,41)" rx="2" ry="2" />
+<text  x="574.01" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::grow_one&lt;alloc::alloc::Global&gt; (4 vCPU samples, 0.10%)</title><rect x="573.2" y="245" width="1.7" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="576.18" y="255.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::tcp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::tcp::{impl#4}::recv::{closure#0}::{closure_env#0}&lt;&amp;mut starry_kernel::mm::io::IoVectorBufIo&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="575.8" y="341" width="0.4" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="578.77" y="351.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::vec::Vec&lt;u8, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="293" width="0.4" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="600.85" y="303.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::swap (124 vCPU samples, 3.02%)</title><rect x="512.6" y="261" width="53.6" height="15.0" fill="rgb(253,220,52)" rx="2" ry="2" />
+<text  x="515.57" y="271.5" >core:..</text>
+</g>
+<g >
+<title>spin::rwlock::RwLock&lt;scope_local::scope::Scope, spin::relax::Spin&gt;::try_read&lt;scope_local::scope::Scope, spin::relax::Spin&gt; (3 vCPU samples, 0.07%)</title><rect x="1775.3" y="261" width="1.3" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="1778.28" y="271.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;event_listener::sys::Listener&lt;()&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="245" width="0.4" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="595.66" y="255.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTable&lt;(alloc::string::String, axfs_ng_vfs::node::DirEntry), allocator_api2::stable::alloc::global::Global&gt;::reserve_rehash&lt;(alloc::string::String, axfs_ng_vfs::node::DirEntry), allocator_api2::stable::alloc::global::Global, hashbrown::map::make_hasher::{closure_env#0}&lt;alloc::string::String, axfs_ng_vfs::node::DirEntry, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="574.9" y="325" width="0.4" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
+<text  x="577.91" y="335.5" ></text>
+</g>
+<g >
+<title>axdriver::init_drivers (8 vCPU samples, 0.19%)</title><rect x="430.8" y="309" width="3.4" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="433.76" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Immut, (3 vCPU samples, 0.07%)</title><rect x="593.5" y="149" width="1.3" height="15.0" fill="rgb(210,25,5)" rx="2" ry="2" />
+<text  x="596.52" y="159.5" ></text>
+</g>
+<g >
+<title>log::{impl#48}::clone (4 vCPU samples, 0.10%)</title><rect x="594.8" y="261" width="1.8" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="597.82" y="271.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_init_dynamic (107 vCPU samples, 2.60%)</title><rect x="1724.2" y="229" width="46.3" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="1727.20" y="239.5" >ext4..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::evict_cache (9 vCPU samples, 0.22%)</title><rect x="567.1" y="341" width="3.9" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="570.12" y="351.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lba_RB_REMOVE_COLOR (9 vCPU samples, 0.22%)</title><rect x="508.7" y="245" width="3.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="511.68" y="255.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::discard_cached_pages (2 vCPU samples, 0.05%)</title><rect x="572.3" y="325" width="0.9" height="15.0" fill="rgb(245,187,44)" rx="2" ry="2" />
+<text  x="575.31" y="335.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_fit&lt;usize, axpoll::PollSet&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="325" width="3.5" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="503.02" y="335.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicUsize::fetch_sub (1 vCPU samples, 0.02%)</title><rect x="543.3" y="117" width="0.4" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="546.31" y="127.5" ></text>
+</g>
+<g >
+<title>smoltcp::wire::icmpv6::Packet&lt;&amp;[u8]&gt;::header_len&lt;&amp;[u8]&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.8" y="309" width="0.4" height="15.0" fill="rgb(234,133,31)" rx="2" ry="2" />
+<text  x="1710.75" y="319.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_compare_exchange_weak&lt;u64&gt; (1 vCPU samples, 0.02%)</title><rect x="597.4" y="277" width="0.5" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="600.42" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_fit&lt;usize, axpoll::PollSet&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="181" width="3.5" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="503.02" y="191.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe_bus_devices (1 vCPU samples, 0.02%)</title><rect x="503.5" y="245" width="0.4" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="506.48" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::deallocate&lt;alloc::alloc::Global&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="117" width="2.6" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="551.93" y="127.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::map::{impl#46}::next&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="245" width="1.3" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="596.52" y="255.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::new_common (20 vCPU samples, 0.49%)</title><rect x="1715.1" y="293" width="8.7" height="15.0" fill="rgb(220,72,17)" rx="2" ry="2" />
+<text  x="1718.11" y="303.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="592.7" y="309" width="0.4" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="595.66" y="319.5" ></text>
+</g>
+<g >
+<title>event_listener::InnerListener&lt;(), &amp;event_listener::Inner&lt;()&gt;&gt;::listen&lt;(), &amp;event_listener::Inner&lt;()&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="571.4" y="277" width="0.5" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="574.44" y="287.5" ></text>
+</g>
+<g >
+<title>ext4_fs_truncate_inode (8 vCPU samples, 0.19%)</title><rect x="1767.1" y="213" width="3.4" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="1770.06" y="223.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::swap (7 vCPU samples, 0.17%)</title><rect x="445.5" y="229" width="3.0" height="15.0" fill="rgb(253,220,52)" rx="2" ry="2" />
+<text  x="448.48" y="239.5" ></text>
+</g>
+<g >
+<title>event_listener::_::{impl#2}::drop&lt;(), &amp;event_listener::Inner&lt;()&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="341" width="0.5" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="602.15" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::string::{impl#25}::hash&lt;hashbrown::hasher::DefaultHasher&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="181" width="1.3" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="1711.19" y="191.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#48}::drop&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1723.3" y="245" width="0.5" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="1726.34" y="255.5" ></text>
+</g>
+<g >
+<title>smoltcp::socket::tcp::Socket::may_recv (1 vCPU samples, 0.02%)</title><rect x="575.3" y="309" width="0.5" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="578.34" y="319.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe_bus_devices (25 vCPU samples, 0.61%)</title><rect x="1748.0" y="181" width="10.8" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1751.01" y="191.5" ></text>
+</g>
+<g >
+<title>core::ptr::mut_ptr::{impl#0}::add&lt;core::mem::maybe_uninit::MaybeUninit&lt;core::ptr::non_null::NonNull&lt;alloc::collections::btree::node::LeafNode&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;&gt;&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="469.3" y="277" width="1.3" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="472.29" y="287.5" ></text>
+</g>
+<g >
+<title>smoltcp::iface::interface::InterfaceInner::get_source_address_ipv6 (37 vCPU samples, 0.90%)</title><rect x="1690.9" y="341" width="16.0" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="1693.87" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVec&lt;(u32, axfs::highlevel::file::PageCache), alloc::alloc::Global&gt;::grow_one&lt;(u32, axfs::highlevel::file::PageCache), alloc::alloc::Global&gt; (4 vCPU samples, 0.10%)</title><rect x="573.2" y="261" width="1.7" height="15.0" fill="rgb(211,27,6)" rx="2" ry="2" />
+<text  x="576.18" y="271.5" ></text>
+</g>
+<g >
+<title>smoltcp::iface::interface::InterfaceInner::has_multicast_group&lt;core::net::ip_addr::Ipv6Addr&gt; (1 vCPU samples, 0.02%)</title><rect x="1707.3" y="325" width="0.5" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="1710.32" y="335.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::fence (1 vCPU samples, 0.02%)</title><rect x="546.3" y="133" width="0.5" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="549.34" y="143.5" ></text>
+</g>
+<g >
+<title>axtask::future::block_on&lt;core::future::poll_fn::PollFn&lt;starry_kernel::syscall::signal::sys_rt_sigsuspend::{closure_env#0}&gt;&gt; (2 vCPU samples, 0.05%)</title><rect x="598.3" y="325" width="0.8" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="601.28" y="335.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicUsize::load (8 vCPU samples, 0.19%)</title><rect x="430.8" y="245" width="3.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="433.76" y="255.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt;::lock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt; (1 vCPU samples, 0.02%)</title><rect x="597.0" y="277" width="0.4" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="599.98" y="287.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::sync::Weak&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="576.2" y="277" width="0.4" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="579.21" y="287.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::{impl#4}::drop (1 vCPU samples, 0.02%)</title><rect x="571.9" y="261" width="0.4" height="15.0" fill="rgb(234,137,32)" rx="2" ry="2" />
+<text  x="574.88" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#38}::drop&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="592.7" y="213" width="0.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="595.66" y="223.5" ></text>
+</g>
+<g >
+<title>axtask::run_queue::CurrentRunQueueRef&lt;kernel_guard::NoPreemptIrqSave&gt;::yield_current&lt;kernel_guard::NoPreemptIrqSave&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="325" width="0.4" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="600.85" y="335.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;axfs_ng_vfs::mount::Location&gt; (1 vCPU samples, 0.02%)</title><rect x="543.3" y="181" width="0.4" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="546.31" y="191.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::{impl#3}::drop&lt;u8, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="261" width="0.4" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="600.85" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_or&lt;u8&gt; (10 vCPU samples, 0.24%)</title><rect x="455.4" y="197" width="4.4" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="458.43" y="207.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::reserve_rehash_inner&lt;allocator_api2::stable::alloc::global::Global&gt; (25 vCPU samples, 0.61%)</title><rect x="1776.6" y="293" width="10.8" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="1779.58" y="303.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::rehash_in_place (25 vCPU samples, 0.61%)</title><rect x="1776.6" y="277" width="10.8" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="1779.58" y="287.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::drop_cached_pages (1 vCPU samples, 0.02%)</title><rect x="566.7" y="341" width="0.4" height="15.0" fill="rgb(238,154,36)" rx="2" ry="2" />
+<text  x="569.68" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::{impl#3}::drop&lt;u8, alloc::alloc::Global&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="133" width="2.6" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="551.93" y="143.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::reserve_rehash_inner&lt;allocator_api2::stable::alloc::global::Global&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="277" width="1.3" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="1711.19" y="287.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTable&lt;((usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;), allocator_api2::stable::alloc::global::Global&gt;::reserve_rehash&lt;((usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;), allocator_api2::stable::alloc::global::Global, hashbrown::map::make_hasher::{closure_env#0}&lt;(usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;, hashbrown::hasher::DefaultHashBuilder&gt;&gt; (25 vCPU samples, 0.61%)</title><rect x="1776.6" y="309" width="10.8" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="1779.58" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::{impl#1}::deallocate (16 vCPU samples, 0.39%)</title><rect x="599.6" y="245" width="6.9" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="602.58" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt;::drop_slow&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="576.2" y="293" width="0.4" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="579.21" y="303.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::node::marker::Leaf&gt;, alloc::collections::btree::node::marker::KV&gt;::remove_leaf_kv&lt;axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::map::entry::{impl#9}::remove_kv::{closure_env#0}&lt;axtask::future::time::TimerKey, core::task::wake::Waker, alloc::alloc::Global&gt;, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="470.6" y="341" width="0.4" height="15.0" fill="rgb(245,184,44)" rx="2" ry="2" />
+<text  x="473.58" y="351.5" ></text>
+</g>
+<g >
+<title>hashbrown::control::group::generic::Group::convert_special_to_empty_and_full_to_deleted (11 vCPU samples, 0.27%)</title><rect x="1782.6" y="245" width="4.8" height="15.0" fill="rgb(237,150,35)" rx="2" ry="2" />
+<text  x="1785.64" y="255.5" ></text>
+</g>
+<g >
+<title>smoltcp::socket::tcp::Socket::recv&lt;axnet::tcp::{impl#4}::recv::{closure#0}::{closure#0}::{closure_env#1}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt;, core::result::Result&lt;usize, axerrno::AxError&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="229" width="0.5" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="578.34" y="239.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::{impl#1}::deallocate (1 vCPU samples, 0.02%)</title><rect x="1706.9" y="261" width="0.4" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="1709.89" y="271.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe_bus_devices (1 vCPU samples, 0.02%)</title><rect x="503.9" y="277" width="0.4" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="506.92" y="287.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::bucket_mask_to_capacity (1 vCPU samples, 0.02%)</title><rect x="574.9" y="277" width="0.4" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="577.91" y="287.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_remove_dirty_node (2,505 vCPU samples, 60.92%)</title><rect x="606.5" y="293" width="1084.4" height="15.0" fill="rgb(240,162,38)" rx="2" ry="2" />
+<text  x="609.51" y="303.5" >ext4_bcache_remove_dirty_node</text>
+</g>
+<g >
+<title>alloc::sync::{impl#48}::drop&lt;event_listener::sys::node::TaskWaiting, &amp;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="576.2" y="261" width="0.4" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="579.21" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::compare_exchange_weak (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="261" width="0.4" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1717.68" y="271.5" ></text>
+</g>
+<g >
+<title>event_listener::Inner&lt;()&gt;::remove&lt;()&gt; (1 vCPU samples, 0.02%)</title><rect x="599.1" y="309" width="0.5" height="15.0" fill="rgb(224,91,21)" rx="2" ry="2" />
+<text  x="602.15" y="319.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;alloc::string::String&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="309" width="0.4" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="600.85" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::deallocate&lt;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="597.9" y="245" width="0.4" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="600.85" y="255.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt;::lock&lt;kernel_guard::NoPreemptIrqSave, alloc::string::String&gt; (1 vCPU samples, 0.02%)</title><rect x="597.4" y="245" width="0.5" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="600.42" y="255.5" ></text>
+</g>
+<g >
+<title>[guest-user-or-unknown] (1,061 vCPU samples, 25.80%)</title><rect x="10.0" y="341" width="459.3" height="15.0" fill="rgb(231,121,29)" rx="2" ry="2" />
+<text  x="13.00" y="351.5" >[guest-user-or-unknown]</text>
+</g>
+<g >
+<title>hashbrown::map::make_hasher::{closure#0}&lt;(usize, alloc::string::String), alloc::sync::Weak&lt;axfs_ng_vfs::mount::Mountpoint, alloc::alloc::Global&gt;, hashbrown::hasher::DefaultHashBuilder&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="229" width="1.3" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="1711.19" y="239.5" ></text>
+</g>
+<g >
+<title>axdriver::init_drivers (1 vCPU samples, 0.02%)</title><rect x="503.5" y="277" width="0.4" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="506.48" y="287.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_compare_exchange_weak&lt;u64&gt; (2 vCPU samples, 0.05%)</title><rect x="572.3" y="261" width="0.9" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="575.31" y="271.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="566.2" y="309" width="0.5" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="569.25" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::set_ptr_and_cap&lt;alloc::alloc::Global&gt; (4 vCPU samples, 0.10%)</title><rect x="573.2" y="213" width="1.7" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="576.18" y="223.5" ></text>
+</g>
+<g >
+<title>spin::rwlock::RwLock&lt;scope_local::scope::Scope, spin::relax::Spin&gt;::acquire_reader&lt;scope_local::scope::Scope, spin::relax::Spin&gt; (3 vCPU samples, 0.07%)</title><rect x="1775.3" y="245" width="1.3" height="15.0" fill="rgb(228,108,26)" rx="2" ry="2" />
+<text  x="1778.28" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt;::drop_slow&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt; (16 vCPU samples, 0.39%)</title><rect x="599.6" y="309" width="6.9" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="602.58" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="341" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="503.02" y="351.5" ></text>
+</g>
+<g >
+<title>core::ptr::non_null::NonNull&lt;alloc::sync::ArcInner&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;&gt;&gt;::as_ref&lt;alloc::sync::ArcInner&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;&gt;&gt; (117 vCPU samples, 2.85%)</title><rect x="1724.2" y="245" width="50.6" height="15.0" fill="rgb(242,172,41)" rx="2" ry="2" />
+<text  x="1727.20" y="255.5" >core:..</text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_load&lt;usize&gt; (8 vCPU samples, 0.19%)</title><rect x="430.8" y="229" width="3.4" height="15.0" fill="rgb(208,17,4)" rx="2" ry="2" />
+<text  x="433.76" y="239.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::fetch_or (7 vCPU samples, 0.17%)</title><rect x="445.5" y="213" width="3.0" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="448.48" y="223.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt;::drop_slow&lt;event_listener::sys::node::TaskWaiting, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1723.3" y="277" width="0.5" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="1726.34" y="287.5" ></text>
+</g>
+<g >
+<title>alloc::sync::{impl#28}::clone&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt; (6 vCPU samples, 0.15%)</title><rect x="1772.3" y="165" width="2.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="1775.25" y="175.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::name (1 vCPU samples, 0.02%)</title><rect x="597.0" y="293" width="0.4" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="599.98" y="303.5" ></text>
+</g>
+<g >
+<title>core::net::ip_addr::{impl#55}::eq (1 vCPU samples, 0.02%)</title><rect x="1707.3" y="309" width="0.5" height="15.0" fill="rgb(238,156,37)" rx="2" ry="2" />
+<text  x="1710.32" y="319.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_drop_buf (8 vCPU samples, 0.19%)</title><rect x="500.0" y="53" width="3.5" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="503.02" y="63.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::udp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::udp::{impl#2}::recv::{closure#0}::{closure_env#1}&lt;&amp;mut starry_kernel::mm::io::IoVectorBufIo&gt;&gt; (2 vCPU samples, 0.05%)</title><rect x="592.2" y="341" width="0.9" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="595.22" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVecInner&lt;alloc::alloc::Global&gt;::current_memory&lt;alloc::alloc::Global&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="101" width="2.6" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="551.93" y="111.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::map::{impl#22}::next&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="229" width="1.3" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="596.52" y="239.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Leaf&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert_recursing&lt;usize, axpoll::PollSet, alloc::alloc::Global, alloc::collections::btree::map::entry::{impl#8}::insert_entry::{closure_env#0}&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt;&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="165" width="3.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="503.02" y="175.5" ></text>
+</g>
+<g >
+<title>alloc::vec::{impl#15}::from_iter&lt;alloc::sync::Arc&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;, weak_map::map::Values&lt;u32, alloc::sync::Weak&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;&gt;&gt; (4 vCPU samples, 0.10%)</title><rect x="1787.4" y="277" width="1.7" height="15.0" fill="rgb(222,80,19)" rx="2" ry="2" />
+<text  x="1790.40" y="287.5" ></text>
+</g>
+<g >
+<title>spin::once::Once&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt;::call_once&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin, spin::lazy::{impl#3}::force::{closure_env#0}&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, fn() -&gt; spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="571.0" y="293" width="0.4" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="574.01" y="303.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;lwext4_rust::inode::InodeRef&lt;axfs::fs::ext4::util::AxHal&gt;&gt; (2 vCPU samples, 0.05%)</title><rect x="1758.8" y="181" width="0.9" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="1761.83" y="191.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::fetch_or (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="213" width="0.4" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="1717.68" y="223.5" ></text>
+</g>
+<g >
+<title>starry_kernel::task::ops::processes (5 vCPU samples, 0.12%)</title><rect x="1787.4" y="309" width="2.2" height="15.0" fill="rgb(244,179,43)" rx="2" ry="2" />
+<text  x="1790.40" y="319.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::{impl#1}::deref (12 vCPU samples, 0.29%)</title><rect x="494.8" y="261" width="5.2" height="15.0" fill="rgb(223,87,20)" rx="2" ry="2" />
+<text  x="497.82" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::mem::replace&lt;alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Immut, (3 vCPU samples, 0.07%)</title><rect x="593.5" y="181" width="1.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="596.52" y="191.5" ></text>
+</g>
+<g >
+<title>core::mem::maybe_uninit::MaybeUninit&lt;alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;::write&lt;alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="469.3" y="325" width="1.3" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="472.29" y="335.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (1 vCPU samples, 0.02%)</title><rect x="575.8" y="309" width="0.4" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="578.77" y="319.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::{impl#4}::create (124 vCPU samples, 3.02%)</title><rect x="512.6" y="341" width="53.6" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="515.57" y="351.5" >axfs:..</text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::rehash_in_place (3 vCPU samples, 0.07%)</title><rect x="426.0" y="277" width="1.3" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="429.00" y="287.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::swap (10 vCPU samples, 0.24%)</title><rect x="455.4" y="229" width="4.4" height="15.0" fill="rgb(253,220,52)" rx="2" ry="2" />
+<text  x="458.43" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::writeback_page (9 vCPU samples, 0.22%)</title><rect x="567.1" y="325" width="3.9" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="570.12" y="335.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::writeback_dirty_pages_in_range (1 vCPU samples, 0.02%)</title><rect x="571.4" y="261" width="0.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="574.44" y="271.5" ></text>
+</g>
+<g >
+<title>all (4,112 vCPU samples, 100%)</title><rect x="10.0" y="389" width="1780.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="399.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::with_current_dir (1 vCPU samples, 0.02%)</title><rect x="543.3" y="197" width="0.4" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="546.31" y="207.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_drop_buf (2,521 vCPU samples, 61.31%)</title><rect x="599.6" y="341" width="1091.3" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="602.58" y="351.5" >ext4_bcache_drop_buf</text>
+</g>
+<g >
+<title>spin::once::Once&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt;::try_call_once&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin, spin::once::{impl#4}::call_once::{closure_env#0}&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin, spin::lazy::{impl#3}::force::{closure_env#0}&lt;spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, fn() -&gt; spin::rwlock::RwLock&lt;alloc::collections::btree::map::BTreeMap&lt;(usize, u64), alloc::sync::Arc&lt;axfs::highlevel::file::CachedFileRecord, alloc::alloc::Global&gt;, alloc::alloc::Global&gt;, spin::relax::Spin&gt;, spin::relax::Spin&gt;&gt;, core::convert::Infallible&gt; (1 vCPU samples, 0.02%)</title><rect x="571.0" y="277" width="0.4" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="574.01" y="287.5" ></text>
+</g>
+<g >
+<title>starry_kernel::syscall::fs::fd_ops::close_all_files_for_current_process (185 vCPU samples, 4.50%)</title><rect x="1709.5" y="341" width="80.1" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="1712.48" y="351.5" >starry_ke..</text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::page_or_insert_zeroed (1 vCPU samples, 0.02%)</title><rect x="571.9" y="341" width="0.4" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="574.88" y="351.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::rehash_in_place (1 vCPU samples, 0.02%)</title><rect x="574.9" y="293" width="0.4" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="577.91" y="303.5" ></text>
+</g>
+<g >
+<title>loongarch64-stage-00 (4,112 vCPU samples, 100.00%)</title><rect x="10.0" y="373" width="1780.0" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="13.00" y="383.5" >loongarch64-stage-00</text>
+</g>
+<g >
+<title>axnet::tcp::{impl#4}::recv::{closure#0}::{closure#0}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="325" width="0.5" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="578.34" y="335.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_or&lt;u8&gt; (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="197" width="0.4" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="1717.68" y="207.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (1 vCPU samples, 0.02%)</title><rect x="1723.3" y="197" width="0.5" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="1726.34" y="207.5" ></text>
+</g>
+<g >
+<title>smallvec::SmallVec&lt;[axdriver_virtio::blk::VirtIoBlkDev&lt;axdriver::virtio::VirtIoHalImpl, virtio_drivers::transport::pci::PciTransport&gt;: 1]&gt;::push&lt;[axdriver_virtio::blk::VirtIoBlkDev&lt;axdriver::virtio::VirtIoHalImpl, virtio_drivers::transport::pci::PciTransport&gt;: 1]&gt; (22 vCPU samples, 0.54%)</title><rect x="1749.3" y="149" width="9.5" height="15.0" fill="rgb(245,188,44)" rx="2" ry="2" />
+<text  x="1752.31" y="159.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe (19 vCPU samples, 0.46%)</title><rect x="504.3" y="325" width="8.3" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="507.35" y="335.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Owned, axtask::future::time::TimerKey, core::task::wake::Waker, alloc::collections::btree::node::marker::LeafOrInternal&gt;::split_off&lt;axtask::future::time::TimerKey, core::task::wake::Waker, axtask::future::time::TimerKey, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.6" y="293" width="0.4" height="15.0" fill="rgb(211,28,6)" rx="2" ry="2" />
+<text  x="1792.57" y="303.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::tcp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::tcp::{impl#4}::send::{closure#0}::{closure_env#0}&lt;&amp;mut starry_kernel::mm::access::VmBytes&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="576.6" y="261" width="0.5" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="579.64" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (1 vCPU samples, 0.02%)</title><rect x="597.9" y="213" width="0.4" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="600.85" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_components (7 vCPU samples, 0.17%)</title><rect x="543.7" y="213" width="3.1" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="546.74" y="223.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::tcp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::tcp::{impl#4}::recv::{closure#0}::{closure_env#0}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="341" width="0.5" height="15.0" fill="rgb(235,142,34)" rx="2" ry="2" />
+<text  x="578.34" y="351.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::page_or_insert_zeroed (1 vCPU samples, 0.02%)</title><rect x="571.9" y="309" width="0.4" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="574.88" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, usize, axpoll::PollSet, alloc::collections::btree::node::marker::Internal&gt;, alloc::collections::btree::node::marker::Edge&gt;::insert&lt;usize, axpoll::PollSet, alloc::alloc::Global&gt; (8 vCPU samples, 0.19%)</title><rect x="500.0" y="149" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="503.02" y="159.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::file::CachedFile::discard_cached_pages (1 vCPU samples, 0.02%)</title><rect x="566.2" y="341" width="0.5" height="15.0" fill="rgb(245,187,44)" rx="2" ry="2" />
+<text  x="569.25" y="351.5" ></text>
+</g>
+<g >
+<title>alloc::sync::Arc&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt;::from_inner_in&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt; (4 vCPU samples, 0.10%)</title><rect x="1770.5" y="181" width="1.8" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="1773.52" y="191.5" ></text>
+</g>
+<g >
+<title>lock_api::mutex::Mutex&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt;::lock&lt;axsync::mutex::RawMutex, smoltcp::iface::socket_set::SocketSet&gt; (1 vCPU samples, 0.02%)</title><rect x="575.8" y="325" width="0.4" height="15.0" fill="rgb(217,58,13)" rx="2" ry="2" />
+<text  x="578.77" y="335.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicBool::swap (1 vCPU samples, 0.02%)</title><rect x="1714.7" y="229" width="0.4" height="15.0" fill="rgb(253,220,52)" rx="2" ry="2" />
+<text  x="1717.68" y="239.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::prepare_rehash_in_place (25 vCPU samples, 0.61%)</title><rect x="1776.6" y="261" width="10.8" height="15.0" fill="rgb(222,80,19)" rx="2" ry="2" />
+<text  x="1779.58" y="271.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;axfs_ng_vfs::path::PathBuf&gt; (6 vCPU samples, 0.15%)</title><rect x="548.9" y="197" width="2.6" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="551.93" y="207.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::AtomicUsize::load (1 vCPU samples, 0.02%)</title><rect x="503.9" y="245" width="0.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="506.92" y="255.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (19 vCPU samples, 0.46%)</title><rect x="417.3" y="245" width="8.3" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="420.34" y="255.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_drop_buf (13 vCPU samples, 0.32%)</title><rect x="1759.7" y="213" width="5.6" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="1762.70" y="223.5" ></text>
+</g>
+<g >
+<title>axfs_ng_vfs::node::DirEntry::set_cached_len (8 vCPU samples, 0.19%)</title><rect x="500.0" y="69" width="3.5" height="15.0" fill="rgb(232,124,29)" rx="2" ry="2" />
+<text  x="503.02" y="79.5" ></text>
+</g>
+<g >
+<title>scope_local::boxed::{impl#5}::as_ref&lt;alloc::sync::Arc&lt;spin::rwlock::RwLock&lt;flatten_objects::FlattenObjects&lt;starry_kernel::file::FileDescriptor, 1024&gt;, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1774.8" y="261" width="0.5" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="1777.85" y="271.5" ></text>
+</g>
+<g >
+<title>alloc::alloc::dealloc (1 vCPU samples, 0.02%)</title><rect x="576.2" y="213" width="0.4" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="579.21" y="223.5" ></text>
+</g>
+<g >
+<title>axfs::fs::ext4::inode::{impl#4}::create (33 vCPU samples, 0.80%)</title><rect x="434.2" y="309" width="14.3" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="437.22" y="319.5" ></text>
+</g>
+<g >
+<title>alloc::raw_vec::RawVec&lt;alloc::string::String, alloc::alloc::Global&gt;::grow_one&lt;alloc::string::String, alloc::alloc::Global&gt; (2 vCPU samples, 0.05%)</title><rect x="503.5" y="341" width="0.8" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="506.48" y="351.5" ></text>
+</g>
+<g >
+<title>ext4_buf_lba_RB_REMOVE (1 vCPU samples, 0.02%)</title><rect x="470.6" y="293" width="0.4" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="473.58" y="303.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::tcp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::tcp::{impl#4}::recv::{closure#0}::{closure_env#0}&lt;&amp;mut dyn starry_kernel::file::WriteBuf&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="575.3" y="261" width="0.5" height="15.0" fill="rgb(235,142,34)" rx="2" ry="2" />
+<text  x="578.34" y="271.5" ></text>
+</g>
+<g >
+<title>axnet::udp::{impl#2}::send::{closure#0}::{closure#0}&lt;&amp;mut dyn starry_kernel::file::ReadBuf&gt; (8 vCPU samples, 0.19%)</title><rect x="593.1" y="325" width="3.5" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="596.09" y="335.5" ></text>
+</g>
+<g >
+<title>axnet::wrapper::SocketSetWrapper::with_socket_mut&lt;smoltcp::socket::udp::Socket, core::result::Result&lt;usize, axerrno::AxError&gt;, axnet::udp::{impl#2}::send::{closure#0}::{closure_env#0}&lt;&amp;mut starry_kernel::mm::io::IoVectorBufIo&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="596.6" y="341" width="1.3" height="15.0" fill="rgb(242,170,40)" rx="2" ry="2" />
+<text  x="599.55" y="351.5" ></text>
+</g>
+<g >
+<title>core::alloc::{impl#2}::deallocate&lt;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="1723.3" y="229" width="0.5" height="15.0" fill="rgb(206,8,2)" rx="2" ry="2" />
+<text  x="1726.34" y="239.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::try_resolve_symlink (41 vCPU samples, 1.00%)</title><rect x="548.5" y="213" width="17.7" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="551.50" y="223.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_load&lt;u8&gt; (1 vCPU samples, 0.02%)</title><rect x="598.7" y="245" width="0.4" height="15.0" fill="rgb(208,17,4)" rx="2" ry="2" />
+<text  x="601.72" y="255.5" ></text>
+</g>
+<g >
+<title>hashbrown::raw::RawTableInner::rehash_in_place (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="261" width="1.3" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="1711.19" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_sub&lt;usize&gt; (1 vCPU samples, 0.02%)</title><rect x="543.3" y="101" width="0.4" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="546.31" y="111.5" ></text>
+</g>
+<g >
+<title>core::alloc::{impl#2}::deallocate&lt;alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="576.2" y="245" width="0.4" height="15.0" fill="rgb(206,8,2)" rx="2" ry="2" />
+<text  x="579.21" y="255.5" ></text>
+</g>
+<g >
+<title>core::ptr::drop_in_place&lt;spin::rwlock::RwLockReadGuard&lt;weak_map::map::WeakMap&lt;u32, alloc::sync::Weak&lt;starry_kernel::task::ProcessData, alloc::alloc::Global&gt;&gt;&gt;&gt; (1 vCPU samples, 0.02%)</title><rect x="1789.1" y="293" width="0.5" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="1792.13" y="303.5" ></text>
+</g>
+<g >
+<title>axdriver::AllDevices::probe (25 vCPU samples, 0.61%)</title><rect x="1748.0" y="197" width="10.8" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="1751.01" y="207.5" ></text>
+</g>
+<g >
+<title>alloc::collections::btree::node::Handle&lt;alloc::collections::btree::node::NodeRef&lt;alloc::collections::btree::node::marker::Mut, memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::collections::btree::node::marker::LeafOrInternal&gt;, alloc::collections::btree::node::marker::KV&gt;::remove_kv_tracking&lt;memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::collections::btree::map::{impl#54}::next::{closure_env#0}&lt;memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::collections::btree::map::{impl#20}::retain::{closure_env#0}&lt;memory_addr::addr::VirtAddr, memory_set::area::MemoryArea&lt;axmm::backend::Backend&gt;, alloc::alloc::Global, memory_set::set::{impl#0}::unmap::{closure_env#0}&lt;axmm::backend::Backend&gt;&gt;, alloc::alloc::Global&gt;, alloc::alloc::Global&gt; (67 vCPU samples, 1.63%)</title><rect x="471.0" y="341" width="29.0" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="474.02" y="351.5" >al..</text>
+</g>
+<g >
+<title>alloc::sync::{impl#38}::drop&lt;axfs_ng_vfs::node::Inner, alloc::alloc::Global&gt; (1 vCPU samples, 0.02%)</title><rect x="546.3" y="149" width="0.5" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="549.34" y="159.5" ></text>
+</g>
+<g >
+<title>ext4_bcache_drop_buf (1 vCPU samples, 0.02%)</title><rect x="470.6" y="309" width="0.4" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="473.58" y="319.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_compare_exchange_weak&lt;u64&gt; (1 vCPU samples, 0.02%)</title><rect x="576.6" y="277" width="0.5" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="579.64" y="287.5" ></text>
+</g>
+<g >
+<title>hashbrown::hasher::{impl#1}::write (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="133" width="1.3" height="15.0" fill="rgb(250,211,50)" rx="2" ry="2" />
+<text  x="1711.19" y="143.5" ></text>
+</g>
+<g >
+<title>core::iter::adapters::cloned::{impl#1}::next&lt;alloc::collections::btree::map::Values&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;, alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="261" width="1.3" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="596.52" y="271.5" ></text>
+</g>
+<g >
+<title>core::sync::atomic::atomic_or&lt;u8&gt; (7 vCPU samples, 0.17%)</title><rect x="445.5" y="197" width="3.0" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="448.48" y="207.5" ></text>
+</g>
+<g >
+<title>alloc::vec::spec_from_iter_nested::{impl#0}::from_iter&lt;alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;, core::iter::adapters::cloned::Cloned&lt;alloc::collections::btree::map::Values&lt;(usize, u64), alloc::sync::Arc&lt;spin::mutex::Mutex&lt;axfs_ng_vfs::node::InodeMetadataCache, spin::relax::Spin&gt;, alloc::alloc::Global&gt;&gt;&gt;&gt; (3 vCPU samples, 0.07%)</title><rect x="593.5" y="309" width="1.3" height="15.0" fill="rgb(239,160,38)" rx="2" ry="2" />
+<text  x="596.52" y="319.5" ></text>
+</g>
+<g >
+<title>axsync::mutex::{impl#3}::lock (4 vCPU samples, 0.10%)</title><rect x="590.5" y="309" width="1.7" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="593.49" y="319.5" ></text>
+</g>
+<g >
+<title>kspin::base::BaseSpinLock&lt;kernel_guard::NoPreempt, lwext4_rust::fs::Ext4Filesystem&lt;axfs::fs::ext4::util::AxHal, axfs::fs::ext4::Ext4Disk&gt;&gt;::lock&lt;kernel_guard::NoPreempt, lwext4_rust::fs::Ext4Filesystem&lt;axfs::fs::ext4::util::AxHal, axfs::fs::ext4::Ext4Disk&gt;&gt; (7 vCPU samples, 0.17%)</title><rect x="445.5" y="277" width="3.0" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="448.48" y="287.5" ></text>
+</g>
+<g >
+<title>axfs::highlevel::fs::FsContext::resolve_inner (4 vCPU samples, 0.10%)</title><rect x="546.8" y="213" width="1.7" height="15.0" fill="rgb(215,50,11)" rx="2" ry="2" />
+<text  x="549.77" y="223.5" ></text>
+</g>
+<g >
+<title>hashbrown::map::make_hash&lt;(usize, alloc::string::String), hashbrown::hasher::DefaultHashBuilder&gt; (3 vCPU samples, 0.07%)</title><rect x="1708.2" y="213" width="1.3" height="15.0" fill="rgb(224,87,20)" rx="2" ry="2" />
+<text  x="1711.19" y="223.5" ></text>
+</g>
+<g >
+<title>axtask::task::TaskInner::new_init (8 vCPU samples, 0.19%)</title><rect x="427.3" y="325" width="3.5" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="430.30" y="335.5" ></text>
+</g>
+</g>
+</svg>

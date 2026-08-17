@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="700" viewBox="0 0 1160 700">
+<style>text{font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif;fill:#263238}.title{font-size:24px;font-weight:700}.axis{font-size:13px;fill:#546e7a}.label{font-size:14px}.value{font-size:13px;font-weight:600}.grid{stroke:#dfe7ed;stroke-width:1}.axisline{stroke:#78909c;stroke-width:1.2}</style>
+<rect width="100%" height="100%" rx="12" fill="#fbfdff"/>
+<text class="title" x="580.0" y="35" text-anchor="middle">正式编译窗口内存与 I/O</text>
+<line class="grid" x1="85" y1="320.0" x2="1125" y2="320.0"/>
+<text class="axis" x="75" y="325.0" text-anchor="end">0.0 GiB</text>
+<line class="grid" x1="85" y1="257.5" x2="1125" y2="257.5"/>
+<text class="axis" x="75" y="262.5" text-anchor="end">0.8 GiB</text>
+<line class="grid" x1="85" y1="195.0" x2="1125" y2="195.0"/>
+<text class="axis" x="75" y="200.0" text-anchor="end">1.6 GiB</text>
+<line class="grid" x1="85" y1="132.5" x2="1125" y2="132.5"/>
+<text class="axis" x="75" y="137.5" text-anchor="end">2.5 GiB</text>
+<line class="grid" x1="85" y1="70.0" x2="1125" y2="70.0"/>
+<text class="axis" x="75" y="75.0" text-anchor="end">3.3 GiB</text>
+<rect x="110.27272727272728" y="146.7200106804085" width="18" height="173.2799893195915" fill="#4f7cac"/>
+<rect x="136.27272727272728" y="115.54442407660164" width="18" height="204.45557592339836" fill="#f4a261"/>
+<rect x="204.8181818181818" y="181.46580775628797" width="18" height="138.53419224371203" fill="#4f7cac"/>
+<rect x="230.8181818181818" y="160.35803276830566" width="18" height="159.64196723169434" fill="#f4a261"/>
+<rect x="299.3636363636364" y="161.08578069914222" width="18" height="158.91421930085778" fill="#4f7cac"/>
+<rect x="325.3636363636364" y="134.2476543885966" width="18" height="185.7523456114034" fill="#f4a261"/>
+<rect x="393.90909090909093" y="161.51937847517095" width="18" height="158.48062152482905" fill="#4f7cac"/>
+<rect x="419.90909090909093" y="130.9584916369916" width="18" height="189.0415083630084" fill="#f4a261"/>
+<rect x="488.45454545454544" y="152.096295377109" width="18" height="167.903704622891" fill="#4f7cac"/>
+<rect x="514.4545454545455" y="108.06586082469556" width="18" height="211.93413917530444" fill="#f4a261"/>
+<rect x="583.0" y="153.00566336770004" width="18" height="166.99433663229996" fill="#4f7cac"/>
+<rect x="609.0" y="113.51605866217412" width="18" height="206.48394133782588" fill="#f4a261"/>
+<rect x="677.5454545454545" y="150.04992642182643" width="18" height="169.95007357817357" fill="#4f7cac"/>
+<rect x="703.5454545454545" y="105.63600272840839" width="18" height="214.36399727159161" fill="#f4a261"/>
+<rect x="772.0909090909091" y="146.7983973790508" width="18" height="173.2016026209492" fill="#4f7cac"/>
+<rect x="798.0909090909091" y="102.60869565217388" width="18" height="217.39130434782612" fill="#f4a261"/>
+<rect x="866.6363636363636" y="146.82383062277" width="18" height="173.17616937723" fill="#4f7cac"/>
+<rect x="892.6363636363636" y="106.96124791473466" width="18" height="213.03875208526534" fill="#f4a261"/>
+<rect x="961.1818181818182" y="146.39176084098253" width="18" height="173.60823915901747" fill="#4f7cac"/>
+<rect x="987.1818181818182" y="108.43629080448795" width="18" height="211.56370919551205" fill="#f4a261"/>
+<rect x="1055.7272727272727" y="146.26330310280127" width="18" height="173.73669689719873" fill="#4f7cac"/>
+<rect x="1081.7272727272727" y="105.3564384098033" width="18" height="214.6435615901967" fill="#f4a261"/>
+<line class="grid" x1="85" y1="600.0" x2="1125" y2="600.0"/>
+<text class="axis" x="75" y="605.0" text-anchor="end">0.0 GiB</text>
+<line class="grid" x1="85" y1="550.0" x2="1125" y2="550.0"/>
+<text class="axis" x="75" y="555.0" text-anchor="end">0.1 GiB</text>
+<line class="grid" x1="85" y1="500.0" x2="1125" y2="500.0"/>
+<text class="axis" x="75" y="505.0" text-anchor="end">0.2 GiB</text>
+<line class="grid" x1="85" y1="450.0" x2="1125" y2="450.0"/>
+<text class="axis" x="75" y="455.0" text-anchor="end">0.3 GiB</text>
+<line class="grid" x1="85" y1="400.0" x2="1125" y2="400.0"/>
+<text class="axis" x="75" y="405.0" text-anchor="end">0.5 GiB</text>
+<rect x="110.27272727272728" y="595.7212663053883" width="18" height="4.278733694611627" fill="#43aa8b"/>
+<rect x="136.27272727272728" y="466.2787503433808" width="18" height="133.72124965661916" fill="#f94144"/>
+<text class="label" x="132.27272727272728" y="625" text-anchor="middle">linux</text>
+<rect x="204.8181818181818" y="599.182545430329" width="18" height="0.8174545696709372" fill="#43aa8b"/>
+<rect x="230.8181818181818" y="426.90441109141005" width="18" height="173.09558890858995" fill="#f94144"/>
+<text class="label" x="226.8181818181818" y="625" text-anchor="middle">S00</text>
+<rect x="299.3636363636364" y="598.123683706682" width="18" height="1.8763162933180166" fill="#43aa8b"/>
+<rect x="325.3636363636364" y="467.7172040056939" width="18" height="132.28279599430613" fill="#f94144"/>
+<text class="label" x="321.3636363636364" y="625" text-anchor="middle">S01</text>
+<rect x="393.90909090909093" y="599.998335123076" width="18" height="0.0016648769239733954" fill="#43aa8b"/>
+<rect x="419.90909090909093" y="467.42418566707454" width="18" height="132.57581433292546" fill="#f94144"/>
+<text class="label" x="415.90909090909093" y="625" text-anchor="middle">S02</text>
+<rect x="488.45454545454544" y="600.0" width="18" height="0.0" fill="#43aa8b"/>
+<rect x="514.4545454545455" y="468.7627467139491" width="18" height="131.23725328605084" fill="#f94144"/>
+<text class="label" x="510.45454545454544" y="625" text-anchor="middle">S03</text>
+<rect x="583.0" y="599.7352845690882" width="18" height="0.26471543091176986" fill="#43aa8b"/>
+<rect x="609.0" y="466.95469037451403" width="18" height="133.04530962548594" fill="#f94144"/>
+<text class="label" x="605.0" y="625" text-anchor="middle">S04</text>
+<rect x="677.5454545454545" y="598.9294841378851" width="18" height="1.0705158621148934" fill="#43aa8b"/>
+<rect x="703.5454545454545" y="469.68009389905853" width="18" height="130.3199061009415" fill="#f94144"/>
+<text class="label" x="699.5454545454545" y="625" text-anchor="middle">S05</text>
+<rect x="772.0909090909091" y="599.996670246152" width="18" height="0.003329753847946791" fill="#43aa8b"/>
+<rect x="798.0909090909091" y="469.12568988337534" width="18" height="130.87431011662466" fill="#f94144"/>
+<text class="label" x="794.0909090909091" y="625" text-anchor="middle">S06</text>
+<rect x="866.6363636363636" y="597.7224483680044" width="18" height="2.277551631995605" fill="#43aa8b"/>
+<rect x="892.6363636363636" y="469.9564634684381" width="18" height="130.04353653156193" fill="#f94144"/>
+<text class="label" x="888.6363636363636" y="625" text-anchor="middle">S07</text>
+<rect x="961.1818181818182" y="600.0" width="18" height="0.0" fill="#43aa8b"/>
+<rect x="987.1818181818182" y="565.5104096429671" width="18" height="34.48959035703286" fill="#f94144"/>
+<text class="label" x="983.1818181818182" y="625" text-anchor="middle">S08</text>
+<rect x="1055.7272727272727" y="600.0" width="18" height="0.0" fill="#43aa8b"/>
+<rect x="1081.7272727272727" y="565.4038575198329" width="18" height="34.59614248016716" fill="#f94144"/>
+<text class="label" x="1077.7272727272727" y="625" text-anchor="middle">S09</text>
+<text class="axis" x="85" y="55">上图：QEMU RSS</text>
+<rect x="220" y="43" width="15" height="15" fill="#4f7cac"/><text class="axis" x="241" y="56">平均</text>
+<rect x="300" y="43" width="15" height="15" fill="#f4a261"/><text class="axis" x="321" y="56">峰值</text>
+<text class="axis" x="85" y="380">下图：QEMU 进程 I/O 字节增量</text>
+<rect x="350" y="368" width="15" height="15" fill="#43aa8b"/><text class="axis" x="371" y="381">读取</text>
+<rect x="435" y="368" width="15" height="15" fill="#f94144"/><text class="axis" x="456" y="381">写入</text>
+</svg>

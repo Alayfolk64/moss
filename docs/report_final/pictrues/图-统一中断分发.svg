@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="570" viewBox="0 0 960 570" role="img" aria-labelledby="title desc">
+  <title id="title">四平台统一中断分发</title>
+  <desc id="desc">定时器、IPI 和设备事件经过 Trap 入口和统一 IRQ 接口，分流到四个平台的中断控制器，最终调用内核或设备处理函数。</desc>
+  <defs>
+    <filter id="shadow" x="-15%" y="-20%" width="130%" height="145%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#26395d" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#60728f"/>
+    </marker>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif; fill: #24334d; }
+      .label { font-size: 18px; font-weight: 650; }
+      .small { font-size: 15px; fill: #52627d; }
+      .line { fill: none; stroke: #60728f; stroke-width: 2.2; marker-end: url(#arrow); }
+      .branch { fill: none; stroke: #60728f; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="960" height="570" rx="18" fill="#fbfcff"/>
+
+  <g filter="url(#shadow)">
+    <rect x="145" y="30" width="190" height="60" rx="14" fill="#eef6ff" stroke="#79a5d2" stroke-width="1.6"/>
+    <text x="240" y="66" text-anchor="middle" class="label">定时器</text>
+    <rect x="385" y="30" width="190" height="60" rx="14" fill="#f5eefb" stroke="#a58ac1" stroke-width="1.6"/>
+    <text x="480" y="66" text-anchor="middle" class="label">IPI</text>
+    <rect x="625" y="30" width="190" height="60" rx="14" fill="#fbf2e8" stroke="#c69a67" stroke-width="1.6"/>
+    <text x="720" y="66" text-anchor="middle" class="label">外部设备</text>
+  </g>
+
+  <path d="M240 90 V113" class="branch"/>
+  <path d="M480 90 V113" class="branch"/>
+  <path d="M720 90 V113" class="branch"/>
+  <path d="M240 113 H720" class="branch"/>
+  <path d="M480 113 V134" class="line"/>
+
+  <g filter="url(#shadow)">
+    <rect x="300" y="140" width="360" height="62" rx="14" fill="#e8f0fc" stroke="#8ba9d6" stroke-width="1.7"/>
+    <text x="480" y="166" text-anchor="middle" class="label">axcpu Trap 入口</text>
+    <text x="480" y="188" text-anchor="middle" class="small">识别中断原因</text>
+  </g>
+
+  <path d="M480 202 V229" class="line"/>
+
+  <g filter="url(#shadow)">
+    <rect x="300" y="235" width="360" height="62" rx="14" fill="#eaf7f3" stroke="#70ad9c" stroke-width="1.7"/>
+    <text x="480" y="261" text-anchor="middle" class="label">axhal::irq / IrqIf</text>
+    <text x="480" y="283" text-anchor="middle" class="small">注册、使能、分发、确认</text>
+  </g>
+
+  <path d="M480 297 V326" class="branch"/>
+  <path d="M105 326 H855" class="branch"/>
+
+  <g filter="url(#shadow)">
+    <rect x="50" y="338" width="200" height="82" rx="14" fill="#eef6ff" stroke="#79a5d2" stroke-width="1.6"/>
+    <text x="150" y="369" text-anchor="middle" class="label">RISC-V QEMU</text>
+    <text x="150" y="397" text-anchor="middle" class="small">PLIC claim / complete</text>
+
+    <rect x="270" y="338" width="200" height="82" rx="14" fill="#eef6ff" stroke="#79a5d2" stroke-width="1.6"/>
+    <text x="370" y="369" text-anchor="middle" class="label">VisionFive 2</text>
+    <text x="370" y="397" text-anchor="middle" class="small">PLIC + hart 映射</text>
+
+    <rect x="490" y="338" width="200" height="82" rx="14" fill="#f5f0fb" stroke="#9a83bb" stroke-width="1.6"/>
+    <text x="590" y="369" text-anchor="middle" class="label">LoongArch QEMU</text>
+    <text x="590" y="397" text-anchor="middle" class="small">PCH-PIC + EIOINTC</text>
+
+    <rect x="710" y="338" width="200" height="82" rx="14" fill="#f5f0fb" stroke="#9a83bb" stroke-width="1.6"/>
+    <text x="810" y="369" text-anchor="middle" class="label">2K1000LA</text>
+    <text x="810" y="397" text-anchor="middle" class="small">LIOINTC mask / unmask</text>
+  </g>
+
+  <path d="M150 326 V332" class="line"/>
+  <path d="M370 326 V332" class="line"/>
+  <path d="M590 326 V332" class="line"/>
+  <path d="M810 326 V332" class="line"/>
+
+  <path d="M150 420 V453" class="branch"/>
+  <path d="M370 420 V453" class="branch"/>
+  <path d="M590 420 V453" class="branch"/>
+  <path d="M810 420 V453" class="branch"/>
+  <path d="M150 453 H810" class="branch"/>
+  <path d="M480 453 V473" class="line"/>
+
+  <g filter="url(#shadow)">
+    <rect x="180" y="479" width="600" height="62" rx="14" fill="#fbf2e8" stroke="#c69a67" stroke-width="1.7"/>
+    <text x="480" y="505" text-anchor="middle" class="label">IRQ 处理函数</text>
+    <text x="480" y="528" text-anchor="middle" class="small">调度时钟　·　远端唤醒 / TLB 刷新　·　UART / 存储 / 网卡</text>
+  </g>
+</svg>

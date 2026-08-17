@@ -56,7 +56,7 @@ MossOS 的整体结构如 @fig:overview-arch 所示。用户程序通过 Linux A
 #figure(
   [
     #align(center)[
-      #image("./pictrues/初赛排名1.png", width: 100%)
+      #image("./pictrues/初赛排名.png", width: 100%)
     ]
   ],
   caption: [初赛排行榜（截至 2026 年 6 月 30 日）],
@@ -64,15 +64,15 @@ MossOS 的整体结构如 @fig:overview-arch 所示。用户程序通过 Linux A
 
 === 决赛成绩
 
-截至 2026 年 8 月 11 日，队伍在决赛线上排行榜中位列第 1，总分 758.2。RISC-V64 与 LoongArch64 的 BuildStorm 得分均为 180.0，cagent-glibc 得分均为 199.1。
+截至 2026 年 8 月 12 日，队伍在决赛线上排行榜中位列第 2，总分 758.2。RISC-V64 与 LoongArch64 的 BuildStorm 得分均为 180.0，cagent-glibc 得分均为 199.1。
 
 #figure(
   [
     #align(center)[
-      #image("./pictrues/决赛排名.png", width: 100%)
+      #image("../buildstorm-report/pictures/rank-812.png", width: 100%)
     ]
   ],
-  caption: [决赛线上排行榜（截至 2026 年 8 月 11 日）],
+  caption: [决赛线上排行榜（截至 2026 年 8 月 12 日）],
 ) <fig:final-rank>
 
 === 决赛阶段主要进展

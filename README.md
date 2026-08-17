@@ -1,20 +1,48 @@
-# MOSS OS
+# MossOS
 
-MOSS 是一个基于 StarryOS/ArceOS 演进而来的 Rust 宏内核操作系统，面向 Linux 用户态兼容场景开发。当前比赛版本主要支持 RISC-V 64 与 LoongArch64，可运行 BusyBox、musl/glibc 用户程序、性能测试以及 LTP 系统调用测试。
+## 项目简介
 
-> 初赛阶段的汇报材料位于百度网盘：`https://pan.baidu.com/s/1Ls1hawu1NluVZ0SAmK7Izg?pwd=moss`，提取码 `moss`(包含 演示视频，汇报 PPT，初赛文档)
+MossOS 是使用 Rust 实现的 Linux ABI 兼容宏内核，基于 ArceOS 组件化框架并由 StarryOS 演化而来。系统面向操作系统内核功能、性能和跨平台能力验证，内核主体可在 RISC-V64 与 LoongArch64 两种指令集、QEMU 与物理开发板共四个平台间复用。
+
+MossOS 已实现进程与线程、虚拟内存、文件系统、信号、网络、Futex、多核调度和 Linux 系统调用等核心能力，可运行 BusyBox、musl/glibc 用户程序及多类 Linux 应用。平台层提供统一的中断、时钟、串口和设备访问接口，并已接入 VirtIO、SD/MMC、AHCI SATA 和以太网等设备。
+
+## 文档索引
+
+- [决赛设计文档](决赛文档.pdf)
+- [BuildStorm 内核设计优化实现文档](BuildStorm内核优化实现文档.pdf)
+- [初赛汇报材料](https://pan.baidu.com/s/1Ls1hawu1NluVZ0SAmK7Izg?pwd=moss)（提取码：`moss`，包含演示视频、汇报 PPT 和初赛文档）
+- [决赛答辩材料](https://pan.baidu.com/s/1ppQOjb5W-m1yjWBFRqJ3FQ?pwd=moss)（提取码: `moss`,包含答辩视频、答辩 PPT）
 
 ## 支持情况
 
-| 架构 | 状态 | 主要用途 |
-| --- | --- | --- |
-| RISC-V 64 | 支持 | 比赛测评、交互演示、内核调试 |
-| LoongArch64 | 支持 | 比赛测评、交互演示、内核调试 |
+| 平台 | 架构与配置 | 主要硬件路径 | 验证情况 |
+| --- | --- | --- | --- |
+| QEMU virt | RISC-V64，8 核、8 GiB | SBI、PLIC、VirtIO MMIO | 通过 CAgent 与 BuildStorm 线上测试 |
+| QEMU virt | LoongArch64，12 核、8 GiB | EIOINTC、IOCSR IPI、VirtIO PCI | 通过 CAgent 与 BuildStorm 线上测试 |
+| VisionFive 2 | RISC-V64，4 核、4 GiB | PLIC、UART、SD/MMC、GMAC1 | 完成实板启动、存储、网络和用户程序验证 |
+| LS2K1000LA | LoongArch64，2 核、2 GiB | LIOINTC、UART、AHCI SATA、GMAC、RTC | 完成实板启动并通过现场赛测试 |
 
+## 成绩情况
 
-## 运行环境
+### 初赛线上阶段
 
-推荐使用项目比赛镜像，镜像中已经准备好 Rust 工具链、交叉编译工具和 QEMU：
+截至2026年6月30日，MossOS 以总分 2601.18 位列初赛线上排行榜第 3 名。
+
+<p align="center">
+  <img src="docs/report_final/pictrues/初赛排名.png" alt="MossOS 初赛线上阶段排名" width="100%">
+</p>
+
+### 决赛线上阶段
+
+截至2026年8月12日，MossOS 以总分 758.2 位列决赛线上排行榜第 2 名。RISC-V64 与 LoongArch64 的 BuildStorm 得分均为 180.0，CAgent 得分均为 199.1。
+
+<p align="center">
+  <img src="docs/report_final/pictrues/rank-812.png" alt="MossOS 决赛线上阶段排名" width="100%">
+</p>
+
+## 环境、构建与运行
+
+推荐使用项目比赛镜像，其中已准备 Rust 工具链、交叉编译工具和 QEMU：
 
 ```bash
 docker run -it --rm --privileged \
@@ -25,152 +53,73 @@ docker run -it --rm --privileged \
   /bin/bash
 ```
 
-moss 在 [`Makefile`](./Makefile) 中也写入了 docker 的启动指令，可以进入 wsl 环境后
+也可以在仓库根目录直接执行：
 
 ```bash
 make docker
 ```
 
-进入 docker 环境。
+不使用 Docker 时，需要自行安装 Rust nightly、`cargo-binutils`、对应架构的交叉编译工具和 QEMU；LoongArch64 需要 QEMU 10。以下命令均在仓库根目录执行。
 
-后续命令均在仓库根目录执行。LoongArch64 运行需要 QEMU 10；如果不使用 Docker，请自行安装 Rust、`cargo-binutils`、对应架构的交叉编译工具以及 QEMU。
+### QEMU 构建与普通运行
 
-## 构建比赛内核
-
-进入 docker 环境后，使用以下命令可进行编译，分别构建两个比赛架构：
+分别构建两个 QEMU 平台内核，或一次构建二者：
 
 ```bash
-make kernel-rv
-make kernel-la
+make kernel-rv     # 生成 kernel-rv
+make kernel-la     # 生成 kernel-la
+make all           # 生成以上两个内核
 ```
 
-也可以一次构建全部比赛产物：
-
-```bash
-make all
-```
-
-生成的比赛内核位于仓库根目录：
-
-```text
-kernel-rv
-kernel-la
-```
-
-## 测评入口
-
-### RISC-V 64
+使用单核配置快速启动系统：
 
 ```bash
 make run_rv
-```
-
-### LoongArch64
-
-```bash
 make run_la
 ```
 
-上述入口会依次完成以下工作：
+上述快捷入口会自动准备对应的 `sdcard-rv.img` 或 `sdcard-la.img`，运行日志分别写入 `docs/output_rv.txt` 和 `docs/output_la.txt`。
 
-1. 构建对应架构的比赛内核；
-2. 从基准镜像准备干净的 `sdcard-rv.img` 或 `sdcard-la.img`；
-3. 启动 QEMU；
-4. 由内核启动 BusyBox，并执行内嵌的 [`src/init.sh`](./src/init.sh)；
-5. 准备 musl 与 glibc 运行环境；
-6. 自动执行测评项目，结束后关机并退出 QEMU。
-
-当前自动测评覆盖 basic、BusyBox、cyclictest、iozone、iperf、netperf、libcbench、libctest、lmbench、Lua 和 LTP 等测试组。LTP 用例清单位于 [`src/ltp_testcases.sh`](./src/ltp_testcases.sh)。
-
-串口日志输出分别保存在：
-
-```text
-docs/output_rv.txt
-docs/output_la.txt
-```
-
-## 进入交互式终端的方法
-
-RISC-V 64：
+需要进入交互式 BusyBox Shell 时，可使用：
 
 ```bash
 make rv-shell
-```
-
-LoongArch64：
-
-```bash
 make la-shell
 ```
 
-系统启动完成后会进入 BusyBox Shell ，终端应显示如下：
+输入 `exit` 可退出 Shell；若 QEMU 未自动关闭，可依次按下 `Ctrl+A`、`X`。
 
-```text
-Entering interactive shell...
-starry:~#
-```
+### 决赛线上测试复现
 
-进入交互式终端后可以使用常见的 Linux 命令检查系统。
-
-
-Note: 交互入口会先把 4 GiB 的基础镜像复制为 `tmp-rv-shell.img` 或 `tmp-la-shell.img`，以免操作终端时污染正式测评镜像。在 Docker 挂载目录中，这一步可能耗时较长，而且复制命令默认不显示进度；内核构建结束后若暂时没有新输出，请等待镜像复制完成，镜像复制完成后会顺利进入终端界面。
-
-输入 `exit` 可退出 Shell。如果 QEMU 没有自动关闭，可依次按下 `Ctrl+A`、`X`。
-
-## moss 仓库测试脚本
-
-### 1. 完整重置镜像并运行单架构测评
-
-[`scripts/run_rv.sh`](./scripts/run_rv.sh) 和 [`scripts/run_la.sh`](./scripts/run_la.sh) 会删除旧的工作镜像和内核，从 `imgs/` 复制基准镜像，然后重新构建并启动 QEMU。这组脚本适合需要确保磁盘状态完全一致的重复测评，也可将脚本中的复制镜像指令注释以节省拷贝解压的时间。
+默认构建会嵌入 `src/init_final.sh`，启动后执行 CAgent 与 BuildStorm。先准备磁盘镜像，再使用决赛配置运行：
 
 ```bash
-cd scripts
-./run_rv.sh
-# 或
-./run_la.sh
+# RISC-V64：8 核、8 GiB
+make prepare-sdcard-rv
+./scripts/run_rv.sh
+
+# LoongArch64：12 核、8 GiB
+make prepare-sdcard-la
+./scripts/run_la.sh
 ```
 
-### 2. 自定义测例开关选项
+运行脚本使用 QEMU 快照模式，不会把测试过程写回基准磁盘镜像。初赛回归测试由 `src/init.sh` 提供，交互模式由 `src/init_shell.sh` 提供。
 
-[`src/init.sh`](./src/init.sh) 中可以选择 rv 或 la 架构是否开启测评，也可以选择每个模块的测试是否进行，设置为 1 代表启动测试，0 代表跳过测试。
+### 实板构建
+
+VisionFive 2：
 
 ```bash
-RUN_RV=1
-RUN_LA=1
-
-# Test switches: 1 means run, 0 means only print group start/end.
-basic=1
-busybox=1
-cyclictest=1
-iozone=1
-iperf=1
-libcbench=1
-libctest=1
-lmbench=1
-ltp=1
-lua=1
-netperf=1
+make kernel-vf2
 ```
 
-`some_testcases`中若有赋值则只对选中的 LTP 测例进行测试，其他测试均跳过，方便对 LTP 测例进行本地测试。例如：
+构建产物为 `moss-vf2.bin`，目标配置为 4 核、4 GiB。
+
+LS2K1000LA：
 
 ```bash
-some_testcases="
-access01 access01
-access02 access02
-"
+make kernel-la-2k1000
+make kernel-la-2k1000-shell
 ```
 
-[`src/ltp_testcases.sh`](./src/ltp_testcases.sh) 中写入了用于测评的所有 LTP 测例，如有注释则可跳过被注释的测例。
-
-## AI 使用说明
-
-本项目代码由 AI 辅助生成实现（使用的模型为 ChatGPT 5.5），关键设计思路与技术决策由人机协同完成。
-
-在开发过程中，开发者负责提出需求、设计整体方案与约束条件，AI 负责代码生成与部分实现优化。
-
-最终代码由开发者审核、调整并整合。
-
-## 许可证
-
-本项目使用 Apache License 2.0，详见 [`LICENSE`](./LICENSE) 和 [`NOTICE`](./NOTICE)。
+对应产物为 `moss-2k1000la.bin` 和交互式镜像 `moss-2k1000la-shell.bin`，目标配置为 2 核、1 GiB。实板镜像需结合开发板的 U-Boot、TFTP 和根文件系统环境部署。

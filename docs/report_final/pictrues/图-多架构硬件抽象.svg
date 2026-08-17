@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">MossOS 多架构硬件抽象结构</title>
+  <desc id="desc">axplat 平台路径和 axdriver 设备路径均连接四个平台，axcpu 按 RISC-V64 和 LoongArch64 分组。</desc>
+
+  <defs>
+    <linearGradient id="pageBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="kernelBg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#dbeafe"/>
+      <stop offset="1" stop-color="#e0e7ff"/>
+    </linearGradient>
+    <linearGradient id="rvBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eff6ff"/>
+      <stop offset="1" stop-color="#f8fbff"/>
+    </linearGradient>
+    <linearGradient id="laBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#faf5ff"/>
+      <stop offset="1" stop-color="#fdfaff"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-20%" width="130%" height="150%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#334155" flood-opacity="0.13"/>
+    </filter>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowTeal" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#0f766e"/>
+    </marker>
+    <marker id="arrowViolet" viewBox="0 0 10 10" refX="8.2" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#7c3aed"/>
+    </marker>
+    <style>
+      text { font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif; fill: #1e293b; }
+      .kernel { font-size: 25px; font-weight: 700; }
+      .node { font-size: 20px; font-weight: 700; }
+      .interface { font-size: 17px; font-weight: 700; }
+      .bus-label { font-size: 12px; font-weight: 700; }
+      .card-title { font-size: 18px; font-weight: 700; }
+      .card-label { font-size: 12px; font-weight: 700; fill: #64748b; }
+      .card-value { font-size: 14px; font-weight: 600; }
+      .cpu { font-family: "Noto Sans Mono CJK SC", "Cascadia Mono", monospace; font-size: 17px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect x="2" y="2" width="1196" height="696" rx="24" fill="url(#pageBg)" stroke="#e2e8f0" stroke-width="2"/>
+
+  <!-- Kernel -->
+  <g filter="url(#shadow)">
+    <rect x="150" y="25" width="900" height="66" rx="16" fill="url(#kernelBg)" stroke="#6b91df" stroke-width="2"/>
+  </g>
+  <text class="kernel" x="600" y="66" text-anchor="middle">MossOS 内核</text>
+
+  <!-- Kernel independently uses axhal and axdriver. -->
+  <path d="M390 91V116" fill="none" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrowSlate)"/>
+  <path d="M810 91V116" fill="none" stroke="#64748b" stroke-width="2.2" marker-end="url(#arrowSlate)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="120" y="122" width="360" height="62" rx="14" fill="#e8f7f4" stroke="#2a998c" stroke-width="2"/>
+    <rect x="720" y="122" width="360" height="62" rx="14" fill="#f3eefe" stroke="#9568cf" stroke-width="2"/>
+  </g>
+  <text class="node" x="300" y="160" text-anchor="middle">axhal</text>
+  <text class="node" x="900" y="160" text-anchor="middle">axdriver</text>
+
+  <path d="M300 184V207" fill="none" stroke="#0f766e" stroke-width="2.2" marker-end="url(#arrowTeal)"/>
+  <path d="M900 184V207" fill="none" stroke="#7c3aed" stroke-width="2.2" marker-end="url(#arrowViolet)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="120" y="213" width="360" height="56" rx="13" fill="#ecfdf9" stroke="#0f766e" stroke-width="2"/>
+    <rect x="720" y="213" width="360" height="56" rx="13" fill="#faf5ff" stroke="#7c3aed" stroke-width="2"/>
+  </g>
+  <text class="interface" x="300" y="248" text-anchor="middle">axplat 平台接口</text>
+  <text class="interface" x="900" y="248" text-anchor="middle">BlockDriverOps / NetDriverOps</text>
+
+  <!-- Two complete, independent buses. Each bus spans all four platform columns. -->
+  <path d="M300 269V295H70V295H1130" fill="none" stroke="#0f766e" stroke-width="2.5"/>
+  <path d="M900 269V326H70V326H1130" fill="none" stroke="#7c3aed" stroke-width="2.5"/>
+
+  <rect x="180" y="279" width="86" height="23" rx="11.5" fill="#d9f3ed"/>
+  <text class="bus-label" x="223" y="295" text-anchor="middle" fill="#0f766e">平台路径</text>
+  <rect x="180" y="303" width="86" height="23" rx="11.5" fill="#eee4fb"/>
+  <text class="bus-label" x="223" y="319" text-anchor="middle" fill="#7c3aed">设备路径</text>
+
+  <!-- White underlay at crossings makes the two paths visibly independent. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M132 295V374" stroke="#f8fafc" stroke-width="8"/>
+    <path d="M412 295V374" stroke="#f8fafc" stroke-width="8"/>
+    <path d="M712 295V374" stroke="#f8fafc" stroke-width="8"/>
+    <path d="M992 295V374" stroke="#f8fafc" stroke-width="8"/>
+    <path d="M132 295V374" stroke="#0f766e" stroke-width="2.3" marker-end="url(#arrowTeal)"/>
+    <path d="M412 295V374" stroke="#0f766e" stroke-width="2.3" marker-end="url(#arrowTeal)"/>
+    <path d="M712 295V374" stroke="#0f766e" stroke-width="2.3" marker-end="url(#arrowTeal)"/>
+    <path d="M992 295V374" stroke="#0f766e" stroke-width="2.3" marker-end="url(#arrowTeal)"/>
+    <path d="M208 326V374" stroke="#7c3aed" stroke-width="2.3" marker-end="url(#arrowViolet)"/>
+    <path d="M488 326V374" stroke="#7c3aed" stroke-width="2.3" marker-end="url(#arrowViolet)"/>
+    <path d="M788 326V374" stroke="#7c3aed" stroke-width="2.3" marker-end="url(#arrowViolet)"/>
+    <path d="M1068 326V374" stroke="#7c3aed" stroke-width="2.3" marker-end="url(#arrowViolet)"/>
+  </g>
+
+  <!-- Four targets: both colored arrows terminate on every card. -->
+  <g filter="url(#shadow)">
+    <rect x="45" y="380" width="250" height="180" rx="16" fill="url(#rvBg)" stroke="#6094e8" stroke-width="2"/>
+    <rect x="325" y="380" width="250" height="180" rx="16" fill="url(#rvBg)" stroke="#6094e8" stroke-width="2"/>
+    <rect x="625" y="380" width="250" height="180" rx="16" fill="url(#laBg)" stroke="#9568cf" stroke-width="2"/>
+    <rect x="905" y="380" width="250" height="180" rx="16" fill="url(#laBg)" stroke="#9568cf" stroke-width="2"/>
+  </g>
+
+  <text class="card-title" x="170" y="418" text-anchor="middle">RISC-V QEMU</text>
+  <text class="card-label" x="70" y="457">平台</text>
+  <text class="card-value" x="125" y="457">PLIC</text>
+  <text class="card-label" x="70" y="505">驱动</text>
+  <text class="card-value" x="70" y="531">VirtIO MMIO</text>
+
+  <text class="card-title" x="450" y="418" text-anchor="middle">VisionFive 2</text>
+  <text class="card-label" x="350" y="457">平台</text>
+  <text class="card-value" x="405" y="457">PLIC</text>
+  <text class="card-label" x="350" y="505">驱动</text>
+  <text class="card-value" x="350" y="531">SD/MMC · GMAC1</text>
+
+  <text class="card-title" x="750" y="418" text-anchor="middle">LoongArch QEMU</text>
+  <text class="card-label" x="650" y="457">平台</text>
+  <text class="card-value" x="705" y="457">EIOINTC</text>
+  <text class="card-label" x="650" y="505">驱动</text>
+  <text class="card-value" x="650" y="531">VirtIO PCI</text>
+
+  <text class="card-title" x="1030" y="418" text-anchor="middle">2K1000LA</text>
+  <text class="card-label" x="930" y="457">平台</text>
+  <text class="card-value" x="985" y="457">LIOINTC</text>
+  <text class="card-label" x="930" y="505">驱动</text>
+  <text class="card-value" x="930" y="531">AHCI · GMAC0</text>
+
+  <!-- Architecture membership is shown without directional arrows. -->
+  <path d="M170 560V582H450V560M310 582V608" fill="none" stroke="#6094e8" stroke-width="2"/>
+  <path d="M750 560V582H1030V560M890 582V608" fill="none" stroke="#9568cf" stroke-width="2"/>
+  <g filter="url(#shadow)">
+    <rect x="80" y="608" width="460" height="58" rx="14" fill="#e5f0ff" stroke="#6094e8" stroke-width="2"/>
+    <rect x="660" y="608" width="460" height="58" rx="14" fill="#f1e9fb" stroke="#9568cf" stroke-width="2"/>
+  </g>
+  <text class="cpu" x="310" y="644" text-anchor="middle">axcpu::riscv</text>
+  <text class="cpu" x="890" y="644" text-anchor="middle">axcpu::loongarch64</text>
+</svg>
