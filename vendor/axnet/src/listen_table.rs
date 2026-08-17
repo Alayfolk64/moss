@@ -1,5 +1,4 @@
-use alloc::{boxed::Box, collections::VecDeque, sync::Arc, vec};
-use core::ops::DerefMut;
+use alloc::{boxed::Box, collections::VecDeque, sync::Arc, vec, vec::Vec};
 
 use axerrno::{AxError, AxResult};
 use axsync::Mutex;
@@ -62,7 +61,7 @@ impl Drop for ListenTableEntry {
 }
 
 pub struct ListenTable {
-    tcp: Box<[Arc<Mutex<Option<Box<ListenTableEntry>>>>]>,
+    tcp: Box<[Arc<Mutex<Vec<Box<ListenTableEntry>>>>]>,
 }
 
 impl ListenTable {
@@ -78,7 +77,7 @@ impl ListenTable {
     }
 
     pub fn can_listen(&self, port: u16) -> bool {
-        self.tcp[port as usize].lock().is_none()
+        self.tcp[port as usize].lock().is_empty()
     }
 
     pub fn listen(
@@ -91,44 +90,71 @@ impl ListenTable {
     ) -> AxResult {
         let port = listen_endpoint.port;
         assert_ne!(port, 0);
-        let mut entry = self.tcp[port as usize].lock();
-        if entry.is_none() {
-            *entry = Some(Box::new(ListenTableEntry::new(
+        let mut entries = self.tcp[port as usize].lock();
+        if entries.iter().any(|entry| {
+            listeners_overlap(
+                entry.listen_endpoint,
+                entry.family,
+                entry.ipv6_only,
                 listen_endpoint,
                 family,
                 ipv6_only,
-                tcp_rx_buf_len,
-                tcp_tx_buf_len,
-            )));
-            Ok(())
-        } else {
+            )
+        }) {
             warn!("socket already listening on port {port}");
-            Err(AxError::AddrInUse)
+            return Err(AxError::AddrInUse);
         }
+        entries.push(Box::new(ListenTableEntry::new(
+            listen_endpoint,
+            family,
+            ipv6_only,
+            tcp_rx_buf_len,
+            tcp_tx_buf_len,
+        )));
+        Ok(())
     }
 
-    pub fn unlisten(&self, port: u16) {
-        debug!("TCP socket unlisten on {}", port);
-        *self.tcp[port as usize].lock() = None;
+    pub fn unlisten(&self, listen_endpoint: IpListenEndpoint, family: IpFamily, ipv6_only: bool) {
+        debug!("TCP socket unlisten on {}", listen_endpoint);
+        self.tcp[listen_endpoint.port as usize]
+            .lock()
+            .retain(|entry| !entry.matches_listener(listen_endpoint, family, ipv6_only));
     }
 
-    fn listen_entry(&self, port: u16) -> Arc<Mutex<Option<Box<ListenTableEntry>>>> {
+    fn listen_entries(&self, port: u16) -> Arc<Mutex<Vec<Box<ListenTableEntry>>>> {
         self.tcp[port as usize].clone()
     }
 
-    pub fn can_accept(&self, port: u16) -> AxResult<bool> {
-        if let Some(entry) = self.listen_entry(port).lock().as_ref() {
-            Ok(entry.syn_queue.iter().any(|&handle| is_connected(handle)))
-        } else {
+    pub fn can_accept(
+        &self,
+        listen_endpoint: IpListenEndpoint,
+        family: IpFamily,
+        ipv6_only: bool,
+    ) -> AxResult<bool> {
+        let entries = self.listen_entries(listen_endpoint.port);
+        let entries = entries.lock();
+        let Some(entry) = entries
+            .iter()
+            .find(|entry| entry.matches_listener(listen_endpoint, family, ipv6_only))
+        else {
             warn!("accept before listen");
-            Err(AxError::InvalidInput)
-        }
+            return Err(AxError::InvalidInput);
+        };
+        Ok(entry.syn_queue.iter().any(|&handle| is_connected(handle)))
     }
 
-    pub fn accept(&self, port: u16) -> AxResult<SocketHandle> {
-        let entry = self.listen_entry(port);
-        let mut table = entry.lock();
-        let Some(entry) = table.deref_mut() else {
+    pub fn accept(
+        &self,
+        listen_endpoint: IpListenEndpoint,
+        family: IpFamily,
+        ipv6_only: bool,
+    ) -> AxResult<SocketHandle> {
+        let entries = self.listen_entries(listen_endpoint.port);
+        let mut entries = entries.lock();
+        let Some(entry) = entries
+            .iter_mut()
+            .find(|entry| entry.matches_listener(listen_endpoint, family, ipv6_only))
+        else {
             warn!("accept before listen");
             return Err(AxError::InvalidInput);
         };
@@ -163,11 +189,9 @@ impl ListenTable {
         dst: IpEndpoint,
         sockets: &mut SocketSet<'_>,
     ) {
-        if let Some(entry) = self.listen_entry(dst.port).lock().deref_mut() {
-            if !entry.accepts_packet(dst) {
-                return;
-            }
-
+        let entries = self.listen_entries(dst.port);
+        let mut entries = entries.lock();
+        if let Some(entry) = entries.iter_mut().find(|entry| entry.accepts_packet(dst)) {
             // TODO(mivik): accept address check
             if entry.syn_queue.len() >= LISTEN_QUEUE_SIZE {
                 // SYN queue is full, drop the packet
@@ -194,6 +218,41 @@ impl ListenTable {
             entry.syn_queue.push_back(handle);
         }
     }
+}
+
+impl ListenTableEntry {
+    fn matches_listener(
+        &self,
+        listen_endpoint: IpListenEndpoint,
+        family: IpFamily,
+        ipv6_only: bool,
+    ) -> bool {
+        self.listen_endpoint == listen_endpoint
+            && self.family == family
+            && self.ipv6_only == ipv6_only
+    }
+}
+
+fn listeners_overlap(
+    left_endpoint: IpListenEndpoint,
+    left_family: IpFamily,
+    left_ipv6_only: bool,
+    right_endpoint: IpListenEndpoint,
+    right_family: IpFamily,
+    right_ipv6_only: bool,
+) -> bool {
+    if left_family == right_family {
+        return left_endpoint.addr.is_none()
+            || right_endpoint.addr.is_none()
+            || left_endpoint.addr == right_endpoint.addr;
+    }
+
+    let (ipv6_endpoint, ipv6_only) = if left_family == IpFamily::Ipv6 {
+        (left_endpoint, left_ipv6_only)
+    } else {
+        (right_endpoint, right_ipv6_only)
+    };
+    ipv6_endpoint.addr.is_none() && !ipv6_only
 }
 
 fn is_connected(handle: SocketHandle) -> bool {

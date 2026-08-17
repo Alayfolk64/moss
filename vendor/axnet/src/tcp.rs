@@ -56,8 +56,12 @@ pub struct TcpSocketInner {
     requested_mss: AtomicUsize,
     bytes_since_poll: AtomicUsize,
     nagle_enabled: AtomicBool,
+    cork: AtomicBool,
     quick_ack: AtomicBool,
     keep_alive: AtomicBool,
+    keep_idle_secs: AtomicUsize,
+    keep_interval_secs: AtomicUsize,
+    keep_count: AtomicUsize,
 
     general: GeneralOptions,
     has_mcast_group: AtomicBool,
@@ -112,8 +116,12 @@ impl TcpSocket {
             core::ptr::addr_of_mut!((*dst).requested_mss).write(AtomicUsize::new(0));
             core::ptr::addr_of_mut!((*dst).bytes_since_poll).write(AtomicUsize::new(0));
             core::ptr::addr_of_mut!((*dst).nagle_enabled).write(AtomicBool::new(true));
+            core::ptr::addr_of_mut!((*dst).cork).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).quick_ack).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).keep_alive).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).keep_idle_secs).write(AtomicUsize::new(7200));
+            core::ptr::addr_of_mut!((*dst).keep_interval_secs).write(AtomicUsize::new(75));
+            core::ptr::addr_of_mut!((*dst).keep_count).write(AtomicUsize::new(9));
             GeneralOptions::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).general));
             core::ptr::addr_of_mut!((*dst).has_mcast_group).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).rx_closed).write(AtomicU32::new(0));
@@ -191,8 +199,12 @@ impl TcpSocket {
         *self.requested_mss.get_mut() = 0;
         *self.bytes_since_poll.get_mut() = 0;
         *self.nagle_enabled.get_mut() = true;
+        *self.cork.get_mut() = false;
         *self.quick_ack.get_mut() = false;
         *self.keep_alive.get_mut() = false;
+        *self.keep_idle_secs.get_mut() = 7200;
+        *self.keep_interval_secs.get_mut() = 75;
+        *self.keep_count.get_mut() = 9;
         *self.has_mcast_group.get_mut() = false;
         unsafe { core::ptr::write_volatile(self.rx_closed.get_mut(), 0) };
 
@@ -264,7 +276,9 @@ impl TcpSocket {
         socket.set_keep_alive(
             self.keep_alive
                 .load(Ordering::Relaxed)
-                .then(|| Duration::from_secs(75)),
+                .then(|| {
+                    Duration::from_secs(self.keep_idle_secs.load(Ordering::Relaxed) as u64)
+                }),
         );
     }
 
@@ -382,9 +396,11 @@ impl TcpSocket {
         endpoint.addr.map_or(true, |addr| !addr.is_loopback())
     }
 
-    fn can_accept_smol_listener(endpoint: IpListenEndpoint) -> bool {
+    fn can_accept_smol_listener(&self, endpoint: IpListenEndpoint) -> bool {
         Self::needs_smol_listener(endpoint)
-            && LISTEN_TABLE.can_accept(endpoint.port).unwrap_or(false)
+            && LISTEN_TABLE
+                .can_accept(endpoint, self.family, self.general.ipv6_only())
+                .unwrap_or(false)
     }
 
     fn poll_connect(&self) -> IoEvents {
@@ -438,7 +454,7 @@ impl TcpSocket {
         if self.local.can_accept() {
             events.set(IoEvents::IN, true);
         } else if let Ok(endpoint) = self.bound_endpoint() {
-            events.set(IoEvents::IN, Self::can_accept_smol_listener(endpoint));
+            events.set(IoEvents::IN, self.can_accept_smol_listener(endpoint));
         }
         events
     }
@@ -459,6 +475,9 @@ impl Configurable for TcpSocket {
             O::NoDelay(no_delay) => {
                 **no_delay = !self.nagle_enabled.load(Ordering::Relaxed);
             }
+            O::Cork(cork) => {
+                **cork = self.cork.load(Ordering::Relaxed);
+            }
             O::QuickAck(quick_ack) => {
                 **quick_ack = self.quick_ack.load(Ordering::Relaxed);
             }
@@ -467,6 +486,15 @@ impl Configurable for TcpSocket {
             }
             O::MaxSegment(max_segment) => {
                 **max_segment = self.advertised_path_mtu_and_mss().1;
+            }
+            O::KeepIdle(seconds) => {
+                **seconds = self.keep_idle_secs.load(Ordering::Relaxed);
+            }
+            O::KeepInterval(seconds) => {
+                **seconds = self.keep_interval_secs.load(Ordering::Relaxed);
+            }
+            O::KeepCount(count) => {
+                **count = self.keep_count.load(Ordering::Relaxed);
             }
             O::SendBuffer(size) | O::SendBufferForce(size) => {
                 **size = self.configured_tx_buf_len();
@@ -525,6 +553,13 @@ impl Configurable for TcpSocket {
                     socket.set_nagle_enabled(!no_delay);
                 });
             }
+            O::Cork(cork) => {
+                // smoltcp does not expose Linux's packet-coalescing policy,
+                // but TCP_CORK does not alter stream contents.  Preserve the
+                // Linux-visible state and let the normal send path segment the
+                // stream; rejecting this option makes nginx abort responses.
+                self.cork.store(*cork, Ordering::Relaxed);
+            }
             O::QuickAck(quick_ack) => {
                 self.quick_ack.store(*quick_ack, Ordering::Relaxed);
                 self.try_with_smol_socket(|socket| {
@@ -539,9 +574,33 @@ impl Configurable for TcpSocket {
             }
             O::KeepAlive(keep_alive) => {
                 self.keep_alive.store(*keep_alive, Ordering::Relaxed);
+                let idle = self.keep_idle_secs.load(Ordering::Relaxed) as u64;
                 self.try_with_smol_socket(|socket| {
-                    socket.set_keep_alive(keep_alive.then(|| Duration::from_secs(75)));
+                    socket.set_keep_alive(keep_alive.then(|| Duration::from_secs(idle)));
                 });
+            }
+            O::KeepIdle(seconds) => {
+                if *seconds == 0 {
+                    return Err(AxError::InvalidInput);
+                }
+                self.keep_idle_secs.store(*seconds, Ordering::Relaxed);
+                if self.keep_alive.load(Ordering::Relaxed) {
+                    self.try_with_smol_socket(|socket| {
+                        socket.set_keep_alive(Some(Duration::from_secs(*seconds as u64)));
+                    });
+                }
+            }
+            O::KeepInterval(seconds) => {
+                if *seconds == 0 {
+                    return Err(AxError::InvalidInput);
+                }
+                self.keep_interval_secs.store(*seconds, Ordering::Relaxed);
+            }
+            O::KeepCount(count) => {
+                if *count == 0 {
+                    return Err(AxError::InvalidInput);
+                }
+                self.keep_count.store(*count, Ordering::Relaxed);
             }
             O::McastGroupOp(join) => {
                 if *join {
@@ -794,20 +853,22 @@ impl SocketOps for TcpSocket {
             }
 
             poll_interfaces();
-            LISTEN_TABLE.accept(bound_endpoint.port).map(|handle| {
-                let socket = TcpSocket::new_connected(
-                    handle,
-                    self.family,
-                    self.configured_rx_buf_len(),
-                    self.configured_tx_buf_len(),
-                );
-                debug!(
-                    "accepted connection from {}, {}",
-                    handle,
-                    socket.with_smol_socket(|socket| socket.remote_endpoint().unwrap())
-                );
-                Socket::Tcp(socket)
-            })
+            LISTEN_TABLE
+                .accept(bound_endpoint, self.family, self.general.ipv6_only())
+                .map(|handle| {
+                    let socket = TcpSocket::new_connected(
+                        handle,
+                        self.family,
+                        self.configured_rx_buf_len(),
+                        self.configured_tx_buf_len(),
+                    );
+                    debug!(
+                        "accepted connection from {}, {}",
+                        handle,
+                        socket.with_smol_socket(|socket| socket.remote_endpoint().unwrap())
+                    );
+                    Socket::Tcp(socket)
+                })
         })
     }
 
@@ -954,7 +1015,7 @@ impl SocketOps for TcpSocket {
                 let endpoint = self.bound_endpoint()?;
                 self.local.close();
                 if Self::needs_smol_listener(endpoint) {
-                    LISTEN_TABLE.unlisten(endpoint.port);
+                    LISTEN_TABLE.unlisten(endpoint, self.family, self.general.ipv6_only());
                 }
                 poll_interfaces();
                 Ok(())

@@ -106,8 +106,12 @@ define_options! {
 
     // --- TCP level options (TCP_*) ----
     NoDelay(bool),
+    Cork(bool),
     QuickAck(bool),
     MaxSegment(usize),
+    KeepIdle(usize),
+    KeepInterval(usize),
+    KeepCount(usize),
     TcpInfo(TcpInfo),
 
     // ---- IP level options (IP_*) ----

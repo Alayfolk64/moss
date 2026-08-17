@@ -124,13 +124,18 @@ macro_rules! call_dispatch {
             (SOL_SOCKET, SO_PEERCRED) => PeerCredentials as Ucred,
 
             (PROTO_TCP, TCP_NODELAY) => NoDelay as IntBool,
+            (PROTO_TCP, TCP_CORK) => Cork as IntBool,
             (PROTO_TCP, TCP_QUICKACK) => QuickAck as IntBool,
             (PROTO_TCP, TCP_MAXSEG) => MaxSegment as Int<usize>,
+            (PROTO_TCP, TCP_KEEPIDLE) => KeepIdle as Int<usize>,
+            (PROTO_TCP, TCP_KEEPINTVL) => KeepInterval as Int<usize>,
+            (PROTO_TCP, TCP_KEEPCNT) => KeepCount as Int<usize>,
 
             (PROTO_IP, IP_TTL) => Ttl as Int<u8>,
             (PROTO_IP, IP_TOS) => TypeOfService as Int<u8>,
             (PROTO_IP, IP_RECVERR) => ReceiveError as IntBool,
             (PROTO_IPV6, IPV6_V6ONLY) => Ipv6Only as IntBool,
+            (PROTO_IPV6, IPV6_TCLASS) => TypeOfService as Int<u8>,
             (PROTO_IPV6, IPV6_RECVERR) => ReceiveError as IntBool,
         }
     }};
