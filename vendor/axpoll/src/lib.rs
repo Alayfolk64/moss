@@ -5,13 +5,13 @@
 
 extern crate alloc;
 
+use alloc::{boxed::Box, sync::Arc, task::Wake};
 use core::{
     mem::MaybeUninit,
     sync::atomic::{AtomicBool, Ordering},
     task::{Context, Waker},
 };
 
-use alloc::{boxed::Box, sync::Arc, task::Wake};
 use bitflags::bitflags;
 use linux_raw_sys::general::*;
 use spin::{Lazy, Mutex};
@@ -88,6 +88,18 @@ impl Inner {
     }
 
     fn register(&mut self, waker: &Waker) {
+        // Re-registering the same logical waiter is idempotent.  Keeping
+        // duplicate clones wastes the bounded table and amplifies a single
+        // source transition into many wakeups.
+        if self
+            .entries
+            .iter()
+            .take(self.len())
+            .any(|entry| unsafe { entry.assume_init_ref() }.will_wake(waker))
+        {
+            return;
+        }
+
         let slot = self.cursor % POLL_SET_CAPACITY;
         if self.cursor >= POLL_SET_CAPACITY {
             let old = unsafe { self.entries[slot].assume_init_read() };
@@ -161,8 +173,7 @@ impl PollSet {
     /// and must not be published until initialization completes.
     pub unsafe fn write_unpublished_in_place(dst: *mut Self) {
         unsafe {
-            core::ptr::addr_of_mut!((*dst).inner)
-                .write(Lazy::new(|| Mutex::new(Inner::new())));
+            core::ptr::addr_of_mut!((*dst).inner).write(Lazy::new(|| Mutex::new(Inner::new())));
             core::ptr::addr_of_mut!((*dst).has_waiters).write(AtomicBool::new(false));
         }
     }

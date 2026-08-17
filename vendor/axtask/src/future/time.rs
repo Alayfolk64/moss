@@ -59,9 +59,9 @@ impl TimerRuntime {
         self.wheel.remove(key);
     }
 
-    fn wake(&mut self) {
+    fn take_expired(&mut self) -> BTreeMap<TimerKey, Waker> {
         if self.wheel.is_empty() {
-            return;
+            return BTreeMap::new();
         }
 
         let now = wall_time();
@@ -71,10 +71,7 @@ impl TimerRuntime {
             key: u64::MAX,
         });
 
-        let expired = core::mem::replace(&mut self.wheel, pending);
-        for (_, w) in expired {
-            w.wake();
-        }
+        core::mem::replace(&mut self.wheel, pending)
     }
 }
 
@@ -87,7 +84,14 @@ static TIMER_RUNTIME: SpinNoIrq<TimerRuntime> = SpinNoIrq::new(TimerRuntime::new
 
 #[allow(dead_code)]
 pub(crate) fn check_timer_events() {
-    TIMER_RUNTIME.lock().wake();
+    // Wakers are arbitrary callbacks and may acquire epoll, socket, or task
+    // locks.  Never invoke them while holding the global timer-wheel lock:
+    // another CPU can be interrupted while holding one of those locks and
+    // then wait for this timer lock, forming a cross-CPU ABBA deadlock.
+    let expired = TIMER_RUNTIME.lock().take_expired();
+    for (_, waker) in expired {
+        waker.wake();
+    }
 }
 
 fn with_current<R>(f: impl FnOnce(&mut TimerRuntime) -> R) -> R {

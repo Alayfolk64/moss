@@ -23,8 +23,8 @@ use axerrno::{AxError, AxResult};
 use axpoll::{IoEvents, PollSet, Pollable};
 use bitflags::bitflags;
 use hashbrown::HashMap;
-use kspin::SpinNoPreempt;
-use linux_raw_sys::general::{EPOLLET, EPOLLONESHOT, epoll_event};
+use kspin::{SpinNoIrq, SpinNoPreempt};
+use linux_raw_sys::general::{EPOLLET, EPOLLEXCLUSIVE, EPOLLONESHOT, EPOLLWAKEUP, epoll_event};
 
 use crate::file::{Directory, FileLike, get_file_like};
 
@@ -39,6 +39,8 @@ bitflags! {
     pub struct EpollFlags: u32 {
         const EDGE_TRIGGER = EPOLLET;
         const ONESHOT = EPOLLONESHOT;
+        const EXCLUSIVE = EPOLLEXCLUSIVE;
+        const WAKEUP = EPOLLWAKEUP;
     }
 }
 
@@ -139,6 +141,7 @@ struct EpollInterest {
     event: EpollEvent,
     mode: SpinNoPreempt<TriggerMode>,
     in_ready_queue: AtomicBool,
+    waker: SpinNoPreempt<Option<Waker>>,
 }
 
 impl EpollInterest {
@@ -155,8 +158,21 @@ impl EpollInterest {
                 TriggerMode::from_flags(flags),
             );
             core::ptr::addr_of_mut!((*dst).in_ready_queue).write(AtomicBool::new(false));
+            SpinNoPreempt::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).waker), None);
             storage.assume_init()
         }
+    }
+
+    fn stable_waker(self: &Arc<Self>, epoll: &Arc<EpollInner>) -> Waker {
+        let mut waker = self.waker.lock();
+        waker
+            .get_or_insert_with(|| {
+                Waker::from(Arc::new(InterestWaker {
+                    epoll: Arc::downgrade(epoll),
+                    interest: Arc::downgrade(self),
+                }))
+            })
+            .clone()
     }
 
     #[inline]
@@ -247,6 +263,11 @@ impl Wake for InterestWaker {
             return;
         };
 
+        // A source wake is only a readiness hint. Queue it without polling
+        // the file here: some network sources invoke their wakers while the
+        // service lock is held, and re-registering synchronously from this
+        // callback would recurse into that lock. poll_events() validates the
+        // state and re-arms a spurious hint later in the waiting task.
         if interest.try_mark_in_queue() {
             epoll
                 .ready_queue
@@ -263,7 +284,11 @@ impl Wake for InterestWaker {
 
 struct EpollInner {
     interests: SpinNoPreempt<HashMap<EntryKey, Arc<EpollInterest>>>,
-    ready_queue: SpinNoPreempt<VecDeque<Weak<EpollInterest>>>,
+    // Source wakers may run in a timer or device interrupt.  Disabling only
+    // task preemption here lets an interrupt re-enter InterestWaker while the
+    // interrupted CPU already owns this queue, deadlocking that CPU and every
+    // peer that later reports readiness to the same epoll instance.
+    ready_queue: SpinNoIrq<VecDeque<Weak<EpollInterest>>>,
     poll_ready: PollSet,
 }
 
@@ -278,7 +303,7 @@ impl EpollInner {
                 core::ptr::addr_of_mut!((*dst).interests),
                 HashMap::new(),
             );
-            SpinNoPreempt::write_unpublished_in_place(
+            SpinNoIrq::write_unpublished_in_place(
                 core::ptr::addr_of_mut!((*dst).ready_queue),
                 VecDeque::new(),
             );
@@ -315,10 +340,7 @@ impl Epoll {
             return;
         }
 
-        let waker = Waker::from(Arc::new(InterestWaker {
-            epoll: Arc::downgrade(&self.inner),
-            interest: Arc::downgrade(interest),
-        }));
+        let waker = interest.stable_waker(&self.inner);
 
         let mut context = Context::from_waker(&waker);
         file.register(&mut context, interest.monitored_events());
@@ -334,10 +356,7 @@ impl Epoll {
             return;
         }
 
-        let waker = Waker::from(Arc::new(InterestWaker {
-            epoll: Arc::downgrade(&self.inner),
-            interest: Arc::downgrade(interest),
-        }));
+        let waker = interest.stable_waker(&self.inner);
 
         let current = interest.ready_events(file.as_ref());
 
