@@ -89,6 +89,7 @@ pub struct Linger {
 define_options! {
     // ---- Socket level options (SO_*) ----
     ReuseAddress(bool),
+    Broadcast(bool),
     Error(i32),
     DontRoute(bool),
     SendBuffer(usize),

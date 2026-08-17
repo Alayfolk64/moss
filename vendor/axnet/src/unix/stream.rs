@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box, collections::VecDeque, sync::Arc, vec::Vec};
 use core::{
     sync::atomic::{AtomicBool, Ordering},
     task::Context,
@@ -15,7 +15,7 @@ use ringbuf::{
 };
 
 use crate::{
-    RecvOptions, SendOptions, Shutdown,
+    CMsgData, RecvFlags, RecvOptions, SendOptions, Shutdown,
     general::GeneralOptions,
     options::{Configurable, GetSocketOption, SetSocketOption, UnixCredentials},
     unix::{Transport, TransportOps, UnixSocketAddr},
@@ -30,26 +30,48 @@ fn new_uni_channel() -> (HeapProd<u8>, HeapCons<u8>) {
 fn new_channels(pid: u32) -> (Channel, Channel) {
     let (client_tx, server_rx) = new_uni_channel();
     let (server_tx, client_rx) = new_uni_channel();
+    let client_to_server = Arc::new(Mutex::new(StreamControl::default()));
+    let server_to_client = Arc::new(Mutex::new(StreamControl::default()));
     let poll_update = Arc::new(PollSet::new());
     (
         Channel {
             tx: client_tx,
             rx: client_rx,
+            tx_control: client_to_server.clone(),
+            rx_control: server_to_client.clone(),
             poll_update: poll_update.clone(),
             peer_pid: pid,
         },
         Channel {
             tx: server_tx,
             rx: server_rx,
+            tx_control: server_to_client,
+            rx_control: client_to_server,
             poll_update,
             peer_pid: pid,
         },
     )
 }
 
+struct AncillaryRecord {
+    position: u64,
+    data: Vec<CMsgData>,
+}
+
+#[derive(Default)]
+struct StreamControl {
+    written: u64,
+    read: u64,
+    records: VecDeque<AncillaryRecord>,
+    writer_closed: bool,
+    reader_closed: bool,
+}
+
 struct Channel {
     tx: HeapProd<u8>,
     rx: HeapCons<u8>,
+    tx_control: Arc<Mutex<StreamControl>>,
+    rx_control: Arc<Mutex<StreamControl>>,
     // TODO: granularity
     poll_update: Arc<PollSet>,
     peer_pid: u32,
@@ -205,11 +227,22 @@ impl TransportOps for StreamTransport {
             };
             rx.clone()
         };
+        let request = if self.general.nonblocking() {
+            match rx.try_recv() {
+                Ok(request) => request,
+                Err(async_channel::TryRecvError::Empty) => return Err(AxError::WouldBlock),
+                Err(async_channel::TryRecvError::Closed) => {
+                    return Err(AxError::ConnectionReset);
+                }
+            }
+        } else {
+            rx.recv().await.map_err(|_| AxError::ConnectionReset)?
+        };
         let ConnRequest {
             channel,
             addr: peer_addr,
             pid,
-        } = rx.recv().await.map_err(|_| AxError::ConnectionReset)?;
+        } = request;
         Ok((
             Transport::Stream(StreamTransport::new_channel(Some(channel), pid)),
             peer_addr,
@@ -220,15 +253,19 @@ impl TransportOps for StreamTransport {
         if options.to.is_some() {
             return Err(AxError::InvalidInput);
         }
+        if self.tx_closed.load(Ordering::Acquire) {
+            return Err(AxError::BrokenPipe);
+        }
         let size = src.remaining();
         let mut total = 0;
+        let mut cmsg = Some(options.cmsg);
         let non_blocking = self.general.nonblocking();
         self.general.send_poller(self, || {
             let mut guard = self.channel.lock();
             let Some(chan) = guard.as_mut() else {
                 return Err(AxError::NotConnected);
             };
-            if !chan.tx.read_is_held() {
+            if !chan.tx.read_is_held() || chan.tx_control.lock().reader_closed {
                 return Err(AxError::BrokenPipe);
             }
 
@@ -243,10 +280,20 @@ impl TransportOps for StreamTransport {
             };
             total += count;
             if count > 0 {
+                let mut control = chan.tx_control.lock();
+                let position = control.written;
+                control.written = control.written.saturating_add(count as u64);
+                if let Some(data) = cmsg.take()
+                    && !data.is_empty()
+                {
+                    control
+                        .records
+                        .push_back(AncillaryRecord { position, data });
+                }
                 chan.poll_update.wake();
             }
 
-            if count == size || non_blocking {
+            if total == size || non_blocking {
                 Ok(total)
             } else {
                 Err(AxError::WouldBlock)
@@ -254,7 +301,10 @@ impl TransportOps for StreamTransport {
         })
     }
 
-    fn recv(&self, mut dst: impl Write, _options: RecvOptions) -> AxResult<usize> {
+    fn recv(&self, mut dst: impl Write, mut options: RecvOptions) -> AxResult<usize> {
+        if self.rx_closed.load(Ordering::Acquire) {
+            return Err(AxError::NotConnected);
+        }
         self.general.recv_poller(self, || {
             let mut guard = self.channel.lock();
             let Some(chan) = guard.as_mut() else {
@@ -267,12 +317,38 @@ impl TransportOps for StreamTransport {
                 if count >= left.len() {
                     count += dst.write(right)?;
                 }
-                unsafe { chan.rx.advance_read_index(count) };
+                if !options.flags.contains(RecvFlags::PEEK) {
+                    unsafe { chan.rx.advance_read_index(count) };
+                }
                 count
             };
             if count > 0 {
+                if !options.flags.contains(RecvFlags::PEEK) {
+                    let mut control = chan.rx_control.lock();
+                    let end = control.read.saturating_add(count as u64);
+                    if let Some(dst) = options.cmsg.as_mut() {
+                        while control
+                            .records
+                            .front()
+                            .is_some_and(|record| record.position < end)
+                        {
+                            dst.extend(control.records.pop_front().unwrap().data);
+                        }
+                    } else {
+                        while control
+                            .records
+                            .front()
+                            .is_some_and(|record| record.position < end)
+                        {
+                            control.records.pop_front();
+                        }
+                    }
+                    control.read = end;
+                }
                 chan.poll_update.wake();
                 Ok(count)
+            } else if !chan.rx.write_is_held() || chan.rx_control.lock().writer_closed {
+                Ok(0)
             } else {
                 Err(AxError::WouldBlock)
             }
@@ -282,18 +358,19 @@ impl TransportOps for StreamTransport {
     fn shutdown(&self, how: Shutdown) -> AxResult<()> {
         if how.has_read() {
             self.rx_closed.store(true, Ordering::Release);
-            self.poll_state.wake();
+            if let Some(chan) = self.channel.lock().as_ref() {
+                chan.rx_control.lock().reader_closed = true;
+                chan.poll_update.wake();
+            }
         }
         if how.has_write() {
             self.tx_closed.store(true, Ordering::Release);
-            self.poll_state.wake();
+            if let Some(chan) = self.channel.lock().as_ref() {
+                chan.tx_control.lock().writer_closed = true;
+                chan.poll_update.wake();
+            }
         }
-        if self.rx_closed.load(Ordering::Acquire)
-            && self.tx_closed.load(Ordering::Acquire)
-            && let Some(chan) = self.channel.lock().take()
-        {
-            chan.poll_update.wake();
-        }
+        self.poll_state.wake();
         Ok(())
     }
 }
@@ -302,24 +379,31 @@ impl Pollable for StreamTransport {
     fn poll(&self) -> IoEvents {
         let mut events = IoEvents::empty();
         if let Some(chan) = self.channel.lock().as_ref() {
+            let peer_write_closed =
+                !chan.rx.write_is_held() || chan.rx_control.lock().writer_closed;
+            let peer_read_closed = !chan.tx.read_is_held() || chan.tx_control.lock().reader_closed;
             events.set(
                 IoEvents::IN,
-                !self.rx_closed.load(Ordering::Acquire) && chan.rx.occupied_len() > 0,
+                !self.rx_closed.load(Ordering::Acquire)
+                    && (chan.rx.occupied_len() > 0 || peer_write_closed),
             );
             events.set(
                 IoEvents::OUT,
-                !self.tx_closed.load(Ordering::Acquire) && chan.tx.vacant_len() > 0,
+                !self.tx_closed.load(Ordering::Acquire)
+                    && !peer_read_closed
+                    && chan.tx.vacant_len() > 0,
             );
+            events.set(IoEvents::RDHUP, peer_write_closed);
+            events.set(IoEvents::HUP, peer_write_closed && peer_read_closed);
         } else if let Some((conn_tx, _)) = self.conn_rx.lock().as_ref() {
             events.set(IoEvents::IN, !conn_tx.is_empty());
         }
-        events.set(IoEvents::RDHUP, self.rx_closed.load(Ordering::Acquire));
         events
     }
 
     fn register(&self, context: &mut Context<'_>, events: IoEvents) {
         if let Some(chan) = self.channel.lock().as_ref() {
-            if events.intersects(IoEvents::IN | IoEvents::OUT) {
+            if events.intersects(IoEvents::IN | IoEvents::OUT | IoEvents::RDHUP | IoEvents::HUP) {
                 chan.poll_update.register(context.waker());
             }
         } else if let Some((_, poll_new_conn)) = self.conn_rx.lock().as_ref()
@@ -333,8 +417,12 @@ impl Pollable for StreamTransport {
 
 impl Drop for StreamTransport {
     fn drop(&mut self) {
-        if let Some(chan) = self.channel.lock().as_ref() {
-            chan.poll_update.wake();
+        if let Some(chan) = self.channel.lock().take() {
+            chan.tx_control.lock().writer_closed = true;
+            chan.rx_control.lock().reader_closed = true;
+            let poll_update = chan.poll_update.clone();
+            drop(chan);
+            poll_update.wake();
         }
     }
 }

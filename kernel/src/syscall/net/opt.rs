@@ -11,6 +11,7 @@ const PROTO_TCP: u32 = linux_raw_sys::net::IPPROTO_TCP as u32;
 
 const PROTO_IP: u32 = linux_raw_sys::net::IPPROTO_IP as u32;
 const PROTO_IPV6: u32 = linux_raw_sys::net::IPPROTO_IPV6 as u32;
+const PROTO_ICMPV6: u32 = linux_raw_sys::net::IPPROTO_ICMPV6 as u32;
 const PROTO_UDP: u32 = linux_raw_sys::net::IPPROTO_UDP as u32;
 const MCAST_JOIN_GROUP: u32 = linux_raw_sys::net::MCAST_JOIN_GROUP;
 const MCAST_LEAVE_GROUP: u32 = linux_raw_sys::net::MCAST_LEAVE_GROUP;
@@ -108,6 +109,7 @@ macro_rules! call_dispatch {
         call_dispatch! {
             $dispatch, $pat,
             (SOL_SOCKET, SO_REUSEADDR) => ReuseAddress as IntBool,
+            (SOL_SOCKET, SO_BROADCAST) => Broadcast as IntBool,
             (SOL_SOCKET, SO_ERROR) => Error,
             (SOL_SOCKET, SO_DONTROUTE) => DontRoute as IntBool,
             (SOL_SOCKET, SO_SNDBUF) => SendBuffer as Int<usize>,
@@ -250,6 +252,44 @@ pub fn sys_setsockopt(
     }
 
     let socket = Socket::from_fd(fd)?;
+    const ICMPV6_FILTER: u32 = 1;
+    if level == PROTO_ICMPV6 && optname == ICMPV6_FILTER {
+        let filter = *get::<[u32; 8]>(optval, optlen)?;
+        if let axnet::Socket::Raw(raw) = &socket.0 {
+            raw.set_icmpv6_filter(filter)?;
+            return Ok(0);
+        }
+        return Err(AxError::from(LinuxError::ENOPROTOOPT));
+    }
+
+    if level == linux_raw_sys::net::SOL_RAW && optname == linux_raw_sys::net::IPV6_CHECKSUM {
+        let offset = *get::<i32>(optval, optlen)?;
+        if let axnet::Socket::Raw(raw) = &socket.0 {
+            raw.set_ipv6_checksum_offset(offset)?;
+            return Ok(0);
+        }
+        return Err(AxError::from(LinuxError::ENOPROTOOPT));
+    }
+
+    if level == PROTO_IPV6
+        && matches!(
+            optname,
+            linux_raw_sys::net::IPV6_2292HOPLIMIT | linux_raw_sys::net::IPV6_RECVHOPLIMIT
+        )
+    {
+        let enabled = *get::<i32>(optval, optlen)? != 0;
+        let cmsg_type = if optname == linux_raw_sys::net::IPV6_2292HOPLIMIT {
+            linux_raw_sys::net::IPV6_2292HOPLIMIT
+        } else {
+            linux_raw_sys::net::IPV6_HOPLIMIT
+        };
+        if let axnet::Socket::Raw(raw) = &socket.0 {
+            raw.set_ipv6_hop_limit_cmsg(cmsg_type, enabled)?;
+            return Ok(0);
+        }
+        return Err(AxError::from(LinuxError::ENOPROTOOPT));
+    }
+
     const SOL_NETLINK: u32 = 270;
     const NETLINK_EXT_ACK: u32 = 11;
     const NETLINK_GET_STRICT_CHK: u32 = 12;

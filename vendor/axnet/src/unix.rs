@@ -79,6 +79,22 @@ pub struct BindSlot {
 
 lazy_static! {
     static ref ABSTRACT_BINDS: Mutex<HashMap<Arc<[u8]>, BindSlot>> = Mutex::new(HashMap::new());
+    // `/dev` is a synthetic device filesystem and cannot host a normal VFS
+    // inode, but glibc and logging daemons use the conventional `/dev/log`
+    // pathname UNIX datagram socket.  Keep that endpoint in the same socket
+    // registry while preserving normal VFS semantics for all other paths.
+    static ref DEV_LOG_BIND: Mutex<Option<BindSlot>> = Mutex::new(None);
+}
+
+fn with_dev_log_slot<R>(path: &str, insert: bool, f: impl FnOnce(&BindSlot) -> AxResult<R>) -> AxResult<R> {
+    if path != "/dev/log" {
+        return Err(AxError::NotFound);
+    }
+    let mut slot = DEV_LOG_BIND.lock();
+    if insert && slot.is_none() {
+        *slot = Some(BindSlot::default());
+    }
+    f(slot.as_ref().ok_or(AxError::NotFound)?)
 }
 
 pub(crate) fn with_slot<R>(
@@ -96,6 +112,9 @@ pub(crate) fn with_slot<R>(
             }
         }
         UnixSocketAddr::Path(path) => {
+            if path.as_ref() == "/dev/log" {
+                return with_dev_log_slot(path, false, f);
+            }
             let loc = FS_CONTEXT.lock().resolve(path.as_ref())?;
             if loc.metadata()?.node_type != NodeType::Socket {
                 return Err(AxError::NotASocket);
@@ -140,6 +159,21 @@ fn cleanup_bound_slot(addr: &UnixSocketAddr, transport: &Transport) {
             }
         }
         UnixSocketAddr::Path(path) => {
+            if path.as_ref() == "/dev/log" {
+                let should_remove = {
+                    let slot = DEV_LOG_BIND.lock();
+                    if let Some(slot) = slot.as_ref() {
+                        clear_slot(slot, transport);
+                        is_slot_empty(slot)
+                    } else {
+                        false
+                    }
+                };
+                if should_remove {
+                    *DEV_LOG_BIND.lock() = None;
+                }
+                return;
+            }
             let Ok(loc) = FS_CONTEXT.lock().resolve(path.as_ref()) else {
                 return;
             };
@@ -167,6 +201,9 @@ fn with_slot_or_insert<R>(
             f(binds.entry(name.clone()).or_default())
         }
         UnixSocketAddr::Path(path) => {
+            if path.as_ref() == "/dev/log" {
+                return with_dev_log_slot(path, true, f);
+            }
             let loc = OpenOptions::new()
                 .write(true)
                 .create(true)

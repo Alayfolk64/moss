@@ -8,18 +8,23 @@ use crate::{
     mm::{UserConstPtr, UserPtr},
 };
 
+pub const fn cmsg_align(len: usize) -> usize {
+    let align = align_of::<usize>();
+    (len + align - 1) & !(align - 1)
+}
+
 pub enum CMsg {
     Rights { fds: Vec<Arc<dyn FileLike>> },
 }
 impl CMsg {
     pub fn parse(hdr: &cmsghdr) -> AxResult<Self> {
-        if hdr.cmsg_len < size_of::<cmsghdr>() {
+        let header_len = cmsg_align(size_of::<cmsghdr>());
+        if hdr.cmsg_len < header_len {
             return Err(AxError::InvalidInput);
         }
 
-        let data =
-            UserConstPtr::<u8>::from((hdr as *const cmsghdr as usize) + size_of::<cmsghdr>())
-                .get_as_slice(hdr.cmsg_len - size_of::<cmsghdr>())?;
+        let data = UserConstPtr::<u8>::from((hdr as *const cmsghdr as usize) + header_len)
+            .get_as_slice(hdr.cmsg_len - header_len)?;
         Ok(match (hdr.cmsg_level as u32, hdr.cmsg_type as u32) {
             (SOL_SOCKET, SCM_RIGHTS) => {
                 if data.len() % size_of::<i32>() != 0 {
@@ -65,8 +70,11 @@ impl<'a> CMsgBuilder<'a> {
         ty: u32,
         body: impl FnOnce(&mut [u8]) -> AxResult<usize>,
     ) -> AxResult<bool> {
-        let Some(body_capacity) = (self.capacity - *self.len).checked_sub(size_of::<cmsghdr>())
-        else {
+        let header_len = cmsg_align(size_of::<cmsghdr>());
+        let Some(remaining) = self.capacity.checked_sub(*self.len) else {
+            return Ok(false);
+        };
+        let Some(body_capacity) = remaining.checked_sub(header_len) else {
             return Ok(false);
         };
 
@@ -74,14 +82,22 @@ impl<'a> CMsgBuilder<'a> {
         hdr.cmsg_level = level as _;
         hdr.cmsg_type = ty as _;
 
-        let data = UserPtr::<u8>::from(self.hdr.address().as_usize() + size_of::<cmsghdr>())
+        let data = UserPtr::<u8>::from(self.hdr.address().as_usize() + header_len)
             .get_as_mut_slice(body_capacity)?;
         let body_len = body(data)?;
+        if body_len > body_capacity {
+            return Err(AxError::InvalidInput);
+        }
 
-        let cmsg_len = size_of::<cmsghdr>() + body_len;
+        let cmsg_len = header_len + body_len;
+        let aligned_len = cmsg_align(cmsg_len);
+        let consumed = aligned_len.min(remaining);
         hdr.cmsg_len = cmsg_len;
-        self.hdr = UserPtr::from(hdr as *const _ as usize + cmsg_len);
-        *self.len += cmsg_len;
+        if consumed > cmsg_len {
+            data[body_len..body_len + consumed - cmsg_len].fill(0);
+        }
+        self.hdr = UserPtr::from(hdr as *const _ as usize + consumed);
+        *self.len += consumed;
         Ok(true)
     }
 }

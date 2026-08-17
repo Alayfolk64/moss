@@ -23,6 +23,8 @@ pub(crate) struct GeneralOptions {
     nonblock: AtomicBool,
     /// Whether the socket should reuse the address.
     reuse_address: AtomicBool,
+    /// Whether datagrams may be sent to a broadcast address.
+    broadcast: AtomicBool,
     /// Whether an IPv6 socket only accepts IPv6 traffic.
     ipv6_only: AtomicBool,
     /// Whether packets should bypass gateways where possible.
@@ -55,6 +57,7 @@ impl GeneralOptions {
         Self {
             nonblock: AtomicBool::new(false),
             reuse_address: AtomicBool::new(false),
+            broadcast: AtomicBool::new(false),
             ipv6_only: AtomicBool::new(false),
             dont_route: AtomicBool::new(false),
             recv_error: AtomicBool::new(false),
@@ -82,6 +85,7 @@ impl GeneralOptions {
         unsafe {
             core::ptr::addr_of_mut!((*dst).nonblock).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).reuse_address).write(AtomicBool::new(false));
+            core::ptr::addr_of_mut!((*dst).broadcast).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).ipv6_only).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).dont_route).write(AtomicBool::new(false));
             core::ptr::addr_of_mut!((*dst).recv_error).write(AtomicBool::new(false));
@@ -163,13 +167,17 @@ impl GeneralOptions {
     }
 
     pub fn set_send_buffer(&self, size: usize) {
-        self.send_buffer_len
-            .store(Self::normalize_socket_buffer(size) as u32, Ordering::Relaxed);
+        self.send_buffer_len.store(
+            Self::normalize_socket_buffer(size) as u32,
+            Ordering::Relaxed,
+        );
     }
 
     pub fn set_recv_buffer(&self, size: usize) {
-        self.recv_buffer_len
-            .store(Self::normalize_socket_buffer(size) as u32, Ordering::Relaxed);
+        self.recv_buffer_len.store(
+            Self::normalize_socket_buffer(size) as u32,
+            Ordering::Relaxed,
+        );
     }
 
     fn normalize_socket_buffer(size: usize) -> usize {
@@ -269,6 +277,9 @@ impl Configurable for GeneralOptions {
             O::ReuseAddress(reuse) => {
                 **reuse = self.reuse_address();
             }
+            O::Broadcast(broadcast) => {
+                **broadcast = self.broadcast.load(Ordering::Relaxed);
+            }
             O::DontRoute(dont_route) => {
                 **dont_route = self.dont_route();
             }
@@ -301,6 +312,9 @@ impl Configurable for GeneralOptions {
             }
             O::ReuseAddress(reuse) => {
                 self.reuse_address.store(*reuse, Ordering::Relaxed);
+            }
+            O::Broadcast(broadcast) => {
+                self.broadcast.store(*broadcast, Ordering::Relaxed);
             }
             O::DontRoute(dont_route) => {
                 self.dont_route.store(*dont_route, Ordering::Relaxed);

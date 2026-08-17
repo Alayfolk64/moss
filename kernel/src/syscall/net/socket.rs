@@ -6,6 +6,7 @@ use axnet::vsock::{VsockSocket, VsockStreamTransport};
 use axnet::{
     IpFamily, Shutdown, Socket as SocketInner, SocketAddrEx, SocketOps,
     netlink::NetlinkSocket,
+    raw::RawSocket,
     tcp::TcpSocket,
     udp::UdpSocket,
     unix::{DgramTransport, StreamTransport, UnixSocket},
@@ -14,9 +15,9 @@ use axtask::current;
 use linux_raw_sys::{
     general::{O_CLOEXEC, O_NONBLOCK},
     net::{
-        AF_INET, AF_INET6, AF_NETLINK, AF_UNIX, AF_VSOCK, IPPROTO_SCTP, IPPROTO_TCP, IPPROTO_UDP,
-        IPPROTO_UDPLITE, SHUT_RD, SHUT_RDWR, SHUT_WR, SOCK_DGRAM, SOCK_RAW, SOCK_SEQPACKET,
-        SOCK_STREAM, sockaddr, socklen_t,
+        AF_INET, AF_INET6, AF_NETLINK, AF_UNIX, AF_VSOCK, IPPROTO_ICMP, IPPROTO_ICMPV6,
+        IPPROTO_SCTP, IPPROTO_TCP, IPPROTO_UDP, IPPROTO_UDPLITE, SHUT_RD, SHUT_RDWR, SHUT_WR,
+        SOCK_DGRAM, SOCK_RAW, SOCK_SEQPACKET, SOCK_STREAM, sockaddr, socklen_t,
     },
 };
 
@@ -59,6 +60,16 @@ pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
                 return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
             }
             SocketInner::Udp(UdpSocket::new(ip_family.unwrap()))
+        }
+        (AF_INET | AF_INET6, SOCK_RAW) => {
+            let expected_proto = match ip_family.unwrap() {
+                IpFamily::Ipv4 => IPPROTO_ICMP as u32,
+                IpFamily::Ipv6 => IPPROTO_ICMPV6 as u32,
+            };
+            if proto != expected_proto {
+                return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
+            }
+            SocketInner::Raw(RawSocket::new_icmp(ip_family.unwrap()))
         }
         (AF_UNIX, SOCK_STREAM) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
         (AF_UNIX, SOCK_SEQPACKET) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),

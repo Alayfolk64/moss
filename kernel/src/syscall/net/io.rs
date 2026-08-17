@@ -3,7 +3,10 @@ use core::net::{Ipv4Addr, SocketAddr};
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axio::prelude::*;
-use axnet::{CMsgData, RecvFlags, RecvOptions, SendFlags, SendOptions, SocketAddrEx, SocketOps};
+use axnet::{
+    CMsgData, RecvControlMessage, RecvFlags, RecvOptions, SendFlags, SendOptions, SocketAddrEx,
+    SocketOps,
+};
 use linux_raw_sys::net::{
     __kernel_sockaddr_storage, MSG_ERRQUEUE, MSG_OOB, MSG_PEEK, MSG_TRUNC, SCM_RIGHTS, SOL_SOCKET,
     cmsghdr, mmsghdr, msghdr, sockaddr, socklen_t,
@@ -13,7 +16,7 @@ use super::addr::SocketAddrExt;
 use crate::{
     file::{FileLike, Socket, add_file_like},
     mm::{IoVec, IoVectorBuf, UserConstPtr, UserPtr, VmBytes, VmBytesMut},
-    syscall::net::{CMsg, CMsgBuilder},
+    syscall::net::{CMsg, CMsgBuilder, cmsg_align},
 };
 
 fn send_impl(
@@ -68,14 +71,18 @@ pub fn sys_sendmsg(fd: i32, msg: UserConstPtr<msghdr>, flags: u32) -> AxResult<i
     let mut cmsg = Vec::new();
     if !msg.msg_control.is_null() {
         let mut ptr = msg.msg_control as usize;
-        let ptr_end = ptr + msg.msg_controllen;
+        let ptr_end = ptr
+            .checked_add(msg.msg_controllen)
+            .ok_or(AxError::InvalidInput)?;
         while ptr + size_of::<cmsghdr>() <= ptr_end {
             let hdr = UserConstPtr::<cmsghdr>::from(ptr).get_as_ref()?;
             if ptr_end - ptr < hdr.cmsg_len {
                 return Err(AxError::InvalidInput);
             }
             cmsg.push(Box::new(CMsg::parse(hdr)?) as CMsgData);
-            ptr += hdr.cmsg_len;
+            ptr = ptr
+                .checked_add(cmsg_align(hdr.cmsg_len))
+                .ok_or(AxError::InvalidInput)?;
         }
     }
     send_impl(
@@ -171,21 +178,40 @@ fn recv_impl(
 
     if let (Some(mut builder), Some(cmsg)) = (cmsg_builder, cmsg) {
         for cmsg in cmsg {
-            let Ok(cmsg) = cmsg.downcast::<CMsg>() else {
-                warn!("received unexpected cmsg");
-                continue;
-            };
-
-            let pushed = match *cmsg {
-                CMsg::Rights { fds } => builder.push(SOL_SOCKET, SCM_RIGHTS, |data| {
-                    let mut written = 0;
-                    for (f, chunk) in fds.into_iter().zip(data.chunks_exact_mut(size_of::<i32>())) {
-                        let fd = add_file_like(f, false)?;
-                        chunk.copy_from_slice(&fd.to_ne_bytes());
-                        written += size_of::<i32>();
+            let pushed = match cmsg.downcast::<CMsg>() {
+                Ok(cmsg) => match *cmsg {
+                    CMsg::Rights { fds } => builder.push(SOL_SOCKET, SCM_RIGHTS, |data| {
+                        let mut written = 0;
+                        for (f, chunk) in
+                            fds.into_iter().zip(data.chunks_exact_mut(size_of::<i32>()))
+                        {
+                            let fd = add_file_like(f, false)?;
+                            chunk.copy_from_slice(&fd.to_ne_bytes());
+                            written += size_of::<i32>();
+                        }
+                        Ok(written)
+                    })?,
+                },
+                Err(cmsg) => match cmsg.downcast::<RecvControlMessage>() {
+                    Ok(cmsg) => match *cmsg {
+                        RecvControlMessage::Ipv6HopLimit { value, cmsg_type } => builder.push(
+                            linux_raw_sys::net::IPPROTO_IPV6 as u32,
+                            cmsg_type,
+                            |data| {
+                                let bytes = value.to_ne_bytes();
+                                if data.len() < bytes.len() {
+                                    return Err(AxError::InvalidInput);
+                                }
+                                data[..bytes.len()].copy_from_slice(&bytes);
+                                Ok(bytes.len())
+                            },
+                        )?,
+                    },
+                    Err(_) => {
+                        warn!("received unexpected cmsg");
+                        continue;
                     }
-                    Ok(written)
-                })?,
+                },
             };
             if !pushed {
                 break;
@@ -213,6 +239,10 @@ pub fn sys_recvmsg(fd: i32, msg: UserPtr<msghdr>, flags: u32) -> AxResult<isize>
     if msg.msg_iovlen > 1024 {
         return Err(AxError::from(LinuxError::EMSGSIZE));
     }
+    // msg_flags is an output field. Linux overwrites it on every recvmsg;
+    // leaving the caller's previous stack contents intact can fabricate
+    // MSG_TRUNC/MSG_CTRUNC and make otherwise valid ancillary data unusable.
+    msg.msg_flags = 0;
     recv_impl(
         fd,
         IoVectorBuf::new(msg.msg_iov as *mut IoVec, msg.msg_iovlen)?.into_io(),

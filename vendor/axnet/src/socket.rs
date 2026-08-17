@@ -19,6 +19,7 @@ use crate::vsock::VsockSocket;
 use crate::{
     netlink::{NetlinkAddr, NetlinkSocket},
     options::{Configurable, GetSocketOption, SetSocketOption},
+    raw::RawSocket,
     tcp::TcpSocket,
     udp::UdpSocket,
     unix::{UnixSocket, UnixSocketAddr},
@@ -90,6 +91,11 @@ bitflags! {
 }
 
 pub type CMsgData = Box<dyn Any + Send + Sync>;
+
+#[derive(Clone, Copy, Debug)]
+pub enum RecvControlMessage {
+    Ipv6HopLimit { value: i32, cmsg_type: u32 },
+}
 
 /// Options for sending data to a socket.
 ///
@@ -170,6 +176,7 @@ pub trait SocketOps: Configurable {
 /// Network socket abstraction.
 #[enum_dispatch(Configurable, SocketOps)]
 pub enum Socket {
+    Raw(RawSocket),
     Udp(UdpSocket),
     Tcp(TcpSocket),
     Unix(UnixSocket),
@@ -195,6 +202,7 @@ impl Socket {
 impl Pollable for Socket {
     fn poll(&self) -> IoEvents {
         match self {
+            Socket::Raw(raw) => raw.poll(),
             Socket::Tcp(tcp) => tcp.poll(),
             Socket::Udp(udp) => udp.poll(),
             Socket::Unix(unix) => unix.poll(),
@@ -206,6 +214,7 @@ impl Pollable for Socket {
 
     fn register(&self, context: &mut Context<'_>, events: IoEvents) {
         match self {
+            Socket::Raw(raw) => raw.register(context, events),
             Socket::Tcp(tcp) => tcp.register(context, events),
             Socket::Udp(udp) => udp.register(context, events),
             Socket::Unix(unix) => unix.register(context, events),

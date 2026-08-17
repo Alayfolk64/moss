@@ -26,6 +26,9 @@ pub const UDP_RX_BUF_LEN: usize = 1024 * 1024;
 pub const UDP_TX_BUF_LEN: usize = 1024 * 1024;
 pub const UDP_PACKET_BUFFER_SIZE: usize = 1024;
 pub const UDP_LOOPBACK_YIELD_BYTES: usize = 128 * 1024;
+pub const RAW_PACKET_BUFFER_SIZE: usize = 64;
+pub const RAW_RX_BUF_LEN: usize = 256 * 1024;
+pub const RAW_TX_BUF_LEN: usize = 256 * 1024;
 pub const MAX_SOCKET_BUF_LEN: usize = 8 * 1024 * 1024;
 pub const LISTEN_QUEUE_SIZE: usize = 512;
 

@@ -27,6 +27,7 @@ mod listen_table;
 mod local;
 pub mod netlink;
 pub mod options;
+pub mod raw;
 mod router;
 mod service;
 mod socket;
