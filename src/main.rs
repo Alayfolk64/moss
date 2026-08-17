@@ -4,11 +4,11 @@
 
 extern crate alloc;
 
-use alloc::{borrow::ToOwned, vec::Vec};
-use starry_kernel::runtime_cpu_count;
-use alloc::string::String;
+use alloc::{borrow::ToOwned, string::String, vec::Vec};
 
-const INIT_PRE: &str   = include_str!("init_pre.sh");
+use starry_kernel::runtime_cpu_count;
+
+const INIT_PRE: &str = include_str!("init_pre.sh");
 const INIT_SHELL: &str = include_str!("init_shell.sh");
 const INIT_FINAL: &str = include_str!("init_final.sh");
 const INIT_SITE: &str = include_str!("init_site.sh");
@@ -27,10 +27,10 @@ enum InitProfile {
 impl InitProfile {
     fn name(&self) -> &'static str {
         match self {
-            InitProfile::Pre   => "pre",
+            InitProfile::Pre => "pre",
             InitProfile::Shell => "shell",
             InitProfile::Final => "final",
-            InitProfile::Site  => "site",
+            InitProfile::Site => "site",
         }
     }
 }
@@ -55,37 +55,15 @@ fn select_init_profile() -> InitProfile {
 
 fn build_args(profile: InitProfile) -> Vec<String> {
     let cmdline: &[&str] = match profile {
-        InitProfile::Pre => &[
-            "/musl/busybox",
-            "sh",
-            "-c",
-            INIT_PRE,
-        ],
-        InitProfile::Final => &[
-            "/bin/bash",
-            "-c",
-            INIT_FINAL,
-        ],
-        InitProfile::Shell => &[
-            "/bin/sh",
-            "-c",
-            INIT_SHELL,
-        ],
-        InitProfile::Site => &[
-            "/bin/sh",
-            "-c",
-            INIT_SITE,
-        ],
+        InitProfile::Pre => &["/musl/busybox", "sh", "-c", INIT_PRE],
+        InitProfile::Final => &["/bin/bash", "-c", INIT_FINAL],
+        InitProfile::Shell => &["/bin/sh", "-c", INIT_SHELL],
+        InitProfile::Site => &["/bin/sh", "-c", INIT_SITE],
     };
-    cmdline
-        .iter()
-        .copied()
-        .map(str::to_owned)
-        .collect()
+    cmdline.iter().copied().map(str::to_owned).collect()
 }
 
 pub const LTP_CASES_RAW: &str = include_str!("ltp_testcases.sh");
-
 
 fn build_ltp_cases_env() -> String {
     let mut env = String::from("LTP_CASES=");
