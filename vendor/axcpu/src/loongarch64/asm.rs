@@ -60,6 +60,14 @@ pub fn wait_for_irqs() {
     unsafe { loongArch64::asm::idle() }
 }
 
+/// Synchronizes subsequent instruction fetches with earlier stores performed
+/// by this CPU. Debuggers use this after replacing user text with a software
+/// breakpoint and immediately before the tracee returns to user space.
+#[inline]
+pub fn flush_icache_all() {
+    unsafe { asm!("dbar 0; ibar 0", options(nostack, preserves_flags)) }
+}
+
 /// Halt the current CPU.
 #[inline]
 pub fn halt() {

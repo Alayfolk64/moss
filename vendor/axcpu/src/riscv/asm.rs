@@ -65,6 +65,14 @@ pub fn wait_for_irqs() {
     riscv::asm::wfi()
 }
 
+/// Synchronizes subsequent instruction fetches with earlier stores performed
+/// by this hart. Debuggers use this after replacing user text with a software
+/// breakpoint and immediately before the tracee returns to user space.
+#[inline]
+pub fn flush_icache_all() {
+    unsafe { core::arch::asm!("fence.i", options(nostack, preserves_flags)) }
+}
+
 /// Halt the current CPU.
 #[inline]
 pub fn halt() {
@@ -133,14 +141,12 @@ pub unsafe fn write_boot_page_table(root_paddr: PhysAddr) {
 pub unsafe fn publish_kernel_page_table(root_paddr: PhysAddr) {
     let root = root_paddr.as_usize();
     assert_ne!(root, 0, "kernel page table root must not be zero");
-    if let Err(published) = KERNEL_PAGE_TABLE_ROOT.compare_exchange(
-        0,
-        root,
-        Ordering::Release,
-        Ordering::Acquire,
-    ) {
+    if let Err(published) =
+        KERNEL_PAGE_TABLE_ROOT.compare_exchange(0, root, Ordering::Release, Ordering::Acquire)
+    {
         panic!(
-            "kernel page table root was already published: published={published:#x}, attempted={root:#x}"
+            "kernel page table root was already published: published={published:#x}, \
+             attempted={root:#x}"
         );
     }
 }
