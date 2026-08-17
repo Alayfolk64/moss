@@ -87,7 +87,7 @@ fn proc_net_dev() -> String {
              drop fifo colls carrier compressed\nlo:       0       0    0    0    0     0          \
              0         0        0       0    0    0    0     0       0          0\n",
         );
-    if axnet::static_ipv4_config().is_some() {
+    if axnet::eth0_exists() {
         output.push_str(
             "  eth0:       0       0    0    0    0     0          0         0        0       0    \
              0    0    0     0       0          0\n",
@@ -101,7 +101,7 @@ fn proc_net_route() -> String {
     let mut output = String::from(
         "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n",
     );
-    let Some(config) = axnet::static_ipv4_config() else {
+    let Some(config) = axnet::ipv4_config() else {
         return output;
     };
     let mask = if config.prefix_len == 0 {
@@ -116,10 +116,12 @@ fn proc_net_route() -> String {
         route_hex(network),
         route_hex(mask),
     ));
-    output.push_str(&format!(
-        "eth0\t00000000\t{:08X}\t0003\t0\t0\t0\t00000000\t0\t0\t0\n",
-        u32::from_le_bytes(config.gateway.octets()),
-    ));
+    if let Some(gateway) = config.gateway {
+        output.push_str(&format!(
+            "eth0\t00000000\t{:08X}\t0003\t0\t0\t0\t00000000\t0\t0\t0\n",
+            u32::from_le_bytes(gateway.octets()),
+        ));
+    }
     output
 }
 

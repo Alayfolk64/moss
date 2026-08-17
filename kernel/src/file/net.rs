@@ -103,7 +103,7 @@ impl InterfaceRequest {
 fn interface_index(name: &str) -> AxResult<i32> {
     match name {
         "lo" => Ok(1),
-        "eth0" if axnet::static_ipv4_config().is_some() => Ok(2),
+        "eth0" if axnet::eth0_exists() => Ok(2),
         _ => Err(AxError::NoSuchDevice),
     }
 }
@@ -120,7 +120,7 @@ fn interface_request(name: &str) -> InterfaceRequest {
 fn interface_ipv4(name: &str) -> AxResult<Ipv4Addr> {
     match name {
         "lo" => Ok(Ipv4Addr::LOCALHOST),
-        "eth0" => axnet::static_ipv4_config()
+        "eth0" => axnet::ipv4_config()
             .map(|config| config.address)
             .ok_or(AxError::NoSuchDevice),
         _ => Err(AxError::NoSuchDevice),
@@ -185,7 +185,7 @@ impl FileLike for Socket {
         if cmd == SIOCGIFCONF {
             let mut config = (arg as *const InterfaceConfig).vm_read()?;
             let mut names = [Some("lo"), None];
-            if axnet::static_ipv4_config().is_some() {
+            if axnet::eth0_exists() {
                 names[1] = Some("eth0");
             }
             let available = names.iter().flatten().count();
@@ -233,7 +233,7 @@ impl FileLike for Socket {
                 let address = match request.interface_name()? {
                     "lo" => Ipv4Addr::new(127, 255, 255, 255),
                     "eth0" => {
-                        let config = axnet::static_ipv4_config().ok_or(AxError::NoSuchDevice)?;
+                        let config = axnet::ipv4_config().ok_or(AxError::NoSuchDevice)?;
                         let address = u32::from(config.address);
                         let mask = u32::from(prefix_mask(config.prefix_len));
                         Ipv4Addr::from(address | !mask)
@@ -246,7 +246,7 @@ impl FileLike for Socket {
                 let prefix_len = match request.interface_name()? {
                     "lo" => 8,
                     "eth0" => {
-                        axnet::static_ipv4_config()
+                        axnet::ipv4_config()
                             .ok_or(AxError::NoSuchDevice)?
                             .prefix_len
                     }
@@ -258,9 +258,7 @@ impl FileLike for Socket {
                 "lo" => request.set_hardware_address(ARPHRD_LOOPBACK, &[0; 6]),
                 "eth0" => request.set_hardware_address(
                     ARPHRD_ETHER,
-                    &axnet::static_ipv4_config()
-                        .ok_or(AxError::NoSuchDevice)?
-                        .mac,
+                    &axnet::eth0_mac_address().ok_or(AxError::NoSuchDevice)?,
                 ),
                 _ => return Err(AxError::NoSuchDevice),
             },

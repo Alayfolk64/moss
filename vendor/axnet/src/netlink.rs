@@ -1,8 +1,8 @@
-//! Minimal read-only `NETLINK_ROUTE` support for ordinary iproute2 queries.
+//! `NETLINK_ROUTE` support for ordinary address, route, and neighbor operations.
 
 use alloc::{collections::VecDeque, vec, vec::Vec};
 use core::{
-    net::Ipv4Addr,
+    net::{Ipv4Addr, Ipv6Addr},
     sync::atomic::{AtomicU32, Ordering},
     task::Context,
 };
@@ -10,11 +10,12 @@ use core::{
 use axerrno::{AxError, AxResult, LinuxError};
 use axio::prelude::*;
 use axpoll::{IoEvents, Pollable};
+use smoltcp::wire::{IpAddress, IpCidr, Ipv4Cidr, Ipv6Cidr};
 use spin::Mutex;
 
 use crate::{
-    RecvFlags, RecvOptions, SendOptions, Shutdown, SocketAddrEx, SocketOps,
-    consts::{GATEWAY, IP, IP_PREFIX},
+    RecvFlags, RecvOptions, SERVICE, SendOptions, Shutdown, SocketAddrEx, SocketOps,
+    device::NeighborState,
     eth0_mac,
     general::GeneralOptions,
     options::{Configurable, GetSocketOption, SetSocketOption},
@@ -32,9 +33,14 @@ const NLM_F_DUMP: u16 = 0x300;
 const RTM_NEWLINK: u16 = 16;
 const RTM_GETLINK: u16 = 18;
 const RTM_NEWADDR: u16 = 20;
+const RTM_DELADDR: u16 = 21;
 const RTM_GETADDR: u16 = 22;
 const RTM_NEWROUTE: u16 = 24;
+const RTM_DELROUTE: u16 = 25;
 const RTM_GETROUTE: u16 = 26;
+const RTM_NEWNEIGH: u16 = 28;
+const RTM_DELNEIGH: u16 = 29;
+const RTM_GETNEIGH: u16 = 30;
 
 const IFLA_ADDRESS: u16 = 1;
 const IFLA_BROADCAST: u16 = 2;
@@ -47,8 +53,13 @@ const IFA_LOCAL: u16 = 2;
 const IFA_LABEL: u16 = 3;
 const IFA_BROADCAST: u16 = 4;
 
+const RTA_DST: u16 = 1;
 const RTA_OIF: u16 = 4;
 const RTA_GATEWAY: u16 = 5;
+const RTA_PREFSRC: u16 = 7;
+
+const NDA_DST: u16 = 1;
+const NDA_LLADDR: u16 = 2;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NetlinkAddr {
@@ -98,10 +109,24 @@ impl NetlinkSocket {
             }
             RTM_GETADDR => append_addresses(&mut response, seq, pid, family),
             RTM_GETROUTE => append_routes(&mut response, seq, pid, family),
+            RTM_GETNEIGH => append_neighbors(&mut response, seq, pid, family),
+            RTM_NEWADDR | RTM_DELADDR | RTM_NEWROUTE | RTM_DELROUTE | RTM_NEWNEIGH
+            | RTM_DELNEIGH => {
+                let result = apply_network_change(kind, &request[..declared_len]);
+                let error = result
+                    .err()
+                    .map_or(0, |error| -LinuxError::from(error).code());
+                append_error(&mut response, seq, pid, &request, error);
+            }
             _ => append_error(&mut response, seq, pid, request, -95),
         }
         let mut responses = self.responses.lock();
-        if is_dump && matches!(kind, RTM_GETLINK | RTM_GETADDR | RTM_GETROUTE) {
+        if is_dump
+            && matches!(
+                kind,
+                RTM_GETLINK | RTM_GETADDR | RTM_GETROUTE | RTM_GETNEIGH
+            )
+        {
             if !response.is_empty() {
                 responses.push_back(response);
             }
@@ -391,27 +416,6 @@ fn append_addresses(output: &mut Vec<u8>, seq: u32, pid: u32, family: u8) {
             b"lo\0",
             None,
         );
-        if eth0_mac().is_some() {
-            let ip: Ipv4Addr = IP.parse().expect("invalid configured IPv4 address");
-            let mask = if IP_PREFIX == 0 {
-                0
-            } else {
-                u32::MAX << (32 - IP_PREFIX)
-            };
-            let broadcast = Ipv4Addr::from(u32::from(ip) | !mask).octets();
-            append_address(
-                output,
-                seq,
-                pid,
-                AF_INET,
-                IP_PREFIX,
-                0,
-                2,
-                &ip.octets(),
-                b"eth0\0",
-                Some(&broadcast),
-            );
-        }
     }
     if family == AF_UNSPEC || family == AF_INET6 {
         let mut loopback = [0; 16];
@@ -420,18 +424,326 @@ fn append_addresses(output: &mut Vec<u8>, seq: u32, pid: u32, family: u8) {
             output, seq, pid, AF_INET6, 128, 254, 1, &loopback, b"lo\0", None,
         );
     }
+
+    let Some(service) = SERVICE.get() else {
+        return;
+    };
+    let snapshot = service.lock().network_snapshot();
+    for address in snapshot.addresses {
+        match address {
+            IpCidr::Ipv4(address) if family == AF_UNSPEC || family == AF_INET => {
+                let broadcast = address.broadcast().map(|address| address.octets());
+                append_address(
+                    output,
+                    seq,
+                    pid,
+                    AF_INET,
+                    address.prefix_len(),
+                    0,
+                    2,
+                    &address.address().octets(),
+                    b"eth0\0",
+                    broadcast.as_ref().map(<[u8; 4]>::as_slice),
+                );
+            }
+            IpCidr::Ipv6(address) if family == AF_UNSPEC || family == AF_INET6 => {
+                let ip = address.address();
+                append_address(
+                    output,
+                    seq,
+                    pid,
+                    AF_INET6,
+                    address.prefix_len(),
+                    if ip.is_unicast_link_local() { 253 } else { 0 },
+                    2,
+                    &ip.octets(),
+                    b"eth0\0",
+                    None,
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+fn ipv6_network(address: Ipv6Cidr) -> [u8; 16] {
+    let mut network = address.address().octets();
+    let whole_bytes = usize::from(address.prefix_len() / 8);
+    let remaining_bits = address.prefix_len() % 8;
+    if whole_bytes < network.len() {
+        if remaining_bits != 0 {
+            network[whole_bytes] &= u8::MAX << (8 - remaining_bits);
+        }
+        let clear_from = whole_bytes + usize::from(remaining_bits != 0);
+        network[clear_from..].fill(0);
+    }
+    network
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_route(
+    output: &mut Vec<u8>,
+    seq: u32,
+    pid: u32,
+    family: u8,
+    prefix: u8,
+    protocol: u8,
+    scope: u8,
+    destination: Option<&[u8]>,
+    gateway: Option<&[u8]>,
+    preferred_source: Option<&[u8]>,
+) {
+    append_message(output, RTM_NEWROUTE, NLM_F_MULTI, seq, pid, |message| {
+        message.extend_from_slice(&[family, prefix, 0, 0, 254, protocol, scope, 1]);
+        push_u32(message, 0);
+        if let Some(destination) = destination {
+            append_attr(message, RTA_DST, destination);
+        }
+        append_attr(message, RTA_OIF, &2_u32.to_ne_bytes());
+        if let Some(gateway) = gateway {
+            append_attr(message, RTA_GATEWAY, gateway);
+        }
+        if let Some(source) = preferred_source {
+            append_attr(message, RTA_PREFSRC, source);
+        }
+    });
 }
 
 fn append_routes(output: &mut Vec<u8>, seq: u32, pid: u32, family: u8) {
-    if (family == AF_UNSPEC || family == AF_INET) && eth0_mac().is_some() {
-        append_message(output, RTM_NEWROUTE, NLM_F_MULTI, seq, pid, |message| {
-            message.extend_from_slice(&[AF_INET, 0, 0, 0, 254, 3, 0, 1]);
-            push_u32(message, 0);
-            append_attr(message, RTA_OIF, &2_u32.to_ne_bytes());
-            let gateway: Ipv4Addr = GATEWAY.parse().expect("invalid configured gateway");
-            append_attr(message, RTA_GATEWAY, &gateway.octets());
+    let Some(service) = SERVICE.get() else {
+        return;
+    };
+    let snapshot = service.lock().network_snapshot();
+    for address in &snapshot.addresses {
+        match address {
+            IpCidr::Ipv4(address) if family == AF_UNSPEC || family == AF_INET => {
+                let destination = address.network().address().octets();
+                let source = address.address().octets();
+                append_route(
+                    output,
+                    seq,
+                    pid,
+                    AF_INET,
+                    address.prefix_len(),
+                    2,
+                    253,
+                    Some(&destination),
+                    None,
+                    Some(&source),
+                );
+            }
+            IpCidr::Ipv6(address) if family == AF_UNSPEC || family == AF_INET6 => {
+                let destination = ipv6_network(*address);
+                let source = address.address().octets();
+                append_route(
+                    output,
+                    seq,
+                    pid,
+                    AF_INET6,
+                    address.prefix_len(),
+                    2,
+                    253,
+                    Some(&destination),
+                    None,
+                    Some(&source),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if (family == AF_UNSPEC || family == AF_INET)
+        && let Some(gateway) = snapshot.ipv4_gateway
+    {
+        append_route(
+            output,
+            seq,
+            pid,
+            AF_INET,
+            0,
+            3,
+            0,
+            None,
+            Some(&gateway.octets()),
+            None,
+        );
+    }
+    if (family == AF_UNSPEC || family == AF_INET6)
+        && let Some(gateway) = snapshot.ipv6_gateway
+    {
+        append_route(
+            output,
+            seq,
+            pid,
+            AF_INET6,
+            0,
+            3,
+            0,
+            None,
+            Some(&gateway.octets()),
+            None,
+        );
+    }
+}
+
+fn append_neighbors(output: &mut Vec<u8>, seq: u32, pid: u32, family: u8) {
+    let Some(service) = SERVICE.get() else {
+        return;
+    };
+    let entries = service.lock().neighbor_entries();
+    for entry in entries {
+        let (entry_family, address) = match entry.address {
+            IpAddress::Ipv4(address) => (AF_INET, address.octets().to_vec()),
+            IpAddress::Ipv6(address) => (AF_INET6, address.octets().to_vec()),
+        };
+        if family != AF_UNSPEC && family != entry_family {
+            continue;
+        }
+        let state = match entry.state {
+            NeighborState::Incomplete => 0x01,
+            NeighborState::Reachable => 0x02,
+            NeighborState::Stale => 0x04,
+            NeighborState::Permanent => 0x80,
+        };
+        append_message(output, RTM_NEWNEIGH, NLM_F_MULTI, seq, pid, |message| {
+            message.extend_from_slice(&[entry_family, 0]);
+            push_u16(message, 0);
+            push_i32(message, 2);
+            push_u16(message, state);
+            message.extend_from_slice(&[0, 1]);
+            append_attr(message, NDA_DST, &address);
+            if let Some(hardware_address) = entry.hardware_address {
+                append_attr(message, NDA_LLADDR, &hardware_address);
+            }
         });
     }
+}
+
+fn find_attr(message: &[u8], mut offset: usize, kind: u16) -> Option<&[u8]> {
+    while offset.checked_add(4)? <= message.len() {
+        let length = usize::from(read_u16(message, offset));
+        if length < 4 || offset.checked_add(length)? > message.len() {
+            return None;
+        }
+        if read_u16(message, offset + 2) == kind {
+            return Some(&message[offset + 4..offset + length]);
+        }
+        offset = offset.checked_add(align4(length))?;
+    }
+    None
+}
+
+fn apply_network_change(kind: u16, request: &[u8]) -> AxResult {
+    match kind {
+        RTM_NEWADDR | RTM_DELADDR => apply_address_change(kind, request),
+        RTM_NEWROUTE | RTM_DELROUTE => apply_route_change(kind, request),
+        RTM_NEWNEIGH | RTM_DELNEIGH => apply_neighbor_change(kind, request),
+        _ => Err(AxError::OperationNotSupported),
+    }
+}
+
+fn apply_neighbor_change(kind: u16, request: &[u8]) -> AxResult {
+    if request.len() < 28 || read_i32(request, 20) != 2 {
+        return Err(AxError::NoSuchDevice);
+    }
+    let bytes = find_attr(request, 28, NDA_DST).ok_or(AxError::InvalidInput)?;
+    let address = match request[16] {
+        AF_INET if bytes.len() == 4 => {
+            IpAddress::Ipv4(Ipv4Addr::from(<[u8; 4]>::try_from(bytes).unwrap()))
+        }
+        AF_INET6 if bytes.len() == 16 => {
+            IpAddress::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(bytes).unwrap()))
+        }
+        _ => return Err(AxError::InvalidInput),
+    };
+    let service = SERVICE.get().ok_or(AxError::NoSuchDevice)?;
+    if kind == RTM_DELNEIGH {
+        return service.lock().remove_neighbor(address);
+    }
+    let hardware_address = find_attr(request, 28, NDA_LLADDR).ok_or(AxError::InvalidInput)?;
+    if hardware_address.len() != 6 {
+        return Err(AxError::InvalidInput);
+    }
+    service
+        .lock()
+        .set_neighbor(address, <[u8; 6]>::try_from(hardware_address).unwrap())
+}
+
+fn apply_address_change(kind: u16, request: &[u8]) -> AxResult {
+    if request.len() < 24 || read_u32(request, 20) != 2 {
+        return Err(AxError::NoSuchDevice);
+    }
+    let family = request[16];
+    let prefix = request[17];
+    let bytes = find_attr(request, 24, IFA_LOCAL)
+        .or_else(|| find_attr(request, 24, IFA_ADDRESS))
+        .ok_or(AxError::InvalidInput)?;
+    let address = match family {
+        AF_INET if bytes.len() == 4 && prefix <= 32 => {
+            let address = Ipv4Addr::from(<[u8; 4]>::try_from(bytes).unwrap());
+            if kind == RTM_DELADDR {
+                IpAddress::Ipv4(address)
+            } else {
+                let cidr = Ipv4Cidr::new(address, prefix);
+                return SERVICE
+                    .get()
+                    .ok_or(AxError::NoSuchDevice)?
+                    .lock()
+                    .set_address(cidr.into());
+            }
+        }
+        AF_INET6 if bytes.len() == 16 && prefix <= 128 => {
+            let address = Ipv6Addr::from(<[u8; 16]>::try_from(bytes).unwrap());
+            if kind == RTM_DELADDR {
+                IpAddress::Ipv6(address)
+            } else {
+                let cidr = Ipv6Cidr::new(address, prefix);
+                return SERVICE
+                    .get()
+                    .ok_or(AxError::NoSuchDevice)?
+                    .lock()
+                    .set_address(cidr.into());
+            }
+        }
+        _ => return Err(AxError::InvalidInput),
+    };
+    SERVICE
+        .get()
+        .ok_or(AxError::NoSuchDevice)?
+        .lock()
+        .remove_address(address)
+}
+
+fn apply_route_change(kind: u16, request: &[u8]) -> AxResult {
+    if request.len() < 28 || request[17] != 0 || request[18] != 0 {
+        return Err(AxError::OperationNotSupported);
+    }
+    if let Some(output_interface) = find_attr(request, 28, RTA_OIF) {
+        if output_interface.len() != 4 || read_u32(output_interface, 0) != 2 {
+            return Err(AxError::NoSuchDevice);
+        }
+    }
+    let family = request[16];
+    let service = SERVICE.get().ok_or(AxError::NoSuchDevice)?;
+    if kind == RTM_DELROUTE {
+        return match family {
+            AF_INET => service.lock().remove_default_gateway(false),
+            AF_INET6 => service.lock().remove_default_gateway(true),
+            _ => Err(AxError::InvalidInput),
+        };
+    }
+
+    let gateway = find_attr(request, 28, RTA_GATEWAY).ok_or(AxError::InvalidInput)?;
+    let gateway = match family {
+        AF_INET if gateway.len() == 4 => {
+            IpAddress::Ipv4(Ipv4Addr::from(<[u8; 4]>::try_from(gateway).unwrap()))
+        }
+        AF_INET6 if gateway.len() == 16 => {
+            IpAddress::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(gateway).unwrap()))
+        }
+        _ => return Err(AxError::InvalidInput),
+    };
+    service.lock().set_default_gateway(gateway)
 }
 
 fn append_done(output: &mut Vec<u8>, seq: u32, pid: u32) {
