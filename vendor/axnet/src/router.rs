@@ -5,7 +5,9 @@ use smoltcp::{
     phy::{DeviceCapabilities, Medium},
     storage::PacketMetadata,
     time::Instant,
-    wire::{IpAddress, IpCidr, IpProtocol, IpVersion, Ipv4Packet, Ipv6Packet, TcpPacket},
+    wire::{
+        IpAddress, IpCidr, IpProtocol, IpVersion, Ipv4Packet, Ipv6Packet, TcpPacket, UdpPacket,
+    },
 };
 
 use crate::{
@@ -34,6 +36,64 @@ impl Rule {
 }
 
 type PacketBuffer = smoltcp::storage::PacketBuffer<'static, ()>;
+
+/// Complete transport checksums before an IP packet reaches a physical device.
+///
+/// axnet devices transmit complete packets and do not advertise Linux-style
+/// checksum-offload metadata, so TCP and UDP checksums must be valid in memory.
+fn fill_transport_checksum(packet: &mut [u8]) {
+    match IpVersion::of_packet(packet) {
+        Ok(IpVersion::Ipv4) => fill_ipv4_transport_checksum(packet),
+        Ok(IpVersion::Ipv6) => fill_ipv6_transport_checksum(packet),
+        Err(_) => {}
+    }
+}
+
+fn fill_ipv4_transport_checksum(packet: &mut [u8]) {
+    let Ok(mut packet) = Ipv4Packet::new_checked(packet) else {
+        return;
+    };
+    if packet.more_frags() || packet.frag_offset() != 0 {
+        return;
+    }
+
+    let protocol = packet.next_header();
+    let src_addr = IpAddress::Ipv4(packet.src_addr());
+    let dst_addr = IpAddress::Ipv4(packet.dst_addr());
+    fill_transport_payload_checksum(protocol, packet.payload_mut(), &src_addr, &dst_addr);
+}
+
+fn fill_ipv6_transport_checksum(packet: &mut [u8]) {
+    let Ok(mut packet) = Ipv6Packet::new_checked(packet) else {
+        return;
+    };
+
+    let protocol = packet.next_header();
+    let src_addr = IpAddress::Ipv6(packet.src_addr());
+    let dst_addr = IpAddress::Ipv6(packet.dst_addr());
+    fill_transport_payload_checksum(protocol, packet.payload_mut(), &src_addr, &dst_addr);
+}
+
+fn fill_transport_payload_checksum(
+    protocol: IpProtocol,
+    payload: &mut [u8],
+    src_addr: &IpAddress,
+    dst_addr: &IpAddress,
+) {
+    match protocol {
+        IpProtocol::Tcp => {
+            if let Ok(mut packet) = TcpPacket::new_checked(payload) {
+                packet.fill_checksum(src_addr, dst_addr);
+            }
+        }
+        IpProtocol::Udp => {
+            if let Ok(mut packet) = UdpPacket::new_checked(payload) {
+                packet.fill_checksum(src_addr, dst_addr);
+            }
+        }
+        _ => {}
+    }
+}
 
 // TODO(mivik): optimize
 pub struct RouteTable {
@@ -228,6 +288,7 @@ impl Router {
         } = self;
         let mut next = core::mem::take(poll_next);
         while let Ok(((), packet)) = tx_buffer.dequeue() {
+            fill_transport_checksum(packet);
             let route = Self::packet_route(table, packet);
             next |= Self::route_packet(devices, rx_buffer, route, packet, timestamp);
         }
@@ -454,5 +515,97 @@ impl smoltcp::phy::Device for Router {
         caps.loopback_transmission_unit = Some(LOOPBACK_MTU);
         caps.max_burst_size = Some(ROUTER_PACKET_BUFFER_SIZE);
         caps
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ipv4_packet(protocol: IpProtocol, payload_len: usize) -> Vec<u8> {
+        let mut packet = vec![0; 20 + payload_len];
+        packet[0] = 0x45;
+        packet[2..4].copy_from_slice(&((20 + payload_len) as u16).to_be_bytes());
+        packet[8] = 64;
+        packet[9] = protocol.into();
+        packet[12..16].copy_from_slice(&[192, 168, 88, 2]);
+        packet[16..20].copy_from_slice(&[151, 101, 0, 223]);
+        packet
+    }
+
+    fn tcp_syn(payload: &mut [u8]) {
+        payload[0..2].copy_from_slice(&49193u16.to_be_bytes());
+        payload[2..4].copy_from_slice(&443u16.to_be_bytes());
+        payload[12] = 5 << 4;
+        payload[13] = 0x02;
+        payload[14..16].copy_from_slice(&65535u16.to_be_bytes());
+    }
+
+    #[test]
+    fn fills_ipv4_tcp_checksum() {
+        let mut bytes = ipv4_packet(IpProtocol::Tcp, 20);
+        tcp_syn(&mut bytes[20..]);
+
+        fill_transport_checksum(&mut bytes);
+
+        let ip = Ipv4Packet::new_checked(&bytes).unwrap();
+        let src_addr = IpAddress::Ipv4(ip.src_addr());
+        let dst_addr = IpAddress::Ipv4(ip.dst_addr());
+        let tcp = TcpPacket::new_checked(ip.payload()).unwrap();
+        assert_ne!(tcp.checksum(), 0);
+        assert!(tcp.verify_checksum(&src_addr, &dst_addr));
+    }
+
+    #[test]
+    fn fills_ipv4_udp_checksum() {
+        let mut bytes = ipv4_packet(IpProtocol::Udp, 8);
+        let udp = &mut bytes[20..];
+        udp[0..2].copy_from_slice(&49193u16.to_be_bytes());
+        udp[2..4].copy_from_slice(&53u16.to_be_bytes());
+        udp[4..6].copy_from_slice(&8u16.to_be_bytes());
+
+        fill_transport_checksum(&mut bytes);
+
+        let ip = Ipv4Packet::new_checked(&bytes).unwrap();
+        let src_addr = IpAddress::Ipv4(ip.src_addr());
+        let dst_addr = IpAddress::Ipv4(ip.dst_addr());
+        let udp = UdpPacket::new_checked(ip.payload()).unwrap();
+        assert_ne!(udp.checksum(), 0);
+        assert!(udp.verify_checksum(&src_addr, &dst_addr));
+    }
+
+    #[test]
+    fn leaves_fragmented_ipv4_transport_checksum_unchanged() {
+        let mut bytes = ipv4_packet(IpProtocol::Tcp, 20);
+        bytes[6] = 0x20;
+        tcp_syn(&mut bytes[20..]);
+
+        fill_transport_checksum(&mut bytes);
+
+        let ip = Ipv4Packet::new_checked(&bytes).unwrap();
+        let tcp = TcpPacket::new_checked(ip.payload()).unwrap();
+        assert_eq!(tcp.checksum(), 0);
+    }
+
+    #[test]
+    fn fills_ipv6_tcp_checksum() {
+        let mut bytes = vec![0; 60];
+        bytes[0] = 0x60;
+        bytes[4..6].copy_from_slice(&20u16.to_be_bytes());
+        bytes[6] = IpProtocol::Tcp.into();
+        bytes[7] = 64;
+        bytes[8..24].copy_from_slice(&[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+        bytes[24..40]
+            .copy_from_slice(&[0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2]);
+        tcp_syn(&mut bytes[40..]);
+
+        fill_transport_checksum(&mut bytes);
+
+        let ip = Ipv6Packet::new_checked(&bytes).unwrap();
+        let src_addr = IpAddress::Ipv6(ip.src_addr());
+        let dst_addr = IpAddress::Ipv6(ip.dst_addr());
+        let tcp = TcpPacket::new_checked(ip.payload()).unwrap();
+        assert_ne!(tcp.checksum(), 0);
+        assert!(tcp.verify_checksum(&src_addr, &dst_addr));
     }
 }

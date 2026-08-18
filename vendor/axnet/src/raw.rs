@@ -1,6 +1,7 @@
 use alloc::{boxed::Box, vec, vec::Vec};
 use core::{
     net::SocketAddr,
+    ops::Deref,
     sync::atomic::{AtomicU8, AtomicU32, Ordering},
     task::Context,
 };
@@ -49,8 +50,8 @@ fn new_raw_socket(family: IpFamily, protocol: IpProtocol) -> smol::Socket<'stati
     )
 }
 
-/// A Linux-compatible raw IP socket used by ordinary ICMP applications.
-pub struct RawSocket {
+/// Heap-resident state of a [`RawSocket`].
+pub struct RawSocketInner {
     handle: SocketHandle,
     family: IpFamily,
     protocol: IpProtocol,
@@ -62,6 +63,23 @@ pub struct RawSocket {
     general: GeneralOptions,
 }
 
+/// A Linux-compatible raw IP socket used by ordinary ICMP applications.
+///
+/// Keep the state in its final allocation.  Apart from making moves cheap,
+/// this prevents large aggregate moves from corrupting atomic socket options
+/// on affected LoongArch compiler versions.
+pub struct RawSocket(Box<RawSocketInner>);
+
+impl Deref for RawSocket {
+    type Target = RawSocketInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+const _: () = assert!(core::mem::size_of::<RawSocket>() == core::mem::size_of::<usize>());
+
 impl RawSocket {
     pub fn new_icmp(family: IpFamily) -> Self {
         let protocol = match family {
@@ -69,16 +87,20 @@ impl RawSocket {
             IpFamily::Ipv6 => IpProtocol::Icmpv6,
         };
         let handle = SOCKET_SET.add(new_raw_socket(family, protocol));
-        Self {
-            handle,
-            family,
-            protocol,
-            local_addr: RwLock::new(None),
-            peer_addr: RwLock::new(None),
-            hop_limit: AtomicU8::new(64),
-            ipv6_hop_limit_cmsg: AtomicU32::new(0),
-            icmpv6_filter: RwLock::new([0; 8]),
-            general: GeneralOptions::new(),
+        let mut storage = Box::<RawSocketInner>::new_uninit();
+        let dst = storage.as_mut_ptr();
+
+        unsafe {
+            core::ptr::addr_of_mut!((*dst).handle).write(handle);
+            core::ptr::addr_of_mut!((*dst).family).write(family);
+            core::ptr::addr_of_mut!((*dst).protocol).write(protocol);
+            core::ptr::addr_of_mut!((*dst).local_addr).write(RwLock::new(None));
+            core::ptr::addr_of_mut!((*dst).peer_addr).write(RwLock::new(None));
+            core::ptr::addr_of_mut!((*dst).hop_limit).write(AtomicU8::new(64));
+            core::ptr::addr_of_mut!((*dst).ipv6_hop_limit_cmsg).write(AtomicU32::new(0));
+            core::ptr::addr_of_mut!((*dst).icmpv6_filter).write(RwLock::new([0; 8]));
+            GeneralOptions::write_unpublished_in_place(core::ptr::addr_of_mut!((*dst).general));
+            Self(storage.assume_init())
         }
     }
 
