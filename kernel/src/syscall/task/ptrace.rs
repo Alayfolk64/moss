@@ -46,16 +46,33 @@ const PTRACE_GETSIGINFO: u32 = 0x4202;
 const PTRACE_SETSIGINFO: u32 = 0x4203;
 const PTRACE_GETREGSET: u32 = 0x4204;
 const PTRACE_SETREGSET: u32 = 0x4205;
+const PTRACE_GET_SYSCALL_INFO: u32 = 0x420e;
 
 const NT_PRSTATUS: usize = 1;
 const NT_FPREGSET: usize = 2;
 
 const PTRACE_O_TRACESYSGOOD: usize = 1;
+const PTRACE_O_TRACEFORK: usize = 1 << 1;
+const PTRACE_O_TRACEVFORK: usize = 1 << 2;
+const PTRACE_O_TRACECLONE: usize = 1 << 3;
 const PTRACE_O_TRACEEXEC: usize = 1 << 4;
+const PTRACE_O_TRACEVFORKDONE: usize = 1 << 5;
+const PTRACE_O_TRACEEXIT: usize = 1 << 6;
 const PTRACE_O_EXITKILL: usize = 1 << 20;
-const PTRACE_SUPPORTED_OPTIONS: usize =
-    PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL;
+const PTRACE_SUPPORTED_OPTIONS: usize = PTRACE_O_TRACESYSGOOD
+    | PTRACE_O_TRACEFORK
+    | PTRACE_O_TRACEVFORK
+    | PTRACE_O_TRACECLONE
+    | PTRACE_O_TRACEEXEC
+    | PTRACE_O_TRACEVFORKDONE
+    | PTRACE_O_TRACEEXIT
+    | PTRACE_O_EXITKILL;
 const PTRACE_EVENT_EXEC: u32 = 4;
+
+#[cfg(target_arch = "riscv64")]
+const AUDIT_ARCH_NATIVE: u32 = 0xc000_00f3;
+#[cfg(target_arch = "loongarch64")]
+const AUDIT_ARCH_NATIVE: u32 = 0xc000_0102;
 
 #[cfg(target_arch = "riscv64")]
 const SINGLESTEP_BREAK_INSN: u16 = 0x9002;
@@ -151,6 +168,8 @@ struct PtraceState {
     stop_sig: Signo,
     stop_reported: bool,
     stop_event: u32,
+    stop_is_syscall: bool,
+    syscall_entering: bool,
     event_msg: usize,
     context: Option<UserContext>,
     fp: Option<SavedFp>,
@@ -161,6 +180,7 @@ struct PtraceState {
     resume_signal_bypass: Option<Signo>,
     detach_pending: bool,
     options: usize,
+    syscall_trace: bool,
     single_step: bool,
     saved_step_insn: Option<(usize, usize)>,
     text_dirty: bool,
@@ -175,6 +195,8 @@ impl PtraceState {
             stop_sig: Signo::SIGTRAP,
             stop_reported: true,
             stop_event: 0,
+            stop_is_syscall: false,
+            syscall_entering: false,
             event_msg: 0,
             context: None,
             fp: None,
@@ -185,6 +207,7 @@ impl PtraceState {
             resume_signal_bypass: None,
             detach_pending: false,
             options: 0,
+            syscall_trace: false,
             single_step: false,
             saved_step_insn: None,
             text_dirty: false,
@@ -202,8 +225,8 @@ pub struct PtraceWaitEvent {
     pub status: i32,
 }
 
-fn make_stop_status(sig: Signo, event: u32) -> i32 {
-    ((sig as i32) << 8) | 0x7f | ((event as i32) << 16)
+fn make_stop_status(sig: i32, event: u32) -> i32 {
+    (sig << 8) | 0x7f | ((event as i32) << 16)
 }
 
 fn resolve_tracee_pid(pid: Pid) -> Pid {
@@ -212,6 +235,10 @@ fn resolve_tracee_pid(pid: Pid) -> Pid {
     } else {
         pid
     }
+}
+
+fn current_tracee_tid() -> Pid {
+    current().id().as_u64() as Pid
 }
 
 fn pid_matches(raw_pid: i32, tracee: Pid) -> bool {
@@ -290,7 +317,15 @@ pub fn ptrace_take_wait_event(tracer: Pid, raw_pid: i32) -> Option<PtraceWaitEve
             && state.stopped
             && state.context.is_some()
             && !state.stop_reported)
-            .then_some((*tracee, state.stop_sig, state.stop_event))
+            .then_some((
+                *tracee,
+                if state.stop_is_syscall && state.options & PTRACE_O_TRACESYSGOOD != 0 {
+                    Signo::SIGTRAP as i32 | 0x80
+                } else {
+                    state.stop_sig as i32
+                },
+                state.stop_event,
+            ))
     })?;
     let (tracee, sig, event) = found;
     table.get_mut(&tracee).unwrap().stop_reported = true;
@@ -327,8 +362,18 @@ fn restore_current_fp(fp: SavedFp, _uctx: &mut UserContext) {
     fp.0.restore();
 }
 
-fn stop_current(thr: &Thread, sig: Signo, event: u32, uctx: &mut UserContext) -> Option<Signo> {
-    let pid = thr.proc_data.proc.pid();
+fn stop_current(
+    thr: &Thread,
+    sig: Signo,
+    event: u32,
+    is_syscall: bool,
+    syscall_entering: bool,
+    uctx: &mut UserContext,
+) -> Option<Signo> {
+    // ptrace attaches to one Linux task, not to every thread that shares its
+    // process.  Indexing this stop by TGID lets another thread overwrite the
+    // saved registers and later resume with the wrong thread's context.
+    let pid = current_tracee_tid();
     let (tracer, resume_event) = {
         let mut table = PTRACE_TABLE.lock();
         let Some(state) = table.get_mut(&pid) else {
@@ -338,6 +383,8 @@ fn stop_current(thr: &Thread, sig: Signo, event: u32, uctx: &mut UserContext) ->
         state.stop_sig = sig;
         state.stop_reported = false;
         state.stop_event = event;
+        state.stop_is_syscall = is_syscall;
+        state.syscall_entering = syscall_entering;
         state.event_msg = 0;
         state.context = Some(*uctx);
         state.fp = Some(save_current_fp());
@@ -405,7 +452,7 @@ pub fn ptrace_wait_if_stopped(thr: &Thread, uctx: &mut UserContext) {
     if !PTRACE_ACTIVE.load(Ordering::Acquire) {
         return;
     }
-    let pid = thr.proc_data.proc.pid();
+    let pid = current_tracee_tid();
     let pending = {
         let mut table = PTRACE_TABLE.lock();
         let Some(state) = table.get_mut(&pid) else {
@@ -424,12 +471,34 @@ pub fn ptrace_wait_if_stopped(thr: &Thread, uctx: &mut UserContext) {
         }
     };
     if let Some((sig, event)) = pending {
-        if let Some(resume_sig) = stop_current(thr, sig, event, uctx) {
+        if let Some(resume_sig) = stop_current(thr, sig, event, false, false, uctx) {
             if let Some(state) = PTRACE_TABLE.lock().get_mut(&pid) {
                 state.resume_signal_bypass = Some(resume_sig);
             }
             let _ = send_signal_to_process(pid, Some(SignalInfo::new_kernel(resume_sig)));
         }
+    }
+}
+
+/// Stops a tracee immediately before or after a system call when its tracer
+/// resumed it with `PTRACE_SYSCALL`.
+pub fn ptrace_syscall_stop(thr: &Thread, uctx: &mut UserContext, entering: bool) {
+    if !PTRACE_ACTIVE.load(Ordering::Acquire) {
+        return;
+    }
+    let pid = current_tracee_tid();
+    let should_stop = PTRACE_TABLE
+        .lock()
+        .get(&pid)
+        .is_some_and(|state| state.syscall_trace && !state.stopped);
+    if !should_stop {
+        return;
+    }
+    if let Some(resume_sig) = stop_current(thr, Signo::SIGTRAP, 0, true, entering, uctx) {
+        if let Some(state) = PTRACE_TABLE.lock().get_mut(&pid) {
+            state.resume_signal_bypass = Some(resume_sig);
+        }
+        let _ = send_signal_to_process(pid, Some(SignalInfo::new_kernel(resume_sig)));
     }
 }
 
@@ -473,7 +542,7 @@ pub fn ptrace_force_kill_wake(pid: Pid) {
 }
 
 pub fn ptrace_intercept_signal(thr: &Thread, sig: Signo, uctx: &mut UserContext) -> bool {
-    let pid = thr.proc_data.proc.pid();
+    let pid = current_tracee_tid();
     if sig == Signo::SIGKILL || !ptrace_is_traced(pid) {
         return false;
     }
@@ -487,7 +556,7 @@ pub fn ptrace_intercept_signal(thr: &Thread, sig: Signo, uctx: &mut UserContext)
             return false;
         }
     }
-    match stop_current(thr, sig, 0, uctx) {
+    match stop_current(thr, sig, 0, false, false, uctx) {
         None => true,
         Some(resume_sig) if resume_sig == sig => false,
         Some(resume_sig) => {
@@ -605,6 +674,9 @@ pub fn sys_ptrace(request: u32, pid: Pid, addr: usize, data: usize) -> AxResult<
         }
         PTRACE_CONT => {
             let sig = parse_forward_signal(data)?;
+            let pid = resolve_tracee_pid(pid);
+            check_trace_access(pid, curr_pid, true)?;
+            PTRACE_TABLE.lock().get_mut(&pid).unwrap().syscall_trace = false;
             resume_tracee(pid, curr_pid, sig)?;
             yield_now();
             Ok(0)
@@ -613,11 +685,19 @@ pub fn sys_ptrace(request: u32, pid: Pid, addr: usize, data: usize) -> AxResult<
             let sig = parse_forward_signal(data)?;
             let pid = resolve_tracee_pid(pid);
             stopped_tracee(pid, curr_pid)?;
+            PTRACE_TABLE.lock().get_mut(&pid).unwrap().syscall_trace = false;
             setup_software_singlestep(pid)?;
             resume_tracee(pid, curr_pid, sig)?;
             Ok(0)
         }
-        PTRACE_SYSCALL => Err(AxError::Unsupported),
+        PTRACE_SYSCALL => {
+            let sig = parse_forward_signal(data)?;
+            let pid = resolve_tracee_pid(pid);
+            check_trace_access(pid, curr_pid, true)?;
+            PTRACE_TABLE.lock().get_mut(&pid).unwrap().syscall_trace = true;
+            resume_tracee(pid, curr_pid, sig)?;
+            Ok(0)
+        }
         PTRACE_DETACH => {
             let sig = parse_forward_signal(data)?;
             let pid = resolve_tracee_pid(pid);
@@ -697,8 +777,63 @@ pub fn sys_ptrace(request: u32, pid: Pid, addr: usize, data: usize) -> AxResult<
             NT_FPREGSET => ptrace_setregset(pid, curr_pid, data, true),
             _ => Err(AxError::Unsupported),
         },
+        PTRACE_GET_SYSCALL_INFO => ptrace_get_syscall_info(pid, curr_pid, addr, data),
         _ => Err(AxError::Unsupported),
     }
+}
+
+fn ptrace_get_syscall_info(
+    pid: Pid,
+    tracer: Pid,
+    user_size: usize,
+    data: usize,
+) -> AxResult<isize> {
+    let pid = resolve_tracee_pid(pid);
+    check_trace_access(pid, tracer, true)?;
+    let (context, entering, is_syscall) = {
+        let table = PTRACE_TABLE.lock();
+        let state = table.get(&pid).ok_or(AxError::NoSuchProcess)?;
+        (
+            state.context.ok_or(AxError::NoSuchProcess)?,
+            state.syscall_entering,
+            state.stop_is_syscall,
+        )
+    };
+
+    let mut info = vec![0_u8; 24];
+    if is_syscall {
+        info[0] = if entering { 1 } else { 2 };
+    }
+    info[4..8].copy_from_slice(&AUDIT_ARCH_NATIVE.to_ne_bytes());
+    info[8..16].copy_from_slice(&(context.ip() as u64).to_ne_bytes());
+    info[16..24].copy_from_slice(&(context.sp() as u64).to_ne_bytes());
+
+    if is_syscall && entering {
+        info.extend_from_slice(&(context.sysno() as u64).to_ne_bytes());
+        for argument in [
+            context.arg0(),
+            context.arg1(),
+            context.arg2(),
+            context.arg3(),
+            context.arg4(),
+            context.arg5(),
+        ] {
+            info.extend_from_slice(&(argument as u64).to_ne_bytes());
+        }
+    } else if is_syscall {
+        let result = context.retval() as isize as i64;
+        info.extend_from_slice(&result.to_ne_bytes());
+        info.push(u8::from((-4095..=-1).contains(&result)));
+    }
+
+    let copy_len = user_size.min(info.len());
+    if copy_len != 0 {
+        if data == 0 {
+            return Err(AxError::InvalidInput);
+        }
+        vm_write_slice(data as *mut u8, &info[..copy_len])?;
+    }
+    Ok(info.len() as isize)
 }
 
 fn stopped_context(pid: Pid, tracer: Pid) -> AxResult<UserContext> {

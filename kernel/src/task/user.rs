@@ -8,7 +8,7 @@ use super::{
     AsThread, Thread, TimerState, check_signals, do_exit, raise_signal_fatal, set_timer_state,
     unblock_next_signal,
 };
-use crate::syscall::{handle_syscall, ptrace_wait_if_stopped};
+use crate::syscall::{handle_syscall, ptrace_syscall_stop, ptrace_wait_if_stopped};
 
 fn exit_if_requested_by_exec(thr: &Thread) -> bool {
     if thr.pending_exit() {
@@ -50,7 +50,14 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                 }
 
                 match reason {
-                    ReturnReason::Syscall => handle_syscall(&mut uctx),
+                    ReturnReason::Syscall => {
+                        ptrace_syscall_stop(thr, &mut uctx, true);
+                        if exit_if_requested_by_exec(thr) {
+                            break;
+                        }
+                        handle_syscall(&mut uctx);
+                        ptrace_syscall_stop(thr, &mut uctx, false);
+                    }
                     ReturnReason::PageFault(addr, flags) => {
                         let fault_signal = {
                             let aspace_ref = thr.proc_data.aspace();
