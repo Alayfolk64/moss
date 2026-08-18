@@ -159,8 +159,7 @@ fn recv_impl(
 
     let mut cmsg = cmsg_builder.as_ref().map(|_| Vec::new());
 
-    let mut remote_addr =
-        (!addr.is_null()).then(|| SocketAddrEx::Ip((Ipv4Addr::UNSPECIFIED, 0).into()));
+    let mut remote_addr = prepare_recv_addr(&socket, addr);
     let recv = socket.recv(
         &mut dst,
         RecvOptions {
@@ -169,12 +168,7 @@ fn recv_impl(
             cmsg: cmsg.as_mut(),
         },
     )?;
-
-    if let Some(remote_addr) = remote_addr
-        && !is_unspecified_remote_addr(&remote_addr)
-    {
-        remote_addr.write_to_user(addr, addrlen.get_as_mut()?)?;
-    }
+    finish_recv_addr(&socket, remote_addr, addr, addrlen)?;
 
     if let (Some(mut builder), Some(cmsg)) = (cmsg_builder, cmsg) {
         for cmsg in cmsg {
@@ -256,4 +250,73 @@ pub fn sys_recvmsg(fd: i32, msg: UserPtr<msghdr>, flags: u32) -> AxResult<isize>
             )
         }),
     )
+}
+
+#[cfg(target_arch = "loongarch64")]
+fn prepare_recv_addr(socket: &Socket, addr: UserPtr<sockaddr>) -> Option<SocketAddrEx> {
+    let is_netlink = matches!(&socket.0, axnet::Socket::Netlink(_));
+    (!addr.is_null() && !is_netlink).then(|| SocketAddrEx::Ip((Ipv4Addr::UNSPECIFIED, 0).into()))
+}
+
+#[cfg(target_arch = "loongarch64")]
+fn finish_recv_addr(
+    socket: &Socket,
+    remote_addr: Option<SocketAddrEx>,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+) -> AxResult<()> {
+    if matches!(&socket.0, axnet::Socket::Netlink(_)) {
+        return write_kernel_netlink_addr(addr, addrlen);
+    }
+    write_recv_addr(remote_addr, addr, addrlen)
+}
+
+#[cfg(target_arch = "loongarch64")]
+fn write_kernel_netlink_addr(addr: UserPtr<sockaddr>, addrlen: UserPtr<socklen_t>) -> AxResult<()> {
+    if addr.is_null() {
+        return Ok(());
+    }
+    // The pinned LoongArch nightly corrupts sockaddr_nl when it is carried
+    // through SocketAddrEx.  Write the fixed kernel-origin address directly,
+    // using volatile byte stores to avoid the compiler's aggregate-copy bug.
+    const NETLINK_ADDR_LEN: usize = 12;
+    let addrlen = addrlen.get_as_mut()?;
+    let output = addr
+        .cast::<u8>()
+        .get_as_mut_slice((*addrlen as usize).min(NETLINK_ADDR_LEN))?;
+    let family = (linux_raw_sys::net::AF_NETLINK as u16).to_ne_bytes();
+    for (index, byte) in output.iter_mut().enumerate() {
+        let value = family.get(index).copied().unwrap_or(0);
+        unsafe { core::ptr::write_volatile(byte, value) };
+    }
+    *addrlen = NETLINK_ADDR_LEN as _;
+    Ok(())
+}
+
+#[cfg(not(target_arch = "loongarch64"))]
+fn prepare_recv_addr(_socket: &Socket, addr: UserPtr<sockaddr>) -> Option<SocketAddrEx> {
+    (!addr.is_null()).then(|| SocketAddrEx::Ip((Ipv4Addr::UNSPECIFIED, 0).into()))
+}
+
+#[cfg(not(target_arch = "loongarch64"))]
+fn finish_recv_addr(
+    _socket: &Socket,
+    remote_addr: Option<SocketAddrEx>,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+) -> AxResult<()> {
+    write_recv_addr(remote_addr, addr, addrlen)
+}
+
+fn write_recv_addr(
+    remote_addr: Option<SocketAddrEx>,
+    addr: UserPtr<sockaddr>,
+    addrlen: UserPtr<socklen_t>,
+) -> AxResult<()> {
+    if let Some(remote_addr) = remote_addr
+        && !is_unspecified_remote_addr(&remote_addr)
+    {
+        remote_addr.write_to_user(addr, addrlen.get_as_mut()?)?;
+    }
+    Ok(())
 }
