@@ -2,9 +2,10 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+app_name=$(basename "$repo_root")
 fixture="$repo_root/tests/fixtures/ls2k1000la.dts"
 image="$repo_root/build/site-2kla/moss-2kla.bin"
-elf="$repo_root/build/site-2kla/moss-dev_loongarch64-ls2k1000.elf"
+elf="$repo_root/build/site-2kla/${app_name}_loongarch64-ls2k1000.elf"
 mkdir -p "$repo_root/tmp"
 dtb=$(mktemp -p "$repo_root/tmp" --suffix=.ls2k1000la.dtb)
 

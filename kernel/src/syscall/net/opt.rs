@@ -1,6 +1,9 @@
 use axerrno::{AxError, AxResult, LinuxError};
 use axnet::options::{Configurable, GetSocketOption, SetSocketOption, TcpInfo};
-use linux_raw_sys::net::{SO_ATTACH_BPF, SO_BINDTODEVICE, SO_OOBINLINE, SOL_SOCKET, socklen_t};
+use linux_raw_sys::net::{
+    SO_ATTACH_BPF, SO_BINDTODEVICE, SO_OOBINLINE, SO_TYPE, SOCK_DGRAM, SOCK_RAW, SOCK_STREAM,
+    SOL_SOCKET, socklen_t,
+};
 
 use crate::{
     file::{BpfProgram, FileLike, Socket},
@@ -15,6 +18,15 @@ const PROTO_ICMPV6: u32 = linux_raw_sys::net::IPPROTO_ICMPV6 as u32;
 const PROTO_UDP: u32 = linux_raw_sys::net::IPPROTO_UDP as u32;
 const MCAST_JOIN_GROUP: u32 = linux_raw_sys::net::MCAST_JOIN_GROUP;
 const MCAST_LEAVE_GROUP: u32 = linux_raw_sys::net::MCAST_LEAVE_GROUP;
+
+fn ip_socket_type(socket: &axnet::Socket) -> AxResult<i32> {
+    match socket {
+        axnet::Socket::Tcp(_) => Ok(SOCK_STREAM as i32),
+        axnet::Socket::Udp(_) => Ok(SOCK_DGRAM as i32),
+        axnet::Socket::Raw(_) => Ok(SOCK_RAW as i32),
+        _ => Err(AxError::from(LinuxError::ENOPROTOOPT)),
+    }
+}
 
 mod conv {
     use axerrno::{AxError, AxResult};
@@ -184,6 +196,10 @@ pub fn sys_getsockopt(
         // MOSS does not bind sockets to a network device. Linux reports that
         // state as a successful query with a zero-length interface name.
         *optlen = 0;
+        return Ok(0);
+    }
+    if level == SOL_SOCKET && optname == SO_TYPE {
+        *get(optval, optlen)? = ip_socket_type(&socket.0)?;
         return Ok(0);
     }
     if unsupported_getsockopt(level, optname) {

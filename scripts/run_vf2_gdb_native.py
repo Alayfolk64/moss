@@ -25,8 +25,8 @@ from gdb_native_workload import ensure_gdb_packages, run_gdb_native_test
 from run_vf2_gmac_test import SerialRunner
 
 
-HOST_IP = "192.168.1.2"
-BOARD_IP = "192.168.1.10"
+HOST_IP = "192.168.88.1"
+BOARD_IP = "192.168.88.2"
 RELAY = "/usr/local/sbin/moss-vf2-relay"
 
 
@@ -395,7 +395,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--tftp-dir", type=Path, default=Path("/srv/tftp"))
     parser.add_argument("--serial")
-    parser.add_argument("--interface")
+    parser.add_argument("--interface", default="enp3s0")
     parser.add_argument("--username", default="vf2")
     parser.add_argument("--root-device", default="/dev/mmcblk1p3")
     parser.add_argument("--http-port", type=int, default=18090)

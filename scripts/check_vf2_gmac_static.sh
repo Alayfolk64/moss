@@ -2,11 +2,13 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+app_name=$(basename "$repo_root")
 mainline_fixture="$repo_root/tests/fixtures/visionfive2-v13b-mainline.dts"
 legacy_fixture="$repo_root/tests/fixtures/visionfive2-v13b-uboot-2021.10.dts"
 image="$repo_root/build/site-vf2/moss-vf2.bin"
-elf="$repo_root/build/site-vf2/moss-dev_visionfive2.elf"
-tmp_dir=$(mktemp -d --suffix=.vf2-gmac)
+elf="$repo_root/build/site-vf2/${app_name}_visionfive2.elf"
+mkdir -p "$repo_root/tmp"
+tmp_dir=$(mktemp -d -p "$repo_root/tmp" --suffix=.vf2-gmac)
 
 cleanup() {
     rm -r -- "$tmp_dir"

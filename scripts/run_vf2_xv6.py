@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--tftp-dir", type=Path, default=Path("/srv/tftp"))
     parser.add_argument("--serial")
-    parser.add_argument("--interface")
+    parser.add_argument("--interface", default="enp3s0")
     parser.add_argument("--username", default="vf2")
     return parser.parse_args()
 

@@ -12,10 +12,10 @@
       ▼
 电脑网口 A（赛事局域网，由组委会配置或 DHCP）
 
-电脑网口 B（VF2 私网，默认 192.168.1.2/24）
+电脑网口 B（VF2 私网，默认 192.168.88.1/24）
       │ 网线 2
       ▼
-VF2 GMAC1（默认 192.168.1.10/24）
+VF2 GMAC1（默认 192.168.88.2/24）
 
 电脑 USB ───────── VF2 USB 串口
 ```
@@ -54,9 +54,9 @@ VF2 GMAC1（默认 192.168.1.10/24）
 - 已写好并验证的多分区 SD 卡；
 - 已在本机缓存好的 Rust 工具链、源码和构建依赖。
 
-当前已经验证过的 VF2 私网接口是 `enp108s0`。现场插入 USB 转网口后会出现另一个接口，常见名字为 `enx...` 或新的 `enp...`。接口名不能凭记忆判断，必须通过插拔和 `ip -brief link` 重新确认。
+当前 VF2 私网接口固定使用 `enp3s0`。现场插入 USB 转网口后会出现另一个接口，常见名字为 `enx...` 或新的 `enp...`。必须通过插拔和 `ip -brief link` 确认赛事网口，避免误改 `enp3s0`。
 
-推荐保持已经验证过的 `enp108s0` 继续直连 VF2，把新出现的 USB 转网口用于赛事 RJ45。
+保持 `enp3s0` 直连 VF2，把新出现的 USB 转网口用于赛事 RJ45。
 
 ## 4. 赛前关闭 VF2 NAT 和其他出口
 
@@ -108,7 +108,7 @@ sudo scripts/setup_vf2_network.sh apply
 2. 将赛事 RJ45 通过 USB 转网口接入电脑；
 3. 等待组委会 DHCP 或按要求完成赛事网络配置；
 4. 查看赛事网口名称、地址和路由；
-5. 再连接 `enp108s0` 与 VF2。
+5. 再连接 `enp3s0` 与 VF2。
 
 检查：
 
@@ -121,42 +121,42 @@ ip -4 route
 正常状态应类似：
 
 ```text
-enp108s0  UP  192.168.1.2/24       # VF2 私网
+enp3s0    UP  192.168.88.1/24      # VF2 私网
 enx...     UP  <赛事分配的地址>      # 赛事局域网
 ```
 
 路由应满足：
 
 ```text
-192.168.1.0/24 dev enp108s0
+192.168.88.0/24 dev enp3s0
 default via <赛事网关> dev <赛事网口>
 ```
 
-不要给 VF2 私网口配置默认网关。不要在赛事网口上配置 `192.168.1.2`。
+不要给 VF2 私网口配置默认网关。不要在赛事网口上配置 `192.168.88.1`。
 
 ## 6. 检查赛事网段是否与 VF2 冲突
 
 默认 VF2 私网为：
 
 ```text
-电脑：192.168.1.2/24
-MOSS：192.168.1.10/24
+电脑：192.168.88.1/24
+MOSS：192.168.88.2/24
 ```
 
-如果赛事网卡获得 `192.168.1.x/24`，或者 `ip route` 显示赛事网口也拥有覆盖 `192.168.1.0/24` 的直连路由，就存在冲突，必须切换 VF2 私网。若赛事网使用 `10.x.x.x`、`172.x.x.x` 或其他不覆盖 `192.168.1.0/24` 的网段，可以继续使用默认方案。
+如果赛事网卡获得 `192.168.88.x/24`，或者 `ip route` 显示赛事网口也拥有覆盖 `192.168.88.0/24` 的直连路由，就存在冲突，必须切换 VF2 私网。若赛事网使用 `10.x.x.x`、`172.x.x.x` 或其他不覆盖 `192.168.88.0/24` 的网段，可以继续使用默认方案。
 
-不要只看地址前三段；应同时看前缀长度和 `ip route`。例如赛事地址为 `192.168.0.10/16` 时也会覆盖 `192.168.1.0/24`。
+不要只看地址前三段；应同时看前缀长度和 `ip route`。例如赛事地址为 `192.168.0.10/16` 时也会覆盖 `192.168.88.0/24`。
 
 ## 7. 默认无冲突方案
 
 ### 7.1 配置 VF2 私网口
 
-确认 `enp108s0` 确实连接 VF2 后执行：
+确认 `enp3s0` 确实连接 VF2 后执行：
 
 ```bash
-sudo ip address replace 192.168.1.2/24 dev enp108s0
-sudo ip link set dev enp108s0 up
-ip -brief address show enp108s0
+sudo ip address replace 192.168.88.1/24 dev enp3s0
+sudo ip link set dev enp3s0 up
+ip -brief address show enp3s0
 ```
 
 ### 7.2 构建无默认网关的 MOSS
@@ -166,11 +166,11 @@ ip -brief address show enp108s0
 ```bash
 cd /home/zjr/Data/moss
 make -B APPS_INIT=n SITE_INIT=n \
-  IP=192.168.1.10 GW= \
+  IP=192.168.88.2 GW= \
   kernel-vf2
 ```
 
-`GW=` 为空不会影响 MOSS 与 `192.168.1.2` 通信，但会阻止 MOSS把非本地流量交给电脑转发。
+`GW=` 为空不会影响 MOSS 与 `192.168.88.1` 通信，但会阻止 MOSS把非本地流量交给电脑转发。
 
 当前 `shell-init` 默认不运行 NTP。只有显式设置 `MOSS_NTP_SYNC=1` 才会启动 `ntpd`，因此赛事外网不可用不会阻塞进入 shell。比赛时不要设置该变量，也不要运行公网 `apk update`、`wget` 或 `curl`。
 
@@ -191,7 +191,7 @@ sha256sum \
 确认 TFTP 只监听 VF2 私网地址：
 
 ```bash
-sudo ss -lunp | grep '192.168.1.2:69'
+sudo ss -lunp | grep '192.168.88.1:69'
 ```
 
 如果没有监听，启动：
@@ -200,7 +200,7 @@ sudo ss -lunp | grep '192.168.1.2:69'
 sudo /usr/sbin/in.tftpd \
   --listen \
   --user tftp \
-  --address 192.168.1.2:69 \
+  --address 192.168.88.1:69 \
   --secure /srv/tftp
 ```
 
@@ -219,11 +219,11 @@ picocom -b 115200 /dev/ttyACM0
 进入 `StarFive #` 后逐行执行：
 
 ```text
-setenv ipaddr 192.168.1.10
-setenv serverip 192.168.1.2
+setenv ipaddr 192.168.88.2
+setenv serverip 192.168.88.1
 setenv netmask 255.255.255.0
 printenv ipaddr serverip netmask
-ping 192.168.1.2
+ping 192.168.88.1
 
 tftpboot 0x40200000 moss-vf2-nowatchdog.bin
 fdt addr 0x42200000
@@ -244,11 +244,11 @@ go 0x40200000
 电脑执行：
 
 ```bash
-ip -brief link show enp108s0
-ip -brief address show enp108s0
+ip -brief link show enp3s0
+ip -brief address show enp3s0
 ```
 
-应看到 `UP`、`LOWER_UP` 和 `192.168.1.2/24`。
+应看到 `UP`、`LOWER_UP` 和 `192.168.88.1/24`。
 
 ### 8.2 PC 到 MOSS 的 HTTP/TCP 下载
 
@@ -256,7 +256,7 @@ ip -brief address show enp108s0
 
 ```bash
 python3 -m http.server 8000 \
-  --bind 192.168.1.2 \
+  --bind 192.168.88.1 \
   --directory /srv/tftp
 ```
 
@@ -264,7 +264,7 @@ MOSS 的 Alpine p3/p4 执行：
 
 ```sh
 wget -O /dev/null \
-  http://192.168.1.2:8000/moss-vf2-nowatchdog.bin
+  http://192.168.88.1:8000/moss-vf2-nowatchdog.bin
 ```
 
 Debian p2 可使用：
@@ -272,7 +272,7 @@ Debian p2 可使用：
 ```sh
 curl -w '%{http_code} %{size_download}\n' \
   -o /dev/null \
-  http://192.168.1.2:8000/moss-vf2-nowatchdog.bin
+  http://192.168.88.1:8000/moss-vf2-nowatchdog.bin
 ```
 
 ### 8.3 MOSS 向 PC 发送 TCP 数据
@@ -280,13 +280,13 @@ curl -w '%{http_code} %{size_download}\n' \
 电脑执行：
 
 ```bash
-nc -l 192.168.1.2 19000
+nc -l 192.168.88.1 19000
 ```
 
 MOSS 执行：
 
 ```sh
-echo MOSS_VF2_TX_OK | busybox nc -w 3 192.168.1.2 19000
+echo MOSS_VF2_TX_OK | busybox nc -w 3 192.168.88.1 19000
 ```
 
 电脑应收到 `MOSS_VF2_TX_OK`。
@@ -302,7 +302,7 @@ busybox nc -l -p 19001
 电脑执行：
 
 ```bash
-printf 'MOSS_VF2_RX_OK\n' | nc -w 3 192.168.1.10 19001
+printf 'MOSS_VF2_RX_OK\n' | nc -w 3 192.168.88.2 19001
 ```
 
 MOSS 应收到 `MOSS_VF2_RX_OK`。
@@ -323,10 +323,10 @@ MOSS：192.168.250.10/24
 确认目标是 VF2 私网口后执行：
 
 ```bash
-sudo ip address flush dev enp108s0 scope global
-sudo ip address add 192.168.250.2/24 dev enp108s0
-sudo ip link set dev enp108s0 up
-ip -4 address show dev enp108s0
+sudo ip address flush dev enp3s0 scope global
+sudo ip address add 192.168.250.2/24 dev enp3s0
+sudo ip link set dev enp3s0 up
+ip -4 address show dev enp3s0
 ip -4 route
 ```
 
@@ -351,7 +351,7 @@ make -B APPS_INIT=n SITE_INIT=n \
 sudo ss -lunp | grep ':69'
 ```
 
-停止其中绑定旧地址 `192.168.1.2:69` 的 `in.tftpd` 服务或进程，再启动新实例：
+停止其中绑定默认地址 `192.168.88.1:69` 的 `in.tftpd` 服务或进程，再启动新实例：
 
 ```bash
 sudo /usr/sbin/in.tftpd \
@@ -406,8 +406,8 @@ tftpboot 0x40200000 moss-vf2-nowatchdog.bin
 检查：
 
 ```bash
-ip -brief link show enp108s0
-ip -brief address show enp108s0
+ip -brief link show enp3s0
+ip -brief address show enp3s0
 sudo ss -lunp | grep ':69'
 ls -l /srv/tftp/moss-vf2-nowatchdog.bin
 ```
@@ -416,7 +416,7 @@ ls -l /srv/tftp/moss-vf2-nowatchdog.bin
 
 ```text
 printenv ipaddr serverip netmask
-ping 192.168.1.2
+ping 192.168.88.1
 ```
 
 ### 11.2 插入赛事网后 TFTP 突然失败
@@ -428,7 +428,7 @@ ip -4 -brief address
 ip -4 route
 ```
 
-确认 `192.168.1.0/24` 只指向 VF2 私网口，TFTP 只监听 `192.168.1.2:69`。
+确认 `192.168.88.0/24` 只指向 VF2 私网口，TFTP 只监听 `192.168.88.1:69`。
 
 ### 11.3 MOSS 能访问电脑但不能访问赛事平台
 
@@ -449,7 +449,7 @@ ip -4 route
 1. 移除 VF2 NAT，确认 `ip_forward=0`；
 2. 关闭 Wi-Fi；
 3. 确认源码、Rust 工具链和依赖均可离线使用；
-4. 使用 `IP=192.168.1.10 GW=` 重新构建；
+4. 使用 `IP=192.168.88.2 GW=` 重新构建；
 5. 部署并校验 TFTP 文件；
 6. 通过 picocom 截停 U-Boot；
 7. TFTP 加载 MOSS；
@@ -467,8 +467,8 @@ ip -4 route
 [ ] net.ipv4.ip_forward = 0
 [ ] 没有 moss_vf2 NAT 表
 [ ] 赛事网段与 VF2 私网不冲突
-[ ] VF2 私网口为 192.168.1.2/24（或已成套切换新网段）
-[ ] MOSS 使用 IP=192.168.1.10、GW 为空
+[ ] VF2 私网口为 192.168.88.1/24（或已成套切换新网段）
+[ ] MOSS 使用 IP=192.168.88.2、GW 为空
 [ ] TFTP 只监听 VF2 私网地址的 UDP 69
 [ ] U-Boot ipaddr/serverip/netmask 与当前私网一致
 [ ] 未执行 saveenv
@@ -486,4 +486,3 @@ sudo scripts/setup_vf2_network.sh status
 ```
 
 该操作仅用于允许联网的普通开发环境，不要在赛事网络中执行。
-

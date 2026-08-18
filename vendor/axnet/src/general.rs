@@ -102,7 +102,11 @@ impl GeneralOptions {
     }
 
     pub fn nonblocking(&self) -> bool {
-        self.nonblock.load(Ordering::Relaxed)
+        self.nonblock.load(Ordering::Acquire)
+    }
+
+    pub fn set_nonblocking(&self, nonblocking: bool) {
+        self.nonblock.store(nonblocking, Ordering::Release);
     }
 
     pub fn reuse_address(&self) -> bool {
@@ -308,7 +312,7 @@ impl Configurable for GeneralOptions {
 
         match option {
             O::NonBlocking(nonblock) => {
-                self.nonblock.store(*nonblock, Ordering::Relaxed);
+                self.set_nonblocking(*nonblock);
             }
             O::ReuseAddress(reuse) => {
                 self.reuse_address.store(*reuse, Ordering::Relaxed);

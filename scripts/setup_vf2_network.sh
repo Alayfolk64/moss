@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-BOARD_ADDRESS=192.168.1.2
-BOARD_NETWORK=192.168.1.0/24
+BOARD_ADDRESS=192.168.88.1
+BOARD_NETWORK=192.168.88.0/24
 SYSCTL_FILE=/etc/sysctl.d/90-moss-vf2-forward.conf
 NFT_FILE=/etc/nftables.d/moss-vf2.nft
 CHRONY_FILE=/etc/chrony/conf.d/moss-vf2.conf

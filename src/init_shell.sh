@@ -61,8 +61,7 @@ if [ "${MOSS_NTP_SYNC:-0}" = 1 ] && command -v ntpd >/dev/null 2>&1; then
         NTP_ATTEMPT=1
         while [ "$NTP_ATTEMPT" -le 3 ]; do
             if ntpd -nq -p 203.107.6.88 \
-                || ntpd -nq -p 192.168.88.1 \
-                || ntpd -nq -p 192.168.1.2; then
+                || ntpd -nq -p 192.168.88.1; then
                 NTP_OK=1
                 break
             fi

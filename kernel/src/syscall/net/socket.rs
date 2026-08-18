@@ -38,6 +38,20 @@ fn check_privileged_bind(addr: &SocketAddrEx) -> AxResult {
     Ok(())
 }
 
+/// Places a newly created socket in its final allocation, restores the exact
+/// blocking mode requested by userspace, and only then publishes the fd.
+///
+/// Keeping this as one finalization step is important on the pinned
+/// LoongArch toolchain: moving a freshly constructed socket aggregate has
+/// occasionally changed its initial atomic option state.  Writing both the
+/// blocking and non-blocking cases here also keeps every socket family on the
+/// same Linux-compatible creation path.
+fn add_new_socket(socket: SocketInner, raw_ty: u32) -> AxResult<isize> {
+    let socket = Arc::new(Socket(socket));
+    socket.set_nonblocking(raw_ty & O_NONBLOCK != 0)?;
+    add_file_like(socket, raw_ty & O_CLOEXEC != 0).map(|fd| fd as isize)
+}
+
 pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
     debug!("sys_socket <= domain: {domain}, ty: {raw_ty}, proto: {proto}");
     let ty = raw_ty & 0xFF;
@@ -92,14 +106,7 @@ pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
             return Err(AxError::from(LinuxError::EAFNOSUPPORT));
         }
     };
-    let socket = Socket(socket);
-
-    if raw_ty & O_NONBLOCK != 0 {
-        socket.set_nonblocking(true)?;
-    }
-    let cloexec = raw_ty & O_CLOEXEC != 0;
-
-    socket.add_to_fd_table(cloexec).map(|fd| fd as isize)
+    add_new_socket(socket, raw_ty)
 }
 
 pub fn sys_bind(fd: i32, addr: UserConstPtr<sockaddr>, addrlen: u32) -> AxResult<isize> {

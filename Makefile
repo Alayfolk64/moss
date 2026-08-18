@@ -1,5 +1,6 @@
 # 只保留仓库路径；平台配置全部写在对应目标里，不设全局 MEM/CPU_NUM。
 A := $(abspath $(dir $(firstword $(MAKEFILE_LIST))))
+APP_NAME := $(notdir $(A))
 export A
 
 .DEFAULT_GOAL := all
@@ -18,7 +19,7 @@ kernel-rv:
 		OUT_DIR=$(A)/build/kernel-rv
 	rust-objcopy -I binary -O elf64-littleriscv -B riscv \
 		--rename-section .data=.text,alloc,load,readonly,code \
-		build/kernel-rv/moss-dev_riscv64-qemu-virt.bin build/kernel-rv/kernel.bin.o
+		build/kernel-rv/$(APP_NAME)_riscv64-qemu-virt.bin build/kernel-rv/kernel.bin.o
 	rust-lld -flavor gnu -m elf64lriscv -T make/kernel-rv-wrap.ld \
 		-o kernel-rv build/kernel-rv/kernel.bin.o
 	rm -f build/kernel-rv/kernel.bin.o
@@ -32,7 +33,7 @@ kernel-la:
 		OUT_CONFIG=$(A)/build/kernel-la/axconfig.toml \
 		OUT_DIR=$(A)/build/kernel-la
 	loongarch64-linux-musl-gcc \
-		-DKERNEL_BINARY='"build/kernel-la/moss-dev_loongarch64-qemu-virt.bin"' \
+		-DKERNEL_BINARY='"build/kernel-la/$(APP_NAME)_loongarch64-qemu-virt.bin"' \
 		-c make/kernel-la-image.S -o build/kernel-la/kernel.bin.o
 	rust-lld -flavor gnu -m elf64loongarch -T make/kernel-la-wrap.ld \
 		-o kernel-la build/kernel-la/kernel.bin.o
@@ -49,7 +50,7 @@ site-rv:
 		OUT_DIR=$(A)/build/site-rv
 	rust-objcopy -I binary -O elf64-littleriscv -B riscv \
 		--rename-section .data=.text,alloc,load,readonly,code \
-		build/site-rv/moss-dev_riscv64-qemu-virt.bin build/site-rv/kernel.bin.o
+		build/site-rv/$(APP_NAME)_riscv64-qemu-virt.bin build/site-rv/kernel.bin.o
 	rust-lld -flavor gnu -m elf64lriscv -T make/kernel-rv-wrap.ld \
 		-o build/site-rv/kernel-rv build/site-rv/kernel.bin.o
 	rm -f build/site-rv/kernel.bin.o
@@ -70,7 +71,7 @@ site-la:
 		OUT_CONFIG=$(A)/build/site-la/axconfig.toml \
 		OUT_DIR=$(A)/build/site-la
 	loongarch64-linux-musl-gcc \
-		-DKERNEL_BINARY='"build/site-la/moss-dev_loongarch64-qemu-virt.bin"' \
+		-DKERNEL_BINARY='"build/site-la/$(APP_NAME)_loongarch64-qemu-virt.bin"' \
 		-c make/kernel-la-image.S -o build/site-la/kernel.bin.o
 	rust-lld -flavor gnu -m elf64loongarch -T make/kernel-la-wrap.ld \
 		-o build/site-la/kernel-la build/site-la/kernel.bin.o
@@ -88,12 +89,12 @@ site-vf2:
 		ARCH=riscv64 BUS=mmio MEM=4G CPU_CAPACITY=4 \
 		MYPLAT=axplat-riscv64-visionfive2 \
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
-		IP=192.168.1.10 GW=192.168.1.2 \
+		IP=192.168.88.2 GW=192.168.88.1 \
 		NO_AXSTD=y AX_LIB=axfeat APP_FEATURES="vf2 site-init" \
 		TARGET_DIR=$(A)/target \
 		OUT_CONFIG=$(A)/build/site-vf2/axconfig.toml \
 		OUT_DIR=$(A)/build/site-vf2
-	cp -f build/site-vf2/moss-dev_visionfive2.bin build/site-vf2/moss-vf2.bin
+	cp -f build/site-vf2/$(APP_NAME)_visionfive2.bin build/site-vf2/moss-vf2.bin
 
 site-2kla:
 	mkdir -p build/site-2kla
@@ -107,7 +108,7 @@ site-2kla:
 		TARGET_DIR=$(A)/target \
 		OUT_CONFIG=$(A)/build/site-2kla/axconfig.toml \
 		OUT_DIR=$(A)/build/site-2kla
-	cp -f build/site-2kla/moss-dev_loongarch64-ls2k1000.bin build/site-2kla/moss-2kla.bin
+	cp -f build/site-2kla/$(APP_NAME)_loongarch64-ls2k1000.bin build/site-2kla/moss-2kla.bin
 
 help:
 	@printf '%s\n' \
