@@ -6,7 +6,7 @@ use core::{
 
 use axerrno::{AxError, AxResult, LinuxError};
 use axpoll::{IoEvents, Pollable};
-use axtask::future::{block_on, poll_io, timeout};
+use axtask::future::{block_on, interruptible, poll_io, timeout};
 
 use crate::{
     SERVICE,
@@ -205,10 +205,10 @@ impl GeneralOptions {
         pollable: &P,
         f: F,
     ) -> AxResult<T> {
-        block_on(timeout(
+        block_on(interruptible(timeout(
             self.send_timeout(),
             poll_io(pollable, IoEvents::OUT, self.nonblocking(), f),
-        ))?
+        )))??
     }
 
     pub fn recv_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(
@@ -216,10 +216,10 @@ impl GeneralOptions {
         pollable: &P,
         f: F,
     ) -> AxResult<T> {
-        block_on(timeout(
+        block_on(interruptible(timeout(
             self.recv_timeout(),
             poll_io(pollable, IoEvents::IN, self.nonblocking(), f),
-        ))?
+        )))??
     }
 
     fn network_poller<P: Pollable, F: FnMut() -> AxResult<T>, T>(
@@ -233,7 +233,7 @@ impl GeneralOptions {
             Ok(value) => Ok(value),
             Err(AxError::WouldBlock) => {
                 poll_interfaces();
-                block_on(timeout(
+                block_on(interruptible(timeout(
                     deadline,
                     poll_io(pollable, events, self.nonblocking(), || {
                         // A device interrupt normally wakes this future.  A
@@ -242,7 +242,7 @@ impl GeneralOptions {
                         poll_interfaces();
                         f()
                     }),
-                ))?
+                )))??
             }
             Err(err) => Err(err),
         }

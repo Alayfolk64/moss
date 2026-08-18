@@ -6,7 +6,7 @@ use core::{
 
 use axerrno::{AxError, AxResult};
 use axpoll::IoEvents;
-use axtask::future::{self, block_on, poll_io};
+use axtask::future::{self, block_on, interruptible, poll_io};
 use bitflags::bitflags;
 use linux_raw_sys::general::{
     EPOLL_CLOEXEC, EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, epoll_event, timespec,
@@ -137,19 +137,20 @@ fn do_epoll_wait(
             return poll_epoll_events(&epoll, events);
         }
 
-        match block_on(future::timeout(
+        match block_on(interruptible(future::timeout(
             timeout,
             poll_io(epoll.as_ref(), IoEvents::IN, false, || {
                 poll_network_once();
                 epoll.poll_events(events)
             }),
-        )) {
+        ))) {
             // epoll wait timeouts are reported as a zero event count, never
             // as ETIMEDOUT. Preserve that ABI even if a nested poll future
             // surfaces its own elapsed deadline.
-            Ok(Err(AxError::TimedOut)) => Ok(0),
-            Ok(r) => r.map(|n| n as _),
-            Err(_) => Ok(0),
+            Ok(Ok(Err(AxError::TimedOut))) => Ok(0),
+            Ok(Ok(r)) => r.map(|n| n as _),
+            Ok(Err(_)) => Ok(0),
+            Err(_) => Err(AxError::Interrupted),
         }
     });
 
