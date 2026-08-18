@@ -80,14 +80,14 @@ run_vf2() {
     bundle_info=$(prepare_bundle 3.22 riscv64) || return $?
     read -r bundle package_count _ <<<"$bundle_info"
     if [[ ${VF2_GDB_SKIP_BUILD:-0} != 1 ]]; then
-        make -B -C "$repo_root" SITE_INIT=y kernel-vf2 || return $?
+        make -C "$repo_root" site-vf2 || return $?
     fi
-    [[ -s "$repo_root/moss-vf2.bin" ]]
+    [[ -s "$repo_root/build/site-vf2/moss-vf2.bin" ]]
     local timestamp log
     timestamp=$(date +%Y%m%d-%H%M%S)
     log="$repo_root/tmp/hardware-vf2-gdb-native-$timestamp.log"
     python3 "$repo_root/scripts/run_vf2_gdb_native.py" \
-        --image "$repo_root/moss-vf2.bin" --bundle "$bundle" \
+        --image "$repo_root/build/site-vf2/moss-vf2.bin" --bundle "$bundle" \
         --package-floor "$package_count" --log "$log" \
         "${serial_arg[@]}" "${interface_arg[@]}" || return $?
     echo "[hardware-gdb] VF2 log=$log"
@@ -111,14 +111,14 @@ run_ls2k1000la() {
     bundle_info=$(prepare_bundle 3.21 loongarch64) || return $?
     read -r bundle package_count _ <<<"$bundle_info"
     if [[ ${LS2K_GDB_SKIP_BUILD:-0} != 1 ]]; then
-        make -B -C "$repo_root" SITE_INIT=y kernel-la-2k1000 || return $?
+        make -C "$repo_root" site-2kla || return $?
     fi
-    [[ -s "$repo_root/moss-2k1000la.bin" ]]
+    [[ -s "$repo_root/build/site-2kla/moss-2kla.bin" ]]
     local image_sha tftp_name timestamp log
-    image_sha=$(sha256sum "$repo_root/moss-2k1000la.bin" | awk '{print $1}')
+    image_sha=$(sha256sum "$repo_root/build/site-2kla/moss-2kla.bin" | awk '{print $1}')
     tftp_name="moss-ls2k1000la-gdb-${image_sha:0:16}.bin"
     sudo install -o tftp -g tftp -m 0644 \
-        "$repo_root/moss-2k1000la.bin" "/srv/tftp/$tftp_name"
+        "$repo_root/build/site-2kla/moss-2kla.bin" "/srv/tftp/$tftp_name"
     [[ $(sha256sum "/srv/tftp/$tftp_name" | awk '{print $1}') == "$image_sha" ]]
     timestamp=$(date +%Y%m%d-%H%M%S)
     log="$repo_root/tmp/hardware-ls2k1000la-gdb-native-$timestamp.log"

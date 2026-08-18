@@ -4,8 +4,8 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 mainline_fixture="$repo_root/tests/fixtures/visionfive2-v13b-mainline.dts"
 legacy_fixture="$repo_root/tests/fixtures/visionfive2-v13b-uboot-2021.10.dts"
-image="$repo_root/moss-vf2.bin"
-elf="$repo_root/$(basename "$repo_root")_visionfive2.elf"
+image="$repo_root/build/site-vf2/moss-vf2.bin"
+elf="$repo_root/build/site-vf2/moss-dev_visionfive2.elf"
 tmp_dir=$(mktemp -d --suffix=.vf2-gmac)
 
 cleanup() {
@@ -66,6 +66,7 @@ rustc --edition 2024 --test -A dead-code \
 echo "[3/5] enforce the VF2 lifecycle and PHY-management source contracts"
 driver="$repo_root/vendor/axdriver_net/src/dwmac_jh7110.rs"
 platform="$repo_root/vendor/axdriver/src/jh7110.rs"
+rg -q 'APP_FEATURES="vf2 site-init"' "$repo_root/Makefile"
 rg -q 'fn ensure_started' "$driver"
 rg -q 'register_interrupt_handler' "$driver" "$platform"
 rg -q 'fn mdio_write' "$driver"
@@ -92,8 +93,8 @@ if rg -n 'MAC_PACKET_FILTER_PR' "$driver"; then
     exit 1
 fi
 
-echo "[4/5] build the VF2 shell image"
-make -C "$repo_root" kernel-vf2
+echo "[4/5] build the VF2 site image"
+make -C "$repo_root" site-vf2
 [[ -s "$image" ]] || {
     echo "missing VF2 image: $image" >&2
     exit 1

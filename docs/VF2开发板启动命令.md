@@ -1,6 +1,6 @@
 # VF2 开发板手动启动命令
 
-本文只记录 VisionFive 2 通过 `picocom`、U-Boot 和 TFTP 手动启动最新 MOSS 的主流程。每次启动前重新构建无看门狗的 `shell-init` 镜像，不运行自动验收脚本。
+本文只记录 VisionFive 2 通过 `picocom`、U-Boot 和 TFTP 手动启动最新 MOSS 的主流程。每次启动前重新构建无看门狗的 `site-init` 镜像，不运行自动验收脚本。
 
 ## 主流程
 
@@ -10,22 +10,20 @@
 
 ```bash
 cd /home/wuxun/Projects/moss-dev
-make -B APPS_INIT=n SITE_INIT=n \
-  IP=192.168.1.10 GW=192.168.1.2 \
-  kernel-vf2
+make site-vf2
 ```
 
-`APPS_INIT=n SITE_INIT=n` 会选择 `vf2 shell-init`，不会加入 `vf2-watchdog`；`IP` 和 `GW` 让 MOSS 启动后直接使用 PC 直连地址和默认路由。
+该目标固定选择 `vf2 site-init`，不会加入 `vf2-watchdog`；板卡地址 `192.168.1.10/24` 和网关 `192.168.1.2` 已固化，不接受额外构建参数。
 
 将刚生成的镜像部署到 TFTP：
 
 ```bash
 sudo install -o tftp -g tftp -m 0644 \
-  moss-vf2.bin \
+  build/site-vf2/moss-vf2.bin \
   /srv/tftp/moss-vf2-nowatchdog.bin
 
 sha256sum \
-  moss-vf2.bin \
+  build/site-vf2/moss-vf2.bin \
   /srv/tftp/moss-vf2-nowatchdog.bin
 ```
 
@@ -71,12 +69,7 @@ fdt set /chosen bootargs "root=/dev/mmcblk1p3 rw"
 go 0x40200000
 ```
 
-这里使用 SD 卡的 p3 Alpine rootfs。正常启动最后会进入：
-
-```text
-Entering interactive shell...
-starry:~#
-```
+这里固定使用 SD 卡的 p3 Alpine rootfs。`site-init` 进入 `/root`，设置 `starry:~#` 提示符后启动 `/bin/sh`，不自动运行网络、服务或验收命令。
 
 ### 5. 退出 MOSS
 

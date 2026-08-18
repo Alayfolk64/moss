@@ -1,4 +1,4 @@
-# Loongson 2K1000LA board configuration used by `make kernel-la-2k1000`.
+# Loongson 2K1000LA board configuration used by `make site-2kla`.
 arch = "loongarch64"
 platform = "loongarch64-ls2k1000"
 package = "axplat-loongarch64-ls2k1000"

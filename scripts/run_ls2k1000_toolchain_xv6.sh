@@ -114,9 +114,9 @@ curl --noproxy '*' -fsS \
     "http://$board_host_ip:$apk_repo_port/$(basename "$xv6_archive")" \
     -o /dev/null
 
-image="$repo_root/moss-2k1000la.bin"
+image="$repo_root/build/site-2kla/moss-2kla.bin"
 if [[ ${LS2K_TOOLCHAIN_SKIP_BUILD:-0} != 1 ]]; then
-    make -C "$repo_root" SITE_INIT=y kernel-la-2k1000
+    make -C "$repo_root" site-2kla
 fi
 [[ -f "$image" ]] || {
     echo "MOSS image is missing: $image" >&2

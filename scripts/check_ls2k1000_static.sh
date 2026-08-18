@@ -3,10 +3,10 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 fixture="$repo_root/tests/fixtures/ls2k1000la.dts"
-image="$repo_root/moss-2k1000la.bin"
-shell_image="$repo_root/moss-2k1000la-shell.bin"
-elf="$repo_root/$(basename "$repo_root")_loongarch64-ls2k1000.elf"
-dtb=$(mktemp --suffix=.ls2k1000la.dtb)
+image="$repo_root/build/site-2kla/moss-2kla.bin"
+elf="$repo_root/build/site-2kla/moss-dev_loongarch64-ls2k1000.elf"
+mkdir -p "$repo_root/tmp"
+dtb=$(mktemp -p "$repo_root/tmp" --suffix=.ls2k1000la.dtb)
 
 cleanup() {
     unlink -- "$dtb" 2>/dev/null || true
@@ -20,7 +20,7 @@ for tool in dtc fdtget llvm-objdump llvm-readelf make od rg rustc; do
     }
 done
 
-echo "[1/7] compile and inspect the LS2K1000LA DT fixture"
+echo "[1/6] compile and inspect the LS2K1000LA DT fixture"
 dtc -Wunique_unit_address -Wunit_address_vs_reg \
     -I dts -O dtb -o "$dtb" "$fixture"
 
@@ -72,19 +72,30 @@ fi
 [[ $(fdtget -t s "$dtb" /reboot compatible) == syscon-reboot ]]
 [[ $(fdtget -t s "$dtb" /poweroff compatible) == syscon-poweroff ]]
 
-echo "[2/7] run host-side state-machine tests"
+echo "[2/6] run host-side state-machine tests"
 
 rg -q 'pub time: SpinNoIrq<TimeManager>' "$repo_root/kernel/src/task/mod.rs"
 rg -q 'static ref ALARM_RUNTIME: SpinNoIrq<AlarmRuntime>' \
     "$repo_root/kernel/src/task/timer.rs"
-rg -q 'timers: Vec<(TimerKey, Entry)>' "$repo_root/kernel/src/task/timer.rs"
+rg -Fq 'timers: Vec<(TimerKey, Entry)>' "$repo_root/kernel/src/task/timer.rs"
 if rg -q 'BTreeMap<TimerKey, Entry>' "$repo_root/kernel/src/task/timer.rs"; then
     echo "LS2K1000 alarm queue must not use the repeatedly corrupted BTreeMap path" >&2
     exit 1
 fi
 rg -q 'MOSS_NTP_SYNC:-0' "$repo_root/src/init_shell.sh"
 rg -q 'const SIOCGIFCONF: u32 = 0x8912' "$repo_root/kernel/src/file/net.rs"
-rg -q 'root.add("net"' "$repo_root/kernel/src/pseudofs/proc.rs"
+rg -Fq 'root.add("net"' "$repo_root/kernel/src/pseudofs/proc.rs"
+rg -q '^site-2kla:$' "$repo_root/Makefile"
+rg -q 'APP_FEATURES="ls2k1000 site-init ls2k1000-shell-mode"' \
+    "$repo_root/Makefile"
+rg -q 'ARCH=loongarch64 BUS=mmio MEM=2G CPU_CAPACITY=2' "$repo_root/Makefile"
+rg -q "^export PS1='starry:~# '$" "$repo_root/src/init_site.sh"
+rg -q '^cd /root 2>/dev/null \|\| cd /$' "$repo_root/src/init_site.sh"
+[[ $(tail -n 1 "$repo_root/src/init_site.sh") == 'exec /bin/sh' ]]
+if rg -q '^kernel-la-2k1000(-shell)?:' "$repo_root/Makefile"; then
+    echo "legacy LS2K1000LA image target must not remain in Makefile" >&2
+    exit 1
+fi
 rg -q 'MOSS_NET GMAC_RESET_TIMEOUT' \
     "$repo_root/vendor/axdriver_net/src/dwmac_ls2k1000.rs"
 rg -q 'MOSS_NET GMAC_READY' "$repo_root/vendor/axdriver_net/src/dwmac_ls2k1000.rs"
@@ -123,7 +134,7 @@ for entry in "${state_tests[@]}"; do
     "$test_bin_dir/$test_name" --quiet
 done
 
-echo "[3/7] reject fixed LS2K1000 peripheral addresses in production sources"
+echo "[3/6] reject fixed LS2K1000 peripheral addresses in production sources"
 production_paths=(
     "$repo_root/Cargo.toml"
     "$repo_root/Makefile"
@@ -139,8 +150,8 @@ if rg -n -i '0x(1fe2_?0000|1fe0_?1400|1fe0_?1040|1fe2_?7800|1fe2_?7000|400e_?000
     exit 1
 fi
 
-echo "[4/7] build and validate the production image"
-make -C "$repo_root" kernel-la-2k1000
+echo "[4/6] build and validate the site image"
+make -C "$repo_root" site-2kla
 [[ -s "$image" ]] || {
     echo "missing board image: $image" >&2
     exit 1
@@ -152,7 +163,7 @@ make -C "$repo_root" kernel-la-2k1000
 [[ $(od -An -tx1 -N2 "$image" | tr -d '[:space:]') == 4d5a ]]
 llvm-readelf -h "$elf" | rg -q 'Machine:[[:space:]]+LoongArch'
 
-echo "[5/7] validate the LoongArch boot and context contracts"
+echo "[5/6] validate the LoongArch boot and context contracts"
 boot_entry_disasm=$(
     llvm-objdump -d --demangle "$elf" |
         sed -n '/<_stext>:/,/^$/p' |
@@ -183,7 +194,7 @@ mmu_setup_disasm=$(
 rg -q 'ori[[:space:]]+\$a0, \$zero, 176' <<<"$mmu_setup_disasm"
 rg -q 'csrwr[[:space:]]+\$a0, 0' <<<"$mmu_setup_disasm"
 
-echo "[6/7] validate DTB parsing and uncached DMA layout"
+echo "[6/6] validate DTB parsing and uncached DMA layout"
 fdt_from_bytes_disasm=$(
     llvm-objdump -d --demangle "$elf" |
         sed -n '/<fdt_parser::fdt::Fdt::from_bytes/,/^$/p'
@@ -223,16 +234,5 @@ dma_section=$(
 [[ "$dma_section" != *" AX "* ]]
 [[ ${dma_section##* } == 4096 ]]
 
-echo "[7/7] build and validate the watchdog-free shell image"
-make -C "$repo_root" kernel-la-2k1000-shell
-[[ -s "$shell_image" ]] || {
-    echo "missing shell image: $shell_image" >&2
-    exit 1
-}
-[[ $(od -An -tx1 -N2 "$shell_image" | tr -d '[:space:]') == 4d5a ]]
-llvm-readelf -h "$elf" | rg -q 'Machine:[[:space:]]+LoongArch'
-
-printf 'LS2K1000LA static checks passed: cpus=%s image=%s bytes\n' \
+printf 'LS2K1000LA site static checks passed: cpus=%s image=%s bytes\n' \
     "$enabled_cpus" "$(stat -c %s "$image")"
-printf 'LS2K1000LA shell image passed: image=%s bytes\n' \
-    "$(stat -c %s "$shell_image")"

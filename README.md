@@ -17,8 +17,8 @@ MossOS 已实现进程与线程、虚拟内存、文件系统、信号、网络�
 
 | 平台 | 架构与配置 | 主要硬件路径 | 验证情况 |
 | --- | --- | --- | --- |
-| QEMU virt | RISC-V64，8 核、8 GiB | SBI、PLIC、VirtIO MMIO | 通过 CAgent 与 BuildStorm 线上测试 |
-| QEMU virt | LoongArch64，12 核、8 GiB | EIOINTC、IOCSR IPI、VirtIO PCI | 通过 CAgent 与 BuildStorm 线上测试 |
+| QEMU virt | RISC-V64，现场入口固定 2 核、2 GiB | SBI、PLIC、VirtIO MMIO | DHCP、存储、网络和常用应用已验证 |
+| QEMU virt | LoongArch64，现场入口固定 2 核、2 GiB | EIOINTC、IOCSR IPI、VirtIO PCI | DHCP、存储、网络和常用应用已验证 |
 | VisionFive 2 | RISC-V64，4 核、4 GiB | PLIC、UART、SD/MMC、GMAC1 | 完成实板启动、存储、网络和用户程序验证 |
 | LS2K1000LA | LoongArch64，2 核、2 GiB | LIOINTC、UART、AHCI SATA、GMAC、RTC | 完成实板启动并通过现场赛测试 |
 
@@ -61,65 +61,25 @@ make docker
 
 不使用 Docker 时，需要自行安装 Rust nightly、`cargo-binutils`、对应架构的交叉编译工具和 QEMU；LoongArch64 需要 QEMU 10。以下命令均在仓库根目录执行。
 
-### QEMU 构建与普通运行
-
-分别构建两个 QEMU 平台内核，或一次构建二者：
+### 初赛与决赛 QEMU 内核
 
 ```bash
-make kernel-rv     # 生成 kernel-rv
-make kernel-la     # 生成 kernel-la
-make all           # 生成以上两个内核
+make all
 ```
 
-使用单核配置快速启动系统：
+该命令按现场使用的 16 GiB 配置生成仓库根目录下的 `kernel-rv` 和 `kernel-la`。两份内核都不固定初赛或决赛脚本，而是在启动时读取设备树中的实际 CPU 数量：单核加载 `src/init_pre.sh`，多核加载 `src/init_final.sh`。因此同一份内核可以通过 QEMU 的 `-smp` 配置切换初赛和决赛入口；正常 QEMU 启动时，可用内存同样以设备树报告为准。
 
-```bash
-make run_rv
-make run_la
-```
+### 现场固定入口
 
-上述快捷入口会自动准备对应的 `sdcard-rv.img` 或 `sdcard-la.img`，运行日志分别写入 `docs/output_rv.txt` 和 `docs/output_la.txt`。
+只使用以下四个不带参数的命令：
 
-需要进入交互式 BusyBox Shell 时，可使用：
+| 命令 | 作用 | 固定配置与产物 |
+| --- | --- | --- |
+| `make site-rv` | 编译并自动启动 RISC-V64 QEMU | 2 核、2 GiB，根文件系统 `images/rootfs/site-rv.img` |
+| `make site-la` | 编译并自动启动 LoongArch64 QEMU | 2 核、2 GiB，根文件系统 `images/rootfs/site-la.img` |
+| `make site-vf2` | 只编译 VisionFive 2 实板镜像 | 4 核、4 GiB，产物 `build/site-vf2/moss-vf2.bin` |
+| `make site-2kla` | 只编译 LS2K1000LA 实板镜像 | 2 核、2 GiB，产物 `build/site-2kla/moss-2kla.bin` |
 
-```bash
-make rv-shell
-make la-shell
-```
+QEMU 两个平台都通过内核 DHCP 获得 `10.0.2.15/24`，默认网关为 `10.0.2.2`；进入 Shell 后可以直接使用 `ip addr` 修改地址。固定根文件系统包含 APK、nginx、Redis 和 MariaDB，QEMU 以快照模式运行，不会污染基准镜像。退出 QEMU 时依次按 `Ctrl+A`、`X`。
 
-输入 `exit` 可退出 Shell；若 QEMU 未自动关闭，可依次按下 `Ctrl+A`、`X`。
-
-### 决赛线上测试复现
-
-默认构建会嵌入 `src/init_final.sh`，启动后执行 CAgent 与 BuildStorm。先准备磁盘镜像，再使用决赛配置运行：
-
-```bash
-# RISC-V64：8 核、8 GiB
-make prepare-sdcard-rv
-./scripts/run_rv.sh
-
-# LoongArch64：12 核、8 GiB
-make prepare-sdcard-la
-./scripts/run_la.sh
-```
-
-运行脚本使用 QEMU 快照模式，不会把测试过程写回基准磁盘镜像。初赛回归测试由 `src/init.sh` 提供，交互模式由 `src/init_shell.sh` 提供。
-
-### 实板构建
-
-VisionFive 2：
-
-```bash
-make kernel-vf2
-```
-
-构建产物为 `moss-vf2.bin`，目标配置为 4 核、4 GiB。
-
-LS2K1000LA：
-
-```bash
-make kernel-la-2k1000
-make kernel-la-2k1000-shell
-```
-
-对应产物为 `moss-2k1000la.bin` 和交互式镜像 `moss-2k1000la-shell.bin`，目标配置为 2 核、1 GiB。实板镜像需结合开发板的 U-Boot、TFTP 和根文件系统环境部署。
+实板镜像只负责编译，不会自动传输或启动；结合对应开发板的 U-Boot、TFTP 和既有根文件系统手动部署。
