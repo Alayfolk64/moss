@@ -125,6 +125,24 @@ fn proc_net_route() -> String {
     output
 }
 
+#[cfg(feature = "net")]
+fn proc_net_resolv_conf() -> String {
+    let mut servers = axnet::dns_servers();
+    if servers.is_empty() {
+        // Static-address builds have no DHCP lease to carry DNS. Keep the
+        // traditional project defaults as a usable fallback in that case.
+        servers.extend([
+            "223.5.5.5".parse::<core::net::IpAddr>().unwrap(),
+            "1.1.1.1".parse::<core::net::IpAddr>().unwrap(),
+        ]);
+    }
+    let mut output = String::new();
+    for server in servers.into_iter().take(3) {
+        output.push_str(&format!("nameserver {server}\n"));
+    }
+    output
+}
+
 pub fn new_procfs() -> Filesystem {
     SimpleFs::new_with("proc".into(), 0x9fa0, builder)
 }
@@ -1226,6 +1244,10 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
         net.add(
             "route",
             SimpleFile::new_regular(fs.clone(), || Ok(proc_net_route())),
+        );
+        net.add(
+            "resolv.conf",
+            SimpleFile::new_regular(fs.clone(), || Ok(proc_net_resolv_conf())),
         );
         SimpleDir::new_maker(fs.clone(), Arc::new(net))
     });

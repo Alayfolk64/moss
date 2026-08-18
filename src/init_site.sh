@@ -9,7 +9,10 @@ export PS1='starry:~# '
 mkdir -p /root /tmp /var/tmp /etc
 chmod 1777 /tmp /var/tmp
 
-if [ ! -s /etc/resolv.conf ]; then
+if [ -r /proc/net/resolv.conf ]; then
+    rm -f /etc/resolv.conf
+    ln -s /proc/net/resolv.conf /etc/resolv.conf
+elif [ ! -s /etc/resolv.conf ]; then
     printf 'nameserver 10.0.2.3\nnameserver 1.1.1.1\n' >/etc/resolv.conf
 fi
 

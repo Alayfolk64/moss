@@ -41,7 +41,7 @@ mod wrapper;
 
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use core::{
-    net::Ipv4Addr,
+    net::{IpAddr, Ipv4Addr},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
@@ -217,6 +217,24 @@ pub fn ipv4_config() -> Option<Ipv4Config> {
         gateway: snapshot.ipv4_gateway,
         mac: eth0_mac()?,
     })
+}
+
+/// Returns DNS servers learned from active DHCPv4 leases and IPv6 RDNSS.
+/// The list is updated as leases are renewed, withdrawn, or expire.
+pub fn dns_servers() -> Vec<IpAddr> {
+    let Some(service) = SERVICE.get() else {
+        return Vec::new();
+    };
+    service
+        .lock()
+        .network_snapshot()
+        .dns_servers
+        .into_iter()
+        .map(|address| match address {
+            IpAddress::Ipv4(address) => IpAddr::V4(address),
+            IpAddress::Ipv6(address) => IpAddr::V6(address),
+        })
+        .collect()
 }
 
 /// Initializes the network subsystem by NIC devices.

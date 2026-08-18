@@ -34,7 +34,6 @@ if [ ! -x /bin/sh ]; then
         echo "root:x:0:0:root:/root:/bin/sh"
         echo "nobody:x:65534:65534:nobody:/:/bin/sh"
     } >/etc/passwd
-    printf 'nameserver 223.5.5.5\nnameserver 1.1.1.1\n' >/etc/resolv.conf
 fi
 
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
@@ -43,7 +42,10 @@ export PS1='starry:~# '
 
 cd /root 2>/dev/null || cd /
 
-if [ ! -s /etc/resolv.conf ]; then
+if [ -r /proc/net/resolv.conf ]; then
+    rm -f /etc/resolv.conf
+    ln -s /proc/net/resolv.conf /etc/resolv.conf
+elif [ ! -s /etc/resolv.conf ]; then
     mkdir -p /etc
     printf 'nameserver 223.5.5.5\nnameserver 1.1.1.1\n' >/etc/resolv.conf
 fi

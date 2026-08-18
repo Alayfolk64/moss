@@ -3,7 +3,7 @@ use core::task::Waker;
 
 use smoltcp::{
     storage::PacketBuffer,
-    time::Instant,
+    time::{Duration, Instant},
     wire::{IpAddress, IpCidr, Ipv6Address, Ipv6Cidr},
 };
 
@@ -33,9 +33,32 @@ pub(crate) struct NeighborEntry {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Ipv6AddressLease {
+    pub address: Ipv6Cidr,
+    pub valid_lifetime: Duration,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Ipv6RouterLease {
+    pub address: Ipv6Address,
+    pub lifetime: Duration,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Ipv6DnsServerLease {
+    pub address: Ipv6Address,
+    pub lifetime: Duration,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Ipv6AutoconfigEvent {
-    pub address: Option<Ipv6Cidr>,
-    pub router: Option<Ipv6Address>,
+    /// `None` means this RA did not contain a usable autonomous prefix.
+    /// A zero lifetime explicitly withdraws the contained address.
+    pub address: Option<Ipv6AddressLease>,
+    /// Every valid RA refreshes or withdraws its advertising router.
+    pub router: Ipv6RouterLease,
+    /// RDNSS entries advertised by this RA, including zero-lifetime removals.
+    pub dns_servers: Vec<Ipv6DnsServerLease>,
 }
 
 pub trait Device: Send + Sync {
