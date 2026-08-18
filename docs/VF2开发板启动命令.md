@@ -101,3 +101,44 @@ p5 是 swap，不能作为 rootfs。
 手动启动不要使用 `run_vf2_gdb_native.py`，也不要设置 `moss,watchdog-hard-deadline-secs`。
 
 完整的分区、TFTP 和故障排查说明见 [VisionFive 2 上板、启动与维护指令](boards/星光二号板启动指令.md)。
+
+## 查看本机网口名称
+
+```text
+ip -brief link
+ip -brief address
+会因电脑不同而网口不同
+```
+
+```text
+e.g
+zjr@F16:~/Data/moss$ ip -brief link
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+enp108s0         UP             10:7c:61:6f:5f:58 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+wlo1             UP             f0:20:ff:92:12:88 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+zjr@F16:~/Data/moss$ ip -brief address
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+enp108s0         UP             192.168.1.2/24 
+wlo1             UP             172.20.10.7/28 2409:8903:4b44:1093:2f36:728c:bad9:249a/64 2409:8903:4b44:1093:fd75:568b:677b:f00/64 fe80::33d3:541c:9ef9:1444/64 
+```
+
+
+## git 使用过程中 ssh 配置方法
+
+```text
+配置SSH
+1.ssh-keygen -t ed25519 -C "你的GitHub邮箱"
+一路回车
+2.查看公钥 cat ~/.ssh/id_ed25519.pub
+3.github添加
+头像
+ ↓
+Settings
+ ↓
+SSH and GPG keys
+ ↓
+New SSH key
+4.测试
+ssh -T git@github.com
+预期输出 Hi username! You've successfully authenticated
+```
