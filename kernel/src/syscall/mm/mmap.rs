@@ -735,7 +735,17 @@ pub fn sys_mremap(
     let new_size = align_up_4k(new_size);
 
     let (old_flags, old_user_flags) = {
-        let old_area = aspace.find_area(addr).ok_or(AxError::NoMemory)?;
+        // Linux distinguishes an invalid source range (EFAULT) from a valid
+        // mapping that cannot grow in place (ENOMEM).  libc uses that
+        // distinction when probing mapping boundaries.
+        let old_end = addr
+            .as_usize()
+            .checked_add(old_size)
+            .ok_or(AxError::BadAddress)?;
+        let old_area = aspace.find_area(addr).ok_or(AxError::BadAddress)?;
+        if old_area.end().as_usize() < old_end {
+            return Err(AxError::BadAddress);
+        }
         (old_area.flags(), old_area.metadata().user_flags())
     };
     let old_prot = prot_from_mapping_flags(old_user_flags);
