@@ -25,8 +25,8 @@ from gdb_native_workload import ensure_gdb_packages, run_gdb_native_test
 from run_vf2_gmac_test import SerialRunner
 
 
-HOST_IP = "192.168.88.1"
-BOARD_IP = "192.168.88.2"
+HOST_IP = "192.168.89.1"
+BOARD_IP = "192.168.89.2"
 RELAY = "/usr/local/sbin/moss-vf2-relay"
 
 

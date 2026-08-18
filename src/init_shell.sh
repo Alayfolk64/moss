@@ -59,9 +59,13 @@ if [ "${MOSS_NTP_SYNC:-0}" = 1 ] && command -v ntpd >/dev/null 2>&1; then
     (
         NTP_OK=0
         NTP_ATTEMPT=1
+        NTP_GATEWAY=
+        if command -v ip >/dev/null 2>&1; then
+            NTP_GATEWAY=$(ip route show default | awk 'NR == 1 { print $3 }')
+        fi
         while [ "$NTP_ATTEMPT" -le 3 ]; do
             if ntpd -nq -p 203.107.6.88 \
-                || ntpd -nq -p 192.168.88.1; then
+                || { [ -n "$NTP_GATEWAY" ] && ntpd -nq -p "$NTP_GATEWAY"; }; then
                 NTP_OK=1
                 break
             fi

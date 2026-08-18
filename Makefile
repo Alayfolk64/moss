@@ -89,7 +89,7 @@ site-vf2:
 		ARCH=riscv64 BUS=mmio MEM=4G CPU_CAPACITY=4 \
 		MYPLAT=axplat-riscv64-visionfive2 \
 		PLAT_CONFIG=$(A)/vendor/axplat-riscv64-visionfive2/axconfig.toml \
-		IP=192.168.88.2 GW=192.168.88.1 \
+		IP=192.168.89.2 GW=192.168.89.1 \
 		NO_AXSTD=y AX_LIB=axfeat APP_FEATURES="vf2 site-init" \
 		TARGET_DIR=$(A)/target \
 		OUT_CONFIG=$(A)/build/site-vf2/axconfig.toml \
