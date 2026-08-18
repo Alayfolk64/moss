@@ -75,10 +75,10 @@ pub fn sys_socket(domain: u32, raw_ty: u32, proto: u32) -> AxResult<isize> {
         (AF_UNIX, SOCK_SEQPACKET) => SocketInner::Unix(UnixSocket::new(StreamTransport::new(pid))),
         (AF_UNIX, SOCK_DGRAM) => SocketInner::Unix(UnixSocket::new(DgramTransport::new(pid))),
         (AF_NETLINK, SOCK_RAW | SOCK_DGRAM) => {
-            if proto != 0 {
+            if proto != 0 && proto != 4 {
                 return Err(AxError::from(LinuxError::EPROTONOSUPPORT));
             }
-            SocketInner::Netlink(NetlinkSocket::new(pid))
+            SocketInner::Netlink(NetlinkSocket::new(pid, proto))
         }
         #[cfg(feature = "vsock")]
         (AF_VSOCK, SOCK_STREAM) => {

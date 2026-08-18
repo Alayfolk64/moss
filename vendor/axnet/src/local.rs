@@ -132,6 +132,49 @@ fn local_transport() -> &'static LocalTransport {
     &LOCAL_TRANSPORT
 }
 
+pub(crate) struct InetDiagnostic {
+    pub family: IpFamily,
+    pub protocol: u8,
+    pub endpoint: IpListenEndpoint,
+    pub state: u8,
+    pub rx_queue: u32,
+}
+
+pub(crate) fn inet_diagnostics() -> Vec<InetDiagnostic> {
+    let transport = local_transport();
+    let mut diagnostics = Vec::new();
+
+    for listener in transport.tcp.lock().values() {
+        diagnostics.push(InetDiagnostic {
+            family: listener.family,
+            protocol: 6,
+            endpoint: listener.endpoint,
+            state: 10,
+            rx_queue: listener.queue.lock().len() as u32,
+        });
+    }
+
+    let mut udp = transport.udp.lock();
+    for sockets in udp.values_mut() {
+        sockets.retain(|socket| {
+            let Some(socket) = socket.upgrade() else {
+                return false;
+            };
+            if let Some(endpoint) = *socket.endpoint.lock() {
+                diagnostics.push(InetDiagnostic {
+                    family: socket.family,
+                    protocol: 17,
+                    endpoint,
+                    state: 7,
+                    rx_queue: socket.rx.lock().len() as u32,
+                });
+            }
+            true
+        });
+    }
+    diagnostics
+}
+
 pub(crate) struct UdpPacket {
     data: Vec<u8>,
     remote_endpoint: IpEndpoint,

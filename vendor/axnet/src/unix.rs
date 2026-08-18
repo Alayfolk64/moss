@@ -3,7 +3,7 @@ pub(crate) mod stream;
 
 use alloc::{boxed::Box, sync::Arc};
 use core::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     task::Context,
 };
 
@@ -25,7 +25,7 @@ use crate::{
     options::{Configurable, GetSocketOption, SetSocketOption},
 };
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum UnixSocketAddr {
     #[default]
     Unnamed,
@@ -84,9 +84,58 @@ lazy_static! {
     // pathname UNIX datagram socket.  Keep that endpoint in the same socket
     // registry while preserving normal VFS semantics for all other paths.
     static ref DEV_LOG_BIND: Mutex<Option<BindSlot>> = Mutex::new(None);
+    static ref UNIX_DIAGNOSTICS: Mutex<HashMap<(UnixSocketAddr, u8), u32>> =
+        Mutex::new(HashMap::new());
 }
 
-fn with_dev_log_slot<R>(path: &str, insert: bool, f: impl FnOnce(&BindSlot) -> AxResult<R>) -> AxResult<R> {
+static NEXT_UNIX_DIAGNOSTIC_INODE: AtomicU32 = AtomicU32::new(1);
+
+pub(crate) struct UnixDiagnostic {
+    pub address: UnixSocketAddr,
+    pub socket_type: u8,
+    pub state: u8,
+    pub inode: u32,
+}
+
+pub(crate) fn unix_diagnostics() -> alloc::vec::Vec<UnixDiagnostic> {
+    UNIX_DIAGNOSTICS
+        .lock()
+        .iter()
+        .map(|((address, socket_type), inode)| UnixDiagnostic {
+            address: address.clone(),
+            socket_type: *socket_type,
+            state: if *socket_type == 1 { 10 } else { 7 },
+            inode: *inode,
+        })
+        .collect()
+}
+
+fn transport_socket_type(transport: &Transport) -> u8 {
+    match transport {
+        Transport::Stream(_) => 1,
+        Transport::Dgram(_) => 2,
+    }
+}
+
+fn register_diagnostic(address: &UnixSocketAddr, transport: &Transport) {
+    let socket_type = transport_socket_type(transport);
+    let inode = NEXT_UNIX_DIAGNOSTIC_INODE.fetch_add(1, Ordering::Relaxed);
+    UNIX_DIAGNOSTICS
+        .lock()
+        .insert((address.clone(), socket_type), inode);
+}
+
+fn unregister_diagnostic(address: &UnixSocketAddr, transport: &Transport) {
+    UNIX_DIAGNOSTICS
+        .lock()
+        .remove(&(address.clone(), transport_socket_type(transport)));
+}
+
+fn with_dev_log_slot<R>(
+    path: &str,
+    insert: bool,
+    f: impl FnOnce(&BindSlot) -> AxResult<R>,
+) -> AxResult<R> {
     if path != "/dev/log" {
         return Err(AxError::NotFound);
     }
@@ -253,6 +302,7 @@ impl SocketOps for UnixSocket {
         if matches!(&*guard, UnixSocketAddr::Unnamed) {
             with_slot_or_insert(&local_addr, |slot| self.transport.bind(slot, &local_addr))?;
             *guard = local_addr;
+            register_diagnostic(&guard, &self.transport);
             self.has_bind_ownership.store(true, Ordering::Release);
         } else {
             return Err(AxError::InvalidInput);
@@ -326,6 +376,7 @@ impl Drop for UnixSocket {
             return;
         }
         let local_addr = self.local_addr.lock().clone();
+        unregister_diagnostic(&local_addr, &self.transport);
         cleanup_bound_slot(&local_addr, &self.transport);
     }
 }
