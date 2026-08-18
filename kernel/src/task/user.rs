@@ -90,14 +90,21 @@ pub fn new_user_task(name: &str, mut uctx: UserContext, set_child_tid: usize) ->
                             }
                         };
                         if let Some(signo) = fault_signal {
-                            warn!(
-                                "{:?}: fatal user fault {:?} at {:#x} {:?}, ip={:#x}",
-                                thr.proc_data.proc,
-                                signo,
-                                addr,
-                                flags,
-                                uctx.ip()
-                            );
+                            // A handled synchronous fault is normal control flow for programs
+                            // such as lmbench's protection-fault benchmark. Logging every
+                            // delivery here can flood the serial console and dominate the
+                            // measured workload. Keep diagnostics for faults that will use the
+                            // default fatal action, but leave handled faults silent.
+                            if !thr.proc_data.signal.has_user_handler(signo) {
+                                warn!(
+                                    "{:?}: unhandled user fault {:?} at {:#x} {:?}, ip={:#x}",
+                                    thr.proc_data.proc,
+                                    signo,
+                                    addr,
+                                    flags,
+                                    uctx.ip()
+                                );
+                            }
                             raise_signal_fatal(SignalInfo::new_kernel(signo))
                                 .expect("Failed to send fault signal");
                         }

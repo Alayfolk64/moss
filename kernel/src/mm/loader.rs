@@ -11,6 +11,8 @@ use axhal::{
     paging::{MappingFlags, PageSize},
 };
 use axsync::Mutex;
+#[cfg(target_arch = "loongarch64")]
+use kernel_elf_parser::AuxType;
 use kernel_elf_parser::{AuxEntry, ELFHeaders, ELFHeadersBuilder, ELFParser, app_stack_region};
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr};
 use ouroboros::self_referencing;
@@ -20,6 +22,9 @@ use crate::{
     config::{USER_HEAP_BASE, USER_INTERP_BASE, USER_SPACE_BASE, USER_SPACE_SIZE},
     mm::aspace::{AddrSpace, Backend},
 };
+
+#[cfg(target_arch = "loongarch64")]
+const HWCAP_LOONGARCH_UAL: usize = 1 << 2;
 
 fn resolve_dynamic_linker(path: &str) -> AxResult<Location> {
     if let Ok(loc) = FS_CONTEXT.lock().resolve(path) {
@@ -334,6 +339,16 @@ impl ElfLoader {
             .aux_vector(PAGE_SIZE_4K, ldso.map(|elf| elf.base()))
             .map_err(map_elf_error)?
             .collect::<Vec<_>>();
+
+        // QEMU's LoongArch TCG backend requires Linux to advertise unaligned
+        // access support through AT_HWCAP. MOSS provides those semantics by
+        // emulating user-mode misaligned accesses in the exception path.
+        #[cfg(target_arch = "loongarch64")]
+        let auxv = {
+            let mut auxv = auxv;
+            auxv.push(AuxEntry::new(AuxType::HWCAP, HWCAP_LOONGARCH_UAL));
+            auxv
+        };
 
         Ok(Ok((entry, auxv)))
     }
