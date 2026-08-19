@@ -5,6 +5,7 @@
 // ============================================================
 #let body-font = ("Times New Roman", "SimSun", "STSong")
 #let heading-font = "Microsoft YaHei"
+#let punctuation-font = ("SimSun", "STSong", "Noto Serif CJK SC")
 
 #let hdr = context {
   align(center, text(font: body-font, size: 9pt, fill: rgb("#666666"))[
@@ -37,6 +38,9 @@
   spacing: 0.72em,
 )
 #set heading(numbering: "1.1")
+
+// 保持正文和标题字体不变；句读在 SimSun 不可用时回退到横排字形。
+#show regex("[，。；、]"): set text(font: punctuation-font)
 
 #show list: it => block(inset: (left: 2em), it)
 
