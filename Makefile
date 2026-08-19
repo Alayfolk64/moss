@@ -43,7 +43,7 @@ kernel-la:
 site-rv:
 	mkdir -p build/site-rv
 	$(MAKE) -C make defconfig build \
-		ARCH=riscv64 BUS=mmio MEM=2G CPU_CAPACITY=2 IP= GW= \
+		ARCH=riscv64 BUS=mmio MEM=8G CPU_CAPACITY=16 IP= GW= \
 		NO_AXSTD=y AX_LIB=axfeat APP_FEATURES="qemu site-init" \
 		TARGET_DIR=$(A)/target \
 		OUT_CONFIG=$(A)/build/site-rv/axconfig.toml \
@@ -56,8 +56,8 @@ site-rv:
 	rm -f build/site-rv/kernel.bin.o
 	test -f images/rootfs/site-rv.img
 	qemu-system-riscv64 -machine virt -kernel build/site-rv/kernel-rv \
-		-m 8G -smp 36 -nographic -snapshot \
-		-drive file=sdcard-rv-pub.img,format=raw,if=none,id=disk \
+		-m 8G -smp 16 -nographic -snapshot \
+		-drive file=alpine-linux-riscv64-ext4fs.img,format=raw,if=none,id=disk \
 		-device virtio-blk-device,drive=disk \
 		-device virtio-net-device,netdev=net \
 		-netdev user,id=net
