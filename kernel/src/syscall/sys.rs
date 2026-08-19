@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+use kernel_elf_parser::AuxType::NULL;
 use core::{
     ffi::c_char,
     fmt::Write as _,
@@ -252,7 +253,7 @@ pub fn sys_getrandom(buf: *mut u8, len: usize, flags: u32) -> AxResult<isize> {
     Ok(len as _)
 }
 
-pub fn sys_seccomp(_op: u32, _flags: u32, _args: *const ()) -> AxResult<isize> {
+pub fn sys_seccomp(_op: i32, _flags: u32, _args: *const ()) -> AxResult<isize> {
     warn!("dummy sys_seccomp");
     Ok(0)
 }

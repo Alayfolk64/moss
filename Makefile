@@ -56,8 +56,8 @@ site-rv:
 	rm -f build/site-rv/kernel.bin.o
 	test -f images/rootfs/site-rv.img
 	qemu-system-riscv64 -machine virt -kernel build/site-rv/kernel-rv \
-		-m 2G -smp 2 -nographic -snapshot \
-		-drive file=images/rootfs/site-rv.img,format=raw,if=none,id=disk \
+		-m 8G -smp 36 -nographic -snapshot \
+		-drive file=sdcard-rv-pub.img,format=raw,if=none,id=disk \
 		-device virtio-blk-device,drive=disk \
 		-device virtio-net-device,netdev=net \
 		-netdev user,id=net
@@ -78,8 +78,8 @@ site-la:
 	rm -f build/site-la/kernel.bin.o
 	test -f images/rootfs/site-la.img
 	qemu-system-loongarch64 -kernel build/site-la/kernel-la \
-		-m 2G -smp 2 -nographic -snapshot -accel tcg,thread=multi \
-		-drive file=images/rootfs/site-la.img,format=raw,if=virtio \
+		-m 8G -smp 8 -nographic -snapshot -accel tcg,thread=multi \
+		-drive file=sdcard-la-pub.img,format=raw,if=virtio \
 		-nic user,model=virtio-net-pci
 
 # 现场实板：固定配置，只编译镜像，不自动启动或传输。

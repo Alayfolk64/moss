@@ -1,6 +1,6 @@
 # VF2 开发板手动启动命令
 
-本文只记录 VisionFive 2 通过 `picocom`、U-Boot 和 TFTP 手动启动最新 MOSS 的主流程。每次启动前重新构建无看门狗的 `site-init` 镜像，不运行自动验收脚本。VF2 现行默认使用 `192.168.89.0/24`，与 2K1000LA 的 `192.168.88.0/24` 分离。只连接 VF2 时默认使用 `enp3s0`；两块实板同时连接时，VF2 作为第二块板改用文末的 USB 网卡流程。
+本文只记录 VisionFive 2 通过 `picocom`、U-Boot 和 TFTP 手动启动最新 MOSS 的主流程。每次启动前重新构建无看门狗的 `site-init` 镜像，不运行自动验收脚本。VF2 现行默认使用 `192.168.89.0/24`，与 2K1000LA 的 `192.168.88.0/24` 分离。只连接 VF2 时默认使用 `enp108s0`；两块实板同时连接时，VF2 作为第二块板改用文末的 USB 网卡流程。
 
 ## 主流程
 
@@ -20,11 +20,11 @@ make site-vf2
 ```bash
 sudo install -o tftp -g tftp -m 0644 \
   build/site-vf2/moss-vf2.bin \
-  /srv/tftp/moss-vf2-nowatchdog.bin
+  /srv/tftp/moss-vf2.bin
 
 sha256sum \
   build/site-vf2/moss-vf2.bin \
-  /srv/tftp/moss-vf2-nowatchdog.bin
+  /srv/tftp/moss-vf2.bin
 ```
 
 两行应输出相同的 SHA-256。
@@ -34,8 +34,21 @@ sha256sum \
 配置与 VF2 直连的网口：
 
 ```bash
-sudo ip address replace 192.168.89.1/24 dev enp3s0
-sudo ip link set dev enp3s0 up
+sudo ip address replace 192.168.89.1/24 dev enp108s0
+sudo ip link set dev enp108s0 up
+
+检查 TFTP 服务：
+
+```bash
+ps -ef | grep '[i]n.tftpd'
+```
+
+如果服务未运行：
+
+```bash
+sudo /usr/sbin/in.tftpd --listen --user tftp \
+  --address 192.168.89.1:69 --secure /srv/tftp
+
 ```
 
 打开串口：
@@ -62,10 +75,10 @@ StarFive #
 setenv ipaddr 192.168.89.2
 setenv serverip 192.168.89.1
 setenv netmask 255.255.255.0
-tftpboot 0x40200000 moss-vf2-nowatchdog.bin
+tftpboot 0x40200000 moss-vf2.bin
 fdt addr 0x42200000
 fdt resize 4096
-fdt set /chosen bootargs "root=/dev/mmcblk1p3 rw"
+fdt set /chosen bootargs "root=/dev/mmcblk1p2 rw"
 go 0x40200000
 ```
 
@@ -113,7 +126,7 @@ ip -brief address
 当前四平台测试电脑上，两块实板应显示为：
 
 ```text
-enp3s0             UP  192.168.88.1/24
+enp108s0             UP  192.168.88.1/24
 enx6c1ff75c0e36    UP  192.168.89.1/24
 ```
 
@@ -124,7 +137,7 @@ IP。当前电脑按下表配置：
 
 | 板卡 | 电脑直连网口 | 电脑地址 | 板卡地址 |
 | --- | --- | --- | --- |
-| 龙芯 2K1000LA | `enp3s0` | `192.168.88.1/24` | `192.168.88.2/24` |
+| 龙芯 2K1000LA | `enp108s0` | `192.168.88.1/24` | `192.168.88.2/24` |
 | VF2 | `enx6c1ff75c0e36` | `192.168.89.1/24` | `192.168.89.2/24` |
 
 `enx6c1ff75c0e36` 是当前 USB 网卡的名称。更换 USB 网卡后名称可能变化，先用
@@ -134,8 +147,8 @@ IP。当前电脑按下表配置：
 
 ```bash
 # 龙芯网口保持 192.168.88.0/24
-sudo ip address replace 192.168.88.1/24 dev enp3s0
-sudo ip link set dev enp3s0 up
+sudo ip address replace 192.168.88.1/24 dev enp108s0
+sudo ip link set dev enp108s0 up
 
 # 清除 VF2 网口的旧 IPv4 地址，再配置独立的 192.168.89.0/24
 sudo ip address flush dev enx6c1ff75c0e36 scope global
@@ -146,7 +159,7 @@ sudo ip link set dev enx6c1ff75c0e36 up
 检查地址和路由：
 
 ```bash
-ip -brief address show enp3s0
+ip -brief address show enp108s0
 ip -brief address show enx6c1ff75c0e36
 ip route get 192.168.88.2
 ip route get 192.168.89.2
@@ -155,7 +168,7 @@ ip route get 192.168.89.2
 正确结果应分别显示：
 
 ```text
-192.168.88.2 dev enp3s0 src 192.168.88.1
+192.168.88.2 dev enp108s0 src 192.168.88.1
 192.168.89.2 dev enx6c1ff75c0e36 src 192.168.89.1
 ```
 
@@ -178,7 +191,7 @@ setenv serverip 192.168.89.1
 setenv netmask 255.255.255.0
 printenv ipaddr serverip netmask
 ping 192.168.89.1
-tftpboot 0x40200000 moss-vf2-nowatchdog.bin
+tftpboot 0x40200000 moss-vf2.bin
 fdt addr 0x42200000
 fdt resize 4096
 fdt set /chosen bootargs "root=/dev/mmcblk1p3 rw"

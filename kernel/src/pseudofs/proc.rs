@@ -7,6 +7,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use downcast_rs::Downcast;
 use core::{
     any::Any,
     ffi::CStr,
@@ -1344,6 +1345,12 @@ fn builder(fs: Arc<SimpleFs>) -> DirMaker {
 
                 SimpleDir::new_maker(fs.clone(), Arc::new(keys))
             });
+            // kernel.add("tracing", {
+            //     let mut tracing=DirMapping::new();
+            //     tracing.add("tracing_on", proc_rw_file(fs.clone(), b"0\n".to_vec()));
+            //     tracing.add("trace", SimpleFile::new_regular(fs.clone(), Ok(()));
+            //     tracing.add("trace_mode", proc_rw_file(fs, initial));
+            // });
 
             SimpleDir::new_maker(fs.clone(), Arc::new(kernel))
         });
