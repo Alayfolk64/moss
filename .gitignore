@@ -49,5 +49,5 @@ loongarch64-linux-musl-cross.tgz
 /docs/hardware-*.log
 /docs/qemu-*.log
 /docs/static-*.log
-/docs/buildstorm-report/experiments/
+/docs/reports/buildstorm-report/experiments/
 /images.zip

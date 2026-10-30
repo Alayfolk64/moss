@@ -1,0 +1,43 @@
+# cyclictest 计分结果
+
+- 生成时间: `2026-06-18 13:32:41`
+- baseline 和公式来自官方 `judge_cyclictest-musl.py` / `judge_cyclictest-glibc.py`。
+- 官方解析只记录 `end: success` 的测试段，且必须有 `kill hackbench: success`；否则整组为 0 分。
+- 每段 result 为该段所有 `T:` 行的 `max(Max, Min)` 平均值，单位 `microseconds`，越低越好。
+
+## 计分规则
+
+```text
+result <= baseline: score = 2 - result / baseline
+result >  baseline: score = 1
+missing/result <= 0: score = 0
+```
+
+## 输入
+
+- rv_target_affinity_rerun: `docs/benchmarks/cyclictest/results/rv-target-affinity-rerun-0618-133241.log`
+
+## 汇总
+
+| 输入 | libc | 已解析 | 缺失 | 总分 |
+|---|---|---:|---:|---:|
+| rv_target_affinity_rerun | musl | 4 | 0 | 6.108111 |
+| rv_target_affinity_rerun | glibc | 0 | 4 | 0.000000 |
+
+## rv_target_affinity_rerun / musl
+
+| 项目 | baseline | result | score |
+|---|---:|---:|---:|
+| cyclictest NO_STRESS_P1 (microseconds) | 1862.000000 | 1996.000000 | 1.000000 |
+| cyclictest NO_STRESS_P8 (microseconds) | 1558.125000 | 859.000000 | 1.448696 |
+| cyclictest STRESS_P1 (microseconds) | 1310.000000 | 435.000000 | 1.667939 |
+| cyclictest STRESS_P8 (microseconds) | 13842.750000 | 118.000000 | 1.991476 |
+
+## rv_target_affinity_rerun / glibc
+
+| 项目 | baseline | result | score |
+|---|---:|---:|---:|
+| cyclictest NO_STRESS_P1 (microseconds) | 1862.000000 | - | - |
+| cyclictest NO_STRESS_P8 (microseconds) | 1558.125000 | - | - |
+| cyclictest STRESS_P1 (microseconds) | 1310.000000 | - | - |
+| cyclictest STRESS_P8 (microseconds) | 13842.750000 | - | - |
