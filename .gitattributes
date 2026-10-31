@@ -1,6 +1,7 @@
 * text eol=lf
 vendor/** -text
 *.fst binary
+*.dtb binary
 *.png binary
 *.jpg binary
 *.jpeg binary

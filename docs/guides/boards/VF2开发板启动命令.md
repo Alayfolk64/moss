@@ -1,76 +1,65 @@
-# VF2 开发板手动启动命令
+# 星光二号板 VF2 启动指令
 
-本文只记录 VisionFive 2 通过 `picocom`、U-Boot 和 TFTP 手动启动最新 MOSS 的主流程。每次启动前重新构建无看门狗的 `site-init` 镜像，不运行自动验收脚本。VF2 现行默认使用 `192.168.89.0/24`，与 2K1000LA 的 `192.168.88.0/24` 分离。只连接 VF2 时默认使用 `enp108s0`；两块实板同时连接时，VF2 作为第二块板改用文末的 USB 网卡流程。
+通过串口进入 U-Boot，用 TFTP 加载 MOSS 内核，使用 SD 卡上的根文件系统启动。
+宿主机命令均从 `moss` 项目根目录执行。设备名按[板卡指南](README.md)替换为测试电脑的实际设备名。
 
-## 主流程
-
-### 1. 构建并部署最新镜像
-
-进入仓库并重新构建：
-
-```bash
-cd /home/wuxun/Projects/moss-dev
-make site-vf2
-```
-
-该目标固定选择 `vf2 site-init`，不会加入 `vf2-watchdog`；板卡地址 `192.168.89.2/24` 和网关 `192.168.89.1` 已固化，不接受额外构建参数。
-
-将刚生成的镜像部署到 TFTP：
-
-```bash
-sudo install -o tftp -g tftp -m 0644 \
-  build/site-vf2/moss-vf2.bin \
-  /srv/tftp/moss-vf2.bin
-
-sha256sum \
-  build/site-vf2/moss-vf2.bin \
-  /srv/tftp/moss-vf2.bin
-```
-
-两行应输出相同的 SHA-256。
-
-### 2. 配置网络并打开串口
-
-配置与 VF2 直连的网口：
-
-```bash
-sudo ip address replace 192.168.89.1/24 dev enp108s0
-sudo ip link set dev enp108s0 up
-```
-
-检查 TFTP 服务：
-
-```bash
-ps -ef | grep '[i]n.tftpd'
-```
-
-如果服务未运行：
-
-```bash
-sudo /usr/sbin/in.tftpd --listen --user tftp \
-  --address 192.168.89.1:69 --secure /srv/tftp
-
-```
-
-打开串口：
+接好 USB 串口，先在宿主机终端连接板子：
 
 ```bash
 picocom -b 115200 /dev/ttyACM0
 ```
 
-退出 `picocom` 使用 `Ctrl-A`，再按 `Ctrl-X`。
+`-b 115200` 设置波特率，`/dev/ttyACM0` 是串口设备。保持连接，后续构建和网络配置在另一个宿主机终端执行。
+退出 picocom 时先按 `Ctrl-A`，再按 `Ctrl-X`。
 
-### 3. 进入 U-Boot
+| 项目 | 配置 |
+| --- | --- |
+| PC 直连网卡 | `enp3s0` |
+| PC IP | `192.168.89.1` |
+| 板卡 IP | `192.168.89.2` |
+| TFTP 目录 | `/srv/tftp` |
+| 根分区 | `/dev/mmcblk1p3` |
 
-保持 `picocom` 打开，给 VF2 上电或按 Reset。看到自动启动倒计时后连续按空格，进入：
+## 1. 宿主机：构建并部署
 
-```text
-StarFive #
+```bash
+make site-vf2
+sudo cp build/site-vf2/moss-vf2.bin /srv/tftp/moss-vf2.bin
 ```
 
-### 4. 加载并启动 MOSS
+第一条构建 4 核、4 GiB 的 VF2 交互镜像，第二条将内核复制到 TFTP 目录。
+启动后进入 MOSS shell，比赛脚本由用户手动执行。
 
-在 U-Boot 中逐行执行：
+## 2. 宿主机：配置网络和 TFTP
+
+网线直连 PC 与 VF2，在宿主机执行：
+
+```bash
+sudo ip addr replace 192.168.89.1/24 dev enp3s0
+sudo ip link set enp3s0 up
+```
+
+第一条设置 PC 地址，`/24` 是子网前缀长度；第二条启用网卡。
+
+检查 TFTP 端口：
+
+```bash
+sudo ss -lunp 'sport = :69'
+```
+
+`-lunp` 显示正在监听的 UDP 端口及进程，过滤条件只查看 69 端口。
+若没有服务监听 `192.168.89.1:69` 或 `0.0.0.0:69`，执行：
+
+```bash
+sudo /usr/sbin/in.tftpd --listen --user tftp --address 192.168.89.1:69 --secure /srv/tftp
+```
+
+该命令以 `tftp` 用户启动服务，监听指定地址，并使用 `/srv/tftp` 作为文件目录。
+
+## 3. 板端：进入 U-Boot 并启动
+
+保持串口连接，给 VF2 上电；如果已经进入原厂 Linux，先执行 `sudo reboot` 重启。
+看到自动启动倒计时后连续按空格，进入 `StarFive #`，逐行执行：
 
 ```text
 setenv ipaddr 192.168.89.2
@@ -79,179 +68,87 @@ setenv netmask 255.255.255.0
 tftpboot 0x40200000 moss-vf2.bin
 fdt addr 0x42200000
 fdt resize 4096
-fdt set /chosen bootargs "root=/dev/mmcblk1p2 rw"
+fdt set /chosen bootargs "root=/dev/mmcblk1p3 rw"
 go 0x40200000
 ```
 
-上面的命令选择 SD 卡 p2；原测试卡的 p2 是 Debian，p3/p4 是 Alpine。使用 Alpine 时按下节选择对应分区。`site-init` 进入 `/root`，设置 `starry:~#` 提示符后启动 `/bin/sh`，不自动运行网络、服务或验收命令。
+前三条设置板卡和 TFTP 网络；`tftpboot` 将内核加载到 `0x40200000`。
+`fdt addr` 选择固件保留在 `0x42200000` 的 DTB，`fdt resize 4096` 为修改预留空间，
+`fdt set` 指定可读写的根分区，`go` 启动内核。这些设置只用于当次启动，无需 `saveenv`。
 
-### 5. 退出 MOSS
+根分区使用[烧录教程](星光二号板烧录教程.md)写入的第三分区：宿主机读卡器上的 `/dev/sdb3`，
+装回 VF2 后对应 `/dev/mmcblk1p3`。
 
-操作完成后先同步文件系统，再重启：
+## 4. MOSS：校准时间
+
+看到 `starry:~#` 后，在另一个**宿主机终端**确认电脑时间正确，再执行：
+
+```bash
+date -u '+date -u -s "%Y-%m-%d %H:%M:%S"'
+```
+
+这条命令按宿主机的 UTC 时间生成校时命令。复制输出的完整一行，保留双引号，
+粘贴到 MOSS 的 `starry:~#` 下执行；其中 `-u` 表示 UTC，`-s` 设置时间。
+校时完成后即可手动执行命令和比赛脚本。
+
+## 5. MOSS：常用检查
+
+```sh
+uname -m
+nproc
+cat /sys/devices/system/cpu/online
+cat /proc/cpuinfo
+cat /proc/meminfo
+free -h
+mount
+df -h /
+ip addr
+```
+
+这些命令依次查看架构、CPU、内存、文件系统挂载和网络地址。
+当前目标配置是 4 核、4 GiB 内存：
+
+- `uname -m` 应为 `riscv64`。
+- `nproc` 应为 `4`。
+- CPU online 应为 `0-3`。
+
+## 6. MOSS：运行比赛脚本
+
+使用包含 `/glibc` 比赛脚本的根文件系统，在 MOSS 交互 shell 中运行 CAgent：
+
+```sh
+cd /glibc
+bash ./cagent_testcode.sh
+```
+
+运行 BuildStorm：
+
+```sh
+cd /glibc
+bash ./buildstorm_testcode.sh
+```
+
+
+`cd` 进入比赛目录，`bash` 执行对应测试脚本。
+镜像中已安装的工具可这样查看版本：
+
+```sh
+git --version
+vim --version
+gcc --version
+rustc --version
+```
+
+## 7. MOSS：结束操作
+
+在启动后进入的 MOSS shell 中执行：
 
 ```sh
 sync
-reboot -f
+exit
 ```
 
-如果串口停止但没有重新进入固件，确认 `sync` 已经返回后按 VF2 Reset。想回到原厂 Debian 时，不要截停下一次 U-Boot 自动启动。
+`sync` 刷新写入，`exit` 结束交互 shell，内核随后同步、卸载文件系统并关机。
+等待关机完成后，按 VF2 Reset 再次启动；要返回原厂 Linux，让 U-Boot 自动启动即可。
 
-## 切换 rootfs
-
-选择 p3 Alpine 时，只需要修改 U-Boot 中的 `root=`：
-
-```text
-fdt set /chosen bootargs "root=/dev/mmcblk1p3 rw"
-```
-
-或者：
-
-```text
-fdt set /chosen bootargs "root=/dev/mmcblk1p4 rw"
-```
-
-p5 是 swap，不能作为 rootfs。
-
-手动启动不要使用 `run_vf2_gdb_native.py`，也不要设置 `moss,watchdog-hard-deadline-secs`。
-
-完整的分区、TFTP 和故障排查说明见 [VisionFive 2 维护与排障](../../history/boards/星光二号板维护与排障.md)。
-
-## 查看本机网口名称
-
-```text
-ip -brief link
-ip -brief address
-会因电脑不同而网口不同
-```
-
-当前四平台测试电脑上，两块实板应显示为：
-
-```text
-enp108s0             UP  192.168.88.1/24
-enx6c1ff75c0e36    UP  192.168.89.1/24
-```
-
-## 一台电脑同时连接龙芯和 VF2
-
-两块板同时连接时，不要让电脑的两个直连网口使用同一个网段，也不要让两块板使用同一个
-IP。当前电脑按下表配置：
-
-| 板卡 | 电脑直连网口 | 电脑地址 | 板卡地址 |
-| --- | --- | --- | --- |
-| 龙芯 2K1000LA | `enp108s0` | `192.168.88.1/24` | `192.168.88.2/24` |
-| VF2 | `enx6c1ff75c0e36` | `192.168.89.1/24` | `192.168.89.2/24` |
-
-`enx6c1ff75c0e36` 是当前 USB 网卡的名称。更换 USB 网卡后名称可能变化，先用
-`ip -brief link` 确认实际名称。
-
-### 1. 配置电脑的两个直连网口
-
-```bash
-# 龙芯网口保持 192.168.88.0/24
-sudo ip address replace 192.168.88.1/24 dev enp108s0
-sudo ip link set dev enp108s0 up
-
-# 清除 VF2 网口的旧 IPv4 地址，再配置独立的 192.168.89.0/24
-sudo ip address flush dev enx6c1ff75c0e36 scope global
-sudo ip address add 192.168.89.1/24 dev enx6c1ff75c0e36
-sudo ip link set dev enx6c1ff75c0e36 up
-```
-
-检查地址和路由：
-
-```bash
-ip -brief address show enp108s0
-ip -brief address show enx6c1ff75c0e36
-ip route get 192.168.88.2
-ip route get 192.168.89.2
-```
-
-正确结果应分别显示：
-
-```text
-192.168.88.2 dev enp108s0 src 192.168.88.1
-192.168.89.2 dev enx6c1ff75c0e36 src 192.168.89.1
-```
-
-两个直连网口都不要配置默认网关。电脑的默认路由继续使用 Wi-Fi 或其他公网网口。
-
-### 2. VF2 使用默认网段进行 TFTP
-
-当前电脑上的 TFTP 服务监听 `0.0.0.0:69`，同一个 `/srv/tftp` 可以同时服务两个网段，
-不需要再启动第二个 TFTP 进程。先检查：
-
-```bash
-sudo ss -lunp | grep ':69'
-```
-
-当前应看到 `0.0.0.0:69`。进入 VF2 的 `StarFive #` 后执行：
-
-```text
-setenv ipaddr 192.168.89.2
-setenv serverip 192.168.89.1
-setenv netmask 255.255.255.0
-printenv ipaddr serverip netmask
-ping 192.168.89.1
-tftpboot 0x40200000 moss-vf2.bin
-fdt addr 0x42200000
-fdt resize 4096
-fdt set /chosen bootargs "root=/dev/mmcblk1p3 rw"
-go 0x40200000
-```
-
-这些是本次启动使用的 U-Boot 临时值，不执行 `saveenv`。
-
-### 3. 进入 MOSS 后确认 VF2 运行时地址
-
-`make site-vf2` 已将 `192.168.89.2/24` 和默认网关 `192.168.89.1` 固化进镜像。进入 `starry:~#` 后只需检查：
-
-```sh
-ip -brief address show eth0
-ip route
-```
-
-应看到 `eth0` 持有 `192.168.89.2/24`，默认路由经 `192.168.89.1`。龙芯继续使用 `192.168.88.2`，两块板可以同时连接且不会发生地址或路由冲突。
-
-### 4. VF2 需要通过电脑访问公网时
-
-只进行 TFTP 启动不需要本节。VF2 还需要通过电脑访问公网时，为
-`192.168.89.0/24` 单独增加转发和 NAT 规则：
-
-```bash
-sudo sysctl -w net.ipv4.ip_forward=1
-
-sudo iptables -C FORWARD -s 192.168.89.0/24 -j ACCEPT || \
-  sudo iptables -I FORWARD 1 -s 192.168.89.0/24 -j ACCEPT
-
-sudo iptables -C FORWARD -d 192.168.89.0/24 \
-  -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT || \
-  sudo iptables -I FORWARD 1 -d 192.168.89.0/24 \
-    -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-
-sudo iptables -t nat -C POSTROUTING -s 192.168.89.0/24 -j MASQUERADE || \
-  sudo iptables -t nat -A POSTROUTING -s 192.168.89.0/24 -j MASQUERADE
-```
-
-这三条 `iptables` 命令会先检查规则，重复执行不会添加重复项。没有持久化这些规则时，
-电脑重启后需要重新执行。
-
-
-## git 使用过程中 ssh 配置方法
-
-```text
-配置SSH
-1.ssh-keygen -t ed25519 -C "你的GitHub邮箱"
-一路回车
-2.查看公钥 cat ~/.ssh/id_ed25519.pub
-3.github添加
-头像
- ↓
-Settings
- ↓
-SSH and GPG keys
- ↓
-New SSH key
-4.测试
-ssh -T git@github.com
-预期输出 Hi username! You've successfully authenticated
-```
+其他故障处理见[维护与排障](../../history/boards/星光二号板维护与排障.md)。

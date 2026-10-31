@@ -2,6 +2,9 @@
 
 日期：2026-08-11
 
+本文保留当时的硬件判断、配置和验收结果。当前上板配置见[龙芯启动指令](../../guides/boards/2K1000LA板-启动指令.md)。
+文中引用的日志未收录于仓库，保留文件名供对照。
+
 ## 1. 当前结论
 
 本报告记录的是已经真机跑通的 **Linux 6.12** 流程。板卡为 2 核 LA264、1 GiB DDR3；原厂
@@ -133,9 +136,9 @@ swap_umount_rc=0
 
 原始证据：
 
-- [cagent 真机日志](../../hardware-linux-ls2k1000la-20260811-linux612-1g-swap-cagent-buildstorm.log)
-- [buildstorm 完整真机日志](../../hardware-linux-ls2k1000la-20260811-linux612-1g-swap-buildstorm-v3.log)
-- [无 swap OOM 对照](../../hardware-linux-ls2k1000la-20260811-linux612-cagent-buildstorm-tftp.log)
+- cagent 真机日志（`docs/hardware-linux-ls2k1000la-20260811-linux612-1g-swap-cagent-buildstorm.log`）
+- buildstorm 完整真机日志（`docs/hardware-linux-ls2k1000la-20260811-linux612-1g-swap-buildstorm-v3.log`）
+- 无 swap OOM 对照（`docs/hardware-linux-ls2k1000la-20260811-linux612-cagent-buildstorm-tftp.log`）
 
 ## 7. 正确退出与文件系统保护
 
@@ -154,9 +157,9 @@ ext4 orphan 条目，下一次 `e2fsck -fn` 报 `corrupted orphan linked list` �
 
 修复后的 smoke 已输出 `root_ro_rc=0`，复位后的 sda2 `e2fsck -fn` 返回 0：
 
-- [安全退出 smoke](../../hardware-linux-ls2k1000la-20260811-linux612-root-ro-cleanup-smoke.log)
-- [退出后 fsck](../../hardware-linux-ls2k1000la-20260811-sda2-root-ro-cleanup-verify.log)
-- [旧 orphan 修复记录](../../hardware-linux-ls2k1000la-20260811-sda2-post-buildstorm-repair.log)
+- 安全退出 smoke（`docs/hardware-linux-ls2k1000la-20260811-linux612-root-ro-cleanup-smoke.log`）
+- 退出后 fsck（`docs/hardware-linux-ls2k1000la-20260811-sda2-root-ro-cleanup-verify.log`）
+- 旧 orphan 修复记录（`docs/hardware-linux-ls2k1000la-20260811-sda2-post-buildstorm-repair.log`）
 
 ## 8. 保留的镜像与恢复边界
 

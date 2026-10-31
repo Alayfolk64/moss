@@ -1,32 +1,24 @@
 # 脚本说明
 
-本目录只保留下面五个脚本。命令均在仓库根目录执行，编译和 QEMU 运行环境见[仓库 README](../README.md#环境构建与运行)。
+命令均在仓库根目录执行，编译和 QEMU 运行环境见[仓库 README](../README.md#环境构建与运行)。
 
 | 脚本 | 用途 | 最后修改（2026 年） |
 | --- | --- | --- |
-| [run_rv.sh](run_rv.sh) | 编译 RISC-V 内核并运行决赛测试，保存控制台日志 | 8 月 13 日 |
-| [run_la.sh](run_la.sh) | 编译 LoongArch 内核并运行决赛测试，保存控制台日志 | 8 月 19 日 |
+| [run_pre_rv.sh](run_pre_rv.sh) | 编译 RISC-V 内核并运行初赛测试，1 核、1 GiB | 11 月 1 日 |
+| [run_pre_la.sh](run_pre_la.sh) | 编译 LoongArch 内核并运行初赛测试，1 核、1 GiB | 11 月 1 日 |
+| [run_final_rv.sh](run_final_rv.sh) | 编译 RISC-V 内核并运行决赛测试，8 核、16 GiB | 11 月 1 日 |
+| [run_final_la.sh](run_final_la.sh) | 编译 LoongArch 内核并运行决赛测试，8 核、8 GiB | 11 月 1 日 |
 | [update_vendor_checksum.py](update_vendor_checksum.py) | 修改 vendor 源码后，更新对应 crate 的文件校验值 | 8 月 15 日 |
 | [summary.sh](summary.sh) | 从双架构 LTP 日志中提取各用例结果，按失败数排序 | 6 月 18 日 |
 | [total.sh](total.sh) | 汇总一份 LTP 结果中的 passed、failed、broken、skipped、warnings | 6 月 18 日 |
 
-## 运行决赛测试
+## 运行初赛与决赛测试
 
-先把对应架构的官方决赛镜像放到仓库根目录，分别命名为 `sdcard-rv.img`、`sdcard-la.img`。下载地址见[镜像和赛题](../docs/guides/README.md#镜像和赛题)。
+先把对应阶段、对应架构的镜像放到仓库根目录，分别命名为 `sdcard-rv.img`、`sdcard-la.img`。镜像来源和四个脚本的运行命令见[初赛与决赛指南](../docs/guides/README.md#初赛与决赛测试)。
 
-```sh
-bash scripts/run_rv.sh
-```
+脚本先执行 `make kernel-rv` 或 `make kernel-la`，再启动 QEMU。同一架构的初赛与决赛脚本只改变 `-smp` 核数和 `-m` 内存：初赛均为 1 核、1 GiB，决赛 RV 为 8 核、16 GiB，LA 为 8 核、8 GiB。
 
-执行 `make kernel-rv` 后启动 RISC-V QEMU，配置为 8 核、16 GiB，日志写入 `docs/output_rv.txt`。
-
-```sh
-bash scripts/run_la.sh
-```
-
-执行 `make kernel-la` 后启动 LoongArch QEMU，配置为 8 核、8 GiB，日志写入 `docs/output_la.txt`。
-
-两种架构分别运行。脚本使用快照模式，退出后不回写原始镜像；再次运行会覆盖对应日志。这两个脚本均使用多核，内核会选择决赛入口，不能直接用于初赛。
+`-snapshot` 使用快照模式，退出后不回写镜像；`-display none` 关闭图形窗口。`-chardev` 配置终端和日志，`-serial` 接入串口，`-mon` 共用终端提供 QEMU 控制台。日志分别写入 `docs/output_rv.txt`、`docs/output_la.txt`，再次运行同架构脚本会覆盖日志。退出 QEMU 时先按 `Ctrl+A`，再按 `X`。
 
 ## 更新 vendor 校验值
 
@@ -59,5 +51,3 @@ bash scripts/total.sh docs/summary_la.txt docs/total_la.txt
 ```
 
 第一个参数是输入文件，第二个参数是输出文件。输出会覆盖同名文件。
-
-原实板验收、GDB、xv6、性能采样及旧测试入口已删除。历史文档中的相关命令仅作开发记录，脚本可从 Git 历史查找。

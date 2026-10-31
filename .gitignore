@@ -51,3 +51,4 @@ loongarch64-linux-musl-cross.tgz
 /docs/static-*.log
 /docs/reports/buildstorm-report/experiments/
 /images.zip
+rootfs/
